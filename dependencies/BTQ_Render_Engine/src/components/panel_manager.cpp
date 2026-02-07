@@ -391,6 +391,10 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
   }
 
   if (panel) {
+    // Set the panel ID and panel manager before initializing
+    panel->set_panel_id(panel_id);
+    panel->set_panel_manager(this);
+    
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
@@ -568,6 +572,10 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   }
 
   if (panel) {
+    // Set the panel ID and panel manager before initializing
+    panel->set_panel_id(panel_id);
+    panel->set_panel_manager(this);
+    
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
@@ -1079,6 +1087,9 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         break;
     }
   }
+  
+  // Propagate the symbol change to linked panels if this panel is in a symbol link group
+  propagate_symbol_to_linked_panels(panel_id, symbol);
 }
 
 void PanelManager::register_panel_added_callback(PanelAddedCallback callback) {
@@ -2803,6 +2814,122 @@ void PanelManager::handle_panel_drag_drop() {
       }
     }
   }
+}
+
+uint32_t PanelManager::create_symbol_link_group(SymbolLinkGroupColor color) {
+  uint32_t group_id = next_symbol_link_group_id_++;
+  symbol_link_groups_[group_id] = std::make_unique<SymbolLinkGroup>(color);
+  return group_id;
+}
+
+bool PanelManager::add_panel_to_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+  auto group_it = symbol_link_groups_.find(group_id);
+  if (group_it == symbol_link_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+
+  // Check if panel exists
+  auto panel_it = panels_.find(panel_id);
+  if (panel_it == panels_.end()) {
+    return false; // Panel doesn't exist
+  }
+
+  // Check if panel is already in a symbol link group
+  if (is_panel_in_symbol_link_group(panel_id)) {
+    return false; // Panel is already in a symbol link group
+  }
+
+  // Add panel to the group
+  group_it->second->panel_ids.push_back(panel_id);
+  panel_to_symbol_link_group_map_[panel_id] = group_id;
+
+  // Set the panel's symbol to match the group's symbol if the group has one
+  if (!group_it->second->linked_symbol.empty()) {
+    set_panel_symbol(panel_id, group_it->second->linked_symbol);
+  }
+
+  return true;
+}
+
+bool PanelManager::remove_panel_from_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+  auto group_it = symbol_link_groups_.find(group_id);
+  if (group_it == symbol_link_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+
+  // Find and remove panel from the group's panel list
+  auto& panel_ids = group_it->second->panel_ids;
+  auto it = std::find(panel_ids.begin(), panel_ids.end(), panel_id);
+  if (it != panel_ids.end()) {
+    panel_ids.erase(it);
+  }
+
+  // Remove mapping from panel to group
+  panel_to_symbol_link_group_map_.erase(panel_id);
+
+  return true;
+}
+
+bool PanelManager::destroy_symbol_link_group(uint32_t group_id) {
+  auto group_it = symbol_link_groups_.find(group_id);
+  if (group_it == symbol_link_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+
+  // Remove all panels from this group's mapping
+  for (uint32_t panel_id : group_it->second->panel_ids) {
+    panel_to_symbol_link_group_map_.erase(panel_id);
+  }
+
+  // Erase the group
+  symbol_link_groups_.erase(group_it);
+
+  return true;
+}
+
+bool PanelManager::is_panel_in_symbol_link_group(uint32_t panel_id) const {
+  return panel_to_symbol_link_group_map_.find(panel_id) != panel_to_symbol_link_group_map_.end();
+}
+
+uint32_t PanelManager::get_panel_symbol_link_group_id(uint32_t panel_id) const {
+  auto it = panel_to_symbol_link_group_map_.find(panel_id);
+  if (it != panel_to_symbol_link_group_map_.end()) {
+    return it->second;
+  }
+  return 0; // No group
+}
+
+PanelManager::SymbolLinkGroup* PanelManager::get_symbol_link_group(uint32_t group_id) {
+  auto it = symbol_link_groups_.find(group_id);
+  return (it != symbol_link_groups_.end()) ? it->second.get() : nullptr;
+}
+
+const PanelManager::SymbolLinkGroup* PanelManager::get_symbol_link_group(uint32_t group_id) const {
+  auto it = symbol_link_groups_.find(group_id);
+  return (it != symbol_link_groups_.end()) ? it->second.get() : nullptr;
+}
+
+void PanelManager::update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol) {
+  auto group = get_symbol_link_group(group_id);
+  if (group) {
+    group->linked_symbol = symbol;
+    
+    // Update all panels in this group
+    for (uint32_t panel_id : group->panel_ids) {
+      set_panel_symbol(panel_id, symbol);
+    }
+  }
+}
+
+void PanelManager::propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol) {
+  // Check if the source panel is in a symbol link group
+  uint32_t group_id = get_panel_symbol_link_group_id(source_panel_id);
+  if (group_id == 0) {
+    return; // Source panel is not in a symbol link group
+  }
+
+  // Update the group's symbol
+  update_symbol_link_group_symbol(group_id, symbol);
 }
 
 }  // namespace BTQuant

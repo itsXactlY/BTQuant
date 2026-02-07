@@ -141,6 +141,22 @@ class PanelBase {
 
   // Utility functions
   static const char* get_panel_type_name(PanelType type);
+
+  // Symbol linking functionality
+  void set_symbol_link_group_id(uint32_t group_id) { symbol_link_group_id_ = group_id; }
+  uint32_t get_symbol_link_group_id() const { return symbol_link_group_id_; }
+  void set_symbol_link_color(PanelManager::SymbolLinkGroupColor color) { symbol_link_color_ = color; }
+  PanelManager::SymbolLinkGroupColor get_symbol_link_color() const { return symbol_link_color_; }
+  void render_symbol_link_icon();
+  void set_panel_manager(PanelManager* pm) { panel_manager_ = pm; }
+  void set_panel_id(uint32_t id) { panel_id_ = id; }
+  uint32_t get_panel_id() const { return panel_id_; }
+
+ private:
+  uint32_t panel_id_ = 0;  // The actual panel ID assigned by the panel manager
+  uint32_t symbol_link_group_id_ = 0;  // ID of the symbol link group this panel belongs to
+  PanelManager::SymbolLinkGroupColor symbol_link_color_ = PanelManager::SymbolLinkGroupColor::NONE;  // Color of the link icon
+  PanelManager* panel_manager_ = nullptr;  // Pointer to the panel manager to handle link operations
 };
 
 }  // namespace BTQuant

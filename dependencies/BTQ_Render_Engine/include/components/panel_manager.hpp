@@ -170,6 +170,18 @@ class PanelManager {
   // Drag and drop for tabbed groups
   void handle_panel_drag_drop();
 
+  // Symbol linking functionality
+  uint32_t create_symbol_link_group(SymbolLinkGroupColor color);
+  bool add_panel_to_symbol_link_group(uint32_t group_id, uint32_t panel_id);
+  bool remove_panel_from_symbol_link_group(uint32_t group_id, uint32_t panel_id);
+  bool destroy_symbol_link_group(uint32_t group_id);
+  bool is_panel_in_symbol_link_group(uint32_t panel_id) const;
+  uint32_t get_panel_symbol_link_group_id(uint32_t panel_id) const;
+  SymbolLinkGroup* get_symbol_link_group(uint32_t group_id);
+  const SymbolLinkGroup* get_symbol_link_group(uint32_t group_id) const;
+  void update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol);
+  void propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -206,6 +218,22 @@ class PanelManager {
   uint32_t dragged_panel_id_ = 0;
   uint32_t drag_target_panel_id_ = 0;
   bool is_dragging_ = false;
+
+  // Symbol linking groups - Red(0), Green(1), Blue(2)
+  enum class SymbolLinkGroupColor { RED = 0, GREEN = 1, BLUE = 2, NONE = 3 };
+  
+  struct SymbolLinkGroup {
+    SymbolLinkGroupColor color;
+    std::vector<uint32_t> panel_ids;  // IDs of panels in this link group
+    std::string linked_symbol;        // The symbol that all panels in this group share
+    
+    SymbolLinkGroup(SymbolLinkGroupColor c) : color(c), linked_symbol("") {}
+  };
+
+  // Symbol linking functionality
+  std::unordered_map<uint32_t, std::unique_ptr<SymbolLinkGroup>> symbol_link_groups_;  // Maps group ID to link group
+  std::unordered_map<uint32_t, uint32_t> panel_to_symbol_link_group_map_;  // Maps panel ID to link group ID
+  uint32_t next_symbol_link_group_id_ = 1000;  // Start from 1000 to avoid conflicts with regular groups
 
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;

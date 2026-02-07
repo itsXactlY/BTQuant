@@ -9,6 +9,7 @@
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "theme_manager.hpp"
+#include "panel_manager.hpp"  // Include for PanelManager methods
 
 namespace BTQuant {
 

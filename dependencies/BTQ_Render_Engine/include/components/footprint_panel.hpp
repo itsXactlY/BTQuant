@@ -9,6 +9,7 @@
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
+#include "panel_manager.hpp"  // Include for PanelManager methods
 
 namespace BTQuant {
 
@@ -70,12 +71,9 @@ class FootprintPanel : public PanelBase {
     if (renderer_) renderer_->setSymbol(id);
     
     // Notify the panel manager about the symbol change to trigger symbol linking
-    if (panel_manager_) {
-      // Get the symbol name from the registry to pass to the linking system
-      auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_id(id);
-      if (symbol_info_opt) {
-        panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_info_opt->name);
-      }
+    auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(id);
+    if (symbol_info_opt && get_panel_manager()) {
+      get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_info_opt->name);
     }
   }
 

@@ -65,6 +65,61 @@ public:
     void set_prevent_overlap_for_group(uint32_t group_id, bool prevent = true);
     bool does_group_prevent_overlap(uint32_t group_id) const;
 
+    // Symbol linking groups - Red(0), Green(1), Blue(2)
+    uint32_t create_symbol_link_group(BTQuant::SymbolLinkGroupColor color) {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->create_symbol_link_group(color);
+        }
+        return 0;
+    }
+    
+    bool add_panel_to_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->add_panel_to_symbol_link_group(group_id, panel_id);
+        }
+        return false;
+    }
+    
+    bool remove_panel_from_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->remove_panel_from_symbol_link_group(group_id, panel_id);
+        }
+        return false;
+    }
+    
+    bool destroy_symbol_link_group(uint32_t group_id) {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->destroy_symbol_link_group(group_id);
+        }
+        return false;
+    }
+    
+    bool is_panel_in_symbol_link_group(uint32_t panel_id) const {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->is_panel_in_symbol_link_group(panel_id);
+        }
+        return false;
+    }
+    
+    uint32_t get_panel_symbol_link_group_id(uint32_t panel_id) const {
+        if (render_engine_panel_manager_) {
+            return render_engine_panel_manager_->get_panel_symbol_link_group_id(panel_id);
+        }
+        return 0;
+    }
+    
+    void update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol) {
+        if (render_engine_panel_manager_) {
+            render_engine_panel_manager_->update_symbol_link_group_symbol(group_id, symbol);
+        }
+    }
+    
+    void propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol) {
+        if (render_engine_panel_manager_) {
+            render_engine_panel_manager_->propagate_symbol_to_linked_panels(source_panel_id, symbol);
+        }
+    }
+
     // Access to underlying render engine panel manager
     BTQuant::PanelManager* get_render_engine_panel_manager() { return render_engine_panel_manager_.get(); }
 

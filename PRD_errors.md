@@ -581,3 +581,6 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Create "Layout Templates": define and export JSON presets for "Scalper" (DOM + Tape), "Analyst" (Charts), and "Options" (Desk + Risk) layouts.
 - [x] Add "Save as Default": allow users to save their current panel arrangement as the default startup workspace.
 - [x] Implement "Global Reset": add a "Reset to Factory Layout" button in Dashboard Controls to clear all panel overlaps and return to a clean, grid-aligned state.
+
+- [x] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
+- [x] No Build errors. Build 100%.

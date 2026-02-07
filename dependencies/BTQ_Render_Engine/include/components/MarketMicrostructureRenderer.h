@@ -14,14 +14,16 @@
 #include "hotspine_data_bridge.hpp"
 #include "trading/HotspineData.h"
 
+// Forward declaration to avoid circular dependency
+namespace BTQuant {
+    class PanelManager;  // Forward declare in the correct namespace
+}
+
 namespace BTQuant {
 namespace RenderEngine {
 
 // Forward declaration removed as we iterate include
 // class MarketDataProcessor; // Included now
-
-// Forward declaration for PanelManager which is in BTQuant namespace
-class PanelManager;
 
 // C++26 Error Types
 
@@ -160,7 +162,7 @@ class MarketMicrostructureRenderer {
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
   // Method to set panel manager reference for dirty state updates
-  void set_panel_manager(class PanelManager* panel_manager) { panel_manager_ = panel_manager; }
+  void set_panel_manager(void* panel_manager);
 
   // Method to mark all active panels as dirty to trigger visual updates
   void mark_all_panels_dirty();
@@ -267,7 +269,7 @@ class MarketMicrostructureRenderer {
   std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
 
   // Panel manager reference for dirty state updates
-  class PanelManager* panel_manager_ = nullptr;
+  ::BTQuant::PanelManager* panel_manager_ = nullptr;
 };
 
 // ============================================================================

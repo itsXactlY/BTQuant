@@ -460,8 +460,8 @@ void OptionAnalyticsPanel::renderSmileTab() {
             ImPlot::PlotLine("Puts", strikes.data(), iv_puts.data(), static_cast<int>(strikes.size()));
 
             // Add ATM reference line
-            ImPlot::SetNextLineStyle(ImVec4(0.5f, 0.5f, 0.5f, 0.5f), 1.0f, ImPlotLineFlags_SkipMissing);
-            ImPlot::PlotLine("ATM Reference", &underlying_price, &base_volatility, 1, ImPlotLineFlags_Vertical);
+            ImPlot::SetNextLineStyle(ImVec4(0.5f, 0.5f, 0.5f, 0.5f), 1.0f);
+            ImPlot::PlotLine("ATM Reference", &underlying_price, &base_volatility, 1);
         }
 
         ImPlot::SetupLegend(ImPlotLocation_NorthEast, ImPlotLegendFlags_Outside);

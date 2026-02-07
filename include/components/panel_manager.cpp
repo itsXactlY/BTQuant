@@ -128,6 +128,114 @@ void PanelManager::handle_panel_drag_drop() {
     }
 }
 
+uint32_t PanelManager::create_symbol_link_group(BTQuant::SymbolLinkGroupColor color) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->create_symbol_link_group(color);
+    }
+    return 0;
+}
+
+bool PanelManager::add_panel_to_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->add_panel_to_symbol_link_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::remove_panel_from_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->remove_panel_from_symbol_link_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::destroy_symbol_link_group(uint32_t group_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->destroy_symbol_link_group(group_id);
+    }
+    return false;
+}
+
+bool PanelManager::is_panel_in_symbol_link_group(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->is_panel_in_symbol_link_group(panel_id);
+    }
+    return false;
+}
+
+uint32_t PanelManager::get_panel_symbol_link_group_id(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->get_panel_symbol_link_group_id(panel_id);
+    }
+    return 0;
+}
+
+void PanelManager::update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->update_symbol_link_group_symbol(group_id, symbol);
+    }
+}
+
+void PanelManager::propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->propagate_symbol_to_linked_panels(source_panel_id, symbol);
+    }
+}
+
+uint32_t PanelManager::create_symbol_link_group(BTQuant::SymbolLinkGroupColor color) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->create_symbol_link_group(color);
+    }
+    return 0;
+}
+
+bool PanelManager::add_panel_to_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->add_panel_to_symbol_link_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::remove_panel_from_symbol_link_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->remove_panel_from_symbol_link_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::destroy_symbol_link_group(uint32_t group_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->destroy_symbol_link_group(group_id);
+    }
+    return false;
+}
+
+bool PanelManager::is_panel_in_symbol_link_group(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->is_panel_in_symbol_link_group(panel_id);
+    }
+    return false;
+}
+
+uint32_t PanelManager::get_panel_symbol_link_group_id(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->get_panel_symbol_link_group_id(panel_id);
+    }
+    return 0;
+}
+
+void PanelManager::update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->update_symbol_link_group_symbol(group_id, symbol);
+    }
+}
+
+void PanelManager::propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->propagate_symbol_to_linked_panels(source_panel_id, symbol);
+    }
+}
+
 void PanelManager::save_layout(const std::string& filename) {
     if (render_engine_panel_manager_) {
         render_engine_panel_manager_->save_layout(filename);

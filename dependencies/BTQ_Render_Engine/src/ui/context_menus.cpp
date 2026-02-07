@@ -1450,7 +1450,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
           // Generic action
         }
         break;
-    }
+    }  // End of switch statement
 
     // Add global panel actions at the bottom of each context menu
     ImGui::Separator();
@@ -1492,6 +1492,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
           }
         }
       }
+    }
     /*
     if (ImGui::MenuItem("Screenshot")) {
       // Take a screenshot of the current panel
@@ -1506,7 +1507,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         ScreenshotUtility::capture_panel_screenshot(panel, panel_type_name);
       }
     }
-    */
+    */  // End of commented out screenshot functionality
     if (ImGui::MenuItem("Close Panel")) {
       // Call the panel manager to remove this panel
       if (panel_manager_ && panel_id != 0) {
@@ -1521,7 +1522,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
     }
 
     ImGui::EndPopup();
-  }
+  }  // End of BeginPopup
 }
 
 }  // namespace BTQuant

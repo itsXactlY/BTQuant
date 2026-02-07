@@ -111,14 +111,8 @@ class PanelBase {
   virtual void render_context_menu() {}  // Virtual method for context menu
   virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
 
- protected:
-  PanelConfig config_;
-
   // C++26 Reactive Push Notification Support
   // Set by processor callback when new data arrives - atomic for thread safety
-  std::atomic<bool> data_dirty_{true};  // Start dirty to force initial load
-  uint64_t subscription_id_ = 0;        // ID from processor->subscribe()
-
   /**
    * Called by MarketDataProcessor notification callback
    * Thread-safe: uses release memory ordering for proper visibility
@@ -133,6 +127,14 @@ class PanelBase {
   [[nodiscard]] bool consumeDirty() noexcept {
     return data_dirty_.exchange(false, std::memory_order_acq_rel);
   }
+
+ protected:
+  PanelConfig config_;
+
+  // C++26 Reactive Push Notification Support
+  // Set by processor callback when new data arrives - atomic for thread safety
+  std::atomic<bool> data_dirty_{true};  // Start dirty to force initial load
+  uint64_t subscription_id_ = 0;        // ID from processor->subscribe()
 
   // Helper methods for consistent styling
   void begin_panel_window();
@@ -163,6 +165,7 @@ class PanelBase {
  public:
   void set_panel_id(uint32_t id) { panel_id_ = id; }
   void set_panel_manager(PanelManager* pm) { panel_manager_ = pm; }
+  PanelManager* get_panel_manager() const { return panel_manager_; }
 };
 
 }  // namespace BTQuant

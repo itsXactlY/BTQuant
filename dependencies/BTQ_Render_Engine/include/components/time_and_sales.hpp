@@ -9,6 +9,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "panel_manager.hpp"  // Include for PanelManager methods
 
 namespace BTQuant {
 

@@ -76,8 +76,8 @@ void TimeAndSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol
   markDirty();  // Force immediate refresh
   
   // Notify the panel manager about the symbol change to trigger symbol linking
-  if (panel_manager_) {
-    panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
+  if (get_panel_manager()) {
+    get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
   }
 }
 

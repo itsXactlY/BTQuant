@@ -18,6 +18,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+
+// Include the panel manager header for the implementation
+#include "../../include/components/panel_manager.hpp"
 #include <fstream>
 #include <iostream>
 #include <print>
@@ -1117,6 +1120,10 @@ std::vector<std::vector<Analytics::ClusterCell>> MarketMicrostructureRenderer::g
 
   // Access the cluster canvas from the cluster engine using the getter method
   return cluster_engine_->getClusterCanvas();
+}
+
+void MarketMicrostructureRenderer::set_panel_manager(void* panel_manager) {
+  panel_manager_ = static_cast<BTQuant::PanelManager*>(panel_manager);
 }
 
 void MarketMicrostructureRenderer::mark_all_panels_dirty() {

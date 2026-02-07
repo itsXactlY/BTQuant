@@ -161,6 +161,7 @@ set(DASHBOARD_SOURCES
     src/components/global_alert_manager.cpp
     src/components/strategy_builder.cpp
     src/components/option_analytics_panel.cpp
+    src/components/tabbed_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp
@@ -304,6 +305,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/global_alert_manager.cpp
     src/components/strategy_builder.cpp
     src/components/option_analytics_panel.cpp
+    src/components/tabbed_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp

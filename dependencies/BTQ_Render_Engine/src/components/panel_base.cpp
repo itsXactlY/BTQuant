@@ -56,7 +56,7 @@ void PanelBase::render() {
 }
 
 void PanelBase::render_symbol_link_icon() {
-  if (symbol_link_color_ == PanelManager::SymbolLinkGroupColor::NONE) {
+  if (symbol_link_color_ == SymbolLinkGroupColor::NONE) {
     // Render an inactive/unlinked icon (gray circle)
     ImVec2 cursor_pos = ImGui::GetCursorPos();
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.7f));  // Gray
@@ -79,37 +79,37 @@ void PanelBase::render_symbol_link_icon() {
     // Determine color based on link group
     ImVec4 color;
     switch (symbol_link_color_) {
-      case PanelManager::SymbolLinkGroupColor::RED:
+      case SymbolLinkGroupColor::RED:
         color = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);  // Red
         break;
-      case PanelManager::SymbolLinkGroupColor::GREEN:
+      case SymbolLinkGroupColor::GREEN:
         color = ImVec4(0.3f, 1.0f, 0.3f, 1.0f);  // Green
         break;
-      case PanelManager::SymbolLinkGroupColor::BLUE:
+      case SymbolLinkGroupColor::BLUE:
         color = ImVec4(0.3f, 0.6f, 1.0f, 1.0f);  // Blue
         break;
       default:
         color = ImVec4(0.5f, 0.5f, 0.5f, 0.7f);  // Gray (shouldn't happen)
         break;
     }
-    
+
     // Render the link icon with the appropriate color
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     ImGui::Text("●");  // Colored circle icon representing linked state
     ImGui::PopStyleColor();
-    
+
     // Add tooltip showing the link status
     if (ImGui::IsItemHovered()) {
       ImGui::BeginTooltip();
       const char* color_name;
       switch (symbol_link_color_) {
-        case PanelManager::SymbolLinkGroupColor::RED:
+        case SymbolLinkGroupColor::RED:
           color_name = "Red";
           break;
-        case PanelManager::SymbolLinkGroupColor::GREEN:
+        case SymbolLinkGroupColor::GREEN:
           color_name = "Green";
           break;
-        case PanelManager::SymbolLinkGroupColor::BLUE:
+        case SymbolLinkGroupColor::BLUE:
           color_name = "Blue";
           break;
         default:
@@ -133,81 +133,81 @@ void PanelBase::render_symbol_link_icon() {
     if (ImGui::Selectable("Red")) {
       if (panel_manager_) {
         // Check if this panel is already in a link group and remove it first
-        uint32_t current_group_id = get_panel_symbol_link_group_id();
+        uint32_t current_group_id = get_symbol_link_group_id();
         if (current_group_id != 0) {
           panel_manager_->remove_panel_from_symbol_link_group(current_group_id, get_panel_id());
         }
-        
+
         // Find or create a red link group and add this panel to it
         uint32_t group_id = 0;
-        for (const auto& [id, group] : panel_manager_->symbol_link_groups_) {
-          if (group->color == PanelManager::SymbolLinkGroupColor::RED) {
+        for (const auto& [id, group] : panel_manager_->get_symbol_link_groups()) {
+          if (group->color == SymbolLinkGroupColor::RED) {
             group_id = id;
             break;
           }
         }
-        
+
         if (group_id == 0) {
-          group_id = panel_manager_->create_symbol_link_group(PanelManager::SymbolLinkGroupColor::RED);
+          group_id = panel_manager_->create_symbol_link_group(SymbolLinkGroupColor::RED);
         }
-        
+
         panel_manager_->add_panel_to_symbol_link_group(group_id, get_panel_id());
         set_symbol_link_group_id(group_id);
-        set_symbol_link_color(PanelManager::SymbolLinkGroupColor::RED);
+        set_symbol_link_color(SymbolLinkGroupColor::RED);
       }
       ImGui::CloseCurrentPopup();
     }
     if (ImGui::Selectable("Green")) {
       if (panel_manager_) {
         // Check if this panel is already in a link group and remove it first
-        uint32_t current_group_id = get_panel_symbol_link_group_id();
+        uint32_t current_group_id = get_symbol_link_group_id();
         if (current_group_id != 0) {
           panel_manager_->remove_panel_from_symbol_link_group(current_group_id, get_panel_id());
         }
-        
+
         // Find or create a green link group and add this panel to it
         uint32_t group_id = 0;
-        for (const auto& [id, group] : panel_manager_->symbol_link_groups_) {
-          if (group->color == PanelManager::SymbolLinkGroupColor::GREEN) {
+        for (const auto& [id, group] : panel_manager_->get_symbol_link_groups()) {
+          if (group->color == SymbolLinkGroupColor::GREEN) {
             group_id = id;
             break;
           }
         }
-        
+
         if (group_id == 0) {
-          group_id = panel_manager_->create_symbol_link_group(PanelManager::SymbolLinkGroupColor::GREEN);
+          group_id = panel_manager_->create_symbol_link_group(SymbolLinkGroupColor::GREEN);
         }
-        
+
         panel_manager_->add_panel_to_symbol_link_group(group_id, get_panel_id());
         set_symbol_link_group_id(group_id);
-        set_symbol_link_color(PanelManager::SymbolLinkGroupColor::GREEN);
+        set_symbol_link_color(SymbolLinkGroupColor::GREEN);
       }
       ImGui::CloseCurrentPopup();
     }
     if (ImGui::Selectable("Blue")) {
       if (panel_manager_) {
         // Check if this panel is already in a link group and remove it first
-        uint32_t current_group_id = get_panel_symbol_link_group_id();
+        uint32_t current_group_id = get_symbol_link_group_id();
         if (current_group_id != 0) {
           panel_manager_->remove_panel_from_symbol_link_group(current_group_id, get_panel_id());
         }
-        
+
         // Find or create a blue link group and add this panel to it
         uint32_t group_id = 0;
-        for (const auto& [id, group] : panel_manager_->symbol_link_groups_) {
-          if (group->color == PanelManager::SymbolLinkGroupColor::BLUE) {
+        for (const auto& [id, group] : panel_manager_->get_symbol_link_groups()) {
+          if (group->color == SymbolLinkGroupColor::BLUE) {
             group_id = id;
             break;
           }
         }
-        
+
         if (group_id == 0) {
-          group_id = panel_manager_->create_symbol_link_group(PanelManager::SymbolLinkGroupColor::BLUE);
+          group_id = panel_manager_->create_symbol_link_group(SymbolLinkGroupColor::BLUE);
         }
-        
+
         panel_manager_->add_panel_to_symbol_link_group(group_id, get_panel_id());
         set_symbol_link_group_id(group_id);
-        set_symbol_link_color(PanelManager::SymbolLinkGroupColor::BLUE);
+        set_symbol_link_color(SymbolLinkGroupColor::BLUE);
       }
       ImGui::CloseCurrentPopup();
     }
@@ -219,11 +219,11 @@ void PanelBase::render_symbol_link_icon() {
     ImGui::Text("Remove from link group?");
     if (ImGui::Button("Yes")) {
       if (panel_manager_) {
-        uint32_t current_group_id = get_panel_symbol_link_group_id();
+        uint32_t current_group_id = get_symbol_link_group_id();
         if (current_group_id != 0) {
           panel_manager_->remove_panel_from_symbol_link_group(current_group_id, get_panel_id());
           set_symbol_link_group_id(0);
-          set_symbol_link_color(PanelManager::SymbolLinkGroupColor::NONE);
+          set_symbol_link_color(SymbolLinkGroupColor::NONE);
         }
       }
       ImGui::CloseCurrentPopup();

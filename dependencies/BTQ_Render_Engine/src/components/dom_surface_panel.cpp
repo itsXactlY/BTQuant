@@ -792,8 +792,8 @@ void DomSurfacePanel::addOrUpdateStaticLiquidityLevel(double price, bool is_bid,
   for (auto& level : static_liquidity_levels_) {
     // Use a small epsilon for price comparison
     if (std::abs(level.price - price) < 0.0001) {
-      // Check if the size has changed significantly (more than 1% difference)
-      double size_change_threshold = level.size * 0.01; // 1% threshold
+      // Check if the size has changed significantly (more than 1% difference or absolute threshold)
+      double size_change_threshold = std::max(level.size * 0.01, 0.01); // 1% threshold or 0.01 minimum
       if (std::abs(level.size - size) > size_change_threshold) {
         // Size has changed significantly, update the change time
         level.last_changed_time = current_time;
@@ -880,11 +880,11 @@ void DomSurfacePanel::renderPersistentLevels() {
       // Draw a glowing border around the level
       // First, draw a wider, more transparent line to create the "glow" effect
       ImVec4 glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      glow_color_vec.w = 0.3f; // Higher transparency for glow
+      glow_color_vec.w = 0.2f; // Lower transparency for stronger glow
       ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(glow_color_vec);
 
       ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Very thick for glow effect
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 12.0f); // Even thicker for stronger glow effect
 
       double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double ys[2] = {level.price, level.price};
@@ -895,7 +895,7 @@ void DomSurfacePanel::renderPersistentLevels() {
 
       // Then draw the main line
       ImPlot::PushStyleColor(ImPlotCol_Line, color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 4.0f); // Thicker line for better visibility
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 6.0f); // Thicker line for better visibility
 
       ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
 
@@ -904,14 +904,14 @@ void DomSurfacePanel::renderPersistentLevels() {
 
       // Draw a highlighted rectangle around the level to make it stand out
       ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      rect_color_vec.w = 0.2f; // 20% transparency for the rectangle
+      rect_color_vec.w = 0.15f; // 15% transparency for the rectangle
       ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
       ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
 
       // Calculate a vertical range around the price level for the rectangle
       // Make it proportional to the zoom level for better visibility
       double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
-      double price_range = visible_price_range * 0.01; // 1% of the visible price range for rectangle height
+      double price_range = visible_price_range * 0.02; // 2% of the visible price range for rectangle height (increased for better visibility)
       if (price_range < 0.001) price_range = 0.001; // Minimum thickness
 
       double y_min = level.price - price_range/2.0;
@@ -922,6 +922,25 @@ void DomSurfacePanel::renderPersistentLevels() {
       double shade_y1[2] = {y_min, y_min};
       double shade_y2[2] = {y_max, y_max};
       ImPlot::PlotShaded("##StaticLiquidityRect", shade_x, shade_y1, shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+      
+      // Add a pulsing animation effect for extra visibility
+      float pulse_factor = 0.5f + 0.5f * std::sin(current_time / 500.0f); // Pulsing every 1 second
+      ImVec4 pulse_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      pulse_color_vec.w = 0.1f * pulse_factor; // Pulsing transparency
+      ImU32 pulse_color = ImGui::ColorConvertFloat4ToU32(pulse_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, pulse_color);
+
+      // Draw a pulsing outer rectangle
+      double outer_price_range = price_range * 1.8f; // 1.8x the inner rectangle
+      double y_outer_min = level.price - outer_price_range/2.0;
+      double y_outer_max = level.price + outer_price_range/2.0;
+
+      double outer_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double outer_shade_y1[2] = {y_outer_min, y_outer_min};
+      double outer_shade_y2[2] = {y_outer_max, y_outer_max};
+      ImPlot::PlotShaded("##StaticLiquidityPulse", outer_shade_x, outer_shade_y1, outer_shade_y2, 2);
 
       ImPlot::PopStyleColor();
     }
@@ -996,12 +1015,12 @@ void DomSurfacePanel::renderPersistentLevels() {
 
 ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
   // Use a distinct color scheme for static liquidity levels to differentiate from large orders
-  // Bright magenta for bids (buy-side liquidity), bright yellow for asks (sell-side liquidity)
+  // Bright cyan for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
   // These colors provide better contrast against the heatmap and stand out more distinctly
   if (level.is_bid) {
-    return IM_COL32(255, 0, 255, 220);  // Bright magenta with good visibility
+    return IM_COL32(0, 255, 255, 240);  // Bright cyan with high visibility
   } else {
-    return IM_COL32(255, 255, 0, 220);   // Bright yellow with good visibility
+    return IM_COL32(255, 165, 0, 240);   // Bright orange with high visibility
   }
 }
 

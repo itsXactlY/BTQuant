@@ -20,6 +20,9 @@ namespace RenderEngine {
 // Forward declaration removed as we iterate include
 // class MarketDataProcessor; // Included now
 
+// Forward declaration for PanelManager which is in BTQuant namespace
+class PanelManager;
+
 // C++26 Error Types
 
 // C++26 Error Types

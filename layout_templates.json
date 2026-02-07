@@ -1,0 +1,12 @@
+{
+  "templates": {
+    "scalper": "./scalper_layout.json",
+    "analyst": "./analyst_layout.json", 
+    "options": "./options_layout.json"
+  },
+  "metadata": {
+    "created": "2026-02-07",
+    "version": "1.0.0",
+    "description": "Predefined layout templates for different trading styles"
+  }
+}

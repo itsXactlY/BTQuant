@@ -116,6 +116,29 @@ class PanelManager {
   // Layout presets
   void apply_layout_preset(LayoutPreset preset);
 
+  // Panel binding functionality - "Super-panel" grid locking
+  struct PanelGroup {
+    uint32_t group_id;
+    std::vector<uint32_t> panel_ids;  // IDs of panels in this group
+    int min_grid_x = 0;               // Top-left corner of the group in grid coordinates
+    int min_grid_y = 0;
+    int total_width = 0;              // Total width of the group in grid units
+    int total_height = 0;             // Total height of the group in grid units
+    bool locked = true;               // Whether the group is locked (non-resizable as a unit)
+    
+    PanelGroup(uint32_t id) : group_id(id) {}
+  };
+  
+  // Panel grouping methods
+  uint32_t create_panel_group(const std::vector<uint32_t>& panel_ids);
+  bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
+  bool remove_panel_from_group(uint32_t group_id, uint32_t panel_id);
+  bool destroy_panel_group(uint32_t group_id);
+  bool is_panel_in_group(uint32_t panel_id) const;
+  uint32_t get_panel_group_id(uint32_t panel_id) const;
+  PanelGroup* get_panel_group(uint32_t group_id);
+  const PanelGroup* get_panel_group(uint32_t group_id) const;
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -142,6 +165,11 @@ class PanelManager {
 
   // Current layout tracking
   std::string current_layout_name_ = "default";
+
+  // Panel grouping data
+  std::unordered_map<uint32_t, std::unique_ptr<PanelGroup>> panel_groups_;
+  std::unordered_map<uint32_t, uint32_t> panel_to_group_map_;  // Maps panel ID to group ID
+  uint32_t next_group_id_ = 1;
 
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;

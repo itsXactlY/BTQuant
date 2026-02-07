@@ -58,6 +58,7 @@ class DomSurfacePanel : public PanelBase {
 
   void render() override;
   void setSymbol(uint32_t symbol_id);
+  void setSymbol(uint32_t symbol_id, const std::string& symbol_name);
   
   // Override panel header to add heatmap intensity control
   void render_panel_header() override;
@@ -84,6 +85,7 @@ class DomSurfacePanel : public PanelBase {
   float get_heatmap_intensity() const { return heatmap_intensity_; }
   
   uint32_t get_symbol_id() const { return current_symbol_id_; }
+  const std::string& get_symbol_name() const { return current_symbol_name_; }
 
   // Large Order Marker Configuration
   void setLargeOrderThreshold(double threshold) { large_order_threshold_ = threshold; }
@@ -96,6 +98,7 @@ class DomSurfacePanel : public PanelBase {
  private:
   std::shared_ptr<MarketDataProcessor> processor_;
   uint32_t current_symbol_id_ = 0;
+  std::string current_symbol_name_;
 
   // Visualization parameters
   int history_depth_ = 300;    // Number of snapshots to show (X-axis time)

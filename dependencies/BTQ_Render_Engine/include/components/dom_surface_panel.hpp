@@ -63,6 +63,7 @@ class DomSurfacePanel : public PanelBase {
 
   void render() override;
   void setSymbol(uint32_t symbol_id);
+  void setSymbol(uint32_t symbol_id, const std::string& symbol_name);
 
   // Override panel header to add heatmap intensity control
   void render_panel_header();
@@ -73,6 +74,7 @@ class DomSurfacePanel : public PanelBase {
 
   // Getters for serialization
   uint32_t get_symbol_id() const { return current_symbol_id_; }
+  const std::string& get_symbol_name() const { return current_symbol_name_; }
   double get_price_range() const { return price_range_; }
   int get_price_bins() const { return price_bins_; }
   bool get_auto_scale_price() const { return auto_scale_price_; }
@@ -105,6 +107,7 @@ class DomSurfacePanel : public PanelBase {
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   uint32_t current_symbol_id_ = 0;
+  std::string current_symbol_name_;
 
   // Visualization parameters
   int history_depth_ = 300;         // Number of snapshots to show (X-axis time)

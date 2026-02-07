@@ -26,37 +26,51 @@ DomSurfacePanel::~DomSurfacePanel() {
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
-  if (current_symbol_id_ == symbol_id) return;
-
-  if (subscription_id_ > 0) {
-    processor_->unsubscribe(subscription_id_);
-    subscription_id_ = 0;
-  }
-
-  current_symbol_id_ = symbol_id;
-
-  // Subscribe to both ORDERBOOK and TRADE updates
+  // Get the symbol name from the processor or symbol registry if available
+  std::string symbol_name;
   if (processor_) {
-    subscription_id_ =
-        processor_->subscribe(symbol_id, RenderEngine::NotificationType::ORDERBOOK,
-                              [this](uint32_t sym, RenderEngine::NotificationType type) {
-                                this->onDataUpdate(sym, type);
-                              });
-    
-    // Also subscribe to trade updates for trade bubbles
-    processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
-                          [this](uint32_t sym, RenderEngine::NotificationType type) {
-                            this->onDataUpdate(sym, type);
-                          });
+    symbol_name = processor_->getSymbolName(symbol_id);
   }
+  
+  setSymbol(symbol_id, symbol_name);
+}
 
-  // Clear existing data to prevent mixing symbols
-  heatmap_data_.clear();
-  large_order_markers_.clear();
-  trade_bubbles_.clear();  // Clear trade bubbles when changing symbols
-  recent_order_sizes_.clear();
-  median_order_size_ = 0.0;
-  markDirty();
+void DomSurfacePanel::setSymbol(uint32_t symbol_id, const std::string& symbol_name) {
+  // Store the symbol name for potential use in UI elements
+  current_symbol_name_ = symbol_name;
+  
+  // Call the original setSymbol logic to handle subscriptions and data clearing
+  if (current_symbol_id_ != symbol_id) {
+    if (subscription_id_ > 0) {
+      processor_->unsubscribe(subscription_id_);
+      subscription_id_ = 0;
+    }
+
+    current_symbol_id_ = symbol_id;
+
+    // Subscribe to both ORDERBOOK and TRADE updates
+    if (processor_) {
+      subscription_id_ =
+          processor_->subscribe(symbol_id, RenderEngine::NotificationType::ORDERBOOK,
+                                [this](uint32_t sym, RenderEngine::NotificationType type) {
+                                  this->onDataUpdate(sym, type);
+                                });
+
+      // Also subscribe to trade updates for trade bubbles
+      processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
+                            [this](uint32_t sym, RenderEngine::NotificationType type) {
+                              this->onDataUpdate(sym, type);
+                            });
+    }
+
+    // Clear existing data to prevent mixing symbols
+    heatmap_data_.clear();
+    large_order_markers_.clear();
+    trade_bubbles_.clear();  // Clear trade bubbles when changing symbols
+    recent_order_sizes_.clear();
+    median_order_size_ = 0.0;
+    markDirty();
+  }
 }
 
 void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type) {
@@ -575,8 +589,13 @@ void DomSurfacePanel::render() {
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
-  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
-              large_order_markers_.size(), trade_bubbles_.size());
+  if (!current_symbol_name_.empty()) {
+    ImGui::Text(" | Symbol: %s (%u) | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_name_.c_str(), 
+                current_symbol_id_, price_bins_, large_order_markers_.size(), trade_bubbles_.size());
+  } else {
+    ImGui::Text(" | Symbol ID: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
+                large_order_markers_.size(), trade_bubbles_.size());
+  }
 
   // Enable Pan/Zoom for DOM Surface
   std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);

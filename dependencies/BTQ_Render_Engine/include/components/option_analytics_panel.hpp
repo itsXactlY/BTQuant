@@ -3,10 +3,12 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <memory>
 
 #include "imgui.h"
 #include "panel_base.hpp"
 #include "strategy_builder.hpp"
+#include "market_data_processor.hpp"  // Include MarketDataProcessor header
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -37,10 +39,11 @@ struct ExpirationData {
 
 class OptionAnalyticsPanel : public PanelBase {
 public:
-    OptionAnalyticsPanel(StrategyBuilder* strategy_builder);
+    OptionAnalyticsPanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+    ~OptionAnalyticsPanel();  // Destructor to clean up subscription
 
     void render() override;
-    void update(float dt) override {}
+    void update(float dt) override;
 
     void switchTab(int tabIndex);
     std::string getActiveTabName() const;
@@ -55,12 +58,17 @@ private:
     void renderSmileTab();  // New method for volatility smile
     void onStrikeClick(double strike, const std::string& optionType, const std::string& action);
 
+    // Market data integration
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+    uint64_t subscription_id_;
+
     int activeTab;
     std::vector<std::string> tabs;
     std::vector<OptionData> optionsGrid;
     std::vector<ExpirationData> expirationData;  // For multiple expirations in volatility smile
 
-    StrategyBuilder* strategy_builder_;
+    // Strategy builder is no longer used since we're using MarketDataProcessor
+    // StrategyBuilder* strategy_builder_;
 };
 
 } // namespace RenderEngine

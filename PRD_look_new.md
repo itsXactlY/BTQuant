@@ -536,16 +536,16 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 #### Phase 35e: Code Deletion (The Cleanup)
 - [x] Delete `src/components/realtime_dashboard_component.cpp` and `include/components/realtime_dashboard_component.hpp`.
 - [x] Remove `RealtimeDashboardComponent` references from `CMakeLists.txt` and `src/vulkan_dashboard_advanced.hpp`.
-- [ ] Verify `QuantWorkspaceComponent` is the ONLY place instantiating `PanelManager`.
+- [x] Verify `QuantWorkspaceComponent` is the ONLY place instantiating `PanelManager`.
 
 ---
 
 ### TASK 36: BUILD SYSTEM & NAMESPACE SANITIZATION
 **Objective:** Ensure the code compiles cleanly after the "Great Unification" and no duplicate types exist.
 
-- [ ] Run `build_integration.sh` and fix any linker errors caused by the removal of `RealtimeDashboardComponent`.
-- [ ] Verify that `BTQuant::UI::LayoutManager` is uniquely defined and not conflicting with `BTQuant::RenderEngine::LayoutManager`.
-- [ ] Ensure `CandleCluster` is fully standardized in `include/components/MarketMicrostructureRenderer.h` and used consistently across Footprint and TPO panels.
+- [x] Run `build_integration.sh` and fix any linker errors caused by the removal of `RealtimeDashboardComponent`.
+- [x] Verify that `BTQuant::UI::LayoutManager` is uniquely defined and not conflicting with `BTQuant::RenderEngine::LayoutManager`.
+- [x] Ensure `CandleCluster` is fully standardized in `include/components/MarketMicrostructureRenderer.h` and used consistently across Footprint and TPO panels.
 
 ---
 
@@ -553,8 +553,8 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 **Dependencies:** Task 35 & 36
 **Prerequisites:** A stable, unified terminal.
 
-- [ ] **TPO Profile Engine:** Finalize `tpoengine.cpp` and integration into `TpoPanel`.
-- [ ] **DOM Surface Heatmap:** Connect `domsurfacepanel.cpp` to the now-unified `active_symbol_` data feed.
+- [x] **TPO Profile Engine:** Finalize `tpoengine.cpp` and integration into `TpoPanel`.
+- [x] **DOM Surface Heatmap:** Connect `domsurfacepanel.cpp` to the now-unified `active_symbol_` data feed.
 - [ ] **Options Analytics:** Wire `optionanalyticspanel.cpp` to the unified `MarketDataProcessor`.
 - [ ] **Context Menus:** Ensure the unified `ContextMenuManager` correctly triggers actions on the active panel in the unified workspace.
 

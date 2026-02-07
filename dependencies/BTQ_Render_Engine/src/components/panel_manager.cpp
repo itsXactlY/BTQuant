@@ -289,7 +289,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
+      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(processor_);
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -450,7 +450,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
+      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(processor_);
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -1275,7 +1275,7 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
       }
       case PanelType::HEATMAP: {
         if (auto* dom = dynamic_cast<DomSurfacePanel*>(panel.get())) {
-          dom->setSymbol(symbol_id);
+          dom->setSymbol(symbol_id, symbol_name);
         }
         break;
       }

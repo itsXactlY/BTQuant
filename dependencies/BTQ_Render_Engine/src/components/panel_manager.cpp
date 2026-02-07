@@ -2418,7 +2418,7 @@ uint32_t PanelManager::get_containing_tabbed_group_id(uint32_t panel_id) const {
 
 bool PanelManager::can_drag_panel_to_target(uint32_t source_panel_id, uint32_t target_panel_id) const {
   // Check if both panels exist
-  if (panels_.find(source_panel_id) == panels_.end() || 
+  if (panels_.find(source_panel_id) == panels_.end() ||
       panels_.find(target_panel_id) == panels_.end()) {
     return false;
   }
@@ -2428,13 +2428,18 @@ bool PanelManager::can_drag_panel_to_target(uint32_t source_panel_id, uint32_t t
     return false;
   }
 
-  // Prevent dragging a panel that's already in a tabbed group
+  // Prevent dragging a panel that's already in a tabbed group (to prevent nested tabs)
   if (is_panel_in_tabbed_group(source_panel_id)) {
     return false;
   }
 
-  // Check if target is already a tabbed group (we can add to existing tabbed groups)
+  // Allow dragging to an existing tabbed group
   if (panels_.at(target_panel_id)->get_config().type == PanelType::TABBED_GROUP) {
+    return true;
+  }
+
+  // Allow dragging to a panel that's already in a tabbed group
+  if (is_panel_in_tabbed_group(target_panel_id)) {
     return true;
   }
 
@@ -2638,7 +2643,7 @@ void PanelManager::handle_panel_drag_drop() {
   // Check if we're currently dragging a panel
   if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
     // Check if any panel window is being dragged
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
+    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
       // Find which panel is being dragged by checking if the mouse is over any panel window
       for (auto& [panel_id, panel] : panels_) {
         // Skip if panel is not visible or is in a tabbed group already
@@ -2680,11 +2685,18 @@ void PanelManager::handle_panel_drag_drop() {
           // Add the dragged panel to the existing tabbed group
           add_panel_to_tabbed_group(drag_target_panel_id_, dragged_panel_id_);
         } else {
-          // Create a new tabbed group with both panels
-          uint32_t tabbed_group_id = create_tabbed_group(drag_target_panel_id_);
-          if (tabbed_group_id != 0) {
-            // Add the originally dragged panel to the new tabbed group
-            add_panel_to_tabbed_group(tabbed_group_id, dragged_panel_id_);
+          // Check if target panel is already in a tabbed group
+          uint32_t existing_tabbed_group_id = get_containing_tabbed_group_id(drag_target_panel_id_);
+          if (existing_tabbed_group_id != 0) {
+            // Add the dragged panel to the existing tabbed group that contains the target
+            add_panel_to_tabbed_group(existing_tabbed_group_id, dragged_panel_id_);
+          } else {
+            // Create a new tabbed group with both panels
+            uint32_t tabbed_group_id = create_tabbed_group(drag_target_panel_id_);
+            if (tabbed_group_id != 0) {
+              // Add the originally dragged panel to the new tabbed group
+              add_panel_to_tabbed_group(tabbed_group_id, dragged_panel_id_);
+            }
           }
         }
       }
@@ -2709,7 +2721,7 @@ void PanelManager::handle_panel_drag_drop() {
     // Find which panel we might be dropping onto
     for (auto& [panel_id, panel] : panels_) {
       // Skip if panel is not visible, is the dragged panel, or is in a tabbed group
-      if (!panel->is_visible() || panel_id == dragged_panel_id_ || is_panel_in_tabbed_group(panel_id)) {
+      if (!panel->is_visible() || panel_id == dragged_panel_id_) {
         continue;
       }
 
@@ -2727,9 +2739,9 @@ void PanelManager::handle_panel_drag_drop() {
 
               // Highlight the target panel (visual feedback)
               ImDrawList* draw_list = ImGui::GetForegroundDrawList();
-              ImVec2 p_min = panel_pos;
-              ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x, panel_pos.y + panel_size.y);
-              draw_list->AddRect(p_min, p_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 3.0f);
+              ImVec2 p_min = ImVec2(panel_pos.x + 2, panel_pos.y + 2);
+              ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x - 2, panel_pos.y + panel_size.y - 2);
+              draw_list->AddRect(p_min, p_max, IM_COL32(255, 215, 0, 255), 0.0f, 0, 4.0f);
 
               break;
           }

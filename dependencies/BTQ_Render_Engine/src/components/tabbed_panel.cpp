@@ -36,7 +36,7 @@ void TabbedPanel::render() {
   // Render the tab bar and content
   if (!tabbed_panel_ids_.empty()) {
     render_tab_bar();
-    render_active_tab_content();
+    // The active tab content is rendered within the tab bar, so no need to call render_active_tab_content() separately
   } else {
     // If no tabs, show a placeholder message
     ImGui::Text("Drag a panel here to create a tabbed group");
@@ -55,30 +55,38 @@ void TabbedPanel::render_tab_bar() {
     for (uint32_t panel_id : tabbed_panel_ids_) {
       if (PanelBase* panel = panel_manager_->get_panel_by_id(panel_id)) {
         std::string tab_label = panel->get_title();
-        
+
         // Add close button if this isn't the only tab
         ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
         if (tabbed_panel_ids_.size() > 1) {
           tab_flags |= ImGuiTabItemFlags_UnsavedDocument; // Shows close button
         }
-        
+
         bool tab_open = true;
         if (ImGui::BeginTabItem(tab_label.c_str(), &tab_open, tab_flags)) {
           // Set this as the active tab
           active_tab_id_ = panel_id;
+
+          // Calculate the available space for the panel content within the tab
+          ImVec2 content_size = ImGui::GetContentRegionAvail();
           
-          // Render the panel content directly within the tab
-          // We need to temporarily adjust the panel's visibility
-          bool was_visible = panel->is_visible();
-          panel->set_visible(true);
+          // Temporarily adjust the panel's size to fit within the tab content area
+          ImVec2 original_size = panel->get_config().size;
+          ImVec2 adjusted_size = ImVec2(content_size.x, content_size.y);
+          
+          // Create a child window to contain the panel content
+          std::string child_window_id = "panel_content_" + std::to_string(panel_id);
+          ImGui::BeginChild(child_window_id.c_str(), adjusted_size, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
           
           // Temporarily hide the panel's window decorations since it's inside a tab
           // We'll just render the core content
           panel->render();
           
+          ImGui::EndChild();
+
           ImGui::EndTabItem();
         }
-        
+
         // Handle tab closing
         if (!tab_open && tabbed_panel_ids_.size() > 1) {
           // Remove this panel from the tabbed panel and restore its visibility
@@ -87,7 +95,7 @@ void TabbedPanel::render_tab_bar() {
         }
       }
     }
-    
+
     ImGui::EndTabBar();
   }
 }

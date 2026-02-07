@@ -45,6 +45,7 @@ class ChartReplayPanel;
 class HistoricalTimeSalesPanel;
 class TapePanel;
 class StatusBarPanel;
+class TabbedPanel;
 
 /**
  * @brief ContextMenuManager - Manages context menus for different UI elements

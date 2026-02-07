@@ -38,6 +38,7 @@
 #include "components/historical_time_sales.hpp"
 #include "components/tape_panel.hpp"
 #include "components/status_bar_panel.hpp"
+#include "components/tabbed_panel.hpp"
 #include "ui/screenshot_utility.hpp"
 namespace BTQuant {
 
@@ -162,6 +163,10 @@ void ContextMenuManager::initialize_context_menus() {
   context_menu_handlers_[PanelType::STRATEGY_BUILDER] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "StrategyBuilderContextMenu");
   };
+
+  context_menu_handlers_[PanelType::TABBED_GROUP] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "TabbedGroupContextMenu");
+  };
 }
 
 void ContextMenuManager::show_context_menu(PanelBase* panel) {
@@ -174,6 +179,19 @@ void ContextMenuManager::show_context_menu(PanelBase* panel) {
 }
 
 void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const char* popup_name) {
+  // Find the panel ID by comparing with all panels in the manager
+  uint32_t panel_id = 0;
+  if (panel_manager_) {
+    auto all_panel_ids = panel_manager_->get_all_panel_ids();
+    for (uint32_t id : all_panel_ids) {
+      PanelBase* manager_panel = panel_manager_->get_panel_by_id(id);
+      if (manager_panel == panel) {
+        panel_id = id;
+        break;
+      }
+    }
+  }
+
   // Check if the window is hovered and right mouse button was clicked
   if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     // Open the context menu
@@ -1372,6 +1390,53 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
         break;
 
+      case PanelType::TABBED_GROUP:
+        ImGui::Text("Tabbed Group Actions:");
+        ImGui::Separator();
+        if (ImGui::MenuItem("Add Panel to Group")) {
+          // This would open a dialog to select a panel to add to this tabbed group
+          // For now, we'll just log the action
+        }
+        if (ImGui::MenuItem("Remove Active Tab")) {
+          // Remove the currently active tab from this tabbed group
+          if (panel_manager_ && panel_id != 0) {
+            // Find which panel is currently active in the tabbed group
+            if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel)) {
+              uint32_t active_tab_id = tabbed_panel->get_active_tab();
+              if (active_tab_id != 0 && tabbed_panel->get_tab_count() > 1) {
+                // Remove the active tab from the tabbed group
+                uint32_t tabbed_group_id = panel_id; // The panel itself is the tabbed group
+                panel_manager_->remove_panel_from_tabbed_group(tabbed_group_id, active_tab_id);
+                
+                // Make the panel visible again
+                if (auto* removed_panel = panel_manager_->get_panel_by_id(active_tab_id)) {
+                  removed_panel->set_visible(true);
+                }
+              }
+            }
+          }
+        }
+        if (ImGui::MenuItem("Expand to Window")) {
+          // Remove all panels from the tabbed group and make them individual windows again
+          if (panel_manager_ && panel_id != 0) {
+            if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel)) {
+              auto tabbed_panel_ids = tabbed_panel->get_tabbed_panels();
+              
+              // Remove each panel from the tabbed group and make it visible
+              for (uint32_t tabbed_id : tabbed_panel_ids) {
+                panel_manager_->remove_panel_from_tabbed_group(panel_id, tabbed_id);
+                if (auto* removed_panel = panel_manager_->get_panel_by_id(tabbed_id)) {
+                  removed_panel->set_visible(true);
+                }
+              }
+              
+              // Finally, remove the tabbed group itself
+              panel_manager_->remove_panel(panel_id);
+            }
+          }
+        }
+        break;
+
       default:
         ImGui::Text("Generic Actions:");
         ImGui::Separator();
@@ -1389,19 +1454,6 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
 
     // Add global panel actions at the bottom of each context menu
     ImGui::Separator();
-
-    // Find the panel ID by comparing with all panels in the manager
-    uint32_t panel_id = 0;
-    if (panel_manager_) {
-      auto all_panel_ids = panel_manager_->get_all_panel_ids();
-      for (uint32_t id : all_panel_ids) {
-        PanelBase* manager_panel = panel_manager_->get_panel_by_id(id);
-        if (manager_panel == panel) {
-          panel_id = id;
-          break;
-        }
-      }
-    }
 
     // Global Panel Actions - Available for all panel types
     if (ImGui::MenuItem("Duplicate Panel")) {

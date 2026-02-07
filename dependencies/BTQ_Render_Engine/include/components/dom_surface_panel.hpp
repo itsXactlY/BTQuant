@@ -160,6 +160,7 @@ class DomSurfacePanel : public PanelBase {
     double size;                     // Size of the liquidity at this level
     uint64_t first_detected_time;    // When first detected at this level
     uint64_t last_updated_time;      // Last time liquidity was seen at this level
+    uint64_t last_changed_time;      // Last time the liquidity size changed significantly
     bool is_active;                  // Whether the level is currently active
     bool is_bid;                     // true = Bid, false = Ask
 
@@ -168,6 +169,7 @@ class DomSurfacePanel : public PanelBase {
           size(s),
           first_detected_time(time),
           last_updated_time(time),
+          last_changed_time(time),   // Initially set to first detection time
           is_active(true),
           is_bid(bid) {}
   };

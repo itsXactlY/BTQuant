@@ -740,7 +740,7 @@ void DomSurfacePanel::render() {
                                 .count();
     size_t persistent_static_count = 0;
     for (const auto& level : static_liquidity_levels_) {
-        if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+        if ((current_time - level.last_changed_time) >= persistence_threshold_ms_) {
             persistent_static_count++;
         }
     }
@@ -770,6 +770,9 @@ void DomSurfacePanel::updatePersistentLevels(const RenderEngine::OrderbookData& 
 
   // Clean up inactive levels
   cleanupInactiveStaticLiquidityLevels();
+  
+  // Also clean up inactive persistent levels (legacy)
+  cleanupInactivePersistentLevels();
 }
 
 void DomSurfacePanel::addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size) {
@@ -781,9 +784,15 @@ void DomSurfacePanel::addOrUpdateStaticLiquidityLevel(double price, bool is_bid,
   for (auto& level : static_liquidity_levels_) {
     // Use a small epsilon for price comparison
     if (std::abs(level.price - price) < 0.0001) {
-      // Update existing level
+      // Check if the size has changed significantly (more than 1% difference)
+      double size_change_threshold = level.size * 0.01; // 1% threshold
+      if (std::abs(level.size - size) > size_change_threshold) {
+        // Size has changed significantly, update the change time
+        level.last_changed_time = current_time;
+        level.size = size; // Update to the new size
+      }
+      // Update the last seen time regardless of size change
       level.last_updated_time = current_time;
-      level.size = std::max(level.size, size); // Keep the largest size seen
       level.is_active = true;
       return;
     }
@@ -854,7 +863,9 @@ void DomSurfacePanel::renderPersistentLevels() {
                                 std::chrono::steady_clock::now().time_since_epoch())
                                 .count();
 
-    if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+    // Check if the level has remained static for more than 30 seconds
+    // This means the size hasn't changed significantly since last_changed_time
+    if ((current_time - level.last_changed_time) >= persistence_threshold_ms_) {
       // Use a distinct color for static liquidity levels with glow effect
       ImU32 color = getStaticLiquidityLevelColor(level);
 
@@ -863,23 +874,23 @@ void DomSurfacePanel::renderPersistentLevels() {
       ImVec4 glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
       glow_color_vec.w = 0.3f; // Higher transparency for glow
       ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(glow_color_vec);
-      
+
       ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
       ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Very thick for glow effect
-      
+
       double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double ys[2] = {level.price, level.price};
       ImPlot::PlotLine("##StaticLiquidityGlow", xs, ys, 2);
-      
+
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
 
       // Then draw the main line
       ImPlot::PushStyleColor(ImPlotCol_Line, color);
       ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 4.0f); // Thicker line for better visibility
-      
+
       ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
-      
+
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
 
@@ -977,11 +988,12 @@ void DomSurfacePanel::renderPersistentLevels() {
 
 ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
   // Use a distinct color scheme for static liquidity levels to differentiate from large orders
-  // Bright cyan for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
+  // Bright magenta for bids (buy-side liquidity), bright yellow for asks (sell-side liquidity)
+  // These colors provide better contrast against the heatmap and stand out more distinctly
   if (level.is_bid) {
-    return IM_COL32(0, 255, 255, 200);  // Bright cyan with good visibility
+    return IM_COL32(255, 0, 255, 220);  // Bright magenta with good visibility
   } else {
-    return IM_COL32(255, 165, 0, 200);   // Bright orange with good visibility
+    return IM_COL32(255, 255, 0, 220);   // Bright yellow with good visibility
   }
 }
 

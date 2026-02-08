@@ -33,39 +33,44 @@ public:
     
     /**
      * @brief Signal one waiting thread
-     * 
+     *
      * Equivalent to condition_variable::notify_one()
      */
     void notify_one() noexcept {
         signal_state_.fetch_add(1u, std::memory_order_release);
-        signal_state_.notify_one();
+        // Note: std::atomic::notify_one() is only available in C++20 and later
+        // For compatibility with older standards, we use a simple fetch_add
     }
-    
+
     /**
      * @brief Signal all waiting threads
-     * 
+     *
      * Equivalent to condition_variable::notify_all()
      */
     void notify_all() noexcept {
         signal_state_.fetch_add(1u, std::memory_order_release);
-        signal_state_.notify_all();
+        // Note: std::atomic::notify_all() is only available in C++20 and later
+        // For compatibility with older standards, we use a simple fetch_add
     }
-    
+
     /**
      * @brief Wait for the signal
-     * 
+     *
      * Blocks the calling thread until the signal is notified.
      */
     void wait() const noexcept {
         uint32_t expected = signal_state_.load(std::memory_order_acquire);
         while (signal_state_.load(std::memory_order_acquire) == expected) {
-            signal_state_.wait(expected, std::memory_order_acquire);
+            // Note: std::atomic::wait() is only available in C++20 and later
+            // For compatibility with older standards, we use a simple spin-wait
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+            expected = signal_state_.load(std::memory_order_acquire);
         }
     }
-    
+
     /**
      * @brief Wait for the signal with predicate
-     * 
+     *
      * @param pred Predicate function to evaluate before waiting
      */
     template<typename Predicate>
@@ -75,10 +80,13 @@ public:
             if (pred()) {
                 return; // Predicate became true without waiting
             }
-            
+
             // Wait while the value hasn't changed
             while (signal_state_.load(std::memory_order_acquire) == expected && !pred()) {
-                signal_state_.wait(expected, std::memory_order_acquire);
+                // Note: std::atomic::wait() is only available in C++20 and later
+                // For compatibility with older standards, we use a simple spin-wait
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
+                expected = signal_state_.load(std::memory_order_acquire);
             }
         }
     }
@@ -203,37 +211,40 @@ public:
      */
     void signal() noexcept {
         signal_state_.store(true, std::memory_order_release);
-        signal_state_.notify_all();
+        // Note: std::atomic::notify_all() is only available in C++20 and later
+        // For compatibility with older standards, we use a simple store
     }
-    
+
     /**
      * @brief Reset the signal state
      */
     void reset() noexcept {
         signal_state_.store(false, std::memory_order_release);
     }
-    
+
     /**
      * @brief Wait for the signal to become true
      */
     void wait() const noexcept {
-        bool expected = false;
         while (!signal_state_.load(std::memory_order_acquire)) {
-            signal_state_.wait(expected, std::memory_order_acquire);
+            // Note: std::atomic::wait() is only available in C++20 and later
+            // For compatibility with older standards, we use a simple spin-wait
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
         }
     }
-    
+
     /**
      * @brief Wait for the signal with predicate
      */
     template<typename Predicate>
     void wait(Predicate pred) const {
         while (!pred() && !signal_state_.load(std::memory_order_acquire)) {
-            bool expected = signal_state_.load(std::memory_order_acquire);
             if (pred() || signal_state_.load(std::memory_order_acquire)) {
                 return;
             }
-            signal_state_.wait(expected, std::memory_order_acquire);
+            // Note: std::atomic::wait() is only available in C++20 and later
+            // For compatibility with older standards, we use a simple spin-wait
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
         }
     }
     
@@ -294,22 +305,21 @@ public:
     void increment() noexcept {
         uint32_t old_value = counter_.fetch_add(1u, std::memory_order_acq_rel);
         uint32_t new_value = old_value + 1;
-        
+
         if (new_value >= target_.load(std::memory_order_acquire)) {
-            counter_.notify_all();
+            // Note: std::atomic::notify_all() is only available in C++20 and later
+            // For compatibility with older standards, we use a simple fetch_add
         }
     }
-    
+
     /**
      * @brief Set a new target value
      */
     void set_target(uint32_t new_target) noexcept {
         target_.store(new_target, std::memory_order_release);
-        
-        // Notify in case the new target is already met
-        if (counter_.load(std::memory_order_acquire) >= new_target) {
-            counter_.notify_all();
-        }
+
+        // Note: std::atomic::notify_all() is only available in C++20 and later
+        // For compatibility with older standards, we use a simple store
     }
     
     /**
@@ -332,9 +342,11 @@ public:
     void wait_for_target() const noexcept {
         uint32_t current = counter_.load(std::memory_order_acquire);
         uint32_t target = target_.load(std::memory_order_acquire);
-        
+
         while (current < target) {
-            counter_.wait(current, std::memory_order_acquire);
+            // Note: std::atomic::wait() is only available in C++20 and later
+            // For compatibility with older standards, we use a simple spin-wait
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
             current = counter_.load(std::memory_order_acquire);
             target = target_.load(std::memory_order_acquire);
         }

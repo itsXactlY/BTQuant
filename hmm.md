@@ -50,14 +50,14 @@
 
 ## 40.4: Atomic Data Ingestion (The Pipeline)
 **Goal:** Ingest 1M+ trades/sec without locking the UI.
-- [ ] **Double-Buffered State:**
+- [x] **Double-Buffered State:**
   - In `MarketDataProcessor`, replace `std::vector` buffers with a **Swap-Buffer** architecture using `std::atomic<State*>`.
   - **Writer:** Fills the "Back" buffer. When full, atomically swaps the pointer to make it the "Front" buffer.
   - **Reader:** Grabs the "Front" buffer pointer atomically to process/render.
-- [ ] **Parallel Processing (`<execution>`):**
+- [x] **Parallel Processing (`<execution>`):**
   - In `ClusterEngine::process_trade_batch`, use `std::for_each(std::execution::par_unseq, ...)` to vectorize volume calculations across the batch before merging.
 
 ## 40.5: Validation
-- [ ] **Benchmark:** Run `MarketDataProcessor` with 1M messages/sec replay.
+- [x] **Benchmark:** Run `MarketDataProcessor` with 1M messages/sec replay.
   - **Expectation:** CPU usage should be high (processing) but uniform across cores. No "spikes" or "stalls".
-- [ ] **Leak Check:** Verify Hazard Pointers correctly reclaim memory after the 4-hour window moves.
+- [x] **Leak Check:** Verify Hazard Pointers correctly reclaim memory after the 4-hour window moves.

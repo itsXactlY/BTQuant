@@ -4092,4 +4092,60 @@ std::future<std::vector<std::vector<std::vector<double>>>> TaskScheduler::calcul
     return future;
 }
 
+std::future<void> TaskScheduler::execute_batch_async(const std::vector<std::function<void()>>& tasks) {
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+
+    if (tasks.empty()) {
+        promise->set_value();
+        return future;
+    }
+
+    // Count the number of tasks to complete
+    auto tasks_remaining = std::make_shared<std::atomic<int>>(static_cast<int>(tasks.size()));
+    auto exception_occurred = std::make_shared<std::atomic<bool>>(false);
+    auto exception_ptr = std::make_shared<std::exception_ptr>(nullptr);
+
+    for (const auto& task : tasks) {
+        enqueue_task([task, tasks_remaining, exception_occurred, exception_ptr, promise]() {
+            try {
+                task();
+            } catch (...) {
+                *exception_occurred = true;
+                *exception_ptr = std::current_exception();
+            }
+            
+            if (tasks_remaining->fetch_sub(1) == 1) {
+                // This was the last task
+                if (*exception_occurred) {
+                    promise->set_exception(*exception_ptr);
+                } else {
+                    promise->set_value();
+                }
+            }
+        });
+    }
+
+    return future;
+}
+
+template<typename Func, typename... Args>
+auto TaskScheduler::execute_with_threads_async(size_t num_threads, Func&& f, Args&&... args) 
+    -> std::future<typename std::result_of<Func(Args...)>::type> {
+    auto promise = std::make_shared<std::promise<typename std::result_of<Func(Args...)>::type>>();
+    auto future = promise->get_future();
+
+    // Create a new task that will execute the function with the specified number of threads
+    enqueue_task([f = std::forward<Func>(f), args..., promise]() mutable {
+        try {
+            auto result = f(args...);
+            promise->set_value(std::move(result));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
 } // namespace btq

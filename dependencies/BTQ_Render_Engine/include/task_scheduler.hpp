@@ -12,6 +12,7 @@
 #include <system_error>
 #include <limits>
 #include <map>
+#include <numeric>
 #include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
 #include "threading/atomic_signal.hpp"
 
@@ -245,6 +246,156 @@ public:
     std::future<std::vector<std::vector<std::vector<double>>>> calculate_rolling_correlation_matrix_async(
         const std::vector<std::vector<double>>& data_series,
         int window_size);
+
+    // New execution methods for parallel processing
+    // Batch execution methods
+    std::future<void> execute_batch_async(const std::vector<std::function<void()>>& tasks);
+
+    // Parallel execution with custom thread pool size
+    template<typename Func, typename... Args>
+    auto execute_with_threads_async(size_t num_threads, Func&& f, Args&&... args) 
+        -> std::future<typename std::result_of<Func(Args...)>::type>;
+
+    // Template method implementations for parallel execution
+    template<typename Iterator, typename Function>
+    void parallel_for_async(Iterator first, Iterator last, Function func) {
+        if (first == last) return;
+        
+        size_t total_size = std::distance(first, last);
+        size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), total_size);
+        if (num_threads == 0) num_threads = 1;
+        
+        if (total_size < num_threads) {
+            // If there are fewer elements than threads, just enqueue a single task
+            enqueue_task([first, last, func]() {
+                std::for_each(first, last, func);
+            });
+            return;
+        }
+        
+        size_t chunk_size = total_size / num_threads;
+        Iterator current = first;
+        
+        for (size_t i = 0; i < num_threads; ++i) {
+            Iterator chunk_end = current;
+            std::advance(chunk_end, (i == num_threads - 1) ? std::distance(current, last) : chunk_size); // Last chunk gets remainder
+            
+            auto task = [current, chunk_end, func]() {
+                std::for_each(current, chunk_end, func);
+            };
+            
+            enqueue_task(std::move(task));
+            current = chunk_end;
+        }
+    }
+
+    template<typename InputIterator, typename OutputIterator, typename UnaryOperation>
+    void parallel_transform_async(InputIterator first, InputIterator last, OutputIterator result, 
+                              UnaryOperation op) {
+        if (first == last) return;
+        
+        size_t total_size = std::distance(first, last);
+        size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), total_size);
+        if (num_threads == 0) num_threads = 1;
+        
+        if (total_size < num_threads) {
+            // If there are fewer elements than threads, just enqueue a single task
+            enqueue_task([first, last, result, op]() {
+                std::transform(first, last, result, op);
+            });
+            return;
+        }
+        
+        size_t chunk_size = total_size / num_threads;
+        InputIterator input_current = first;
+        OutputIterator output_current = result;
+        
+        for (size_t i = 0; i < num_threads; ++i) {
+            InputIterator input_chunk_end = input_current;
+            OutputIterator output_chunk_end = output_current;
+            std::advance(input_chunk_end, (i == num_threads - 1) ? std::distance(input_current, last) : chunk_size); // Last chunk gets remainder
+            std::advance(output_chunk_end, (i == num_threads - 1) ? std::distance(input_current, last) : chunk_size);
+            
+            auto task = [input_current, input_chunk_end, output_current, op]() {
+                std::transform(input_current, input_chunk_end, output_current, op);
+            };
+            
+            enqueue_task(std::move(task));
+            input_current = input_chunk_end;
+            output_current = output_chunk_end;
+        }
+    }
+
+    template<typename Iterator, typename T>
+    std::future<T> parallel_reduce_async(Iterator first, Iterator last, T init, 
+                                      std::function<T(T, T)> reducer = std::plus<T>{}) {
+        auto promise = std::make_shared<std::promise<T>>();
+        auto future = promise->get_future();
+
+        if (first == last) {
+            promise->set_value(init);
+            return future;
+        }
+        
+        size_t total_size = std::distance(first, last);
+        size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), total_size);
+        if (num_threads == 0) num_threads = 1;
+        
+        if (total_size < num_threads) {
+            // If there are fewer elements than threads, just enqueue a single task
+            enqueue_task([first, last, init, reducer, promise]() {
+                try {
+                    T result = std::reduce(first, last, init, reducer);
+                    promise->set_value(result);
+                } catch (...) {
+                    promise->set_exception(std::current_exception());
+                }
+            });
+            return future;
+        }
+        
+        size_t chunk_size = total_size / num_threads;
+        std::vector<std::future<T>> futures;
+        futures.reserve(num_threads);
+        
+        Iterator current = first;
+        
+        for (size_t i = 0; i < num_threads; ++i) {
+            Iterator chunk_end = current;
+            std::advance(chunk_end, (i == num_threads - 1) ? std::distance(current, last) : chunk_size); // Last chunk gets remainder
+            
+            auto task_promise = std::make_shared<std::promise<T>>();
+            futures.push_back(task_promise->get_future());
+            
+            auto task = [current, chunk_end, init, reducer, task_promise]() {
+                try {
+                    T partial_result = std::reduce(current, chunk_end, init, reducer);
+                    task_promise->set_value(partial_result);
+                } catch (...) {
+                    task_promise->set_exception(std::current_exception());
+                }
+            };
+            
+            enqueue_task(std::move(task));
+            current = chunk_end;
+        }
+        
+        // Combine results in a separate task
+        auto futures_ptr = std::make_shared<std::vector<std::future<T>>>(std::move(futures));
+        enqueue_task([futures_ptr, reducer, promise, init]() {
+            try {
+                T final_result = init;
+                for (auto& fut : *futures_ptr) {
+                    final_result = reducer(final_result, fut.get());
+                }
+                promise->set_value(final_result);
+            } catch (...) {
+                promise->set_exception(std::current_exception());
+            }
+        });
+        
+        return future;
+    }
 
 private:
     void worker_loop();

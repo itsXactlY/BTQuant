@@ -49,18 +49,32 @@ namespace BTQuant::RenderEngine {
 namespace {
 [[nodiscard]] std::expected<std::vector<uint32_t>, RendererError> load_spirv_binary(
     const std::string& path) noexcept {
-  std::ifstream file(path, std::ios::ate | std::ios::binary);
-  if (!file.is_open()) [[unlikely]] {
-    return std::unexpected(RendererError::ShaderLoadFailed);
+    
+  // Define multiple possible paths to try
+  std::vector<std::string> possible_paths = {
+      path,  // Original path
+      "../../dependencies/BTQ_Render_Engine/" + path,  // From project root
+      "../" + path,  // One level up
+      "./" + path,  // Current directory
+      "../../../dependencies/BTQ_Render_Engine/" + path,  // From deeper
+      "dependencies/BTQ_Render_Engine/" + path  // From project root
+  };
+  
+  for (const auto& test_path : possible_paths) {
+      std::ifstream file(test_path, std::ios::ate | std::ios::binary);
+      if (file.is_open()) {
+          size_t fileSize = static_cast<size_t>(file.tellg());
+          std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
+          file.seekg(0);
+          file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
+          file.close();
+          
+          return buffer;
+      }
   }
-
-  size_t fileSize = static_cast<size_t>(file.tellg());
-  std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
-  file.seekg(0);
-  file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
-  file.close();
-
-  return buffer;
+  
+  // If none of the paths worked, return error
+  return std::unexpected(RendererError::ShaderLoadFailed);
 }
 
 [[nodiscard]] std::expected<VkShaderModule, RendererError> create_shader_module(

@@ -27,7 +27,7 @@ TaskScheduler::~TaskScheduler() {
         std::unique_lock<std::shared_mutex> lock(stop_mutex_);
         stop_ = true;
     }
-    condition_.notify_all();
+    task_available_signal_.notify_all();
 
     for (std::thread& worker : workers_) {
         if (worker.joinable()) {
@@ -54,12 +54,16 @@ void TaskScheduler::worker_loop() {
                 }
             }
 
-            // Wait for a short time before checking again
-            std::unique_lock<std::mutex> lock(notification_mutex_);
-            condition_.wait_for(lock, std::chrono::milliseconds(10), [this] {
-                std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
-                return stop_ || tasks_.size_approx() > 0;
-            });
+            // Wait for a task to become available or for stop signal
+            // Use a timeout to periodically check the stop condition
+            auto start_time = std::chrono::steady_clock::now();
+            auto timeout_time = start_time + std::chrono::milliseconds(10);
+            
+            // Wait for a task to be available with a timeout
+            if (!task_available_signal_.wait_for(std::chrono::milliseconds(10))) {
+                // Timeout occurred, continue to check stop condition
+                continue;
+            }
         }
     }
 }
@@ -73,7 +77,7 @@ void TaskScheduler::enqueue_task(std::function<void()> task) {
     }
 
     tasks_.enqueue(std::move(task));
-    condition_.notify_one();
+    task_available_signal_.notify_one();
 }
 
 // Template method implementation moved to header file

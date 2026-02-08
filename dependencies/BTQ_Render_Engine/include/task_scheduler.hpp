@@ -4,7 +4,6 @@
 #include <thread>
 #include <mutex>
 #include <shared_mutex>
-#include <condition_variable>
 #include <vector>
 #include <functional>
 #include <future>
@@ -12,7 +11,8 @@
 #include <system_error>
 #include <limits>
 #include <map>
-#include "concurrentqueue.h"
+#include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
+#include "threading/atomic_signal.hpp"
 
 namespace btq {
 
@@ -252,8 +252,7 @@ private:
     moodycamel::ConcurrentQueue<std::function<void()>> tasks_;
 
     mutable std::shared_mutex stop_mutex_;  // For thread-safe access to stop_ flag
-    std::mutex notification_mutex_;  // Mutex for condition variable notification
-    std::condition_variable condition_;
+    btq::threading::AtomicSignal task_available_signal_;  // Atomic signal for task availability
     size_t num_threads_;
     bool stop_;
 

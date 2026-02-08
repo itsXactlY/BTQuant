@@ -886,8 +886,15 @@ void VulkanCore::init_imgui() {
   }
   std::cout << "[VulkanCore] init_imgui: ImGui_ImplVulkan_Init success." << std::endl;
 
-  // Fonts are uploaded automatically by ImGui_ImplVulkan_NewFrame() the first
-  // time.
+  // Trigger font texture creation during initialization to avoid delays during first frame rendering
+  // In newer versions of ImGui, font texture is created automatically during the first call to 
+  // ImGui_ImplVulkan_RenderDrawData(), but we can force the font atlas to build during initialization
+  ImGuiIO& io = ImGui::GetIO();
+  unsigned char* pixels;
+  int width, height;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);   // This forces the font atlas to build
+  
+  std::cout << "[VulkanCore] init_imgui: Font atlas built, dimensions: " << width << "x" << height << std::endl;
 }
 
 void VulkanCore::cleanup_imgui() {

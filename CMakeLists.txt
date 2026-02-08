@@ -74,3 +74,6 @@ endif()
 set_target_properties(benchmark_market_data_processor PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+# Add the Render Engine subdirectory to build BTQuantTerminal
+add_subdirectory(dependencies/BTQ_Render_Engine)

@@ -54,9 +54,13 @@ namespace detail {
             std::function<void()> deleter;
             std::thread::id retiring_tid;
             retired_node* next;
+            uint64_t retirement_time;  // Timestamp when object was retired
 
             retired_node(void* p, std::function<void()> d, std::thread::id tid)
-                : ptr(p), deleter(std::move(d)), retiring_tid(tid), next(nullptr) {}
+                : ptr(p), deleter(std::move(d)), retiring_tid(tid), next(nullptr) {
+                retirement_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+            }
         };
 
         alignas(64) std::vector<hazard_record> global_hazard_ptrs_;
@@ -196,6 +200,66 @@ namespace detail {
                 delete to_del;
             }
         }
+
+        // Time-based cleanup: reclaim objects that have been retired for more than the specified time
+        void cleanup_retired_after_duration(uint64_t min_retirement_age_microseconds) {
+            retired_node* current_list = retired_list_head_.load(std::memory_order_acquire);
+            if (!current_list) return;
+
+            retired_node* taken_list = retired_list_head_.exchange(nullptr, std::memory_order_acq_rel);
+            if (!taken_list) return;
+
+            size_t taken_count = 0;
+            for (auto* temp = taken_list; temp; temp = temp->next) {
+                ++taken_count;
+            }
+            retired_count_.fetch_sub(taken_count, std::memory_order_acq_rel);
+
+            retired_node* deletable_list = nullptr;
+            retired_node* protected_or_recent_list = nullptr;
+            retired_node* remaining = taken_list;
+
+            // Get current time to compare retirement ages
+            uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+            while (remaining) {
+                auto* curr = remaining;
+                remaining = remaining->next;
+                curr->next = nullptr;
+
+                // Check if the object is protected OR if it hasn't been retired long enough
+                bool is_protected_now = is_protected(curr->ptr);
+                bool retirement_age_less_than_threshold = 
+                    (current_time - curr->retirement_time) < min_retirement_age_microseconds;
+
+                if (is_protected_now || retirement_age_less_than_threshold) {
+                    curr->next = protected_or_recent_list;
+                    protected_or_recent_list = curr;
+                } else {
+                    curr->next = deletable_list;
+                    deletable_list = curr;
+                }
+            }
+
+            // Put back the protected or recently retired nodes
+            if (protected_or_recent_list) {
+                retired_node* old_head = retired_list_head_.load(std::memory_order_acquire);
+                retired_node* tail = protected_or_recent_list;
+                while (tail->next) tail = tail->next;
+                tail->next = old_head;
+
+                retired_list_head_.store(protected_or_recent_list, std::memory_order_release);
+            }
+
+            // Delete the expired nodes that are no longer protected
+            while (deletable_list) {
+                auto* to_del = deletable_list;
+                deletable_list = deletable_list->next;
+                to_del->deleter();
+                delete to_del;
+            }
+        }
         
         // Accessor methods for hazard_pointer class
         std::atomic<void*>* get_hazard_ptr_at(size_t idx) {
@@ -204,16 +268,21 @@ namespace detail {
             }
             return nullptr;
         }
-        
+
         const std::atomic<void*>* get_hazard_ptr_at(size_t idx) const {
             if (idx < global_hazard_ptrs_.size()) {
                 return &global_hazard_ptrs_[idx].ptr;
             }
             return nullptr;
         }
-        
+
         size_t get_max_hazard_ptrs() const {
             return global_hazard_ptrs_.size();
+        }
+        
+        // Public method to perform time-based cleanup (simulate 4-hour window)
+        void cleanup_retired_objects_older_than(uint64_t age_in_microseconds) {
+            cleanup_retired_after_duration(age_in_microseconds);
         }
     };
 
@@ -462,6 +531,18 @@ inline hazard_pointer make_hazard_pointer() {
  */
 inline void swap(hazard_pointer& lhs, hazard_pointer& rhs) noexcept {
     lhs.swap(rhs);
+}
+
+/**
+ * @brief Perform time-based cleanup of retired objects
+ * @param age_in_microseconds Minimum age of retired objects to be eligible for cleanup
+ * 
+ * This function cleans up retired objects that have been retired for at least
+ * the specified duration and are no longer protected by any hazard pointers.
+ * Useful for implementing time-based memory reclamation (e.g., 4-hour window).
+ */
+inline void cleanup_retired_objects_older_than(uint64_t age_in_microseconds) {
+    detail::hazard_pointer_manager::instance().cleanup_retired_objects_older_than(age_in_microseconds);
 }
 
 } // namespace btq

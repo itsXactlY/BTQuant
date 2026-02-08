@@ -263,15 +263,18 @@ class WatchlistPanel : public PanelBase {
     double value;  // Used for prices, alert values, etc.
     int alert_direction;  // Used for price alert direction
     
+    // Default constructor
+    WatchlistUpdate() : type(ADD_SYMBOL), symbol_id(0), value(0.0), alert_direction(0) {}
+    
     // Constructor for different update types
     WatchlistUpdate(Type t, uint32_t id) : type(t), symbol_id(id), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym) 
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym)
         : type(t), symbol_id(id), symbol(sym), exchange(""), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, const std::string& exch) 
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, const std::string& exch)
         : type(t), symbol_id(id), symbol(sym), exchange(exch), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val) 
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val)
         : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val, int dir) 
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val, int dir)
         : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(dir) {}
   };
 

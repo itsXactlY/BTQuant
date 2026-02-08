@@ -67,12 +67,12 @@
 **Objective:** Eliminate all `std::mutex`, `std::shared_mutex`, and `std::condition_variable` usage in the hot path. Migrate to C++26 Hazard Pointers and Lock-Free Queues.
 
 ## 40.1: Immediate Startup Fixes [Critical]
-- [ ] **Fix Vulkan Font Upload:**
+- [x] **Fix Vulkan Font Upload:**
   - In `src/system/VulkanCore.cpp` -> `init_imgui()`:
   - Create a single-time command buffer (`begin_single_time_commands()`).
   - Call `ImGui_ImplVulkan_CreateFontsTexture()`.
   - Submit and destroy font upload objects (`ImGui_ImplVulkan_DestroyFontUploadObjects()`).
-- [ ] **Verify Shader Loading:** Check `BTQ_Render_Engine/shaders/spirv/` paths in `main_trading_terminal.cpp` relative to the execution directory.
+- [x] **Verify Shader Loading:** Check `BTQ_Render_Engine/shaders/spirv/` paths in `main_trading_terminal.cpp` relative to the execution directory.
 
 ## 40.2: Lock-Free Task Scheduler (The Engine)
 **Goal:** Replace the mutex-heavy scheduler with a high-throughput, wait-free implementation.

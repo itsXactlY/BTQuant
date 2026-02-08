@@ -13,7 +13,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <cstddef>  // For ptrdiff_t
-#include <queue>    // For priority_queue
 #include <string>   // For std::string
 
 namespace btq {

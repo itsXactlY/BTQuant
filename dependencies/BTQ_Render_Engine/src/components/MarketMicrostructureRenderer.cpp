@@ -49,17 +49,19 @@ namespace BTQuant::RenderEngine {
 namespace {
 [[nodiscard]] std::expected<std::vector<uint32_t>, RendererError> load_spirv_binary(
     const std::string& path) noexcept {
-    
-  // Define multiple possible paths to try
+
+  // Define multiple possible paths to try, prioritizing the most likely execution directory paths
   std::vector<std::string> possible_paths = {
-      path,  // Original path
-      "../../dependencies/BTQ_Render_Engine/" + path,  // From project root
-      "../" + path,  // One level up
-      "./" + path,  // Current directory
-      "../../../dependencies/BTQ_Render_Engine/" + path,  // From deeper
-      "dependencies/BTQ_Render_Engine/" + path  // From project root
+      path,  // Original path (relative to execution directory)
+      "dependencies/BTQ_Render_Engine/" + path,  // From project root (most likely scenario)
+      "../dependencies/BTQ_Render_Engine/" + path,  // From build directory
+      "../../dependencies/BTQ_Render_Engine/" + path,  // From deeper build directory
+      "./dependencies/BTQ_Render_Engine/" + path,  // Current directory with dependencies
+      "BTQ_Render_Engine/" + path,  // Alternative path if in project root
+      "../BTQ_Render_Engine/" + path,  // From build directory to BTQ_Render_Engine
+      "../../../dependencies/BTQ_Render_Engine/" + path,  // From even deeper build directory
   };
-  
+
   for (const auto& test_path : possible_paths) {
       std::ifstream file(test_path, std::ios::ate | std::ios::binary);
       if (file.is_open()) {
@@ -68,12 +70,13 @@ namespace {
           file.seekg(0);
           file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
           file.close();
-          
+
           return buffer;
       }
   }
-  
+
   // If none of the paths worked, return error
+  std::println(std::cerr, "[MarketMicrostructureRenderer] Failed to load shader: {}", path);
   return std::unexpected(RendererError::ShaderLoadFailed);
 }
 

@@ -15,7 +15,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <queue>
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>

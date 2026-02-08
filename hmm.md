@@ -76,21 +76,21 @@
 
 ## 40.2: Lock-Free Task Scheduler (The Engine)
 **Goal:** Replace the mutex-heavy scheduler with a high-throughput, wait-free implementation.
-- [ ] **Replace Queue:** Remove `std::queue` and `std::mutex queue_mutex_`.
+- [x] **Replace Queue:** Remove `std::queue` and `std::mutex queue_mutex_`.
   - Integrate `moodycamel::ConcurrentQueue<Task>` (already in your dependencies) or build a custom Ring Buffer using `std::atomic<size_t>` head/tail.
-- [ ] **Atomic Signaling (C++20/26):**
+- [x] **Atomic Signaling (C++20/26):**
   - Remove `std::condition_variable`.
   - Use `std::atomic<uint32_t>::notify_one()` and `std::atomic<uint32_t>::wait()` for worker sleep/wake cycles.
   - **Why:** Removes kernel-level locking overhead during task dispatch.
-- [ ] **Stop Token:** Replace `stop_mutex_` with `std::atomic_flag` or `std::stop_source` (C++20).
+- [x] **Stop Token:** Replace `stop_mutex_` with `std::atomic_flag` or `std::stop_source` (C++20).
 
 ## 40.3: Hazard Pointer Memory Reclamation (The Infinite Canvas)
 **Goal:** Allow the "Infinite Canvas" (ClusterEngine) to grow and prune without stopping readers (Renderers).
-- [ ] **Implement Hazard Pointers (`<hazard_pointer>` C++26):**
+- [x] **Implement Hazard Pointers (`<hazard_pointer>` C++26):**
   - **Readers (Renderers):** When rendering a viewport, acquire a hazard pointer to the `ClusterChunk` being drawn. This guarantees the data remains valid even if the processor tries to delete it.
   - **Writer (MarketDataProcessor):** When pruning old data (>4 hours), call `retire()` on the chunk.
   - **Reclamation:** The system automatically frees the memory *only* when no hazard pointers reference it. No locks required.
-- [ ] **RCU for Configuration (`<rcu>` C++26):**
+- [x] **RCU for Configuration (`<rcu>` C++26):**
   - Use `std::rcu_obj_base` for `active_pairs_` and configuration maps.
   - Readers access data via `std::rcu_read_lock`.
   - Updates happen via `synchronize_rcu()`, ensuring zero contention for readers.

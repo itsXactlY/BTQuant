@@ -14,6 +14,8 @@
 #include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -785,7 +787,7 @@ void FootprintPanel::render() {
   }
   // Show standardized tooltip for the button
   BTQuant::UI::show_control_tooltip("footprint_panel_reset_view");
-  
+
   ImGui::SameLine();
   ImGui::Checkbox("Volume Labels", &show_volume_labels_);
   ImGui::SameLine();

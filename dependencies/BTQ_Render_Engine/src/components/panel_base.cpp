@@ -3,6 +3,8 @@
 #include "components/panel_manager.hpp"
 #include "imgui.h"
 #include "ui/context_menus.hpp"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 namespace BTQuant {
 
@@ -244,7 +246,7 @@ void PanelBase::render_symbol_link_icon() {
     }
     // Show standardized tooltip for the button
     BTQuant::UI::show_control_tooltip("confirmation_dialog_yes");
-    
+
     ImGui::SameLine();
     if (ImGui::Button("No")) {
       ImGui::CloseCurrentPopup();
@@ -280,7 +282,7 @@ void PanelBase::render_panel_header() {
       // Add haptic feedback for button interaction
       BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
-    
+
     // Show standardized tooltip for the button
     BTQuant::UI::show_control_tooltip("panel_settings_button");
   }
@@ -294,7 +296,7 @@ void PanelBase::render_panel_header() {
       // Add haptic feedback for button interaction
       BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
     }
-    
+
     // Show standardized tooltip for the button
     BTQuant::UI::show_control_tooltip("panel_close_button");
   }

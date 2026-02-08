@@ -6,6 +6,8 @@
 #include <nlohmann/json.hpp>
 
 #include "imgui.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Include the chart panel header for the implementation
 #include "../include/components/chart_panel.hpp"
@@ -30,9 +32,9 @@ void ChartPanelSettings::render() {
   // Check if we're in a valid ImGui frame scope to prevent assertion errors
   ImGuiContext& g = *GImGui;
   if (!g.WithinFrameScope) {
-      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
-      // The chart panel settings will be rendered in the next frame when the scope is valid
-      return;
+    // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+    // The chart panel settings will be rendered in the next frame when the scope is valid
+    return;
   }
 
   // Create modal window
@@ -149,7 +151,7 @@ void ChartPanelSettings::render() {
     }
     // Show standardized tooltip for the button
     BTQuant::UI::show_control_tooltip("chart_settings_apply");
-    
+
     ImGui::SameLine();
     if (ImGui::Button("Cancel")) {
       is_modal_open_ = false;

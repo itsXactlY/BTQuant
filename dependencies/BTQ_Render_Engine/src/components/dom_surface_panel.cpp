@@ -91,8 +91,23 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
   std::lock_guard<std::mutex> lock(data_mutex_);
   if (symbol_id == current_symbol_id_) {
     if (type == RenderEngine::NotificationType::TRADE) {
-      // For trade updates, we'll update trade bubbles specifically
-      updateTradeBubbles();
+      // For trade updates, get the trade data and add it to the queue for processing on the main thread
+      auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+      if (!analytics.recent_trades.empty()) {
+        // Add the most recent trade to the pending queue
+        std::lock_guard<std::mutex> queue_lock(pending_trades_mutex_);
+        for (const auto& trade : analytics.recent_trades) {
+          // Convert RenderEngine::TradeData to Data::TradeData
+          BTQuant::Data::TradeData converted_trade;
+          converted_trade.timestamp = trade.timestamp;
+          converted_trade.price = trade.price;
+          converted_trade.volume = static_cast<float>(trade.size);  // size -> volume
+          converted_trade.side = trade.is_buy ? BTQuant::Data::TradeSide::BUY : BTQuant::Data::TradeSide::SELL;  // is_buy -> side
+          converted_trade.exchange_id = 0;  // Default exchange ID
+          converted_trade.flags = 0;  // Default flags
+          pending_trades_queue_.push(converted_trade);
+        }
+      }
     }
     markDirty();
   }
@@ -159,6 +174,57 @@ void DomSurfacePanel::processRecentTrades() {
   // Clean up bubbles that are outside the current view range to prevent accumulation
   cleanupOldTradeBubbles();
 }
+
+void DomSurfacePanel::processQueuedTrades() {
+  // Process any queued trades from the background thread
+  std::lock_guard<std::mutex> queue_lock(pending_trades_mutex_);
+  
+  while (!pending_trades_queue_.empty()) {
+    const auto& trade = pending_trades_queue_.front();
+    
+    // Find max volume for scaling purposes
+    if (trade.volume > max_trade_volume_) {
+      max_trade_volume_ = trade.volume;
+    }
+    
+    // Calculate X position based on timestamp relative to history range
+    double relative_time = 0.0;
+    if (history_end_timestamp_ > history_start_timestamp_) {
+      relative_time = static_cast<double>(trade.timestamp - history_start_timestamp_) /
+                      static_cast<double>(history_end_timestamp_ - history_start_timestamp_);
+    }
+
+    // Map bounds_min[0] (0) to bounds_max[0] (time_steps)
+    double x_pos = bounds_min_[0] + relative_time * (bounds_max_[0] - bounds_min_[0]);
+
+    // Only add bubble if within view
+    if (x_pos >= bounds_min_[0] && x_pos <= bounds_max_[0]) {
+      // Check if we already have this trade in our bubbles to avoid duplicates
+      bool exists = false;
+      for (const auto& bubble : trade_bubbles_) {
+        if (bubble.timestamp == trade.timestamp && std::abs(bubble.y - trade.price) < 0.0001 &&
+            std::abs(bubble.volume - trade.volume) < 0.0001) {
+          exists = true;
+          break;
+        }
+      }
+
+      if (!exists) {
+        TradeBubble bubble(x_pos, trade.price, trade.volume, trade.price, 
+                           trade.side == BTQuant::Data::TradeSide::BUY,
+                           trade.timestamp);
+        bubble.radius = calculateBubbleRadius(trade.volume);
+        trade_bubbles_.push_back(bubble);
+      }
+    }
+    
+    pending_trades_queue_.pop();
+  }
+  
+  // Clean up bubbles that are outside the current view range to prevent accumulation
+  cleanupOldTradeBubbles();
+}
+
 
 void DomSurfacePanel::cleanupOldTradeBubbles() {
   // Get current time to calculate age of the trades
@@ -644,6 +710,10 @@ void DomSurfacePanel::renderLargeOrderMarkers() {
 
 void DomSurfacePanel::render() {
   std::lock_guard<std::mutex> lock(data_mutex_);
+  
+  // Process any queued trades from background thread before updating UI
+  processQueuedTrades();
+  
   if (consumeDirty()) {
     updateHeatmapData();
     updateLargeOrderMarkers();

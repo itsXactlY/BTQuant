@@ -734,7 +734,8 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Remove and restore all std::lock, or any other non C++26 standards.
 - [x] Hunt down Raceconditions.
 - [x] Report found and fixed raceconditions.
-- [ ] **Finalizing:** All missing code parts, as example, the Tutorial Screen what is there, but never implemented. Tooltips, haptic feedback, and other code snippets.
-- [ ] **Search and Destroy**: Systematically analyze if All code blocks are wired up and are warning and error free in the last final release build.
-- [ ] **Build RELEASE Build**: Make sure the Release build executes, renders, has no race conditions, is reactive, works flawless. Use tools like gdb etc.
-- [ ] **Debug:** run the Terminal with gdb to figure out crashes, like this: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build/_deps/imgui-src/imgui.cpp:7744: bool ImGui::Begin(const char*, bool*, ImGuiWindowFlags): Assertion `g.WithinFrameScope' failed.
+- [x] **Finalizing:** All missing code parts, as example, the Tutorial Screen what is there, but never implemented. Tooltips, haptic feedback, and other code snippets.
+- [x] **Search and Destroy**: Systematically analyze if All code blocks are wired up and are warning and error free in the last final release build.
+- [x] Delete the "Parallel Implementation Divergence". Merge `RealtimeDashboard` logic into `PanelManager` and establish `QuantWorkspaceComponent` as the single source of truth.
+- [x] **Build RELEASE Build**: Make sure the Release build executes, renders, has no race conditions, is reactive, works flawless. Use tools like gdb etc.
+- [x] **Debug:** run the Terminal with gdb to figure out crashes, like this: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build/_deps/imgui-src/imgui.cpp:7744: bool ImGui::Begin(const char*, bool*, ImGuiWindowFlags): Assertion `g.WithinFrameScope' failed.

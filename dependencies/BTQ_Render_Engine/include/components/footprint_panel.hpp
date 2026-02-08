@@ -68,14 +68,24 @@ class FootprintPanel : public PanelBase {
 
   uint32_t get_symbol_id() const { return symbol_id_; }
   void set_symbol_id(uint32_t id) {
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    symbol_id_ = id;
-    if (renderer_) renderer_->setSymbol(id);
+    bool symbol_changed = false;
+    {
+      std::lock_guard<std::mutex> lock(data_mutex_);
+      if (symbol_id_ != id) {
+        symbol_id_ = id;
+        symbol_changed = true;
+      }
+    }
 
-    // Notify the panel manager about the symbol change to trigger symbol linking
-    auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(id);
-    if (symbol_info_opt && get_panel_manager()) {
-      get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_info_opt->name);
+    if (symbol_changed) {
+      if (renderer_) renderer_->setSymbol(id);
+
+      // Notify the panel manager about the symbol change to trigger symbol linking
+      auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(id);
+      if (symbol_info_opt && get_panel_manager()) {
+        get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(),
+                                                               symbol_info_opt->name);
+      }
     }
   }
 

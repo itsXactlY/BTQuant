@@ -14,6 +14,8 @@
 #include "../../include/components/theme_manager.hpp"
 #include "../../include/trading/HotspineData.h"
 #include "imgui.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -460,9 +462,6 @@ void TimeAndSalesPanel::render_controls() {
     }
     // Add haptic feedback for button interaction
     BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
-  }
-  // Show standardized tooltip for the button
-  BTQuant::UI::show_control_tooltip("time_and_sales_apply");
 
     // Parse end time - supports both raw timestamp and HH:MM:SS format
     if (strlen(end_time_input_) > 0) {
@@ -484,6 +483,8 @@ void TimeAndSalesPanel::render_controls() {
 
     markDirty();  // Refresh the display with new filters
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("time_and_sales_apply");
 
   ImGui::SameLine();
   if (ImGui::Button("Reset")) {

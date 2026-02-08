@@ -15,6 +15,8 @@
 #include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 #include "implot.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -25,8 +27,7 @@ namespace BTQuant {
 
 HistoricalTimeSalesPanel::HistoricalTimeSalesPanel(
     const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-    PanelManager* panel_manager)
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor), panel_manager_(panel_manager) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
@@ -76,7 +77,7 @@ void HistoricalTimeSalesPanel::set_symbol(uint32_t symbol_id, const std::string&
   // Re-subscribe to new symbol
   subscribe_to_updates();
   markDirty();  // Force immediate refresh
-  
+
   // Notify the panel manager about the symbol change to trigger symbol linking
   if (get_panel_manager()) {
     get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name);

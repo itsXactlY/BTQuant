@@ -16,6 +16,8 @@
 #include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 #include "implot.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;

@@ -5,18 +5,18 @@
 
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+#include "components/MarketMicrostructureRenderer.h"
+#include "components/chart_panel.hpp"
 #include "components/footprint_panel.hpp"
 #include "components/interaction_manager.hpp"
-#include "components/MarketMicrostructureRenderer.h"
 #include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
-#include "components/chart_panel.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "implot.h"
-#include "performance_monitor.hpp"
 #include "performance/debug_overlay.hpp"
+#include "performance_monitor.hpp"
 #include "ui/layout_manager.hpp"
 
 // Shorter aliases for commonly used types
@@ -83,7 +83,7 @@ void VulkanDashboard::init_components() {
   }
 
   workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
-                                                        micro_renderer_.get());
+                                                         micro_renderer_.get());
 
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
@@ -148,120 +148,137 @@ void VulkanDashboard::init_components() {
 
   // Quick-save hotkeys: F5-F8 to save layouts, Shift+F5-F8 to load layouts
   // Using LayoutManager singleton for proper preset management
-  im.registerHotKey(ImGuiKey_F5, []() {
-    auto& layoutManager = UI::LayoutManager::getInstance();
-    if (ImGui::GetIO().KeyShift) {
-      // Shift+F5 - Load layout
-      if (layoutManager.quick_load_layout(1)) {
-        std::cout << "[Layout] Loaded Quick Save 1 (Shift+F5)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to load Quick Save 1 (Shift+F5)" << std::endl;
-      }
-    } else {
-      // F5 - Save layout
-      if (layoutManager.quick_save_layout(1)) {
-        std::cout << "[Layout] Saved to Quick Save 1 (F5)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to save to Quick Save 1 (F5)" << std::endl;
-      }
-    }
-  }, "Quick Save/Load Layout 1", false, false, false); // F5/F5+Shift
-
-  im.registerHotKey(ImGuiKey_F6, []() {
-    auto& layoutManager = UI::LayoutManager::getInstance();
-    if (ImGui::GetIO().KeyShift) {
-      // Shift+F6 - Load layout
-      if (layoutManager.quick_load_layout(2)) {
-        std::cout << "[Layout] Loaded Quick Save 2 (Shift+F6)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to load Quick Save 2 (Shift+F6)" << std::endl;
-      }
-    } else {
-      // F6 - Save layout
-      if (layoutManager.quick_save_layout(2)) {
-        std::cout << "[Layout] Saved to Quick Save 2 (F6)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to save to Quick Save 2 (F6)" << std::endl;
-      }
-    }
-  }, "Quick Save/Load Layout 2", false, false, false); // F6/F6+Shift
-
-  im.registerHotKey(ImGuiKey_F7, []() {
-    auto& layoutManager = UI::LayoutManager::getInstance();
-    if (ImGui::GetIO().KeyShift) {
-      // Shift+F7 - Load layout
-      if (layoutManager.quick_load_layout(3)) {
-        std::cout << "[Layout] Loaded Quick Save 3 (Shift+F7)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to load Quick Save 3 (Shift+F7)" << std::endl;
-      }
-    } else {
-      // F7 - Save layout
-      if (layoutManager.quick_save_layout(3)) {
-        std::cout << "[Layout] Saved to Quick Save 3 (F7)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to save to Quick Save 3 (F7)" << std::endl;
-      }
-    }
-  }, "Quick Save/Load Layout 3", false, false, false); // F7/F7+Shift
-
-  im.registerHotKey(ImGuiKey_F8, []() {
-    auto& layoutManager = UI::LayoutManager::getInstance();
-    if (ImGui::GetIO().KeyShift) {
-      // Shift+F8 - Load layout
-      if (layoutManager.quick_load_layout(4)) {
-        std::cout << "[Layout] Loaded Quick Save 4 (Shift+F8)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to load Quick Save 4 (Shift+F8)" << std::endl;
-      }
-    } else {
-      // F8 - Save layout
-      if (layoutManager.quick_save_layout(4)) {
-        std::cout << "[Layout] Saved to Quick Save 4 (F8)" << std::endl;
-      } else {
-        std::cout << "[Layout] Failed to save to Quick Save 4 (F8)" << std::endl;
-      }
-    }
-  }, "Quick Save/Load Layout 4", false, false, false); // F8/F8+Shift
-
-  // F12 - Toggle Debug Overlay
-  im.registerHotKey(ImGuiKey_F12, [this]() {
-    g_debug_overlay.toggle_visibility();
-    std::cout << "[Debug Overlay] Toggled visibility: "
-              << (g_debug_overlay.is_visible() ? "ON" : "OFF") << std::endl;
-  }, "Toggle Debug Overlay", false, false, false); // F12
-
-  // Delete key - Remove currently focused panel
-  im.registerHotKey(ImGuiKey_Delete, [this]() {
-    // Find the currently focused panel and remove it
-    // We need to iterate through all panels to find which one currently has focus
-    auto panel_manager = workspace_->getPanelManager();
-    if (panel_manager) {
-      auto all_panel_ids = panel_manager->get_all_panel_ids();
-
-      // Find the currently focused window by checking ImGui's focused window
-      ImGuiWindow* focused_window = GImGui->NavWindow;
-      const char* focused_window_name = focused_window ? focused_window->Name : nullptr;
-
-      for (uint32_t panel_id : all_panel_ids) {
-        auto panel = panel_manager->get_panel_by_id(panel_id);
-        if (panel) {
-          // Check if this panel's window is currently focused
-          std::string expected_window_name =
-              panel->get_config().title + "###panel_" +
-              std::to_string(reinterpret_cast<uintptr_t>(panel));
-
-          if (focused_window_name &&
-              std::string(focused_window_name) == expected_window_name) {
-            // Found the focused panel, remove it
-            panel_manager->remove_panel(panel_id);
-            std::cout << "[Hotkey] Removed focused panel: " << panel->get_config().title << std::endl;
-            break;
+  im.registerHotKey(
+      ImGuiKey_F5,
+      []() {
+        auto& layoutManager = UI::LayoutManager::getInstance();
+        if (ImGui::GetIO().KeyShift) {
+          // Shift+F5 - Load layout
+          if (layoutManager.quick_load_layout(1)) {
+            std::cout << "[Layout] Loaded Quick Save 1 (Shift+F5)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to load Quick Save 1 (Shift+F5)" << std::endl;
+          }
+        } else {
+          // F5 - Save layout
+          if (layoutManager.quick_save_layout(1)) {
+            std::cout << "[Layout] Saved to Quick Save 1 (F5)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to save to Quick Save 1 (F5)" << std::endl;
           }
         }
-      }
-    }
-  }, "Remove Focused Panel", false, false, false); // Delete
+      },
+      "Quick Save/Load Layout 1", false, false, false);  // F5/F5+Shift
+
+  im.registerHotKey(
+      ImGuiKey_F6,
+      []() {
+        auto& layoutManager = UI::LayoutManager::getInstance();
+        if (ImGui::GetIO().KeyShift) {
+          // Shift+F6 - Load layout
+          if (layoutManager.quick_load_layout(2)) {
+            std::cout << "[Layout] Loaded Quick Save 2 (Shift+F6)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to load Quick Save 2 (Shift+F6)" << std::endl;
+          }
+        } else {
+          // F6 - Save layout
+          if (layoutManager.quick_save_layout(2)) {
+            std::cout << "[Layout] Saved to Quick Save 2 (F6)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to save to Quick Save 2 (F6)" << std::endl;
+          }
+        }
+      },
+      "Quick Save/Load Layout 2", false, false, false);  // F6/F6+Shift
+
+  im.registerHotKey(
+      ImGuiKey_F7,
+      []() {
+        auto& layoutManager = UI::LayoutManager::getInstance();
+        if (ImGui::GetIO().KeyShift) {
+          // Shift+F7 - Load layout
+          if (layoutManager.quick_load_layout(3)) {
+            std::cout << "[Layout] Loaded Quick Save 3 (Shift+F7)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to load Quick Save 3 (Shift+F7)" << std::endl;
+          }
+        } else {
+          // F7 - Save layout
+          if (layoutManager.quick_save_layout(3)) {
+            std::cout << "[Layout] Saved to Quick Save 3 (F7)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to save to Quick Save 3 (F7)" << std::endl;
+          }
+        }
+      },
+      "Quick Save/Load Layout 3", false, false, false);  // F7/F7+Shift
+
+  im.registerHotKey(
+      ImGuiKey_F8,
+      []() {
+        auto& layoutManager = UI::LayoutManager::getInstance();
+        if (ImGui::GetIO().KeyShift) {
+          // Shift+F8 - Load layout
+          if (layoutManager.quick_load_layout(4)) {
+            std::cout << "[Layout] Loaded Quick Save 4 (Shift+F8)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to load Quick Save 4 (Shift+F8)" << std::endl;
+          }
+        } else {
+          // F8 - Save layout
+          if (layoutManager.quick_save_layout(4)) {
+            std::cout << "[Layout] Saved to Quick Save 4 (F8)" << std::endl;
+          } else {
+            std::cout << "[Layout] Failed to save to Quick Save 4 (F8)" << std::endl;
+          }
+        }
+      },
+      "Quick Save/Load Layout 4", false, false, false);  // F8/F8+Shift
+
+  // F12 - Toggle Debug Overlay
+  im.registerHotKey(
+      ImGuiKey_F12,
+      [this]() {
+        g_debug_overlay.toggle_visibility();
+        std::cout << "[Debug Overlay] Toggled visibility: "
+                  << (g_debug_overlay.is_visible() ? "ON" : "OFF") << std::endl;
+      },
+      "Toggle Debug Overlay", false, false, false);  // F12
+
+  // Delete key - Remove currently focused panel
+  im.registerHotKey(
+      ImGuiKey_Delete,
+      [this]() {
+        // Find the currently focused panel and remove it
+        // We need to iterate through all panels to find which one currently has focus
+        auto panel_manager = workspace_->getPanelManager();
+        if (panel_manager) {
+          auto all_panel_ids = panel_manager->get_all_panel_ids();
+
+          // Find the currently focused window by checking ImGui's focused window
+          ImGuiWindow* focused_window = GImGui->NavWindow;
+          const char* focused_window_name = focused_window ? focused_window->Name : nullptr;
+
+          for (uint32_t panel_id : all_panel_ids) {
+            auto panel = panel_manager->get_panel_by_id(panel_id);
+            if (panel) {
+              // Check if this panel's window is currently focused
+              std::string expected_window_name = panel->get_config().title + "###panel_" +
+                                                 std::to_string(reinterpret_cast<uintptr_t>(panel));
+
+              if (focused_window_name && std::string(focused_window_name) == expected_window_name) {
+                // Found the focused panel, remove it
+                panel_manager->remove_panel(panel_id);
+                std::cout << "[Hotkey] Removed focused panel: " << panel->get_config().title
+                          << std::endl;
+                break;
+              }
+            }
+          }
+        }
+      },
+      "Remove Focused Panel", false, false, false);  // Delete
 }
 
 void VulkanDashboard::render_frame() {
@@ -282,12 +299,9 @@ void VulkanDashboard::render_frame() {
   }
 
   // Start ImGui frame
-  std::cout << "[VulkanDashboard] Before ImGui::NewFrame()" << std::endl;
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
-  std::cout << "[VulkanDashboard] Before ImGui::NewFrame() - After" << std::endl;
   ImGui::NewFrame();
-  std::cout << "[VulkanDashboard] After ImGui::NewFrame()" << std::endl;
 
   // Update Interaction Manager
   InteractionManager::getInstance().update();
@@ -321,7 +335,7 @@ void VulkanDashboard::render_frame() {
   if (workspace_) {
     workspace_->update(dt);
     workspace_->render_gui();
-    
+
     // Sync UI state to Data feed (Fixing the Data Disconnect)
     // Extract UI state from workspace and propagate to data bridge
     if (hotspine_bridge_ && market_data_processor_) {
@@ -331,7 +345,7 @@ void VulkanDashboard::render_frame() {
         active_symbol_ = selected_symbol;
         // Update the dashboard's active symbol to sync with data feed
         set_active_symbol(selected_symbol);
-        
+
         // Propagate the symbol change to all relevant components
         auto symbol_id_opt = SymbolRegistry::instance().get_symbol_id("Binance", selected_symbol);
         if (symbol_id_opt) {
@@ -341,20 +355,20 @@ void VulkanDashboard::render_frame() {
           }
         }
       }
-      
+
       // Sync order state if any changes occurred in the UI
       // double order_qty = workspace_->getOrderQuantity();
       // double order_price = workspace_->getOrderPrice();
       // int order_side = workspace_->getSelectedOrderSide();  // 0 = Buy, 1 = Sell
       // int order_type = workspace_->getSelectedOrderType();  // 0 = Market, 1 = Limit
-      
+
       // If there are pending orders from UI, submit them to the order manager
       auto order_manager = workspace_->getOrderManager();
       if (order_manager) {
         // Process any UI-initiated order submissions
         // This would typically happen through button clicks in the UI
         // For now, we'll just ensure the state is consistent
-        
+
         // Sync hierarchical selector state to data feed
         const auto& selector_state = workspace_->getSelectorState();
         if (!selector_state.selected_symbol.empty()) {
@@ -362,16 +376,20 @@ void VulkanDashboard::render_frame() {
           if (selector_state.selected_symbol != active_symbol_) {
             active_symbol_ = selector_state.selected_symbol;
             set_active_symbol(selector_state.selected_symbol);
-            
+
             // Propagate to panel manager
             if (workspace_->getPanelManager()) {
-              workspace_->getPanelManager()->set_active_symbol(
-                  selector_state.selected_symbol_id, selector_state.selected_symbol);
+              workspace_->getPanelManager()->set_active_symbol(selector_state.selected_symbol_id,
+                                                               selector_state.selected_symbol);
             }
           }
         }
       }
-      
+
+      // Sync mixed UI/Data state
+
+      // ... (existing code) ...
+
       // Sync any UI-driven configuration changes back to the data bridge
       hotspine_bridge_->sync();
     }
@@ -383,9 +401,9 @@ void VulkanDashboard::render_frame() {
     pollDataToRenderer();
     auto result = micro_renderer_->prepare();
     if (!result) {
-        // Log error if preparation failed
-        std::cout << "[VulkanDashboard] Micro renderer prepare failed: " <<
-                     RenderEngine::to_string(result.error()) << std::endl;
+      // Log error if preparation failed
+      // std::cerr << "[VulkanDashboard] Micro renderer prepare failed: " <<
+      // RenderEngine::to_string(result.error()) << std::endl;
     }
     micro_renderer_->executeCompute(vulkan_core_->get_current_command_buffer());
 
@@ -413,6 +431,7 @@ void VulkanDashboard::render_frame() {
       micro_renderer_->executeGraphics(cmd);
     }
   });
+
   vulkan_core_->PresentFrame(imageIndex);
 }
 
@@ -426,8 +445,6 @@ void VulkanDashboard::shutdown() {
     return;
   }
   already_shutdown = true;
-
-  std::cout << "[VulkanDashboard] Shutting down..." << std::endl;
 
   if (vulkan_core_) {
     vulkan_core_->wait_idle();
@@ -467,7 +484,7 @@ void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, i
 
 void VulkanDashboard::pollDataToRenderer() {
   using namespace BTQuant::RenderEngine;
-  
+
   if (!micro_renderer_ || !hotspine_bridge_ || !market_data_processor_) {
     return;
   }
@@ -671,8 +688,8 @@ void VulkanDashboard::render_performance_overlay() {
   // Update renderer stats if available
   if (micro_renderer_) {
     auto stats = micro_renderer_->getStats();
-    g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates,
-                                      stats.tradeUpdates, stats.footprintCellsRendered);
+    g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates, stats.tradeUpdates,
+                                       stats.footprintCellsRendered);
   }
 
   // Get active indicators count from the workspace components
@@ -710,7 +727,7 @@ void VulkanDashboard::render_layout_indicator() {
   int active_slot = layoutManager.get_active_quick_slot();
   std::string slot_info = "";
   if (active_slot > 0) {
-      slot_info = " (QS" + std::to_string(active_slot) + ")";
+    slot_info = " (QS" + std::to_string(active_slot) + ")";
   }
 
   // Position the layout indicator in the top-right corner
@@ -719,26 +736,22 @@ void VulkanDashboard::render_layout_indicator() {
 
   // Create a transparent overlay window for the layout indicator
   ImGui::Begin("##LayoutIndicator", nullptr,
-               ImGuiWindowFlags_NoTitleBar |
-               ImGuiWindowFlags_NoResize |
-               ImGuiWindowFlags_NoMove |
-               ImGuiWindowFlags_NoScrollbar |
-               ImGuiWindowFlags_NoScrollWithMouse |
-               ImGuiWindowFlags_NoCollapse |
-               ImGuiWindowFlags_AlwaysAutoResize |
-               ImGuiWindowFlags_NoSavedSettings |
-               ImGuiWindowFlags_NoInputs |
-               ImGuiWindowFlags_NoFocusOnAppearing |
-               ImGuiWindowFlags_NoNav);
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
+                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs |
+                   ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
 
   // Draw the layout indicator with a semi-transparent background
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f)); // Dark semi-transparent background
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        ImVec4(0.1f, 0.1f, 0.1f, 0.7f));  // Dark semi-transparent background
 
   // Change text color based on whether a quick save slot is active
   if (active_slot > 0) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.9f, 0.5f, 1.0f)); // Greenish color for active quick save
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImVec4(0.5f, 0.9f, 0.5f, 1.0f));  // Greenish color for active quick save
   } else {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f)); // Light text
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));  // Light text
   }
 
   ImGui::Text("Layout: %s%s", active_layout.c_str(), slot_info.c_str());
@@ -751,9 +764,6 @@ void VulkanDashboard::set_always_on_top(bool enabled) {
   if (window_ && glfwGetWindowAttrib(window_, GLFW_VISIBLE)) {
     glfwSetWindowAttrib(window_, GLFW_FLOATING, enabled ? GLFW_TRUE : GLFW_FALSE);
     always_on_top_ = enabled;
-    
-    std::cout << "[VulkanDashboard] Always on top " 
-              << (enabled ? "enabled" : "disabled") << std::endl;
   }
 }
 

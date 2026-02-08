@@ -10,6 +10,8 @@
 #include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 #include "implot.h"
+#include "ui/haptic_feedback.hpp"
+#include "ui/tooltips.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -565,7 +567,7 @@ void VolumeProfilePanel::render_controls() {
   }
   // Show standardized tooltip for the button
   BTQuant::UI::show_control_tooltip("volume_profile_reset_view");
-  
+
   ImGui::SameLine();
   ImGui::Text("Symbol: %s", symbol_name_.c_str());
   ImGui::SameLine();

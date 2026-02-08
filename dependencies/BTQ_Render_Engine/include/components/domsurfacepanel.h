@@ -7,6 +7,8 @@
 #include <deque>
 #include <memory>
 #include <vector>
+#include <queue>
+#include <mutex>
 
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
@@ -149,6 +151,10 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float TRADE_BUBBLE_MAX_VOLUME = 10000.0f; // Maximum volume for scaling
   static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_US = 30'000'000;  // 30 seconds fade-out duration in microseconds
 
+  // Thread-safe queue for trade updates from background thread
+  std::queue<BTQuant::Data::TradeData> pending_trades_queue_;
+  mutable std::mutex pending_trades_mutex_;
+
   // Vulkan resources for accelerated rendering
   VulkanCore* vulkan_core_ = nullptr;
   VkImage heatmap_image_ = nullptr;
@@ -217,78 +223,6 @@ class DomSurfacePanel : public PanelBase {
   double getPersistenceTimeoutMs() const { return persistence_timeout_ms_; }
   bool getShowPersistentLines() const { return show_persistent_lines_; }
 
- private:
-  std::shared_ptr<MarketDataProcessor> processor_;
-  uint32_t current_symbol_id_ = 0;
-  std::string current_symbol_name_;
-
-  // Visualization parameters
-  int history_depth_ = 300;    // Number of snapshots to show (X-axis time)
-  int price_bins_ = 100;       // Number of vertical price buckets (Y-axis price)
-  double price_range_ = 0.02;  // +/- 2% from mid price
-  float heatmap_intensity_ = 1.0f;  // Intensity/sensitivity of heatmap color mapping
-
-  // Data storage for heatmap
-  // ImPlot PlotHeatmap data size = rows * cols
-  // Rows = Price Levels, Cols = Time
-  std::vector<double> heatmap_data_;
-  double bounds_min_[2] = {0, 0};  // X min, Y min
-  double bounds_max_[2] = {1, 1};  // X max, Y max
-  double scale_min_ = 0;
-  double scale_max_ = 100;
-
-  // History tracking for alignment
-  uint64_t history_start_timestamp_ = 0;
-  uint64_t history_end_timestamp_ = 0;
-
-  // Auto-scaling configuration
-  bool auto_scale_price_ = true;  // Automatically determine min/max price from history
-
-  // Large Order Marker System
-  std::vector<LargeOrderMarker> large_order_markers_;
-  double median_order_size_ = 0.0;
-  std::deque<double> recent_order_sizes_;  // For median calculation
-  static constexpr size_t MEDIAN_WINDOW_SIZE = 1000;
-
-  // Large Order Marker Configuration
-  double large_order_threshold_ = 10.0;  // Threshold: order_size > threshold * median_size
-  int max_large_order_markers_ = 100;    // Max active markers
-  bool enable_fade_out_ = false;         // Enable fade-out after 60 seconds
-  static constexpr uint64_t FADE_OUT_DURATION_US = 60'000'000;  // 60 seconds in microseconds
-
-  // Marker Rendering Configuration
-  static constexpr float BASE_RADIUS = 8.0f;  // Base radius in pixels
-  static constexpr float MIN_RADIUS = 6.0f;   // Minimum radius
-  static constexpr float MAX_RADIUS = 40.0f;  // Maximum radius
-
-  // Trade Bubble System
-  std::vector<BTQuant::Data::TradeData> trade_bubbles_;
-  uint64_t last_trade_timestamp_ = 0;  // Track the most recent trade timestamp
-  static constexpr size_t TRADE_HISTORY_SIZE = 1000;  // Number of recent trades to keep
-  static constexpr float TRADE_BUBBLE_BASE_RADIUS = 5.0f;  // Base radius for trade bubbles
-  static constexpr float TRADE_BUBBLE_MAX_RADIUS = 40.0f;  // Maximum radius for trade bubbles (calibrated for log scaling)
-  static constexpr float TRADE_BUBBLE_MIN_VOLUME = 0.01f;  // Minimum volume for visible bubble
-  static constexpr float TRADE_BUBBLE_MAX_VOLUME = 10000.0f; // Maximum volume for scaling
-  static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_US = 30'000'000;  // 30 seconds fade-out duration in microseconds
-
-  // Persistent Liquidity Level Tracker (for levels that remain static for more than 30 seconds)
-  std::vector<StaticLiquidityLevel> static_liquidity_levels_; // Track all liquidity levels that remain static
-  std::vector<PersistentLevel> persistent_levels_;
-  uint64_t persistence_threshold_ms_ = 30000;  // 30 seconds persistence threshold for static liquidity levels
-  double persistence_timeout_ms_ = 60000;      // 60 seconds timeout for inactive levels
-  bool show_persistent_lines_ = true;          // Toggle for persistent line display
-
-  // Vulkan resources for accelerated rendering
-  VulkanCore* vulkan_core_ = nullptr;
-  VkImage heatmap_image_ = nullptr;
-  VkImageView heatmap_image_view_ = nullptr;
-  VkSampler heatmap_sampler_ = nullptr;
-  VkDeviceMemory heatmap_image_memory_ = nullptr;
-  void* vulkan_texture_id_ = nullptr;
-
-  // Track texture dimensions
-  int current_texture_width_ = 0;
-  int current_texture_height_ = 0;
 };
 
 }  // namespace RenderEngine

@@ -1,8 +1,8 @@
 #include "../include/ui/haptic_feedback.hpp"
 
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -60,24 +60,22 @@ void HapticFeedback::triggerWithIntensity(float intensity) {
   // Platform-specific haptic feedback implementation
 #ifdef _WIN32
   // On Windows, we could use XInput or other haptic APIs
-  // For now, we'll simulate with a short delay
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(final_intensity * 50)));
+  // For now, just log (non-blocking)
   std::cout << "Windows haptic feedback triggered with intensity: " << final_intensity << "\n";
 
 #elif __linux__
   // On Linux, we could use libudev or other haptic APIs
-  // For now, we'll simulate with a short delay and system beep
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(final_intensity * 50)));
+  // For now, just log (non-blocking)
   std::cout << "Linux haptic feedback simulated with intensity: " << final_intensity << "\n";
-  
+
   // Optionally, we could use system beep or other audio cues
   // This is a placeholder for actual haptic hardware integration
-  
+
 #elif __APPLE__
   // On macOS, we could use CoreHaptics
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(final_intensity * 50)));
+  // For now, just log (non-blocking)
   std::cout << "macOS haptic feedback simulated with intensity: " << final_intensity << "\n";
-  
+
   // Placeholder for actual CoreHaptics implementation
   // CHHapticEngine would be used in a real implementation
 #endif
@@ -88,17 +86,11 @@ void HapticFeedback::setIntensity(float intensity) {
   intensity_ = std::max(0.0f, std::min(1.0f, intensity));
 }
 
-float HapticFeedback::getIntensity() const {
-  return intensity_;
-}
+float HapticFeedback::getIntensity() const { return intensity_; }
 
-void HapticFeedback::setEnabled(bool enabled) {
-  enabled_ = enabled;
-}
+void HapticFeedback::setEnabled(bool enabled) { enabled_ = enabled; }
 
-bool HapticFeedback::isEnabled() const {
-  return enabled_;
-}
+bool HapticFeedback::isEnabled() const { return enabled_; }
 
 void HapticFeedback::registerHandler(std::function<void(float)> handler) {
   custom_handler_ = handler;

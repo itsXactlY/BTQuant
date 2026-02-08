@@ -15,6 +15,7 @@
 #include "../../include/components/panel_manager.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/symbol_registry.hpp"
+#include "../../include/ui/haptic_feedback.hpp"
 #include "../../include/ui/tooltips.hpp"
 #include "../../include/ui/ui_base.hpp"
 
@@ -133,12 +134,14 @@ void DashboardControls::render_dashboard_controls() {
   // Check if we're in a valid ImGui frame scope to prevent assertion errors
   ImGuiContext& g = *GImGui;
   if (!g.WithinFrameScope) {
-      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
-      // The dashboard controls will be rendered in the next frame when the scope is valid
-      return;
+    // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+    // The dashboard controls will be rendered in the next frame when the scope is valid
+    return;
   }
 
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
+  if (ImGui::Begin("Dashboard Controls", nullptr,
+                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+                       ImGuiWindowFlags_NoCollapse)) {
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
 
@@ -791,7 +794,9 @@ void DashboardControls::render_dashboard_controls() {
       // Add tooltip for the factory reset button
       if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
-        ImGui::Text("Reset to Factory Layout:\nClears all panel overlaps, groups, and tabbed groups.\nReturns to a clean, grid-aligned default state.");
+        ImGui::Text(
+            "Reset to Factory Layout:\nClears all panel overlaps, groups, and tabbed "
+            "groups.\nReturns to a clean, grid-aligned default state.");
         ImGui::EndTooltip();
       }
 

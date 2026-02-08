@@ -349,33 +349,32 @@ void MarketMicrostructureRenderer::resetStats() {
 // ============================================
 
 void MarketMicrostructureRenderer::setSymbol(uint32_t symbol_id) {
-  std::lock_guard lock(dataMutex_);
-  if (symbol_id == current_symbol_id_) return;
-
-  // Unsubscribe previous
-  if (subscription_id_ > 0 && marketDataProcessor_) {
-    marketDataProcessor_->unsubscribe(subscription_id_);
-    subscription_id_ = 0;
-  }
-  if (subscription_id_lob_ > 0 && marketDataProcessor_) {
-    marketDataProcessor_->unsubscribe(subscription_id_lob_);
-    subscription_id_lob_ = 0;
-  }
-
-  current_symbol_id_ = symbol_id;
-
-  // Update cluster engine for new symbol
-  if (cluster_engine_) {
-    auto info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-    if (info) {
-      cluster_engine_->set_tick_size(info->tick_size > 0 ? info->tick_size : 0.01);
-    }
-    cluster_engine_->clear();
-  }
-
-  // Clear buffers
   {
     std::lock_guard lock(dataMutex_);
+    if (symbol_id == current_symbol_id_) return;
+
+    // Unsubscribe previous
+    if (subscription_id_ > 0 && marketDataProcessor_) {
+      marketDataProcessor_->unsubscribe(subscription_id_);
+      subscription_id_ = 0;
+    }
+    if (subscription_id_lob_ > 0 && marketDataProcessor_) {
+      marketDataProcessor_->unsubscribe(subscription_id_lob_);
+      subscription_id_lob_ = 0;
+    }
+
+    current_symbol_id_ = symbol_id;
+
+    // Update cluster engine for new symbol
+    if (cluster_engine_) {
+      auto info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+      if (info) {
+        cluster_engine_->set_tick_size(info->tick_size > 0 ? info->tick_size : 0.01);
+      }
+      cluster_engine_->clear();
+    }
+
+    // Clear buffers
     currentTradeData_.clear();
     currentFootprintClusters_.clear();
     lobSnapshotBuffer_.clear();
@@ -1039,19 +1038,20 @@ MarketMicrostructureRenderer::createTextureResources() {
   vkBindImageMemory(device, lobHeatmapImage_, lobHeatmapImageMemory_, 0);
 
   // 2. Create Image View
-  VkImageViewCreateInfo viewInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                                 .pNext = nullptr,
-                                 .flags = 0,
-                                 .image = lobHeatmapImage_,
-                                 .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                                 .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                 .components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, 
-                                                VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
-                                 .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                      .baseMipLevel = 0,
-                                                      .levelCount = 1,
-                                                      .baseArrayLayer = 0,
-                                                      .layerCount = 1}};
+  VkImageViewCreateInfo viewInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .image = lobHeatmapImage_,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = VK_FORMAT_R8G8B8A8_UNORM,
+      .components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                     VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
 
   if (vkCreateImageView(device, &viewInfo, nullptr, &lobHeatmapImageView_) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create LOB Heatmap image view");
@@ -1249,16 +1249,9 @@ void MarketMicrostructureRenderer::mark_all_panels_dirty() {
     return;  // No panel manager set, nothing to do
   }
 
-  // Get all panel IDs from the panel manager
-  auto all_panel_ids = panel_manager_->get_all_panel_ids();
-
   // Iterate through all panels and mark them as dirty
-  for (uint32_t panel_id : all_panel_ids) {
-    PanelBase* panel = panel_manager_->get_panel_by_id(panel_id);
-    if (panel) {
-      panel->markDirty();
-    }
-  }
+  // Lock-free update: signal the panel manager to repaint on the next main thread update
+  panel_manager_->request_repaint();
 }
 
 }  // namespace BTQuant::RenderEngine

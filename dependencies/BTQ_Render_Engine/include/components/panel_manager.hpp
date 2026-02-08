@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -12,16 +13,16 @@
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
+#include "../ui/context_menus.hpp"
 #include "MarketMicrostructureRenderer.h"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 #include "strategy_builder.hpp"
 #include "tabbed_panel.hpp"
-#include "../ui/context_menus.hpp"
 
 // Forward declarations
 namespace BTQuant {
-    class AlertsPanel;
+class AlertsPanel;
 }
 
 namespace BTQuant {
@@ -53,13 +54,16 @@ class PanelManager {
   void update(float dt);
   void render();
 
+  // Thread-safe repaint request
+  void request_repaint() { requesting_repaint_.store(true, std::memory_order_release); }
+
   // Panel management
   uint32_t add_panel(PanelType type, const std::string& title = "", int grid_x = -1,
                      int grid_y = -1, int width = 1, int height = 1);
   uint32_t add_panel_with_symbol(PanelType type, const std::string& title,
                                  const std::string& symbol, int grid_x, int grid_y, int width,
                                  int height);
-  
+
   // Auto-dock functionality - finds empty edges of existing panels
   std::pair<int, int> find_auto_dock_position(int width, int height) const;
   void remove_panel(uint32_t panel_id);
@@ -103,8 +107,9 @@ class PanelManager {
   // Active panel management
   uint32_t get_active_panel_id() const { return active_panel_id_; }
   void set_active_panel_id(uint32_t panel_id) { active_panel_id_ = panel_id; }
-  PanelBase* get_active_panel() const { return active_panel_id_ != 0 ? get_panel_by_id(active_panel_id_) : nullptr; }
-
+  PanelBase* get_active_panel() const {
+    return active_panel_id_ != 0 ? get_panel_by_id(active_panel_id_) : nullptr;
+  }
 
   // Serialization
   std::string serialize_layout() const;
@@ -127,17 +132,17 @@ class PanelManager {
     std::vector<uint32_t> panel_ids;  // IDs of panels in this group
     int min_grid_x = 0;               // Top-left corner of the group in grid coordinates
     int min_grid_y = 0;
-    int total_width = 0;              // Total width of the group in grid units
-    int total_height = 0;             // Total height of the group in grid units
-    bool locked = true;               // Whether the group is locked (non-resizable as a unit)
-    bool prevent_overlap = true;      // Whether the group prevents overlapping with other panels/groups
+    int total_width = 0;          // Total width of the group in grid units
+    int total_height = 0;         // Total height of the group in grid units
+    bool locked = true;           // Whether the group is locked (non-resizable as a unit)
+    bool prevent_overlap = true;  // Whether the group prevents overlapping with other panels/groups
 
     PanelGroup(uint32_t id) : group_id(id) {}
   };
-  
+
   // Helper method to check if there's space for a panel group at a specific location
   bool can_place_group_at(uint32_t group_id, int grid_x, int grid_y) const;
-  
+
   // Panel grouping methods
   uint32_t create_panel_group(const std::vector<uint32_t>& panel_ids);
   bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
@@ -150,8 +155,9 @@ class PanelManager {
 
   // Super-panel creation methods - create a "super-panel" from adjacent panels
   uint32_t create_super_panel_from_adjacent(uint32_t panel1_id, uint32_t panel2_id);
-  uint32_t create_super_panel_from_rectangular_region(int start_x, int start_y, int width, int height);
-  
+  uint32_t create_super_panel_from_rectangular_region(int start_x, int start_y, int width,
+                                                      int height);
+
   // Lock/unlock panel groups to control whether they behave as a single unit
   void lock_panel_group(uint32_t group_id, bool locked = true);
   bool is_panel_group_locked(uint32_t group_id) const;
@@ -173,7 +179,7 @@ class PanelManager {
 
   // Symbol linking groups - Red(0), Green(1), Blue(2)
   // Using the global SymbolLinkGroupColor enum to avoid circular dependency
-  
+
   struct SymbolLinkGroup {
     BTQuant::SymbolLinkGroupColor color;
     std::vector<uint32_t> panel_ids;  // IDs of panels in this link group
@@ -193,9 +199,12 @@ class PanelManager {
   const SymbolLinkGroup* get_symbol_link_group(uint32_t group_id) const;
   void update_symbol_link_group_symbol(uint32_t group_id, const std::string& symbol);
   void propagate_symbol_to_linked_panels(uint32_t source_panel_id, const std::string& symbol);
-  
+
   // Public access to symbol link groups for panel_base.cpp
-  const std::unordered_map<uint32_t, std::unique_ptr<SymbolLinkGroup>>& get_symbol_link_groups() const { return symbol_link_groups_; }
+  const std::unordered_map<uint32_t, std::unique_ptr<SymbolLinkGroup>>& get_symbol_link_groups()
+      const {
+    return symbol_link_groups_;
+  }
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -209,7 +218,9 @@ class PanelManager {
   std::unique_ptr<ContextMenuManager> context_menu_manager_;
   std::unique_ptr<RenderEngine::StrategyBuilder> strategy_builder_;
   GridLayout grid_layout_;
-  std::unordered_map<uint32_t, std::unique_ptr<PanelBase>> panels_;
+  // Lock removed - using atomic flag + main thread execution
+  std::atomic<bool> requesting_repaint_{false};
+  std::unordered_map<uint32_t, std::shared_ptr<PanelBase>> panels_;
   uint32_t next_panel_id_ = 1;
 
   ImVec2 dashboard_size_ = ImVec2(1920, 1080);
@@ -235,9 +246,12 @@ class PanelManager {
   bool is_dragging_ = false;
 
   // Symbol linking functionality
-  std::unordered_map<uint32_t, std::unique_ptr<SymbolLinkGroup>> symbol_link_groups_;  // Maps group ID to link group
-  std::unordered_map<uint32_t, uint32_t> panel_to_symbol_link_group_map_;  // Maps panel ID to link group ID
-  uint32_t next_symbol_link_group_id_ = 1000;  // Start from 1000 to avoid conflicts with regular groups
+  std::unordered_map<uint32_t, std::unique_ptr<SymbolLinkGroup>>
+      symbol_link_groups_;  // Maps group ID to link group
+  std::unordered_map<uint32_t, uint32_t>
+      panel_to_symbol_link_group_map_;  // Maps panel ID to link group ID
+  uint32_t next_symbol_link_group_id_ =
+      1000;  // Start from 1000 to avoid conflicts with regular groups
 
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;

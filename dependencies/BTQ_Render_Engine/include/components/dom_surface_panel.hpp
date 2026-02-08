@@ -7,11 +7,15 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <vector>
 
+#include "data/TradeData.h"
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "panel_manager.hpp"  // Include for PanelManager methods
+#include "ui/haptic_feedback.hpp"  // Include for haptic feedback
+#include "ui/tooltips.hpp"  // Include for tooltips
 
 namespace BTQuant {
 
@@ -141,6 +145,10 @@ class DomSurfacePanel : public PanelBase {
   static constexpr size_t TRADE_HISTORY_SIZE = 10000;  // Number of recent trades to track
   static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_MS = 30000;  // 30 seconds fade-out duration
 
+  // Thread-safe queue for trade updates from background thread
+  std::queue<BTQuant::Data::TradeData> pending_trades_queue_;
+  mutable std::mutex pending_trades_mutex_;
+
   // Large Order Marker System
   std::vector<LargeOrderMarker> large_order_markers_;
   double median_order_size_ = 0.0;
@@ -210,6 +218,7 @@ class DomSurfacePanel : public PanelBase {
   // Trade Bubbles Methods
   void updateTradeBubbles();
   void processRecentTrades();
+  void processQueuedTrades();
   void renderTradeBubbles();
   void cleanupOldTradeBubbles();
   float calculateBubbleRadius(double volume) const;

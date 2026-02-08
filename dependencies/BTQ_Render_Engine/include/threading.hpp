@@ -7,6 +7,7 @@
 #include "threading/atomic_signal.hpp"
 #include "threading/lockfree_queue.hpp"
 #include "threading/hazard_pointer.hpp"
+#include "threading/double_buffered_state.hpp"
 
 // Additional threading utilities can be added here
 

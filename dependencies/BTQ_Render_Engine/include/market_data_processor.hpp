@@ -24,8 +24,9 @@
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
 #include "cache_manager.hpp"
+#include "threading/double_buffered_state.hpp"
 // Lock-free queue (header-only, fetched by CMake)
-#include "concurrentqueue.h"
+#include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
 // ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
 // lock-free map
@@ -96,8 +97,8 @@ struct SymbolAnalytics {
   std::unordered_map<TimeFrame, std::vector<OHLCVCandle>> candles;
   std::unordered_map<TimeFrame, OHLCVCandle> current_candles;  // In-progress candles
 
-  // Trade analytics
-  std::vector<TradeData> recent_trades;
+  // Trade analytics - using double buffered state for thread safety
+  mutable btq::threading::DoubleBufferedState<std::vector<TradeData>> recent_trades_db;
   uint64_t trade_count = 0;
   double last_trade_price = 0.0;
   double last_trade_size = 0.0;
@@ -160,6 +161,9 @@ struct SymbolAnalytics {
 
   // Volume Profile (Session)
   std::map<double, VolumeProfileLevel> session_volume_profile;
+
+  // Constructor to initialize double buffered state
+  SymbolAnalytics() : recent_trades_db(std::vector<TradeData>{}) {}
 };
 
 // Performance metrics for the processor

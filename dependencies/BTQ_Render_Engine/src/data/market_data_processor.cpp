@@ -69,7 +69,9 @@ SymbolAnalytics MarketDataProcessor::getSymbolAnalytics(uint32_t symbol_id) cons
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
-    return it->second;
+    SymbolAnalytics result = it->second;
+    // The recent_trades_db is already handled by the copy constructor
+    return result;
   }
 
   return SymbolAnalytics{};
@@ -98,7 +100,12 @@ void MarketDataProcessor::clearHistory() {
     std::unique_lock lock(shard_ptr->mutex);
     for (auto& pair : shard_ptr->data) {
       pair.second.candles.clear();
-      pair.second.recent_trades.clear();
+      // Clear the double-buffered state for recent trades
+      {
+        auto& back_buffer = pair.second.recent_trades_db.write();
+        back_buffer.clear();
+        pair.second.recent_trades_db.swap();
+      }
       pair.second.recent_orderbooks.clear();
       pair.second.consolidated_bids.clear();
       pair.second.consolidated_asks.clear();
@@ -344,8 +351,11 @@ void MarketDataProcessor::clearSymbolData(uint32_t symbol_id) {
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
-    it->second = SymbolAnalytics{};
-    it->second.symbol_id = symbol_id;
+    // Create a new SymbolAnalytics object with the double-buffered state cleared
+    SymbolAnalytics new_data;
+    new_data.symbol_id = symbol_id;
+    // The double-buffered state is initialized with an empty vector by default
+    it->second = std::move(new_data);
   }
 }
 
@@ -442,15 +452,16 @@ void MarketDataProcessor::notifySubscribers(uint32_t symbol_id, NotificationType
 // Private methods implementation
 
 void MarketDataProcessor::updateVWAP(SymbolAnalytics& symbol_data) {
-  if (symbol_data.recent_trades.empty()) return;
+  const auto& recent_trades = symbol_data.recent_trades_db.read();
+  if (recent_trades.empty()) return;
 
   double total_volume = 0.0;
   double total_price_volume = 0.0;
 
-  size_t count = std::min(vwap_window_size_, symbol_data.recent_trades.size());
-  for (size_t i = symbol_data.recent_trades.size() - count; i < symbol_data.recent_trades.size();
+  size_t count = std::min(vwap_window_size_, recent_trades.size());
+  for (size_t i = recent_trades.size() - count; i < recent_trades.size();
        ++i) {
-    const auto& trade = symbol_data.recent_trades[i];
+    const auto& trade = recent_trades[i];
     total_volume += trade.size;
     total_price_volume += trade.price * trade.size;
   }
@@ -465,15 +476,16 @@ void MarketDataProcessor::updateVWAP(SymbolAnalytics& symbol_data) {
 }
 
 void MarketDataProcessor::updateMomentum(SymbolAnalytics& symbol_data) {
-  if (symbol_data.recent_trades.size() < 2) return;
+  const auto& recent_trades = symbol_data.recent_trades_db.read();
+  if (recent_trades.size() < 2) return;
 
-  size_t count = std::min(momentum_window_size_, symbol_data.recent_trades.size());
+  size_t count = std::min(momentum_window_size_, recent_trades.size());
   std::vector<double> prices;
   prices.reserve(count);
 
-  for (size_t i = symbol_data.recent_trades.size() - count; i < symbol_data.recent_trades.size();
+  for (size_t i = recent_trades.size() - count; i < recent_trades.size();
        ++i) {
-    prices.push_back(symbol_data.recent_trades[i].price);
+    prices.push_back(recent_trades[i].price);
   }
 
   if (prices.size() >= 2) {
@@ -493,16 +505,17 @@ void MarketDataProcessor::updateMomentum(SymbolAnalytics& symbol_data) {
 }
 
 void MarketDataProcessor::updateVolatility(SymbolAnalytics& symbol_data) {
-  if (symbol_data.recent_trades.size() < 2) return;
+  const auto& recent_trades = symbol_data.recent_trades_db.read();
+  if (recent_trades.size() < 2) return;
 
-  size_t count = std::min(volatility_window_size_, symbol_data.recent_trades.size());
+  size_t count = std::min(volatility_window_size_, recent_trades.size());
   std::vector<double> returns;
   returns.reserve(count - 1);
 
-  for (size_t i = symbol_data.recent_trades.size() - count + 1;
-       i < symbol_data.recent_trades.size(); ++i) {
-    double prev = symbol_data.recent_trades[i - 1].price;
-    double curr = symbol_data.recent_trades[i].price;
+  for (size_t i = recent_trades.size() - count + 1;
+       i < recent_trades.size(); ++i) {
+    double prev = recent_trades[i - 1].price;
+    double curr = recent_trades[i].price;
     returns.push_back(std::log(curr / prev));
   }
 
@@ -773,13 +786,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
     trade.size = update.size;
     trade.is_buy = (update.side == "buy");
 
-    // Limit trade history to prevent memory growth
-    if (symbol_data.recent_trades.size() >= 10000) {
-      symbol_data.recent_trades.erase(symbol_data.recent_trades.begin());
-    }
-    symbol_data.recent_trades.push_back(trade);
-
     // Use incremental updater to update analytics efficiently
+    // The processTradeIncrementally method handles adding the trade to the double-buffered state
     processTradeIncrementally(symbol_data, trade);
 
   } else if (update.type == MarketDataType::ORDERBOOK) {
@@ -870,6 +878,18 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
   }
   if (symbol_data.price_max == 0.0 || trade.price > symbol_data.price_max) {
     symbol_data.price_max = trade.price;
+  }
+
+  // Update the back buffer with the new trade data
+  {
+    auto& back_buffer = symbol_data.recent_trades_db.write();
+    // Limit trade history to prevent memory growth
+    if (back_buffer.size() >= 10000) {
+      back_buffer.erase(back_buffer.begin());
+    }
+    back_buffer.push_back(trade);
+    // Swap the buffers to make the updated data available for readers
+    symbol_data.recent_trades_db.swap();
   }
 
   // Update VWAP

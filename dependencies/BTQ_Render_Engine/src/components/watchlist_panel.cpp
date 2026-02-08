@@ -3494,7 +3494,44 @@ void WatchlistPanel::set_sorting(int column_id, bool ascending) {
 void WatchlistPanel::process_pending_updates() {
   // Process pending market data updates that were queued by on_market_data_update
   // This method is called from update() and can safely acquire the mutex
-  
+
+  // First, process pending watchlist updates
+  std::vector<WatchlistUpdate> watchlist_updates;
+  WatchlistUpdate watchlist_update;
+  while (pending_updates_.try_dequeue(watchlist_update)) {
+    watchlist_updates.push_back(watchlist_update);
+  }
+
+  // Process watchlist updates while holding the mutex once
+  if (!watchlist_updates.empty()) {
+    std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
+
+    for (const auto& update : watchlist_updates) {
+      switch (update.type) {
+        case WatchlistUpdate::ADD_SYMBOL:
+          add_symbol(update.symbol_id, update.symbol, update.exchange);
+          break;
+        case WatchlistUpdate::REMOVE_SYMBOL:
+          remove_symbol(update.symbol_id);
+          break;
+        case WatchlistUpdate::CLEAR_WATCHLIST:
+          clear_watchlist();
+          break;
+        case WatchlistUpdate::PRICE_ALERT:
+          add_price_alert(update.symbol_id, update.symbol, update.value, 
+                         static_cast<WatchlistPriceAlert::Direction>(update.alert_direction));
+          break;
+        case WatchlistUpdate::SYMBOL_RENAME:
+          // TODO: Implement symbol rename functionality if needed
+          break;
+        case WatchlistUpdate::MARKET_DATA_UPDATE:
+          // Handle market data updates separately below
+          break;
+      }
+    }
+  }
+
+  // Then, process pending market data updates that were queued by on_market_data_update
   // First, dequeue all pending updates to a local vector to minimize time spent with mutex locked
   std::vector<QueuedMarketDataUpdate> updates;
   QueuedMarketDataUpdate update;
@@ -3504,11 +3541,11 @@ void WatchlistPanel::process_pending_updates() {
       updates.push_back(update);
     }
   }
-  
+
   // Process all updates while holding the mutex once
   if (!updates.empty()) {
     std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
-    
+
     for (const auto& update : updates) {
       // Check if this symbol is in our current watchlist group
       auto it = get_current_watchlist().find(update.symbol_id);

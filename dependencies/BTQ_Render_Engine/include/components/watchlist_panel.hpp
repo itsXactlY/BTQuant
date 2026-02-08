@@ -246,8 +246,41 @@ class WatchlistPanel : public PanelBase {
     RenderEngine::NotificationType type;
   };
 
+  // Structure to hold different types of watchlist updates
+  struct WatchlistUpdate {
+    enum Type {
+      ADD_SYMBOL,
+      REMOVE_SYMBOL,
+      CLEAR_WATCHLIST,
+      MARKET_DATA_UPDATE,
+      PRICE_ALERT,
+      SYMBOL_RENAME
+    };
+    
+    Type type;
+    uint32_t symbol_id;
+    std::string symbol;
+    std::string exchange;
+    double value;  // Used for prices, alert values, etc.
+    int alert_direction;  // Used for price alert direction
+    
+    // Constructor for different update types
+    WatchlistUpdate(Type t, uint32_t id) : type(t), symbol_id(id), value(0.0), alert_direction(0) {}
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym) 
+        : type(t), symbol_id(id), symbol(sym), exchange(""), value(0.0), alert_direction(0) {}
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, const std::string& exch) 
+        : type(t), symbol_id(id), symbol(sym), exchange(exch), value(0.0), alert_direction(0) {}
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val) 
+        : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(0) {}
+    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val, int dir) 
+        : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(dir) {}
+  };
+
   // Queue for pending market data updates to avoid mutex acquisition in callback
   moodycamel::ConcurrentQueue<QueuedMarketDataUpdate> pending_market_data_updates_;
+
+  // Queue for pending watchlist updates to handle operations from different threads
+  moodycamel::ConcurrentQueue<WatchlistUpdate> pending_updates_;
 
   // Using recursive mutex to prevent deadlocks in rendering logic
   mutable std::recursive_mutex watchlist_mutex_;

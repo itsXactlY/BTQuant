@@ -398,6 +398,54 @@ TechnicalIndicators::IndicatorResult TechnicalIndicators::calculate_vwap_standar
   return result;
 }
 
+TechnicalIndicators::IndicatorResult TechnicalIndicators::average_true_range(
+    const std::vector<OHLCV>& data, int period) {
+  IndicatorResult result;
+  result.name = "ATR";
+  result.parameters["period"] = period;
+
+  if (data.size() < 2) {
+    return result;
+  }
+
+  std::vector<double> true_ranges;
+  true_ranges.reserve(data.size());
+
+  // Calculate true range for each period
+  for (size_t i = 1; i < data.size(); ++i) {
+    double high_low = data[i].high - data[i].low;
+    double high_prev_close = std::abs(data[i].high - data[i-1].close);
+    double low_prev_close = std::abs(data[i].low - data[i-1].close);
+
+    double true_range = std::max({high_low, high_prev_close, low_prev_close});
+    true_ranges.push_back(true_range);
+  }
+
+  if (static_cast<int>(true_ranges.size()) < period) {
+    return result;
+  }
+
+  // Calculate initial ATR using simple moving average
+  double sum = 0.0;
+  for (int i = 0; i < period; ++i) {
+    sum += true_ranges[i];
+  }
+  double atr = sum / period;
+
+  result.values.push_back(atr);
+  result.timestamps.push_back(data[period].timestamp);
+
+  // Calculate subsequent ATR values using smoothed moving average
+  for (size_t i = period; i < true_ranges.size(); ++i) {
+    // ATR = [(previous ATR * (period - 1)) + current TR] / period
+    atr = ((atr * (period - 1)) + true_ranges[i]) / period;
+    result.values.push_back(atr);
+    result.timestamps.push_back(data[i + 1].timestamp); // +1 because true_ranges starts from index 1
+  }
+
+  return result;
+}
+
 // ============================================================================
 // Volume Profile Analyzer Implementation - Simplified
 // ============================================================================
@@ -405,22 +453,171 @@ TechnicalIndicators::IndicatorResult TechnicalIndicators::calculate_vwap_standar
 VolumeProfileAnalyzer::VolumeProfileAnalyzer(double tick_size) : tick_size_(tick_size) {}
 
 VolumeProfileAnalyzer::VolumeProfile VolumeProfileAnalyzer::calculate_volume_profile(
-    const std::vector<TechnicalIndicators::OHLCV>& /*candles*/,
-    const std::vector<RenderEngine::TradeData>& /*trades*/) {
+    const std::vector<TechnicalIndicators::OHLCV>& candles,
+    const std::vector<RenderEngine::TradeData>& trades) {
   VolumeProfile profile;
-  // Note: TradeData is forward-declared, so we can't access its members
-  // This is a placeholder implementation
+  
+  // If we have candle data, we can build a basic volume profile from OHLCV data
+  if (!candles.empty()) {
+    // Group trades by price levels based on tick size
+    std::map<double, VolumeNode> volume_by_price;
+    
+    // Process candles to get price-volume relationships
+    for (const auto& candle : candles) {
+      // Calculate typical price and assign volume to price level
+      double typical_price = (candle.high + candle.low + candle.close) / 3.0;
+      // Round to nearest tick size
+      double price_level = std::round(typical_price / tick_size_) * tick_size_;
+      
+      auto& node = volume_by_price[price_level];
+      node.price_level = price_level;
+      node.volume += candle.volume;
+      node.trade_count++;
+    }
+    
+    // Convert map to vector
+    for (const auto& [price, node] : volume_by_price) {
+      profile.nodes.push_back(node);
+    }
+    
+    // Sort nodes by price level
+    std::sort(profile.nodes.begin(), profile.nodes.end(),
+              [](const VolumeNode& a, const VolumeNode& b) {
+                return a.price_level < b.price_level;
+              });
+    
+    // Calculate POC (Point of Control - price level with most volume)
+    if (!profile.nodes.empty()) {
+      auto max_node = std::max_element(profile.nodes.begin(), profile.nodes.end(),
+                                      [](const VolumeNode& a, const VolumeNode& b) {
+                                        return a.volume < b.volume;
+                                      });
+      profile.poc_price = max_node->price_level;
+      
+      // Calculate total volume
+      profile.total_volume = std::accumulate(profile.nodes.begin(), profile.nodes.end(), 0.0,
+                                           [](double sum, const VolumeNode& node) {
+                                             return sum + node.volume;
+                                           });
+    }
+  }
+  
   return profile;
 }
 
-void VolumeProfileAnalyzer::calculate_value_area(const std::vector<VolumeNode>& /*nodes*/,
-                                                 VolumeProfile& /*profile*/) {
-  // Placeholder implementation
+void VolumeProfileAnalyzer::calculate_value_area(const std::vector<VolumeNode>& nodes,
+                                                 VolumeProfile& profile) {
+  if (nodes.empty()) {
+    return;
+  }
+
+  // Calculate 70% value area (VAH and VAL - Value Area High and Low)
+  double total_volume = 0.0;
+  for (const auto& node : nodes) {
+    total_volume += node.volume;
+  }
+
+  if (total_volume == 0.0) {
+    return;
+  }
+
+  // Find POC (Point of Control)
+  auto poc_it = std::max_element(nodes.begin(), nodes.end(),
+                                [](const VolumeNode& a, const VolumeNode& b) {
+                                  return a.volume < b.volume;
+                                });
+
+  if (poc_it == nodes.end()) {
+    return;
+  }
+
+  // Start from POC and expand outward until we reach 70% of total volume
+  double target_volume = total_volume * 0.70;
+  double accumulated_volume = poc_it->volume;
+
+  auto high_it = poc_it;
+  auto low_it = poc_it;
+
+  // Expand in both directions from POC
+  while (accumulated_volume < target_volume) {
+    // Determine which direction to expand based on which has more volume potential
+    bool expand_up = false;
+    bool expand_down = false;
+
+    if (high_it != nodes.end() - 1) {
+      expand_up = true;
+    }
+    if (low_it != nodes.begin()) {
+      expand_down = true;
+    }
+
+    // If we can't expand in either direction, break
+    if (!expand_up && !expand_down) {
+      break;
+    }
+
+    // Decide which direction to expand
+    if (expand_up && expand_down) {
+      // Expand toward the side with more potential volume
+      auto next_high_vol = (high_it + 1)->volume;
+      auto next_low_vol = (low_it - 1)->volume;
+      if (next_high_vol >= next_low_vol) {
+        ++high_it;
+        accumulated_volume += high_it->volume;
+      } else {
+        --low_it;
+        accumulated_volume += low_it->volume;
+      }
+    } else if (expand_up) {
+      ++high_it;
+      accumulated_volume += high_it->volume;
+    } else if (expand_down) {
+      --low_it;
+      accumulated_volume += low_it->volume;
+    }
+
+    if (accumulated_volume >= target_volume) {
+      break;
+    }
+  }
+
+  // Set the value area high and low
+  profile.value_area_high = high_it->price_level;
+  profile.value_area_low = low_it->price_level;
 }
 
 std::vector<VolumeProfileAnalyzer::VolumeImbalance> VolumeProfileAnalyzer::detect_volume_imbalances(
-    const VolumeProfile& /*profile*/, double /*threshold*/) {
-  return {};
+    const VolumeProfile& profile, double threshold) {
+  std::vector<VolumeImbalance> imbalances;
+  
+  if (profile.nodes.size() < 2) {
+    return imbalances;
+  }
+
+  // Look for significant differences in volume between adjacent price levels
+  for (size_t i = 1; i < profile.nodes.size(); ++i) {
+    const auto& current = profile.nodes[i];
+    const auto& previous = profile.nodes[i-1];
+    
+    // Calculate volume ratio
+    if (previous.volume > 0) {
+      double ratio = current.volume / previous.volume;
+      
+      // Check for significant imbalance (either much higher or much lower volume)
+      if (ratio > threshold || ratio < (1.0 / threshold)) {
+        VolumeImbalance imbalance;
+        imbalance.price_level = current.price_level;
+        imbalance.imbalance_ratio = ratio;
+        imbalance.buy_volume = current.buy_volume;  // Will be 0 since we don't track buy/sell in this implementation
+        imbalance.sell_volume = current.sell_volume; // Will be 0 since we don't track buy/sell in this implementation
+        imbalance.is_significant = true;
+        
+        imbalances.push_back(imbalance);
+      }
+    }
+  }
+  
+  return imbalances;
 }
 
 // ============================================================================
@@ -428,45 +625,170 @@ std::vector<VolumeProfileAnalyzer::VolumeImbalance> VolumeProfileAnalyzer::detec
 // ============================================================================
 
 MarketDepthAnalyzer::MarketDepthSnapshot MarketDepthAnalyzer::create_depth_snapshot(
-    const RenderEngine::OrderbookData& /*orderbook*/) {
+    const RenderEngine::OrderbookData& orderbook) {
   MarketDepthSnapshot snapshot;
-  // Note: OrderbookData is forward-declared, so we can't access its members
-  // This is a placeholder implementation
+  snapshot.timestamp = 0; // Would be set from orderbook data if accessible
+  
+  // Since we can't access the actual OrderbookData members due to forward declaration,
+  // we'll return an empty snapshot with calculated fields based on what would be available
+  // In a real implementation, this would populate bids and asks from the orderbook data
+  
+  // For now, we'll simulate the calculation of derived values based on the concept
+  // that we would have populated bids and asks arrays
+  
+  // Calculate spread, mid price, etc. if we had the data
+  // These would be calculated from the bids and asks vectors
+  snapshot.spread = 0.0; // Would be calculated from best bid and ask
+  snapshot.mid_price = 0.0; // Would be calculated from best bid and ask
+  snapshot.total_bid_volume = 0.0; // Would be sum of bid volumes
+  snapshot.total_ask_volume = 0.0; // Would be sum of ask volumes
+  snapshot.imbalance_ratio = 0.0; // Would be calculated from bid/ask volumes
+  
   return snapshot;
 }
 
 MarketDepthAnalyzer::DepthAnalysis MarketDepthAnalyzer::analyze_market_depth(
-    const MarketDepthSnapshot& /*snapshot*/) {
+    const MarketDepthSnapshot& snapshot) {
   DepthAnalysis analysis;
-  // Placeholder implementation
+  
+  // Calculate support and resistance levels based on depth
+  analysis.support_level = find_support_level(snapshot.bids);
+  analysis.resistance_level = find_resistance_level(snapshot.asks);
+  
+  // Calculate liquidity score based on available depth
+  analysis.liquidity_score = calculate_liquidity_score(snapshot);
+  
+  // Estimate market impact based on depth
+  analysis.market_impact_estimate = estimate_market_impact(snapshot, 1000.0); // Example order value
+  
+  // Find significant levels in the order book
+  analysis.significant_levels = find_significant_levels(snapshot);
+  
   return analysis;
 }
 
-double MarketDepthAnalyzer::find_support_level(const std::vector<DepthLevel>& /*bids*/) {
-  return 0;
+double MarketDepthAnalyzer::find_support_level(const std::vector<DepthLevel>& bids) {
+  if (bids.empty()) {
+    return 0.0;
+  }
+  
+  // Support is typically the highest concentration of bids (buy orders)
+  // Find the bid level with the highest cumulative size
+  if (!bids.empty()) {
+    auto max_cumulative_bid = std::max_element(bids.begin(), bids.end(),
+                                              [](const DepthLevel& a, const DepthLevel& b) {
+                                                return a.cumulative_size < b.cumulative_size;
+                                              });
+    return max_cumulative_bid->price;
+  }
+  
+  // If no bids, return 0
+  return 0.0;
 }
 
-double MarketDepthAnalyzer::find_resistance_level(const std::vector<DepthLevel>& /*asks*/) {
-  return 0;
+double MarketDepthAnalyzer::find_resistance_level(const std::vector<DepthLevel>& asks) {
+  if (asks.empty()) {
+    return 0.0;
+  }
+  
+  // Resistance is typically the lowest concentration of asks (sell orders)
+  // Find the ask level with the highest cumulative size (lowest price with high volume)
+  if (!asks.empty()) {
+    auto max_cumulative_ask = std::max_element(asks.begin(), asks.end(),
+                                              [](const DepthLevel& a, const DepthLevel& b) {
+                                                return a.cumulative_size < b.cumulative_size;
+                                              });
+    return max_cumulative_ask->price;
+  }
+  
+  // If no asks, return 0
+  return 0.0;
 }
 
-double MarketDepthAnalyzer::calculate_liquidity_score(const MarketDepthSnapshot& /*snapshot*/) {
-  return 0;
+double MarketDepthAnalyzer::calculate_liquidity_score(const MarketDepthSnapshot& snapshot) {
+  // Liquidity score based on total available depth and spread
+  double total_depth = snapshot.total_bid_volume + snapshot.total_ask_volume;
+  double inverse_spread = (snapshot.spread > 0) ? (1.0 / snapshot.spread) : 1000.0; // Large value if spread is 0
+  
+  // Normalize and scale the liquidity score
+  double liquidity_score = total_depth * inverse_spread * 0.001; // Scale factor to keep reasonable values
+  
+  return liquidity_score;
 }
 
-double MarketDepthAnalyzer::estimate_market_impact(const MarketDepthSnapshot& /*snapshot*/,
-                                                   double /*order_value*/) {
-  return 0;
+double MarketDepthAnalyzer::estimate_market_impact(const MarketDepthSnapshot& snapshot, 
+                                                   double order_value) {
+  // Simple estimation of market impact based on order size vs available depth
+  double available_depth = (snapshot.total_bid_volume + snapshot.total_ask_volume) / 2.0; // Average depth
+  
+  if (available_depth <= 0) {
+    return 1.0; // Maximum impact if no depth
+  }
+  
+  // Impact increases with order size relative to available depth
+  double impact = order_value / available_depth;
+  
+  // Cap the impact to reasonable bounds (0 to 1)
+  return std::min(impact, 1.0);
 }
 
 std::vector<double> MarketDepthAnalyzer::find_significant_levels(
-    const MarketDepthSnapshot& /*snapshot*/) {
-  return {};
+    const MarketDepthSnapshot& snapshot) {
+  std::vector<double> significant_levels;
+  
+  // Combine bids and asks for analysis
+  std::vector<DepthLevel> all_levels;
+  all_levels.insert(all_levels.end(), snapshot.bids.begin(), snapshot.bids.end());
+  all_levels.insert(all_levels.end(), snapshot.asks.begin(), snapshot.asks.end());
+  
+  // Sort by volume to find the most significant levels
+  std::sort(all_levels.begin(), all_levels.end(),
+            [](const DepthLevel& a, const DepthLevel& b) {
+              return a.size > b.size; // Sort descending by size
+            });
+  
+  // Take the top 5 levels as significant
+  size_t count = std::min(size_t(5), all_levels.size());
+  for (size_t i = 0; i < count; ++i) {
+    significant_levels.push_back(all_levels[i].price);
+  }
+  
+  return significant_levels;
 }
 
 std::vector<MarketDepthAnalyzer::LiquidityGap> MarketDepthAnalyzer::detect_liquidity_gaps(
-    const MarketDepthSnapshot& /*snapshot*/, double /*min_gap_size*/) {
-  return {};
+    const MarketDepthSnapshot& snapshot, double min_gap_size) {
+  std::vector<LiquidityGap> gaps;
+  
+  // Check for gaps in bids
+  for (size_t i = 1; i < snapshot.bids.size(); ++i) {
+    double price_diff = snapshot.bids[i-1].price - snapshot.bids[i].price; // Bids are typically sorted high to low
+    
+    if (price_diff > min_gap_size) {
+      LiquidityGap gap;
+      gap.price_start = snapshot.bids[i].price;
+      gap.price_end = snapshot.bids[i-1].price;
+      gap.gap_size = price_diff;
+      gap.is_bid_side = true;
+      gaps.push_back(gap);
+    }
+  }
+  
+  // Check for gaps in asks
+  for (size_t i = 1; i < snapshot.asks.size(); ++i) {
+    double price_diff = snapshot.asks[i].price - snapshot.asks[i-1].price; // Asks are typically sorted low to high
+    
+    if (price_diff > min_gap_size) {
+      LiquidityGap gap;
+      gap.price_start = snapshot.asks[i-1].price;
+      gap.price_end = snapshot.asks[i].price;
+      gap.gap_size = price_diff;
+      gap.is_bid_side = false;
+      gaps.push_back(gap);
+    }
+  }
+  
+  return gaps;
 }
 
 // ============================================================================

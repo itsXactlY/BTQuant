@@ -16,7 +16,18 @@
 #include <thread>
 #include <unordered_map>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#elif __linux__
+#include <sys/resource.h>
+#include <fstream>
+#include <sstream>
+#include <unistd.h>
+#endif
+
 #include "../../include/vulkan_dashboard_advanced.hpp"
+#include <vulkan/vulkan.h>
 
 namespace BTQuant {
 
@@ -1062,8 +1073,29 @@ class PerformanceOptimizer {
     float total_used = memory_stats.vertex_pool_used + memory_stats.uniform_pool_used +
                        memory_stats.storage_pool_used;
 
-    // Estimate total VRAM (this would need to be queried from Vulkan)
-    float estimated_total_vram = 1024 * 1024 * 1024;  // 1GB placeholder
+    // Query total VRAM from Vulkan physical device properties if available
+    // For now, we'll try to get it from the Vulkan core, or use a reasonable estimate
+    float estimated_total_vram = 0.0f;
+    
+    if (vulkan_core_) {
+      // Attempt to get actual VRAM from Vulkan physical device properties
+      // This would require the VulkanCore to expose this information
+      VkPhysicalDeviceMemoryProperties mem_props;
+      vkGetPhysicalDeviceMemoryProperties(vulkan_core_->get_physical_device(), &mem_props);
+      
+      // Sum up all memory heaps to get total VRAM
+      for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
+        if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+          // Only count device-local memory (VRAM)
+          estimated_total_vram += static_cast<float>(mem_props.memoryHeaps[i].size);
+        }
+      }
+    }
+    
+    // If we couldn't determine the actual VRAM, use a reasonable default
+    if (estimated_total_vram == 0.0f) {
+      estimated_total_vram = 1024 * 1024 * 1024;  // 1GB fallback
+    }
 
     return (total_used / estimated_total_vram) * 100.0f;
   }

@@ -44,6 +44,7 @@ class TechnicalIndicators {
                                                  int d_period = 3);
   static IndicatorResult calculate_vwap(const std::vector<OHLCV>& data, size_t start_index = 0);
   static IndicatorResult calculate_vwap_standard_deviation(const std::vector<OHLCV>& data, size_t start_index = 0);
+  static IndicatorResult average_true_range(const std::vector<OHLCV>& data, int period = 14);
 };
 
 struct ProcessedTrade {

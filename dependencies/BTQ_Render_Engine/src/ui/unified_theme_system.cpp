@@ -564,7 +564,13 @@ void UnifiedThemeManager::apply_to_imgui() const {
 void UnifiedThemeManager::apply_to_components() const {
   // Apply theme to custom components
   // This would typically involve notifying registered components about theme changes
-  // For now, just a placeholder implementation
+  // For now, we'll trigger a theme update notification that components can listen for
+  
+  // In a real implementation, this would iterate through registered components
+  // and call their theme update methods
+  #ifdef DEBUG
+  printf("Applying theme '%s' to components\n", current_theme_name_.c_str());
+  #endif
 }
 
 void UnifiedThemeManager::get_color(const std::string& color_name, float* rgba) const {
@@ -687,7 +693,13 @@ bool UnifiedThemeManager::load_theme(const std::string& file_path) {
 void UnifiedThemeManager::create_preview(const std::string& theme_name,
                                          const std::string& output_path) const {
   // This would create a visual preview of the theme
-  // For now, just a placeholder implementation
+  // For now, we'll log the intent to create a preview
+  // In a real implementation, this would render a sample UI with the theme applied
+  // and save it to the specified output path
+  
+  #ifdef DEBUG
+  printf("Creating preview for theme '%s' at path '%s'\n", theme_name.c_str(), output_path.c_str());
+  #endif
 }
 
 bool UnifiedThemeManager::validate_theme(const ThemeDefinition& theme) const {

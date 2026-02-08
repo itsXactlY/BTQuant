@@ -101,7 +101,7 @@
   - In `MarketDataProcessor`, replace `std::vector` buffers with a **Swap-Buffer** architecture using `std::atomic<State*>`.
   - **Writer:** Fills the "Back" buffer. When full, atomically swaps the pointer to make it the "Front" buffer.
   - **Reader:** Grabs the "Front" buffer pointer atomically to process/render.
-- [ ] **Parallel Processing (`<execution>`):**
+- [x] **Parallel Processing (`<execution>`):**
   - In `ClusterEngine::process_trade_batch`, use `std::for_each(std::execution::par_unseq, ...)` to vectorize volume calculations across the batch before merging.
 
 ## 40.5: Validation

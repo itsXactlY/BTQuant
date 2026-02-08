@@ -13,6 +13,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <stop_token>
 #include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
 #include "threading/atomic_signal.hpp"
 
@@ -405,7 +406,7 @@ private:
 
     btq::threading::AtomicSignal task_available_signal_;  // Atomic signal for task availability
     size_t num_threads_;
-    std::atomic<bool> stop_;
+    std::stop_source stop_source_;
 
 public:
     void enqueue_task(std::function<void()> task);

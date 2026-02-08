@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <thread>
 #include <type_traits>
 
 namespace btq {
@@ -11,7 +12,7 @@ namespace threading {
 
 /**
  * @brief Atomic signal class using C++20/26 atomic wait/notify mechanisms
- * 
+ *
  * This class provides a lock-free signaling mechanism that replaces traditional
  * condition variables with atomic wait/notify operations for improved performance
  * in high-frequency scenarios.
@@ -19,18 +20,18 @@ namespace threading {
 class AtomicSignal {
 private:
     std::atomic<uint32_t> signal_state_{0};
-    
+
 public:
     /**
      * @brief Constructor
      */
     AtomicSignal() = default;
-    
+
     /**
      * @brief Destructor
      */
     ~AtomicSignal() = default;
-    
+
     /**
      * @brief Signal one waiting thread
      *
@@ -38,8 +39,7 @@ public:
      */
     void notify_one() noexcept {
         signal_state_.fetch_add(1u, std::memory_order_release);
-        // Note: std::atomic::notify_one() is only available in C++20 and later
-        // For compatibility with older standards, we use a simple fetch_add
+        signal_state_.notify_one();
     }
 
     /**
@@ -49,8 +49,7 @@ public:
      */
     void notify_all() noexcept {
         signal_state_.fetch_add(1u, std::memory_order_release);
-        // Note: std::atomic::notify_all() is only available in C++20 and later
-        // For compatibility with older standards, we use a simple fetch_add
+        signal_state_.notify_all();
     }
 
     /**
@@ -60,12 +59,7 @@ public:
      */
     void wait() const noexcept {
         uint32_t expected = signal_state_.load(std::memory_order_acquire);
-        while (signal_state_.load(std::memory_order_acquire) == expected) {
-            // Note: std::atomic::wait() is only available in C++20 and later
-            // For compatibility with older standards, we use a simple spin-wait
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
-            expected = signal_state_.load(std::memory_order_acquire);
-        }
+        signal_state_.wait(expected, std::memory_order_acquire);
     }
 
     /**
@@ -75,25 +69,20 @@ public:
      */
     template<typename Predicate>
     void wait(Predicate pred) const {
-        while (!pred()) {
-            uint32_t expected = signal_state_.load(std::memory_order_acquire);
-            if (pred()) {
-                return; // Predicate became true without waiting
-            }
+        if (pred()) {
+            return; // Predicate is already true, no need to wait
+        }
 
-            // Wait while the value hasn't changed
-            while (signal_state_.load(std::memory_order_acquire) == expected && !pred()) {
-                // Note: std::atomic::wait() is only available in C++20 and later
-                // For compatibility with older standards, we use a simple spin-wait
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
-                expected = signal_state_.load(std::memory_order_acquire);
-            }
+        uint32_t expected = signal_state_.load(std::memory_order_acquire);
+        while (!pred()) {
+            signal_state_.wait(expected, std::memory_order_acquire);
+            expected = signal_state_.load(std::memory_order_acquire);
         }
     }
-    
+
     /**
      * @brief Wait for a specific duration
-     * 
+     *
      * @tparam Rep Duration representation type
      * @tparam Period Duration period type
      * @param timeout_duration Duration to wait
@@ -103,26 +92,32 @@ public:
     bool wait_for(const std::chrono::duration<Rep, Period>& timeout_duration) const {
         auto start_time = std::chrono::steady_clock::now();
         auto end_time = start_time + timeout_duration;
-        
+
         uint32_t expected = signal_state_.load(std::memory_order_acquire);
-        
+
         while (signal_state_.load(std::memory_order_acquire) == expected) {
             // Check if timeout has already passed
             auto current_time = std::chrono::steady_clock::now();
             if (current_time >= end_time) {
                 return false; // Timeout
             }
+
+            // For timeout, we need to use a polling approach since std::atomic::wait_for
+            // is not available in the standard. We'll use a short sleep to avoid busy waiting.
+            auto remaining = end_time - current_time;
+            auto sleep_duration = std::min(remaining, std::chrono::duration_cast<decltype(remaining)>(std::chrono::microseconds(100)));
+            std::this_thread::sleep_for(sleep_duration);
             
-            // Simple spin-wait approach since std::atomic doesn't have wait_for
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            // Update expected value after sleeping
+            expected = signal_state_.load(std::memory_order_acquire);
         }
-        
+
         return true; // Signaled
     }
-    
+
     /**
      * @brief Wait until a specific time point
-     * 
+     *
      * @tparam Clock Clock type
      * @tparam Duration Duration type
      * @param timeout_time Time point to wait until
@@ -134,51 +129,63 @@ public:
         if (current_time >= timeout_time) {
             return false; // Already timed out
         }
-        
+
         auto remaining = timeout_time - current_time;
         return wait_for(remaining);
     }
-    
+
     /**
      * @brief Wait with predicate and timeout
-     * 
+     *
      * @tparam Rep Duration representation type
      * @tparam Period Duration period type
      * @tparam Predicate Predicate function type
      * @param timeout_duration Duration to wait
      * @param pred Predicate function to evaluate
-     * @return std::cv_status::no_timeout if predicate became true, std::cv_status::timeout otherwise
+     * @return true if predicate became true, false if timeout occurred
      */
     template<typename Rep, typename Period, typename Predicate>
     bool wait_for(const std::chrono::duration<Rep, Period>& timeout_duration, Predicate pred) const {
+        if (pred()) {
+            return true; // Predicate is already true
+        }
+
         auto start_time = std::chrono::steady_clock::now();
         auto end_time = start_time + timeout_duration;
-        
+
+        uint32_t expected = signal_state_.load(std::memory_order_acquire);
+
         while (!pred()) {
             auto current_time = std::chrono::steady_clock::now();
             if (current_time >= end_time) {
                 return false; // Timeout
             }
+
+            // For timeout, we need to use a polling approach since std::atomic::wait_for
+            // is not available in the standard. We'll use a short sleep to avoid busy waiting.
+            auto remaining = end_time - current_time;
+            auto sleep_duration = std::min(remaining, std::chrono::duration_cast<decltype(remaining)>(std::chrono::microseconds(100)));
+            std::this_thread::sleep_for(sleep_duration);
             
-            // Simple spin-wait approach since std::atomic doesn't have wait_for
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            // Update expected value after sleeping
+            expected = signal_state_.load(std::memory_order_acquire);
         }
-        
+
         return true; // Predicate satisfied
     }
-    
+
     /**
      * @brief Get current signal state
-     * 
+     *
      * @return Current value of the signal state
      */
     uint32_t get_state() const noexcept {
         return signal_state_.load(std::memory_order_acquire);
     }
-    
+
     /**
      * @brief Reset the signal state
-     * 
+     *
      * This is mainly for testing purposes
      */
     void reset() noexcept {
@@ -188,31 +195,30 @@ public:
 
 /**
  * @brief Specialized atomic signal for boolean state
- * 
+ *
  * A more efficient version for simple true/false signaling
  */
 class AtomicBooleanSignal {
 private:
     std::atomic<bool> signal_state_{false};
-    
+
 public:
     /**
      * @brief Constructor
      */
     AtomicBooleanSignal() = default;
-    
+
     /**
      * @brief Destructor
      */
     ~AtomicBooleanSignal() = default;
-    
+
     /**
      * @brief Signal waiting threads
      */
     void signal() noexcept {
         signal_state_.store(true, std::memory_order_release);
-        // Note: std::atomic::notify_all() is only available in C++20 and later
-        // For compatibility with older standards, we use a simple store
+        signal_state_.notify_all();
     }
 
     /**
@@ -226,11 +232,10 @@ public:
      * @brief Wait for the signal to become true
      */
     void wait() const noexcept {
-        while (!signal_state_.load(std::memory_order_acquire)) {
-            // Note: std::atomic::wait() is only available in C++20 and later
-            // For compatibility with older standards, we use a simple spin-wait
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
-        }
+        bool expected = signal_state_.load(std::memory_order_acquire);
+        if (expected) return; // Already signaled
+        
+        signal_state_.wait(expected, std::memory_order_acquire);
     }
 
     /**
@@ -238,16 +243,17 @@ public:
      */
     template<typename Predicate>
     void wait(Predicate pred) const {
+        if (pred() || signal_state_.load(std::memory_order_acquire)) {
+            return; // Already satisfied
+        }
+        
+        bool expected = signal_state_.load(std::memory_order_acquire);
         while (!pred() && !signal_state_.load(std::memory_order_acquire)) {
-            if (pred() || signal_state_.load(std::memory_order_acquire)) {
-                return;
-            }
-            // Note: std::atomic::wait() is only available in C++20 and later
-            // For compatibility with older standards, we use a simple spin-wait
-            std::this_thread::sleep_for(std::chrono::microseconds(1));
+            signal_state_.wait(expected, std::memory_order_acquire);
+            expected = signal_state_.load(std::memory_order_acquire);
         }
     }
-    
+
     /**
      * @brief Wait for a specific duration
      */
@@ -255,20 +261,29 @@ public:
     bool wait_for(const std::chrono::duration<Rep, Period>& timeout_duration) const {
         auto start_time = std::chrono::steady_clock::now();
         auto end_time = start_time + timeout_duration;
+
+        bool expected = signal_state_.load(std::memory_order_acquire);
+        if (expected) return true; // Already signaled
         
         while (!signal_state_.load(std::memory_order_acquire)) {
             auto current_time = std::chrono::steady_clock::now();
             if (current_time >= end_time) {
                 return false; // Timeout
             }
+
+            // For timeout, we need to use a polling approach since std::atomic::wait_for
+            // is not available in the standard. We'll use a short sleep to avoid busy waiting.
+            auto remaining = end_time - current_time;
+            auto sleep_duration = std::min(remaining, std::chrono::duration_cast<decltype(remaining)>(std::chrono::microseconds(100)));
+            std::this_thread::sleep_for(sleep_duration);
             
-            // Simple spin-wait approach since std::atomic doesn't have wait_for
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            // Update expected value after sleeping
+            expected = signal_state_.load(std::memory_order_acquire);
         }
-        
+
         return true; // Signaled
     }
-    
+
     /**
      * @brief Check if signal is set
      */
@@ -279,26 +294,26 @@ public:
 
 /**
  * @brief Counter-based atomic signal
- * 
+ *
  * Useful for signaling when a specific count is reached
  */
 class AtomicCounterSignal {
 private:
     std::atomic<uint32_t> counter_{0};
     std::atomic<uint32_t> target_{1}; // Default target is 1
-    
+
 public:
     /**
      * @brief Constructor
      */
-    explicit AtomicCounterSignal(uint32_t initial_target = 1) 
+    explicit AtomicCounterSignal(uint32_t initial_target = 1)
         : target_(initial_target) {}
-    
+
     /**
      * @brief Destructor
      */
     ~AtomicCounterSignal() = default;
-    
+
     /**
      * @brief Increment the counter and notify if target is reached
      */
@@ -306,9 +321,9 @@ public:
         uint32_t old_value = counter_.fetch_add(1u, std::memory_order_acq_rel);
         uint32_t new_value = old_value + 1;
 
-        if (new_value >= target_.load(std::memory_order_acquire)) {
-            // Note: std::atomic::notify_all() is only available in C++20 and later
-            // For compatibility with older standards, we use a simple fetch_add
+        uint32_t target = target_.load(std::memory_order_acquire);
+        if (new_value >= target) {
+            counter_.notify_all();
         }
     }
 
@@ -317,25 +332,27 @@ public:
      */
     void set_target(uint32_t new_target) noexcept {
         target_.store(new_target, std::memory_order_release);
-
-        // Note: std::atomic::notify_all() is only available in C++20 and later
-        // For compatibility with older standards, we use a simple store
+        // Notify in case the new target is already met or exceeded
+        uint32_t current = counter_.load(std::memory_order_acquire);
+        if (current >= new_target) {
+            counter_.notify_all();
+        }
     }
-    
+
     /**
      * @brief Get current counter value
      */
     uint32_t get_count() const noexcept {
         return counter_.load(std::memory_order_acquire);
     }
-    
+
     /**
      * @brief Get target value
      */
     uint32_t get_target() const noexcept {
         return target_.load(std::memory_order_acquire);
     }
-    
+
     /**
      * @brief Wait until counter reaches target
      */
@@ -344,14 +361,12 @@ public:
         uint32_t target = target_.load(std::memory_order_acquire);
 
         while (current < target) {
-            // Note: std::atomic::wait() is only available in C++20 and later
-            // For compatibility with older standards, we use a simple spin-wait
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            counter_.wait(current, std::memory_order_acquire);
             current = counter_.load(std::memory_order_acquire);
             target = target_.load(std::memory_order_acquire);
         }
     }
-    
+
     /**
      * @brief Wait with timeout until counter reaches target
      */
@@ -359,32 +374,37 @@ public:
     bool wait_for_target(const std::chrono::duration<Rep, Period>& timeout_duration) const {
         auto start_time = std::chrono::steady_clock::now();
         auto end_time = start_time + timeout_duration;
-        
+
         uint32_t current = counter_.load(std::memory_order_acquire);
         uint32_t target = target_.load(std::memory_order_acquire);
-        
+
         while (current < target) {
             auto current_time = std::chrono::steady_clock::now();
             if (current_time >= end_time) {
                 return false; // Timeout
             }
+
+            // For timeout, we need to use a polling approach since std::atomic::wait_for
+            // is not available in the standard. We'll use a short sleep to avoid busy waiting.
+            auto remaining = end_time - current_time;
+            auto sleep_duration = std::min(remaining, std::chrono::duration_cast<decltype(remaining)>(std::chrono::microseconds(100)));
+            std::this_thread::sleep_for(sleep_duration);
             
-            // Simple spin-wait approach since std::atomic doesn't have wait_for
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            // Update values after sleeping
             current = counter_.load(std::memory_order_acquire);
             target = target_.load(std::memory_order_acquire);
         }
-        
+
         return true; // Target reached
     }
-    
+
     /**
      * @brief Reset counter to zero
      */
     void reset() noexcept {
         counter_.store(0, std::memory_order_release);
     }
-    
+
     /**
      * @brief Reset counter and set new target
      */

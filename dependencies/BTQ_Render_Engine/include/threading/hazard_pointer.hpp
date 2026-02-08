@@ -2,578 +2,423 @@
 #define BTQ_HAZARD_POINTER_HPP
 
 #include <atomic>
+#include <memory>
 #include <thread>
 #include <vector>
-#include <memory>
-#include <mutex>
-#include <algorithm>
 #include <functional>
-#include <type_traits>
+#include <mutex>
 
 namespace btq {
-namespace threading {
 
-// Forward declaration
-class HazardPointerManager;
+// Forward declarations
+class hazard_pointer;
+template<class T, class D = std::default_delete<T>>
+class hazard_pointer_obj_base;
+
+namespace detail {
+    // Internal implementation details for hazard pointers
+    class hazard_pointer_manager {
+    private:
+        static constexpr size_t MAX_HAZARD_POINTERS = 1024;
+        static constexpr size_t MAX_RETIRED_OBJECTS = 1000;
+
+        struct hazard_record {
+            std::atomic<void*> ptr{nullptr};
+            std::atomic<bool> active{false};
+            std::thread::id owner_tid{};
+
+            hazard_record() = default;
+        };
+
+        struct retired_node {
+            void* ptr;
+            std::function<void()> deleter;
+            std::thread::id retiring_tid;
+            retired_node* next;
+
+            retired_node(void* p, std::function<void()> d, std::thread::id tid)
+                : ptr(p), deleter(std::move(d)), retiring_tid(tid), next(nullptr) {}
+        };
+
+        alignas(64) std::vector<hazard_record> global_hazard_ptrs_;
+        alignas(64) std::atomic<retired_node*> retired_list_head_{nullptr};
+        alignas(64) std::atomic<size_t> retired_count_{0};
+        
+        mutable std::mutex global_mtx_;
+
+        // Thread-local storage
+        static thread_local std::vector<size_t> thread_hazard_indices_;
+
+    public:
+        hazard_pointer_manager() {
+            global_hazard_ptrs_.resize(MAX_HAZARD_POINTERS);
+        }
+
+        static hazard_pointer_manager& instance() {
+            static hazard_pointer_manager mgr;
+            return mgr;
+        }
+
+        size_t acquire_hazard_ptr_idx() {
+            std::lock_guard<std::mutex> lock(global_mtx_);
+            
+            for (size_t i = 0; i < global_hazard_ptrs_.size(); ++i) {
+                auto& rec = global_hazard_ptrs_[i];
+                if (!rec.active.exchange(true, std::memory_order_acquire)) {
+                    rec.owner_tid = std::this_thread::get_id();
+                    thread_hazard_indices_.push_back(i);
+                    return i;
+                }
+            }
+            
+            // Expand if needed
+            size_t new_idx = global_hazard_ptrs_.size();
+            if (new_idx < MAX_HAZARD_POINTERS) {
+                global_hazard_ptrs_.emplace_back();
+                auto& new_rec = global_hazard_ptrs_[new_idx];
+                new_rec.active.store(true, std::memory_order_release);
+                new_rec.owner_tid = std::this_thread::get_id();
+                thread_hazard_indices_.push_back(new_idx);
+                return new_idx;
+            }
+            
+            throw std::runtime_error("Maximum hazard pointers exceeded");
+        }
+
+        void release_hazard_ptr_idx(size_t idx) {
+            if (idx < global_hazard_ptrs_.size()) {
+                auto& rec = global_hazard_ptrs_[idx];
+                rec.active.store(false, std::memory_order_release);
+                
+                // Remove from thread-local cache
+                for (auto it = thread_hazard_indices_.begin(); it != thread_hazard_indices_.end(); ++it) {
+                    if (*it == idx) {
+                        thread_hazard_indices_.erase(it);
+                        break;
+                    }
+                }
+            }
+        }
+
+        bool is_protected(void* ptr) const {
+            for (const auto& rec : global_hazard_ptrs_) {
+                if (rec.active.load(std::memory_order_acquire) && 
+                    rec.ptr.load(std::memory_order_acquire) == ptr) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        template<typename T, typename Deleter = std::default_delete<T>>
+        void retire_object(T* ptr, Deleter d = Deleter{}) {
+            if (!ptr) return;
+
+            auto deleter = [ptr, d]() { d(ptr); };
+            auto* node = new retired_node(ptr, std::move(deleter), std::this_thread::get_id());
+
+            retired_node* old_head = retired_list_head_.load(std::memory_order_acquire);
+            do {
+                node->next = old_head;
+            } while (!retired_list_head_.compare_exchange_weak(
+                         old_head, node, std::memory_order_acq_rel, std::memory_order_acquire));
+
+            retired_count_.fetch_add(1, std::memory_order_acq_rel);
+
+            if (retired_count_.load(std::memory_order_acquire) >= MAX_RETIRED_OBJECTS) {
+                cleanup_retired();
+            }
+        }
+
+        void cleanup_retired() {
+            retired_node* current_list = retired_list_head_.load(std::memory_order_acquire);
+            if (!current_list) return;
+
+            retired_node* taken_list = retired_list_head_.exchange(nullptr, std::memory_order_acq_rel);
+            if (!taken_list) return;
+
+            size_t taken_count = 0;
+            for (auto* temp = taken_list; temp; temp = temp->next) {
+                ++taken_count;
+            }
+            retired_count_.fetch_sub(taken_count, std::memory_order_acq_rel);
+
+            retired_node* deletable_list = nullptr;
+            retired_node* protected_list = nullptr;
+            retired_node* remaining = taken_list;
+
+            while (remaining) {
+                auto* curr = remaining;
+                remaining = remaining->next;
+                curr->next = nullptr;
+
+                if (is_protected(curr->ptr)) {
+                    curr->next = protected_list;
+                    protected_list = curr;
+                } else {
+                    curr->next = deletable_list;
+                    deletable_list = curr;
+                }
+            }
+
+            if (protected_list) {
+                retired_node* old_head = retired_list_head_.load(std::memory_order_acquire);
+                retired_node* tail = protected_list;
+                while (tail->next) tail = tail->next;
+                tail->next = old_head;
+
+                retired_list_head_.store(protected_list, std::memory_order_release);
+            }
+
+            while (deletable_list) {
+                auto* to_del = deletable_list;
+                deletable_list = deletable_list->next;
+                to_del->deleter();
+                delete to_del;
+            }
+        }
+    };
+
+    thread_local std::vector<size_t> hazard_pointer_manager::thread_hazard_indices_;
+}
 
 /**
- * @brief A hazard pointer guard that protects a pointer from being deleted
+ * @brief Base class for objects that can be protected by hazard pointers
  * 
- * This RAII class ensures that the protected pointer remains valid for the
- * duration of the guard's lifetime by registering it as a "hazard" that
- * prevents reclamation by other threads.
+ * This class provides the retire() method to mark objects for deferred deletion.
+ * 
+ * @tparam T Type of the object
+ * @tparam D Deleter type (defaults to std::default_delete<T>)
  */
-template<typename T>
-class HazardPointerGuard {
+template<class T, class D>
+class hazard_pointer_obj_base {
+public:
+    /**
+     * @brief Mark this object for retirement (deferred deletion)
+     * 
+     * @param d Custom deleter (defaults to D{})
+     */
+    void retire(D d = D{}) noexcept {
+        auto* mgr = &detail::hazard_pointer_manager::instance();
+        mgr->retire_object(static_cast<T*>(this), std::move(d));
+    }
+
+protected:
+    hazard_pointer_obj_base() = default;
+    hazard_pointer_obj_base(const hazard_pointer_obj_base&) = default;
+    hazard_pointer_obj_base(hazard_pointer_obj_base&&) = default;
+    hazard_pointer_obj_base& operator=(const hazard_pointer_obj_base&) = default;
+    hazard_pointer_obj_base& operator=(hazard_pointer_obj_base&&) = default;
+    ~hazard_pointer_obj_base() = default;
+};
+
+// Specialization for default deleter
+template<class T>
+class hazard_pointer_obj_base<T, std::default_delete<T>> {
+public:
+    /**
+     * @brief Mark this object for retirement (deferred deletion)
+     */
+    void retire() noexcept {
+        auto* mgr = &detail::hazard_pointer_manager::instance();
+        mgr->retire_object(static_cast<T*>(this));
+    }
+
+protected:
+    hazard_pointer_obj_base() = default;
+    hazard_pointer_obj_base(const hazard_pointer_obj_base&) = default;
+    hazard_pointer_obj_base(hazard_pointer_obj_base&&) = default;
+    hazard_pointer_obj_base& operator=(const hazard_pointer_obj_base&) = default;
+    hazard_pointer_obj_base& operator=(hazard_pointer_obj_base&&) = default;
+    ~hazard_pointer_obj_base() = default;
+};
+
+/**
+ * @brief A hazard pointer that can protect objects from deletion
+ * 
+ * A hazard pointer is a single-writer multi-reader pointer that can be owned 
+ * by at most one thread at any time. It provides methods to protect objects
+ * from being reclaimed while they are in use.
+ */
+class hazard_pointer {
 private:
-    T* ptr_{nullptr};
-    HazardPointerManager* manager_{nullptr};
-    size_t index_{static_cast<size_t>(-1)};  // Index in the thread's hazard pointer array
+    size_t index_;
+    bool active_;
 
 public:
     /**
-     * @brief Construct a hazard pointer guard
-     * @param ptr The pointer to protect
-     * @param manager The hazard pointer manager to register with
+     * @brief Construct a hazard pointer
      */
-    HazardPointerGuard(T* ptr, HazardPointerManager& manager);
-    
-    /**
-     * @brief Destructor - releases the hazard pointer
-     */
-    ~HazardPointerGuard();
-    
-    /**
-     * @brief Deleted copy constructor
-     */
-    HazardPointerGuard(const HazardPointerGuard&) = delete;
-    
-    /**
-     * @brief Deleted assignment operator
-     */
-    HazardPointerGuard& operator=(const HazardPointerGuard&) = delete;
-    
+    hazard_pointer() : index_(static_cast<size_t>(-1)), active_(false) {
+        acquire();
+    }
+
     /**
      * @brief Move constructor
      */
-    HazardPointerGuard(HazardPointerGuard&& other) noexcept;
-    
+    hazard_pointer(hazard_pointer&& other) noexcept 
+        : index_(other.index_), active_(other.active_) {
+        other.active_ = false;
+    }
+
     /**
      * @brief Move assignment operator
      */
-    HazardPointerGuard& operator=(HazardPointerGuard&& other) noexcept;
-    
-    /**
-     * @brief Get the protected pointer
-     * @return The protected pointer
-     */
-    T* get() const noexcept { return ptr_; }
-    
-    /**
-     * @brief Dereference operator
-     * @return Reference to the pointed-to object
-     */
-    T& operator*() const noexcept { return *ptr_; }
-    
-    /**
-     * @brief Arrow operator
-     * @return The protected pointer
-     */
-    T* operator->() const noexcept { return ptr_; }
-    
-    /**
-     * @brief Check if the guard is protecting a valid pointer
-     * @return True if protecting a valid pointer, false otherwise
-     */
-    explicit operator bool() const noexcept { return ptr_ != nullptr; }
-    
-    /**
-     * @brief Release the hazard pointer early
-     */
-    void release() noexcept;
-};
-
-/**
- * @brief Manager for hazard pointers - handles allocation and reclamation
- * 
- * This singleton-like class manages the pool of hazard pointers and the
- * reclamation of retired objects. Each thread should have its own set of
- * hazard pointers managed by this class.
- */
-class HazardPointerManager {
-private:
-    // Maximum number of hazard pointers per thread
-    static constexpr size_t MAX_HAZARD_POINTERS_PER_THREAD = 64;
-    
-    // Maximum number of retired objects before cleanup is forced
-    static constexpr size_t MAX_RETIRED_BEFORE_CLEANUP = 1000;
-    
-    // Structure to hold a hazard pointer record for a thread
-    struct HazardPointerRecord {
-        std::atomic<void*> pointer{nullptr};
-        std::atomic<bool> active{false};
-        std::thread::id owner_thread_id{std::thread::id{}};
-        
-        HazardPointerRecord() = default;
-        
-        // Define move constructor and assignment operator since atomic members are not copyable
-        HazardPointerRecord(HazardPointerRecord&& other) noexcept
-            : pointer(other.pointer.load()), active(other.active.load()), owner_thread_id(other.owner_thread_id) {}
-        
-        HazardPointerRecord& operator=(HazardPointerRecord&& other) noexcept {
-            if (this != &other) {
-                pointer.store(other.pointer.load());
-                active.store(other.active.load());
-                owner_thread_id = other.owner_thread_id;
+    hazard_pointer& operator=(hazard_pointer&& other) noexcept {
+        if (this != &other) {
+            if (active_) {
+                release();
             }
-            return *this;
+            index_ = other.index_;
+            active_ = other.active_;
+            other.active_ = false;
         }
-        
-        // Delete copy constructor and assignment operator
-        HazardPointerRecord(const HazardPointerRecord&) = delete;
-        HazardPointerRecord& operator=(const HazardPointerRecord&) = delete;
-    };
-    
-    // Structure to hold a retired object
-    struct RetiredNode {
-        void* ptr;
-        std::function<void()> deleter;
-        std::thread::id retiring_thread_id;
-        RetiredNode* next;
-        
-        RetiredNode(void* p, std::function<void()> d, std::thread::id tid)
-            : ptr(p), deleter(std::move(d)), retiring_thread_id(tid), next(nullptr) {}
-    };
-    
-    // Global array of hazard pointer records
-    alignas(64) std::vector<HazardPointerRecord> global_hazard_pointers_;
-    
-    // Head of the retired objects list
-    alignas(64) std::atomic<RetiredNode*> retired_list_head_{nullptr};
-    
-    // Count of retired objects
-    alignas(64) std::atomic<size_t> retired_count_{0};
-    
-    // Mutex for managing the global hazard pointer array
-    mutable std::mutex global_mutex_;
-    
-    // Thread-local storage for this thread's hazard pointer indices
-    static thread_local std::vector<size_t> thread_hazard_indices_;
-    
-    // Thread-local storage for this thread's hazard pointer records
-    static thread_local std::vector<HazardPointerRecord*> thread_hazard_records_;
-    
-    /**
-     * @brief Get or allocate a hazard pointer for this thread
-     * @return Index of the allocated hazard pointer
-     */
-    size_t acquire_hazard_pointer_index();
-    
-    /**
-     * @brief Release a hazard pointer back to the pool
-     * @param index Index of the hazard pointer to release
-     */
-    void release_hazard_pointer_index(size_t index);
-    
-    /**
-     * @brief Check if a pointer is currently protected by any hazard pointer
-     * @param ptr Pointer to check
-     * @return True if the pointer is protected, false otherwise
-     */
-    bool is_protected(void* ptr) const;
-    
-public:
-    
-    /**
-     * @brief Clean up retired objects that are safe to delete
-     */
-    void cleanup_retired_objects();
-    
-    /**
-     * @brief Helper function to delete a retired node
-     * @param node Node to delete
-     */
-    void delete_retired_node(RetiredNode* node);
+        return *this;
+    }
 
-public:
-    /**
-     * @brief Constructor
-     */
-    HazardPointerManager();
-    
     /**
      * @brief Destructor
      */
-    ~HazardPointerManager();
-    
+    ~hazard_pointer() {
+        if (active_) {
+            release();
+        }
+    }
+
     /**
-     * @brief Deleted copy constructor
+     * @brief Check if the hazard pointer is empty (not protecting anything)
+     * @return true if not protecting any object, false otherwise
      */
-    HazardPointerManager(const HazardPointerManager&) = delete;
-    
+    bool empty() const noexcept {
+        return !active_ || get_current_ptr() == nullptr;
+    }
+
     /**
-     * @brief Deleted assignment operator
+     * @brief Protect the object pointed to by src
+     * @tparam T Type of the object
+     * @param src Atomic pointer to protect
+     * @return Pointer to the protected object
      */
-    HazardPointerManager& operator=(const HazardPointerManager&) = delete;
-    
+    template<class T>
+    T* protect(const std::atomic<T*>& src) noexcept {
+        if (!active_) {
+            acquire();
+        }
+        
+        T* ptr = src.load(std::memory_order_acquire);
+        set_ptr(ptr);
+        // Double-check that the pointer is still valid after setting the hazard
+        T* current = src.load(std::memory_order_acquire);
+        if (ptr != current) {
+            ptr = current;
+            set_ptr(ptr);
+        }
+        return ptr;
+    }
+
     /**
-     * @brief Get the singleton instance of the hazard pointer manager
-     * @return Reference to the singleton instance
+     * @brief Try to protect the object pointed to by src
+     * @tparam T Type of the object
+     * @param[out] ptr Reference to store the protected pointer
+     * @param src Atomic pointer to protect
+     * @return true if protection was successful, false otherwise
      */
-    static HazardPointerManager& instance();
-    
+    template<class T>
+    bool try_protect(T*& ptr, const std::atomic<T*>& src) noexcept {
+        if (!active_) {
+            acquire();
+        }
+        
+        T* current = src.load(std::memory_order_acquire);
+        set_ptr(current);
+        // Double-check
+        T* reloaded = src.load(std::memory_order_acquire);
+        if (current == reloaded) {
+            ptr = current;
+            return true;
+        } else {
+            set_ptr(reloaded);
+            ptr = reloaded;
+            return false;
+        }
+    }
+
     /**
-     * @brief Acquire a hazard pointer for the given pointer
-     * @param ptr Pointer to protect
-     * @return A hazard pointer guard that protects the pointer
+     * @brief Reset protection for the current object
+     * @tparam T Type of the object
+     * @param ptr Pointer to the object to stop protecting (optional)
      */
-    template<typename T>
-    HazardPointerGuard<T> acquire_hazard_pointer(T* ptr);
-    
+    template<class T>
+    void reset_protection(const T* ptr = nullptr) noexcept {
+        if (active_ && (ptr == nullptr || get_current_ptr() == ptr)) {
+            set_ptr(nullptr);
+        }
+    }
+
     /**
-     * @brief Retire an object for deletion when safe
-     * @param ptr Pointer to the object to retire
-     * @param deleter Function to delete the object
+     * @brief Reset protection (clear the hazard pointer)
      */
-    template<typename T>
-    void retire(T* ptr, std::function<void()> deleter = []() {});
-    
+    void reset_protection(std::nullptr_t = nullptr) noexcept {
+        if (active_) {
+            set_ptr(nullptr);
+        }
+    }
+
     /**
-     * @brief Force cleanup of retired objects
+     * @brief Swap this hazard pointer with another
+     * @param other The other hazard pointer to swap with
      */
-    void force_cleanup();
-    
-    /**
-     * @brief Get the number of retired objects waiting for cleanup
-     * @return Number of retired objects
-     */
-    size_t get_retired_count() const;
-    
-    /**
-     * @brief Get the number of active hazard pointers for this thread
-     * @return Number of active hazard pointers
-     */
-    size_t get_active_hazard_count() const;
-    
+    void swap(hazard_pointer& other) noexcept {
+        std::swap(this->index_, other.index_);
+        std::swap(this->active_, other.active_);
+    }
+
 private:
-    // Make HazardPointerGuard a friend class so it can access private members
-    template<typename T>
-    friend class HazardPointerGuard;
+    void acquire() {
+        auto& mgr = detail::hazard_pointer_manager::instance();
+        index_ = mgr.acquire_hazard_ptr_idx();
+        active_ = true;
+    }
+
+    void release() {
+        if (active_ && index_ != static_cast<size_t>(-1)) {
+            auto& mgr = detail::hazard_pointer_manager::instance();
+            mgr.release_hazard_ptr_idx(index_);
+            active_ = false;
+        }
+    }
+
+    void* get_current_ptr() const {
+        if (!active_ || index_ >= detail::hazard_pointer_manager::instance().global_hazard_ptrs_.size()) {
+            return nullptr;
+        }
+        return detail::hazard_pointer_manager::instance().global_hazard_ptrs_[index_].ptr.load(std::memory_order_acquire);
+    }
+
+    void set_ptr(void* ptr) {
+        if (active_ && index_ < detail::hazard_pointer_manager::instance().global_hazard_ptrs_.size()) {
+            detail::hazard_pointer_manager::instance().global_hazard_ptrs_[index_].ptr.store(ptr, std::memory_order_release);
+        }
+    }
 };
 
-// Static thread-local definitions
-thread_local std::vector<size_t> HazardPointerManager::thread_hazard_indices_;
-thread_local std::vector<HazardPointerManager::HazardPointerRecord*> HazardPointerManager::thread_hazard_records_;
-
-// Implementation of HazardPointerGuard methods
-template<typename T>
-HazardPointerGuard<T>::HazardPointerGuard(T* ptr, HazardPointerManager& manager)
-    : ptr_(ptr), manager_(&manager), index_(static_cast<size_t>(-1)) {
-    if (ptr != nullptr) {
-        index_ = manager_->acquire_hazard_pointer_index();
-        manager_->global_hazard_pointers_[index_].pointer.store(ptr, std::memory_order_release);
-        manager_->global_hazard_pointers_[index_].active.store(true, std::memory_order_release);
-    }
+/**
+ * @brief Create a new hazard pointer
+ * @return A newly constructed hazard pointer
+ */
+inline hazard_pointer make_hazard_pointer() {
+    return hazard_pointer{};
 }
 
-template<typename T>
-HazardPointerGuard<T>::~HazardPointerGuard() {
-    if (ptr_ != nullptr && manager_ != nullptr && index_ != static_cast<size_t>(-1)) {
-        manager_->global_hazard_pointers_[index_].pointer.store(nullptr, std::memory_order_release);
-        manager_->global_hazard_pointers_[index_].active.store(false, std::memory_order_release);
-        manager_->release_hazard_pointer_index(index_);
-    }
+/**
+ * @brief Swap two hazard pointers
+ * @param lhs First hazard pointer
+ * @param rhs Second hazard pointer
+ */
+inline void swap(hazard_pointer& lhs, hazard_pointer& rhs) noexcept {
+    lhs.swap(rhs);
 }
 
-template<typename T>
-HazardPointerGuard<T>::HazardPointerGuard(HazardPointerGuard&& other) noexcept
-    : ptr_(other.ptr_), manager_(other.manager_), index_(other.index_) {
-    other.ptr_ = nullptr;
-    other.manager_ = nullptr;
-    other.index_ = static_cast<size_t>(-1);
-}
-
-template<typename T>
-HazardPointerGuard<T>& HazardPointerGuard<T>::operator=(HazardPointerGuard&& other) noexcept {
-    if (this != &other) {
-        // Release current hazard pointer if active
-        if (ptr_ != nullptr && manager_ != nullptr && index_ != static_cast<size_t>(-1)) {
-            manager_->global_hazard_pointers_[index_].pointer.store(nullptr, std::memory_order_release);
-            manager_->global_hazard_pointers_[index_].active.store(false, std::memory_order_release);
-            manager_->release_hazard_pointer_index(index_);
-        }
-        
-        // Transfer ownership
-        ptr_ = other.ptr_;
-        manager_ = other.manager_;
-        index_ = other.index_;
-        
-        // Reset other
-        other.ptr_ = nullptr;
-        other.manager_ = nullptr;
-        other.index_ = static_cast<size_t>(-1);
-    }
-    return *this;
-}
-
-template<typename T>
-void HazardPointerGuard<T>::release() noexcept {
-    if (ptr_ != nullptr && manager_ != nullptr && index_ != static_cast<size_t>(-1)) {
-        manager_->global_hazard_pointers_[index_].pointer.store(nullptr, std::memory_order_release);
-        manager_->global_hazard_pointers_[index_].active.store(false, std::memory_order_release);
-        manager_->release_hazard_pointer_index(index_);
-        
-        ptr_ = nullptr;
-        manager_ = nullptr;
-        index_ = static_cast<size_t>(-1);
-    }
-}
-
-// Implementation of HazardPointerManager methods
-inline HazardPointerManager::HazardPointerManager() {
-    // Pre-allocate a reasonable number of hazard pointer records
-    global_hazard_pointers_.resize(1024);  // Start with 1024, will grow as needed
-}
-
-inline HazardPointerManager::~HazardPointerManager() {
-    // Clean up any remaining retired objects
-    force_cleanup();
-    
-    // Ensure all hazard pointers are released
-    for (auto& record : global_hazard_pointers_) {
-        if (record.active.load(std::memory_order_acquire)) {
-            // This indicates a programming error - hazard pointers not properly released
-            // In a real implementation, you might want to log this
-        }
-    }
-}
-
-inline HazardPointerManager& HazardPointerManager::instance() {
-    static HazardPointerManager instance;
-    return instance;
-}
-
-inline size_t HazardPointerManager::acquire_hazard_pointer_index() {
-    // First, check if we have a free hazard pointer in our thread-local cache
-    for (size_t i = 0; i < thread_hazard_records_.size(); ++i) {
-        if (!thread_hazard_records_[i]->active.load(std::memory_order_acquire)) {
-            thread_hazard_records_[i]->active.store(true, std::memory_order_release);
-            return thread_hazard_indices_[i];
-        }
-    }
-    
-    // No free hazard pointer in our cache, need to find one globally
-    std::lock_guard<std::mutex> lock(global_mutex_);
-    
-    // Look for an inactive hazard pointer
-    for (size_t i = 0; i < global_hazard_pointers_.size(); ++i) {
-        auto& record = global_hazard_pointers_[i];
-        if (!record.active.load(std::memory_order_acquire)) {
-            record.owner_thread_id = std::this_thread::get_id();
-            record.active.store(true, std::memory_order_release);
-            
-            // Add to thread-local cache
-            thread_hazard_indices_.push_back(i);
-            thread_hazard_records_.push_back(&record);
-            
-            return i;
-        }
-    }
-    
-    // No free hazard pointer found, expand the array
-    size_t new_index = global_hazard_pointers_.size();
-    global_hazard_pointers_.emplace_back();
-    auto& new_record = global_hazard_pointers_[new_index];
-    
-    new_record.owner_thread_id = std::this_thread::get_id();
-    new_record.active.store(true, std::memory_order_release);
-    
-    // Add to thread-local cache
-    thread_hazard_indices_.push_back(new_index);
-    thread_hazard_records_.push_back(&new_record);
-    
-    return new_index;
-}
-
-inline void HazardPointerManager::release_hazard_pointer_index(size_t index) {
-    if (index >= global_hazard_pointers_.size()) {
-        return; // Invalid index
-    }
-    
-    auto& record = global_hazard_pointers_[index];
-    record.active.store(false, std::memory_order_release);
-    record.pointer.store(nullptr, std::memory_order_release);
-    
-    // Remove from thread-local cache if present
-    for (size_t i = 0; i < thread_hazard_indices_.size(); ++i) {
-        if (thread_hazard_indices_[i] == index) {
-            thread_hazard_indices_.erase(thread_hazard_indices_.begin() + i);
-            thread_hazard_records_.erase(thread_hazard_records_.begin() + i);
-            break;
-        }
-    }
-}
-
-inline bool HazardPointerManager::is_protected(void* ptr) const {
-    for (const auto& record : global_hazard_pointers_) {
-        if (record.active.load(std::memory_order_acquire) && 
-            record.pointer.load(std::memory_order_acquire) == ptr) {
-            return true;
-        }
-    }
-    return false;
-}
-
-template<typename T>
-HazardPointerGuard<T> HazardPointerManager::acquire_hazard_pointer(T* ptr) {
-    return HazardPointerGuard<T>(ptr, *this);
-}
-
-template<typename T>
-void HazardPointerManager::retire(T* ptr, std::function<void()> deleter) {
-    if (ptr == nullptr) {
-        return; // Nothing to retire
-    }
-    
-    // Create a deleter that properly deletes the object
-    std::function<void()> actual_deleter = [ptr, del = std::move(deleter)]() {
-        if (del) {
-            del();
-        } else {
-            delete ptr;
-        }
-    };
-    
-    // Create a new retired node
-    RetiredNode* new_node = new RetiredNode(ptr, std::move(actual_deleter), std::this_thread::get_id());
-    
-    // Atomically add to the retired list
-    RetiredNode* old_head = retired_list_head_.load(std::memory_order_acquire);
-    do {
-        new_node->next = old_head;
-    } while (!retired_list_head_.compare_exchange_weak(old_head, new_node, 
-                                                       std::memory_order_acq_rel, 
-                                                       std::memory_order_acquire));
-                                                       
-    // Increment retired count
-    retired_count_.fetch_add(1, std::memory_order_acq_rel);
-    
-    // If we have too many retired objects, try to clean up
-    if (retired_count_.load(std::memory_order_acquire) >= MAX_RETIRED_BEFORE_CLEANUP) {
-        cleanup_retired_objects();
-    }
-}
-
-inline void HazardPointerManager::cleanup_retired_objects() {
-    // Get the current retired list
-    RetiredNode* current_list = retired_list_head_.load(std::memory_order_acquire);
-    if (current_list == nullptr) {
-        return; // Nothing to clean up
-    }
-    
-    // Atomically take the entire list by setting head to null
-    RetiredNode* taken_list = retired_list_head_.exchange(nullptr, std::memory_order_acq_rel);
-    if (taken_list == nullptr) {
-        return; // Another thread took the list
-    }
-    
-    // Count how many nodes we took
-    size_t taken_count = 0;
-    RetiredNode* temp = taken_list;
-    while (temp) {
-        temp = temp->next;
-        ++taken_count;
-    }
-    
-    // Update the retired count
-    retired_count_.fetch_sub(taken_count, std::memory_order_acq_rel);
-    
-    // Separate nodes that can be deleted from those that still need protection
-    RetiredNode* deletable_list = nullptr;
-    RetiredNode* protected_list = nullptr;
-    RetiredNode* remaining_list = taken_list;
-    
-    while (remaining_list != nullptr) {
-        RetiredNode* current = remaining_list;
-        remaining_list = remaining_list->next;
-        current->next = nullptr;
-        
-        // Check if this pointer is currently protected by any hazard pointer
-        if (is_protected(current->ptr)) {
-            // Still protected, add to protected list
-            current->next = protected_list;
-            protected_list = current;
-        } else {
-            // Safe to delete, add to deletable list
-            current->next = deletable_list;
-            deletable_list = current;
-        }
-    }
-    
-    // Re-add protected nodes to the main retired list
-    if (protected_list != nullptr) {
-        RetiredNode* old_head = retired_list_head_.load(std::memory_order_acquire);
-        RetiredNode* protected_tail = protected_list;
-        while (protected_tail->next) {
-            protected_tail = protected_tail->next;
-        }
-        protected_tail->next = old_head;
-        
-        // Try to add back to the main list
-        RetiredNode* expected = nullptr;
-        if (!retired_list_head_.compare_exchange_strong(expected, protected_list, 
-                                                       std::memory_order_acq_rel, 
-                                                       std::memory_order_acquire)) {
-            // Another thread added to the list, merge with theirs
-            protected_tail->next = expected;
-            retired_list_head_.store(protected_list, std::memory_order_release);
-        }
-    }
-    
-    // Actually delete the safe nodes
-    while (deletable_list != nullptr) {
-        RetiredNode* to_delete = deletable_list;
-        deletable_list = deletable_list->next;
-        
-        // Call the deleter function
-        to_delete->deleter();
-        delete to_delete;
-    }
-}
-
-inline void HazardPointerManager::delete_retired_node(RetiredNode* node) {
-    if (node) {
-        node->deleter();
-        delete node;
-    }
-}
-
-inline void HazardPointerManager::force_cleanup() {
-    // Keep cleaning up until the retired list is empty
-    size_t attempts = 0;
-    const size_t max_attempts = 10; // Prevent infinite loops
-    
-    while (retired_count_.load(std::memory_order_acquire) > 0 && attempts < max_attempts) {
-        cleanup_retired_objects();
-        ++attempts;
-    }
-}
-
-inline size_t HazardPointerManager::get_retired_count() const {
-    return retired_count_.load(std::memory_order_acquire);
-}
-
-inline size_t HazardPointerManager::get_active_hazard_count() const {
-    size_t count = 0;
-    for (const auto& record : global_hazard_pointers_) {
-        if (record.active.load(std::memory_order_acquire)) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-} // namespace threading
 } // namespace btq
 
 #endif // BTQ_HAZARD_POINTER_HPP

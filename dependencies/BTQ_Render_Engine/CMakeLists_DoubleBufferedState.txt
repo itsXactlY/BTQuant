@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.10)
+project(DoubleBufferedStateTest)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Add the test executable
+add_executable(test_double_buffered_state 
+    test_double_buffered_state.cpp
+)
+
+# Add the example executable
+add_executable(example_double_buffered_state 
+    example_double_buffered_state.cpp
+)
+
+# Link pthread for threading support
+target_link_libraries(test_double_buffered_state pthread)
+target_link_libraries(example_double_buffered_state pthread)
+
+# Compiler-specific options
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(test_double_buffered_state PRIVATE -Wall -Wextra -pthread)
+    target_compile_options(example_double_buffered_state PRIVATE -Wall -Wextra -pthread)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(test_double_buffered_state PRIVATE /W4)
+    target_compile_options(example_double_buffered_state PRIVATE /W4)
+endif()

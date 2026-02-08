@@ -10,6 +10,7 @@
 #include <vector>
 #include <memory_resource> // For potential memory resource support
 #include <deque>
+#include <queue>
 #include <mutex>
 #include <condition_variable>
 #include <cstddef>  // For ptrdiff_t

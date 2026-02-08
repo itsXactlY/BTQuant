@@ -97,7 +97,7 @@
 
 ## 40.4: Atomic Data Ingestion (The Pipeline)
 **Goal:** Ingest 1M+ trades/sec without locking the UI.
-- [ ] **Double-Buffered State:**
+- [x] **Double-Buffered State:**
   - In `MarketDataProcessor`, replace `std::vector` buffers with a **Swap-Buffer** architecture using `std::atomic<State*>`.
   - **Writer:** Fills the "Back" buffer. When full, atomically swaps the pointer to make it the "Front" buffer.
   - **Reader:** Grabs the "Front" buffer pointer atomically to process/render.

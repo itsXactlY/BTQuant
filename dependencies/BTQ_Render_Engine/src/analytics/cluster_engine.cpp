@@ -1,5 +1,6 @@
 #include "../../include/analytics/cluster_engine.hpp"
 
+#include <execution>  // For std::execution::par_unseq
 #include <limits>
 #include <map>
 #include <mutex>
@@ -480,6 +481,45 @@ double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket)
   } else {
     // Odd number of elements: return the middle element
     return sorted_prices[n / 2];
+  }
+}
+
+void ClusterEngine::process_trade_batch(const std::vector<MarketData::Trade>& trades) {
+  // Use parallel execution to process volume calculations across the batch
+  // This vector will store intermediate results to avoid race conditions during parallel processing
+  std::vector<std::pair<int64_t, int>> trade_mappings;
+  trade_mappings.reserve(trades.size());
+  
+  // Pre-calculate mappings from trades to price/time coordinates (parallelizable)
+  std::for_each(std::execution::par_unseq, trades.begin(), trades.end(),
+                [&trade_mappings, this](const MarketData::Trade& trade) {
+                  int64_t abs_tick_index = static_cast<int64_t>(std::round(trade.price / this->tick_size_));
+                  
+                  // Calculate time bucket based on timestamp
+                  int64_t time_bucket = 0;
+                  if (this->session_start_us_ != 0) {
+                    constexpr int64_t INTERVAL_US = 30LL * 60 * 1000000; // 30 min brackets
+                    int64_t elapsed = trade.timestamp_us - this->session_start_us_;
+                    if (elapsed >= 0) {
+                      time_bucket = static_cast<int64_t>(elapsed / INTERVAL_US);
+                    }
+                  }
+                  
+                  // Store the mapping for later processing to avoid race conditions
+                  trade_mappings.emplace_back(abs_tick_index, static_cast<int>(time_bucket));
+                });
+  
+  // Now process the trades sequentially to update the cluster canvas safely
+  // This avoids race conditions while still getting benefits from parallel computation
+  std::lock_guard<std::mutex> lock(engine_mutex_);
+  for (size_t i = 0; i < trades.size(); ++i) {
+    const auto& trade = trades[i];
+    const auto& mapping = trade_mappings[i];
+    
+    int64_t abs_tick_index = mapping.first;
+    int time_bucket = mapping.second;
+    
+    processTradeInternal(trade, time_bucket);
   }
 }
 

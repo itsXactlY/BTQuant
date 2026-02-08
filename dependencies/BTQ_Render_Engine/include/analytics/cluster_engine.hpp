@@ -161,6 +161,9 @@ class ClusterEngine {
                                        BTQuant::Data::TimeAggregationType agg_type,
                                        int n_contracts = 1000, int n_ticks = 100);
 
+  // Process a batch of trades using parallel execution for volume calculations
+  void process_trade_batch(const std::vector<MarketData::Trade>& trades);
+
   // Detect diagonal imbalances by comparing buy_volume at price P with sell_volume at price P-1
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_diagonal_imbalances(
       double threshold = 3.0) const;

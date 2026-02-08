@@ -10,7 +10,7 @@ namespace btq {
 
 TaskScheduler::TaskScheduler(size_t num_threads)
     : num_threads_(num_threads > 0 ? num_threads : std::thread::hardware_concurrency()),
-      stop_(false) {
+      stop_source_() {
 
     for (size_t i = 0; i < num_threads_; ++i) {
         workers_.emplace_back([this]() { worker_loop(); });
@@ -18,11 +18,11 @@ TaskScheduler::TaskScheduler(size_t num_threads)
 }
 
 bool TaskScheduler::is_stopping() const {
-    return stop_.load();
+    return stop_source_.stop_requested();
 }
 
 TaskScheduler::~TaskScheduler() {
-    stop_.store(true);
+    stop_source_.request_stop();
     task_available_signal_.notify_all();
 
     for (std::thread& worker : workers_) {
@@ -43,7 +43,7 @@ void TaskScheduler::worker_loop() {
             }
         } else {
             // No task available, check if we should stop
-            if (stop_.load() && tasks_.size_approx() == 0) {
+            if (stop_source_.stop_requested() && tasks_.size_approx() == 0) {
                 return;
             }
 
@@ -62,7 +62,7 @@ void TaskScheduler::worker_loop() {
 }
 
 void TaskScheduler::enqueue_task(std::function<void()> task) {
-    if (stop_.load()) {
+    if (stop_source_.stop_requested()) {
         throw std::runtime_error("TaskScheduler is stopped");
     }
 

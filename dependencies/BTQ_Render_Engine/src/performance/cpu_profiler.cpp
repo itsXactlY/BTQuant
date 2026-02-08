@@ -1657,9 +1657,9 @@ CPUProfiler::get_resource_utilization_breakdown() const {
 
         // These would be populated by actual resource monitoring in a real implementation
         // For now, we'll use estimates based on function complexity and call frequency
-        rub.memory_allocated_bytes = profile_data.total_calls * 1024.0; // Estimate: 1KB per call
-        rub.cache_misses = profile_data.total_calls * 0.01; // Estimate: 1% cache miss rate
-        rub.branch_mispredictions = profile_data.total_calls * 0.005; // Estimate: 0.5% branch misprediction rate
+        rub.memory_allocated_bytes = profile_data.call_count * 1024.0; // Estimate: 1KB per call
+        rub.cache_misses = profile_data.call_count * 0.01; // Estimate: 1% cache miss rate
+        rub.branch_mispredictions = profile_data.call_count * 0.005; // Estimate: 0.5% branch misprediction rate
 
         resource_breakdowns.push_back(rub);
     }

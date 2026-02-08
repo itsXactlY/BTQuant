@@ -254,22 +254,22 @@ double StrategyBuilder::getStrategyDelta() const {
     for (const auto& leg : strategy_legs_) {
         // More realistic delta calculation based on option type and moneyness
         double leg_delta = 0.0;
-        
+
         if (leg.option_type == "Call") {
             // Call delta ranges from ~0 (far OTM) to ~1.0 (far ITM)
             // For ATM options, delta is approximately 0.5
-            if (leg.strike_price < leg.current_price * 0.95) { // Far ITM
+            if (leg.strike < underlying_price_ * 0.95) { // Far ITM
                 leg_delta = 0.9;
-            } else if (leg.strike_price > leg.current_price * 1.05) { // Far OTM
+            } else if (leg.strike > underlying_price_ * 1.05) { // Far OTM
                 leg_delta = 0.1;
             } else { // ATM
                 leg_delta = 0.5;
             }
         } else if (leg.option_type == "Put") {
             // Put delta ranges from ~-1.0 (far ITM) to ~0 (far OTM)
-            if (leg.strike_price > leg.current_price * 1.05) { // Far ITM
+            if (leg.strike > underlying_price_ * 1.05) { // Far ITM
                 leg_delta = -0.9;
-            } else if (leg.strike_price < leg.current_price * 0.95) { // Far OTM
+            } else if (leg.strike < underlying_price_ * 0.95) { // Far OTM
                 leg_delta = -0.1;
             } else { // ATM
                 leg_delta = -0.5;
@@ -277,7 +277,7 @@ double StrategyBuilder::getStrategyDelta() const {
         } else { // Not an option, delta would be 1.0 for underlying asset
             leg_delta = 1.0;
         }
-        
+
         if (leg.action == "Sell") {
             leg_delta *= -1;
         }
@@ -291,10 +291,10 @@ double StrategyBuilder::getStrategyGamma() const {
     for (const auto& leg : strategy_legs_) {
         // Gamma is highest for ATM options and decreases for ITM/OTM
         double leg_gamma = 0.0;
-        
+
         if (leg.option_type == "Call" || leg.option_type == "Put") {
             // Highest for ATM options, lower for ITM/OTM
-            double moneyness = leg.current_price / leg.strike_price;
+            double moneyness = underlying_price_ / leg.strike;
             if (moneyness > 0.98 && moneyness < 1.02) { // ATM
                 leg_gamma = 0.05;
             } else if (moneyness > 0.95 && moneyness < 1.05) { // Near ATM
@@ -305,7 +305,7 @@ double StrategyBuilder::getStrategyGamma() const {
         } else { // Underlying asset has no gamma
             leg_gamma = 0.0;
         }
-        
+
         if (leg.action == "Sell") {
             leg_gamma *= -1;
         }
@@ -319,10 +319,10 @@ double StrategyBuilder::getStrategyTheta() const {
     for (const auto& leg : strategy_legs_) {
         // Theta is typically negative (time decay), higher for ATM options
         double leg_theta = 0.0;
-        
+
         if (leg.option_type == "Call" || leg.option_type == "Put") {
             // Time decay is greatest for ATM options
-            double moneyness = leg.current_price / leg.strike_price;
+            double moneyness = underlying_price_ / leg.strike;
             if (moneyness > 0.98 && moneyness < 1.02) { // ATM
                 leg_theta = -0.05; // Higher decay for ATM
             } else if (moneyness > 0.95 && moneyness < 1.05) { // Near ATM
@@ -333,7 +333,7 @@ double StrategyBuilder::getStrategyTheta() const {
         } else { // Underlying asset has no time decay
             leg_theta = 0.0;
         }
-        
+
         if (leg.action == "Sell") {
             leg_theta *= -1; // Positive theta for short options (benefits from time decay)
         }
@@ -347,10 +347,10 @@ double StrategyBuilder::getStrategyVega() const {
     for (const auto& leg : strategy_legs_) {
         // Vega is highest for ATM options and decreases for ITM/OTM
         double leg_vega = 0.0;
-        
+
         if (leg.option_type == "Call" || leg.option_type == "Put") {
             // Sensitivity to volatility is highest for ATM options
-            double moneyness = leg.current_price / leg.strike_price;
+            double moneyness = underlying_price_ / leg.strike;
             if (moneyness > 0.98 && moneyness < 1.02) { // ATM
                 leg_vega = 0.20; // Higher sensitivity for ATM
             } else if (moneyness > 0.95 && moneyness < 1.05) { // Near ATM
@@ -361,7 +361,7 @@ double StrategyBuilder::getStrategyVega() const {
         } else { // Underlying asset has no vega
             leg_vega = 0.0;
         }
-        
+
         if (leg.action == "Sell") {
             leg_vega *= -1;
         }

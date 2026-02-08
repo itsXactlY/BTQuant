@@ -1841,7 +1841,7 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       break;
 
     case LayoutPreset::MODERN_TRADING:
-      // Modern Trading layout: Based on "old" RealtimeDashboardComponent setup
+      // Modern Trading layout: Standard professional trading setup
       set_grid_layout(6, 5);
 
       // 1. Chart (Top Left, Large) - 4x3

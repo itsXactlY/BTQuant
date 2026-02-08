@@ -178,17 +178,26 @@ void TutorialManager::render_tutorial_window() {
         return;
     }
 
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    // This is critical to avoid the g.WithinFrameScope assertion failure
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The tutorial will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     // Set up a modal-style window for the tutorial
     ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 250, 
-                                   ImGui::GetIO().DisplaySize.y * 0.5f - 150), 
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 250,
+                                   ImGui::GetIO().DisplaySize.y * 0.5f - 150),
                            ImGuiCond_FirstUseEver);
 
     // Create a semi-transparent overlay effect
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, window_alpha_);
 
     // Create the tutorial window
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | 
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse |
                             ImGuiWindowFlags_NoResize |
                             ImGuiWindowFlags_NoMove |
                             ImGuiWindowFlags_NoScrollbar |
@@ -209,20 +218,20 @@ void TutorialManager::render_tutorial_window() {
 
             // Progress indicator
             ImGui::Text("Step %zu of %zu", current_step_ + 1, steps_.size());
-            ImGui::ProgressBar(static_cast<float>(current_step_ + 1) / static_cast<float>(steps_.size()), 
+            ImGui::ProgressBar(static_cast<float>(current_step_ + 1) / static_cast<float>(steps_.size()),
                               ImVec2(-1.0f, 0.0f), "");
-            
+
             // Navigation buttons
             ImGui::Spacing();
             ImGui::BeginGroup();
-            
+
             if (current_step_ > 0) {
                 if (ImGui::Button("Previous")) {
                     previous_step();
                 }
                 ImGui::SameLine();
             }
-            
+
             if (current_step_ < steps_.size() - 1) {
                 if (ImGui::Button("Next")) {
                     next_step();
@@ -232,19 +241,19 @@ void TutorialManager::render_tutorial_window() {
                     stop_tutorial();
                 }
             }
-            
+
             ImGui::SameLine();
             if (ImGui::Button("Skip")) {
                 stop_tutorial();
             }
-            
+
             ImGui::EndGroup();
         }
     }
     ImGui::End();
-    
+
     ImGui::PopStyleVar(); // Restore alpha
-    
+
     // Draw highlight overlay if applicable
     draw_highlight_overlay();
 }

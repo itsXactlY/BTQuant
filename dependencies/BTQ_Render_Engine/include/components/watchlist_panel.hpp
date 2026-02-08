@@ -240,6 +240,15 @@ class WatchlistPanel : public PanelBase {
   // FIXED: Changed from std::queue to moodycamel::ConcurrentQueue
   moodycamel::ConcurrentQueue<PendingSubscription> pending_subscriptions_;
 
+  // Structure to hold market data updates for queuing
+  struct QueuedMarketDataUpdate {
+    uint32_t symbol_id;
+    RenderEngine::NotificationType type;
+  };
+
+  // Queue for pending market data updates to avoid mutex acquisition in callback
+  moodycamel::ConcurrentQueue<QueuedMarketDataUpdate> pending_market_data_updates_;
+
   // Using recursive mutex to prevent deadlocks in rendering logic
   mutable std::recursive_mutex watchlist_mutex_;
 };

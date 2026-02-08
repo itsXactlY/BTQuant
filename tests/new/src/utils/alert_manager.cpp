@@ -210,13 +210,13 @@ FileAlertSink::FileAlertSink(const std::string &path, AlertSeverity min_level)
 FileAlertSink::~FileAlertSink() { close(); }
 
 bool FileAlertSink::open(const std::string &path) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   file_ = fopen(path.c_str(), "a");
   return file_ != nullptr;
 }
 
 void FileAlertSink::close() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (file_) {
     fflush(file_);
     fclose(file_);
@@ -228,7 +228,7 @@ void FileAlertSink::send(const Alert &alert) {
   if (alert.severity < min_level_)
     return;
 
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!file_)
     return;
 
@@ -249,7 +249,7 @@ void FileAlertSink::send(const Alert &alert) {
 }
 
 void FileAlertSink::flush() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (file_) {
     fflush(file_);
   }
@@ -297,12 +297,12 @@ void AlertManager::shutdown() {
 }
 
 void AlertManager::register_sink(std::shared_ptr<IAlertSink> sink) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   sinks_.push_back(sink);
 }
 
 void AlertManager::unregister_sink(const std::string &name) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   sinks_.erase(std::remove_if(sinks_.begin(), sinks_.end(),
                               [&name](const auto &sink) {
                                 return sink->get_name() == name;
@@ -311,7 +311,7 @@ void AlertManager::unregister_sink(const std::string &name) {
 }
 
 void AlertManager::clear_sinks() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (auto &sink : sinks_) {
     sink->flush();
   }
@@ -328,7 +328,7 @@ void AlertManager::raise_alert(const Alert &alert) {
     return;
   }
 
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Add to history
   alert_history_.push_back(alert);
@@ -372,7 +372,7 @@ bool AlertManager::is_duplicate(const Alert &alert) const {
 }
 
 std::vector<Alert> AlertManager::get_recent_alerts(size_t count) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Alert> result;
 
   size_t start =
@@ -385,7 +385,7 @@ std::vector<Alert> AlertManager::get_recent_alerts(size_t count) const {
 }
 
 std::vector<Alert> AlertManager::get_alerts_by_type(AlertType type) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Alert> result;
 
   for (const auto &alert : alert_history_) {
@@ -399,7 +399,7 @@ std::vector<Alert> AlertManager::get_alerts_by_type(AlertType type) const {
 
 std::vector<Alert>
 AlertManager::get_alerts_by_severity(AlertSeverity severity) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Alert> result;
 
   for (const auto &alert : alert_history_) {
@@ -413,7 +413,7 @@ AlertManager::get_alerts_by_severity(AlertSeverity severity) const {
 
 uint64_t
 AlertManager::get_alerts_by_severity_count(AlertSeverity severity) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   uint64_t count = 0;
 
   for (const auto &alert : alert_history_) {
@@ -426,7 +426,7 @@ AlertManager::get_alerts_by_severity_count(AlertSeverity severity) const {
 }
 
 void AlertManager::clear_expired_alerts() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Keep only recent alerts (older than 1 hour)
   uint64_t one_hour_ago = []() -> uint64_t {

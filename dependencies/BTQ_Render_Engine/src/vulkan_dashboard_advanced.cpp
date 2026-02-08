@@ -562,14 +562,14 @@ void VulkanDashboard::pollDataToRenderer() {
   }
 
   // 4. Update Trade Data
-  if (!analytics.recent_trades.empty()) {
+  if (!analytics.recent_trades_db.read().empty()) {
     std::vector<RenderEngine::HotspineTradeTick> ticks;
-    size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades.size());
+    size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades_db.read().size());
     ticks.reserve(count);
 
-    for (size_t i = analytics.recent_trades.size() - count; i < analytics.recent_trades.size();
+    for (size_t i = analytics.recent_trades_db.read().size() - count; i < analytics.recent_trades_db.read().size();
          ++i) {
-      const auto& t = analytics.recent_trades[i];
+      const auto& t = analytics.recent_trades_db.read()[i];
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);
     }
@@ -608,7 +608,7 @@ void VulkanDashboard::pollDataToRenderer() {
     std::map<ClusterKey, ClusterValue> aggregator;
 
     // Process trades in reverse for window efficiency
-    for (const auto& t : std::views::reverse(analytics.recent_trades)) {
+    for (const auto& t : std::views::reverse(analytics.recent_trades_db.read())) {
       if (t.timestamp <= now_us - window_us) break;
 
       const uint64_t timeBin = (t.timestamp / timeframe_us) * timeframe_us;

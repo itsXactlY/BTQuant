@@ -89,7 +89,7 @@ public:
     std::string key = type + ":" + core_message;
     auto now = std::chrono::steady_clock::now();
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     *debug_log_ << "Attempting to add alert: " << type << " " << message
                 << std::endl;
@@ -284,7 +284,7 @@ private:
 
   void render_alerts(std::stringstream &ss) {
     ss << bold("Recent Alerts (Last 15):") << "\033[K\n";
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     *debug_log_ << "Rendering alerts, deque size: " << alerts_.size()
                 << std::endl;
     if (alerts_.empty()) {

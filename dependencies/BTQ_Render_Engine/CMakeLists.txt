@@ -271,35 +271,3 @@ target_link_libraries(BTQuantTerminal PRIVATE
     TBB::tbb
 )
 
-# Benchmark executable
-add_executable(MarketDataProcessorBenchmark 
-    benchmark_market_data_processor.cpp
-    src/data/market_data_processor.cpp
-    src/data/cache_manager.cpp
-)
-
-target_include_directories(MarketDataProcessorBenchmark PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
-    ${json_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
-)
-
-target_link_libraries(MarketDataProcessorBenchmark PRIVATE
-    Threads::Threads
-    TBB::tbb
-)

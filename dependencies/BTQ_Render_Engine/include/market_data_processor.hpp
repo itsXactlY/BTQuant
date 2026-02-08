@@ -26,7 +26,7 @@
 #include "cache_manager.hpp"
 #include "threading/double_buffered_state.hpp"
 // Lock-free queue (header-only, fetched by CMake)
-#include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
+#include "concurrentqueue.h"
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
 // ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
 // lock-free map

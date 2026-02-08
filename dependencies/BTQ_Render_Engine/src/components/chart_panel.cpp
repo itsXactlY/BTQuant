@@ -2895,7 +2895,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
         // Get recent trades for this symbol to populate the mini histograms
         auto analytics = processor_->getSymbolAnalytics(symbol_id);
-        const auto& recent_trades = analytics.recent_trades;
+        const auto& recent_trades = analytics.recent_trades_db.read();
 
         // If we have recent trades, render the step profile histograms showing volume distribution
         // for each candle
@@ -3048,7 +3048,7 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw enhanced step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {

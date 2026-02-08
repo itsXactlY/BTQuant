@@ -170,8 +170,8 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
 
     // Update volatility incrementally using a sliding window
     // Add the new trade to the rolling window if we have previous trades
-    if (!symbol_data.recent_trades.empty()) {
-        double prev_price = symbol_data.recent_trades.back().price;
+    if (!symbol_data.recent_trades_db.read().empty()) {
+        double prev_price = symbol_data.recent_trades_db.read().back().price;
         double current_return = std::log(trade.price / prev_price);
 
         symbol_data.log_returns.push_back(current_return);

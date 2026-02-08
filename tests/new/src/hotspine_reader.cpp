@@ -125,7 +125,7 @@ bool HotSpineReader::pollTrade(HotTrade &trade) {
     return false;
   }
 
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   SharedMemoryHeader *header =
       static_cast<SharedMemoryHeader *>(mapped_region_);
@@ -187,7 +187,7 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
     return false;
   }
 
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   SharedMemoryHeader *header =
       static_cast<SharedMemoryHeader *>(mapped_region_);

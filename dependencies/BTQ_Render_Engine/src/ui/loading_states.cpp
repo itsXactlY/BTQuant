@@ -1,263 +1,225 @@
 #include "../../include/ui/loading_states.hpp"
+#include <iostream>
 
-#include <imgui.h>
+// --- FIX START: Include internal header for low-level drawing ---
+#include <imgui_internal.h>
+// --- FIX END ---
 
-#include <chrono>
-#include <condition_variable>
-#include <iomanip>
-#include <mutex>
-#include <sstream>
-#include <thread>
-
-#include "../../include/threading/lockfree_queue.hpp"
+// Helper macro for thread safety
+#define LOCK_GUARD std::lock_guard<std::mutex> lock(mutex_)
 
 namespace btq {
 namespace ui {
 
-// Constructor
-LoadingStateManager::LoadingStateManager()
-    : current_operation_("Idle"),
-      progress_(0.0f),
-      is_loading_(false),
-      operation_start_time_(std::chrono::steady_clock::now()) {
-  // Initialize with default values
+LoadingStateManager::LoadingStateManager() 
+    : progress_(0.0f), is_loading_(false) {
 }
 
-// Destructor
 LoadingStateManager::~LoadingStateManager() {
-  // Stop any ongoing operations
-  stopLoading();
+    stopLoading();
 }
 
 void LoadingStateManager::startLoading(const std::string& operation_name, float initial_progress) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  current_operation_ = operation_name;
-  progress_ = initial_progress;
-  is_loading_ = true;
-  operation_start_time_ = std::chrono::steady_clock::now();
-
-  // Notify any waiting threads
-  cv_.notify_all();
+    {
+        LOCK_GUARD;
+        current_operation_ = operation_name;
+        progress_ = initial_progress;
+        is_loading_ = true;
+        operation_start_time_ = std::chrono::steady_clock::now();
+    }
+    // Notify any waiters that state has changed (though usually we wait for completion, not start)
+    cv_.notify_all();
 }
 
 void LoadingStateManager::updateProgress(float new_progress, const std::string& status_message) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  progress_ = std::clamp(new_progress, 0.0f, 1.0f);
-
-  if (!status_message.empty()) {
-    current_operation_ = status_message;
-  }
-
-  // Notify any waiting threads
-  cv_.notify_all();
+    {
+        LOCK_GUARD;
+        progress_ = std::clamp(new_progress, 0.0f, 1.0f);
+        if (!status_message.empty()) {
+            current_operation_ = status_message;
+        }
+    }
 }
 
-void LoadingStateManager::updateProgressIncremental(float increment,
-                                                    const std::string& status_message) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  progress_ = std::clamp(progress_ + increment, 0.0f, 1.0f);
-
-  if (!status_message.empty()) {
-    current_operation_ = status_message;
-  }
-
-  // Notify any waiting threads
-  cv_.notify_all();
+void LoadingStateManager::updateProgressIncremental(float increment, const std::string& status_message) {
+    {
+        LOCK_GUARD;
+        progress_ = std::clamp(progress_ + increment, 0.0f, 1.0f);
+        if (!status_message.empty()) {
+            current_operation_ = status_message;
+        }
+    }
 }
 
 void LoadingStateManager::finishLoading() {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  progress_ = 1.0f;
-  is_loading_ = false;
-
-  // Notify any waiting threads
-  cv_.notify_all();
+    {
+        LOCK_GUARD;
+        progress_ = 1.0f;
+        is_loading_ = false;
+    }
+    cv_.notify_all();
 }
 
 void LoadingStateManager::stopLoading() {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  progress_ = 0.0f;
-  is_loading_ = false;
-  current_operation_ = "Stopped";
-
-  // Notify any waiting threads
-  cv_.notify_all();
+    {
+        LOCK_GUARD;
+        is_loading_ = false;
+    }
+    cv_.notify_all();
 }
 
 bool LoadingStateManager::isLoading() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return is_loading_;
+    // Atomic read, no lock needed for simple boolean check
+    return is_loading_;
 }
 
 float LoadingStateManager::getProgress() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return progress_;
+    LOCK_GUARD;
+    return progress_;
 }
 
 std::string LoadingStateManager::getCurrentOperation() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  return current_operation_;
+    LOCK_GUARD;
+    return current_operation_;
 }
 
 double LoadingStateManager::getElapsedTime() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto now = std::chrono::steady_clock::now();
-  auto duration =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - operation_start_time_);
-  return duration.count() / 1000.0;  // Return seconds as double
+    LOCK_GUARD;
+    if (!is_loading_) return 0.0;
+    
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - operation_start_time_);
+    return duration.count() / 1000.0;
 }
 
 void LoadingStateManager::waitForCompletion() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  cv_.wait(lock, [this] { return !is_loading_; });
+    // Optimization: check atomic flag first without lock
+    if (!is_loading_) return;
+    
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [this] { return !is_loading_; });
 }
 
 void LoadingStateManager::renderLoadingOverlay() {
-  if (!isLoading()) {
-    return;
-  }
+    if (!is_loading_) return;
 
-  // Check if we're in a valid ImGui frame scope to prevent assertion errors
-  // We can check this by attempting to get the current context and checking if it's valid
-  ImGuiContext* g = ImGui::GetCurrentContext();
-  if (g == nullptr) {
-    // If there's no valid ImGui context, skip rendering this frame
-    return;
-  }
+    // Use a fixed overlay window
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.5f)); // Semi-transparent black
+    
+    // Flags: No decorations, no inputs, on top of everything
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | 
+                             ImGuiWindowFlags_NoResize | 
+                             ImGuiWindowFlags_NoMove | 
+                             ImGuiWindowFlags_NoScrollbar | 
+                             ImGuiWindowFlags_NoInputs | 
+                             ImGuiWindowFlags_NoSavedSettings | 
+                             ImGuiWindowFlags_NoFocusOnAppearing | 
+                             ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-  // In newer versions of ImGui, we can't directly access WithinFrameScope
-  // Instead, we'll just check if the context is valid and proceed with rendering
-  // If we're not in a proper frame, ImGui will handle the error internally
-
-  // Create a modal window for the loading overlay
-  ImGui::SetNextWindowSize(ImVec2(300, 120), ImGuiCond_Always);
-  ImGui::SetNextWindowPos(
-      ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 150, ImGui::GetIO().DisplaySize.y * 0.5f - 60),
-      ImGuiCond_Always);
-
-  ImGui::Begin("Loading Overlay", nullptr,
-               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings |
-                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-  // Center the content
-  ImGui::SetCursorPosX(
-      (ImGui::GetWindowSize().x - ImGui::CalcTextSize(getCurrentOperation().c_str()).x) * 0.5f);
-  ImGui::Text("%s", getCurrentOperation().c_str());
-
-  // Show progress percentage
-  std::stringstream ss;
-  ss << std::fixed << std::setprecision(1) << (getProgress() * 100.0f) << "%";
-  std::string progress_text = ss.str();
-
-  ImGui::SetCursorPosX((ImGui::GetWindowSize().x - ImGui::CalcTextSize(progress_text.c_str()).x) *
-                       0.5f);
-  ImGui::Text("%s", progress_text.c_str());
-
-  // Progress bar
-  float progress = getProgress();
-  if (progress < 0.0f) {
-    // Indeterminate progress bar animation
-    float animated_progress =
-        (std::fmod(static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                          std::chrono::steady_clock::now().time_since_epoch())
-                                          .count()) /
-                       1000.0f,
-                   1.0f));
-    ImGui::ProgressBar(animated_progress, ImVec2(-1, 0), "Processing...");
-  } else {
-    // Determinate progress bar
-    ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
-  }
-
-  // Show elapsed time
-  double elapsed = getElapsedTime();
-  std::stringstream time_ss;
-  time_ss << std::fixed << std::setprecision(1) << "Elapsed: " << elapsed << "s";
-  ImGui::SetCursorPosX((ImGui::GetWindowSize().x - ImGui::CalcTextSize(time_ss.str().c_str()).x) *
-                       0.5f);
-  ImGui::Text("%s", time_ss.str().c_str());
-
-  ImGui::End();
+    if (ImGui::Begin("##LoadingOverlay", nullptr, flags)) {
+        ImVec2 center = ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+        
+        // Render spinner
+        renderLoadingSpinner("##Spinner", 30.0f, 12);
+        
+        // Render text
+        std::string op_name;
+        float prog;
+        {
+            LOCK_GUARD;
+            op_name = current_operation_;
+            prog = progress_;
+        }
+        
+        // Calculate text size to center it
+        ImVec2 text_size = ImGui::CalcTextSize(op_name.c_str());
+        ImGui::SetCursorPos(ImVec2(center.x - text_size.x * 0.5f, center.y + 40.0f));
+        ImGui::TextUnformatted(op_name.c_str());
+        
+        // Render progress bar
+        float bar_width = 300.0f;
+        ImGui::SetCursorPos(ImVec2(center.x - bar_width * 0.5f, center.y + 70.0f));
+        renderProgressBar(prog, ImVec2(bar_width, 6.0f));
+    }
+    ImGui::End();
+    ImGui::PopStyleColor();
 }
 
 void LoadingStateManager::renderLoadingSpinner(const char* label, float radius, int segments) {
-  // Simple spinner implementation
-  auto* draw_list = ImGui::GetWindowDrawList();
-  ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems)
+        return;
 
-  // Calculate center position
-  ImVec2 center(pos.x + radius, pos.y + radius);
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+    const ImGuiID id = window->GetID(label);
 
-  // Get time for animation
-  float time = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                      std::chrono::steady_clock::now().time_since_epoch())
-                                      .count()) /
-               1000.0f;
-
-  // Draw spinner segments
-  for (int i = 0; i < segments; i++) {
-    float angle = (i * 2.0f * M_PI / segments) + time * 2.0f;
-    ImVec2 segment_pos(center.x + cos(angle) * radius, center.y + sin(angle) * radius);
-
-    // Fade out segments based on rotation
-    float alpha = (sin(time * 5.0f + i * 0.5f) + 1.0f) / 2.0f;
-    ImU32 color = ImGui::GetColorU32(ImVec4(0.8f, 0.8f, 0.8f, alpha));
-
-    draw_list->AddCircleFilled(segment_pos, 2.0f, color);
-  }
-
-  // Advance cursor position
-  ImGui::Dummy(ImVec2(radius * 2, radius * 2));
-
-  if (label) {
-    ImGui::SameLine();
-    ImGui::Text("%s", label);
-  }
-}
-
-void LoadingStateManager::renderProgressBar(float fraction, const ImVec2& size_arg,
-                                            const char* overlay) {
-  // Use the regular ImGui progress bar
-  ImGui::ProgressBar(fraction, size_arg, overlay);
-}
-
-void LoadingStateManager::executeWithLoading(const std::string& operation_name,
-                                             std::function<void()> task_func) {
-  startLoading(operation_name, 0.0f);
-
-  // Execute the task in a separate thread to prevent UI freezing
-  std::thread task_thread([this, task_func]() {
-    try {
-      task_func();
-      finishLoading();
-    } catch (...) {
-      // On exception, stop loading and rethrow
-      stopLoading();
-      throw;
+    ImVec2 pos = window->DC.CursorPos;
+    // Center the spinner in the available space if label is hidden
+    if (strncmp(label, "##", 2) == 0) {
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        pos.x += (avail.x - radius * 2) * 0.5f;
+        pos.y += (avail.y - radius * 2) * 0.5f;
     }
-  });
+    
+    ImVec2 size(radius * 2, radius * 2);
+    const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+    ImGui::ItemSize(bb, style.FramePadding.y);
+    if (!ImGui::ItemAdd(bb, id))
+        return;
 
-  // Wait for the task to complete
-  waitForCompletion();
-
-  // Join the thread
-  if (task_thread.joinable()) {
-    task_thread.join();
-  }
+    // Render
+    window->DrawList->PathClear();
+    
+    int start = (int)(g.Time * 10.0f) % segments; // Animation speed
+    const float PI = 3.14159265358979323846f;
+    const ImVec2 center = ImVec2(pos.x + radius, pos.y + radius);
+    
+    for (int i = 0; i < segments; i++) {
+        const float a = (i * 2 * PI) / segments;
+        const float r_inner = radius * 0.6f;
+        const float r_outer = radius * 0.9f;
+        
+        window->DrawList->PathLineTo(ImVec2(center.x + cos(a) * r_inner, center.y + sin(a) * r_inner));
+        window->DrawList->PathLineTo(ImVec2(center.x + cos(a) * r_outer, center.y + sin(a) * r_outer));
+        
+        ImU32 color = ImGui::GetColorU32(ImGuiCol_Text, 
+            1.0f - (float)((i + start) % segments) / (float)segments);
+            
+        window->DrawList->PathStroke(color, 0, 2.0f); // Thickness
+    }
 }
 
-std::future<void> LoadingStateManager::executeAsyncWithLoading(const std::string& operation_name,
-                                                               std::function<void()> task_func) {
-  return std::async(std::launch::async, [this, operation_name, task_func]() {
-    executeWithLoading(operation_name, task_func);
-  });
+void LoadingStateManager::renderProgressBar(float fraction, const ImVec2& size_arg, const char* overlay) {
+    ImGui::ProgressBar(fraction, size_arg, overlay);
 }
 
-}  // namespace ui
-}  // namespace btq
+void LoadingStateManager::executeWithLoading(const std::string& operation_name, std::function<void()> task_func) {
+    startLoading(operation_name, 0.0f);
+    try {
+        task_func();
+    } catch (...) {
+        stopLoading();
+        throw;
+    }
+    finishLoading();
+}
+
+std::future<void> LoadingStateManager::executeAsyncWithLoading(const std::string& operation_name, std::function<void()> task_func) {
+    startLoading(operation_name, 0.0f);
+    
+    return std::async(std::launch::async, [this, task_func]() {
+        try {
+            task_func();
+        } catch (...) {
+            this->stopLoading();
+            throw;
+        }
+        this->finishLoading();
+    });
+}
+
+} // namespace ui
+} // namespace btq

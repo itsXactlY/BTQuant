@@ -24,7 +24,7 @@ TelemetryCollector::TelemetryCollector() : enabled_(true), initialized_(false),
 
 
 TelemetryCollector& TelemetryCollector::getInstance() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!instance_) {
         instance_ = std::unique_ptr<TelemetryCollector>(new TelemetryCollector());
     }

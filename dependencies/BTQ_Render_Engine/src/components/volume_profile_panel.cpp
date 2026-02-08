@@ -173,7 +173,7 @@ void VolumeProfilePanel::detect_and_handle_session_boundaries() {
   if (!processor_ || symbol_id_ == 0) return;
 
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  auto trades = analytics.recent_trades;
+  auto trades = analytics.recent_trades_db.read();
 
   if (trades.empty()) return;
 
@@ -352,7 +352,7 @@ void VolumeProfilePanel::set_symbol(uint32_t symbol_id, const std::string& symbo
 
 void VolumeProfilePanel::build_volume_profile() {
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  auto trades = analytics.recent_trades;  // Copy to potentially filter
+  auto trades = analytics.recent_trades_db.read();  // Copy to potentially filter
 
   // Handle session-based profiles if in Session mode
   if (profile_mode_ == ProfileMode::Session) {
@@ -598,7 +598,7 @@ void VolumeProfilePanel::render_controls() {
       if (custom_start_time_ == 0.0 && custom_end_time_ == 0.0) {
         // Get current time range from available data
         auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-        const auto& trades = analytics.recent_trades;
+        const auto& trades = analytics.recent_trades_db.read();
 
         if (!trades.empty()) {
           // Find min and max timestamps
@@ -625,7 +625,7 @@ void VolumeProfilePanel::render_controls() {
       // Buttons to reset to full range
       if (ImGui::Button("Reset Time Range")) {
         auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-        const auto& trades = analytics.recent_trades;
+        const auto& trades = analytics.recent_trades_db.read();
 
         if (!trades.empty()) {
           // Find min and max timestamps
@@ -2330,7 +2330,7 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(
 
     // Get recent trades for this symbol to populate the histogram
     auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-    const auto& trades = analytics.recent_trades;
+    const auto& trades = analytics.recent_trades_db.read();
 
     // Create temporary buckets for this candle's price range
     std::vector<double> bucket_volumes(num_buckets, 0.0);
@@ -2452,7 +2452,7 @@ void VolumeProfilePanel::render_step_profile_histograms(
   // Get recent trades for this symbol to populate the histograms
   // Only fetch once for all candles to improve efficiency
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -2599,7 +2599,7 @@ void VolumeProfilePanel::render_step_profile_on_candles(
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -3237,7 +3237,7 @@ void VolumeProfilePanel::render_step_profile_on_candles_with_volume_distribution
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -3384,7 +3384,7 @@ void VolumeProfilePanel::render_enhanced_step_profile_with_volume_distribution(
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw enhanced step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -3548,7 +3548,7 @@ void VolumeProfilePanel::render_step_profile_histograms_on_candle_bars(
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -3695,7 +3695,7 @@ void VolumeProfilePanel::render_enhanced_step_profile_histograms_on_candle_bars(
 
   // Get recent trades for this symbol to populate the histograms
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   // Iterate through each candle to draw enhanced step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
@@ -3951,7 +3951,7 @@ void VolumeProfilePanel::calculateProfileForTimeRange(double start_time, double 
 
   // Get all trades for this symbol
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  auto all_trades = analytics.recent_trades;
+  auto all_trades = analytics.recent_trades_db.read();
 
   // Filter trades based on the time range
   std::vector<RenderEngine::TradeData> filtered_trades;
@@ -4049,7 +4049,7 @@ double VolumeProfilePanel::getMinTimeAvailable() {
   if (!processor_ || symbol_id_ == 0) return 0.0;
 
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   if (trades.empty()) return 0.0;
 
@@ -4066,7 +4066,7 @@ double VolumeProfilePanel::getMaxTimeAvailable() {
   if (!processor_ || symbol_id_ == 0) return 0.0;
 
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades_db.read();
 
   if (trades.empty()) return 0.0;
 
@@ -4542,7 +4542,7 @@ void VolumeProfilePanel::build_composite_profile() {
     if (!processor_ || symbol_id_ == 0) return;
 
     auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-    auto trades = analytics.recent_trades;
+    auto trades = analytics.recent_trades_db.read();
 
     if (trades.empty()) return;
 

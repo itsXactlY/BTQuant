@@ -106,7 +106,7 @@ void TimeAndSalesPanel::render() {
   if (processor_ && symbol_id_ != 0) {
     if (consumeDirty() || cached_trades_.empty()) {
       auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-      cached_trades_ = analytics.recent_trades;
+      cached_trades_ = analytics.recent_trades_db.read();
 
       // Keep only most recent trades for display
       if (cached_trades_.size() > MAX_VISIBLE_TRADES) {

@@ -239,7 +239,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
 }
 
 void WatchlistPanel::update(float dt) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Update animation timers for all watchlist entries in the current group to ensure smooth
   // transitions
   for (auto& [symbol_id, entry] : get_current_watchlist()) {
@@ -291,7 +291,7 @@ void WatchlistPanel::update(float dt) {
 }
 
 void WatchlistPanel::render() {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   begin_panel_window();
 
   if (!is_visible()) {
@@ -600,7 +600,7 @@ void WatchlistPanel::render() {
 
 void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
                                 const std::string& exchange) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   if (get_current_watchlist().find(symbol_id) != get_current_watchlist().end()) {
     return;  // Already exists in current group
   }
@@ -618,7 +618,7 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   get_current_display_order().push_back(symbol_id);
 
   // Queue subscription for later processing to avoid calling ImGui functions during rendering
-  pending_subscriptions_.push({symbol_id, symbol, exchange});
+  pending_subscriptions_.enqueue({symbol_id, symbol, exchange});
 
   // Save the updated order to config file
   save_watchlist_order_to_config(config_file_path_);
@@ -629,7 +629,7 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
 
 void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
                                            RenderEngine::NotificationType type) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Only process trade updates for real-time price feed
   if (type != RenderEngine::NotificationType::TRADE) {
     return;
@@ -872,7 +872,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
 }
 
 void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   get_current_watchlist().erase(symbol_id);
   get_current_display_order().erase(std::remove(get_current_display_order().begin(),
                                                 get_current_display_order().end(), symbol_id),
@@ -901,7 +901,7 @@ WatchlistPanel::~WatchlistPanel() {
 }
 
 void WatchlistPanel::clear_watchlist() {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Unsubscribe from all current symbols in the current group before clearing
   for (const auto& [symbol_id, entry] : get_current_watchlist()) {
     unsubscribe_from_symbol(symbol_id);
@@ -3179,9 +3179,8 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
 
 void WatchlistPanel::process_pending_subscriptions() {
   // Process all pending subscriptions to avoid calling ImGui functions during rendering
-  while (!pending_subscriptions_.empty()) {
-    auto pending = pending_subscriptions_.front();
-    pending_subscriptions_.pop();
+  BTQuant::WatchlistPanel::PendingSubscription pending;
+  while (pending_subscriptions_.try_dequeue(pending)) {
 
     std::cout << "[WatchlistPanel] Processing pending subscription for symbol ID: "
               << pending.symbol_id << " (" << pending.symbol << ")" << std::endl;
@@ -3192,7 +3191,7 @@ void WatchlistPanel::process_pending_subscriptions() {
 }
 
 void WatchlistPanel::create_group(const std::string& group_name) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Check if group already exists
   if (watchlist_groups_.find(group_name) != watchlist_groups_.end()) {
     return;  // Group already exists
@@ -3213,7 +3212,7 @@ void WatchlistPanel::create_group(const std::string& group_name) {
 }
 
 void WatchlistPanel::rename_group(const std::string& old_name, const std::string& new_name) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Check if old group exists
   if (watchlist_groups_.find(old_name) == watchlist_groups_.end()) {
     std::cout << "[WatchlistPanel] Cannot rename non-existent group: " << old_name << std::endl;
@@ -3258,7 +3257,7 @@ void WatchlistPanel::rename_group(const std::string& old_name, const std::string
 }
 
 void WatchlistPanel::delete_group(const std::string& group_name) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Don't delete if it's one of the default groups
   if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
     std::cout << "[WatchlistPanel] Cannot delete default group: " << group_name << std::endl;
@@ -3288,7 +3287,7 @@ void WatchlistPanel::delete_group(const std::string& group_name) {
 }
 
 void WatchlistPanel::switch_to_group(const std::string& group_name) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   auto it = watchlist_groups_.find(group_name);
   if (it != watchlist_groups_.end()) {
     current_group_name_ = group_name;
@@ -3305,7 +3304,7 @@ void WatchlistPanel::switch_to_group(const std::string& group_name) {
 
 void WatchlistPanel::add_symbol_to_group(const std::string& group_name, uint32_t symbol_id,
                                          const std::string& symbol, const std::string& exchange) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   auto& group = watchlist_groups_[group_name];
   if (group.find(symbol_id) != group.end()) {
     return;  // Already exists in this group
@@ -3333,7 +3332,7 @@ void WatchlistPanel::add_symbol_to_group(const std::string& group_name, uint32_t
 }
 
 void WatchlistPanel::remove_symbol_from_group(const std::string& group_name, uint32_t symbol_id) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   auto group_it = watchlist_groups_.find(group_name);
   if (group_it == watchlist_groups_.end()) {
     return;  // Group doesn't exist
@@ -3354,7 +3353,7 @@ void WatchlistPanel::remove_symbol_from_group(const std::string& group_name, uin
 }
 
 void WatchlistPanel::clear_group(const std::string& group_name) {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   auto group_it = watchlist_groups_.find(group_name);
   if (group_it == watchlist_groups_.end()) {
     return;  // Group doesn't exist
@@ -3713,7 +3712,7 @@ void WatchlistPanel::focus_add_symbol_input() {
 }
 
 void WatchlistPanel::clear_all_symbols() {
-  std::lock_guard<std::mutex> lock(watchlist_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
   // Clear the current watchlist
   get_current_watchlist().clear();
   get_current_display_order().clear();

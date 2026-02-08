@@ -61,3 +61,4 @@
 - [x] **Benchmark:** Run `MarketDataProcessor` with 1M messages/sec replay.
   - **Expectation:** CPU usage should be high (processing) but uniform across cores. No "spikes" or "stalls".
 - [x] **Leak Check:** Verify Hazard Pointers correctly reclaim memory after the 4-hour window moves.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.

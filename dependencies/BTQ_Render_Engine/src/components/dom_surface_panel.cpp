@@ -93,10 +93,9 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
     if (type == RenderEngine::NotificationType::TRADE) {
       // For trade updates, get the trade data and add it to the queue for processing on the main thread
       auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
-      if (!analytics.recent_trades.empty()) {
+      if (!analytics.recent_trades_db.read().empty()) {
         // Add the most recent trade to the pending queue
-        std::lock_guard<std::mutex> queue_lock(pending_trades_mutex_);
-        for (const auto& trade : analytics.recent_trades) {
+        for (const auto& trade : analytics.recent_trades_db.read()) {
           // Convert RenderEngine::TradeData to Data::TradeData
           BTQuant::Data::TradeData converted_trade;
           converted_trade.timestamp = trade.timestamp;
@@ -105,7 +104,7 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
           converted_trade.side = trade.is_buy ? BTQuant::Data::TradeSide::BUY : BTQuant::Data::TradeSide::SELL;  // is_buy -> side
           converted_trade.exchange_id = 0;  // Default exchange ID
           converted_trade.flags = 0;  // Default flags
-          pending_trades_queue_.push(converted_trade);
+          pending_trades_queue_.enqueue(converted_trade);
         }
       }
     }
@@ -131,7 +130,7 @@ void DomSurfacePanel::processRecentTrades() {
 
   // Find max volume for scaling purposes across all recent trades
   double current_max_volume = max_trade_volume_;
-  for (const auto& trade : analytics.recent_trades) {
+  for (const auto& trade : analytics.recent_trades_db.read()) {
     if (trade.size > current_max_volume) {
       current_max_volume = trade.size;
     }
@@ -139,7 +138,7 @@ void DomSurfacePanel::processRecentTrades() {
   max_trade_volume_ = current_max_volume;
 
   // Create trade bubbles for each recent trade that's not already in our list
-  for (const auto& trade : analytics.recent_trades) {
+  for (const auto& trade : analytics.recent_trades_db.read()) {
     // Calculate X position based on timestamp relative to history range
     double relative_time = 0.0;
     if (history_end_timestamp_ > history_start_timestamp_) {
@@ -177,16 +176,13 @@ void DomSurfacePanel::processRecentTrades() {
 
 void DomSurfacePanel::processQueuedTrades() {
   // Process any queued trades from the background thread
-  std::lock_guard<std::mutex> queue_lock(pending_trades_mutex_);
-  
-  while (!pending_trades_queue_.empty()) {
-    const auto& trade = pending_trades_queue_.front();
-    
+  BTQuant::Data::TradeData trade;
+  while (pending_trades_queue_.try_dequeue(trade)) {
     // Find max volume for scaling purposes
     if (trade.volume > max_trade_volume_) {
       max_trade_volume_ = trade.volume;
     }
-    
+
     // Calculate X position based on timestamp relative to history range
     double relative_time = 0.0;
     if (history_end_timestamp_ > history_start_timestamp_) {
@@ -210,17 +206,15 @@ void DomSurfacePanel::processQueuedTrades() {
       }
 
       if (!exists) {
-        TradeBubble bubble(x_pos, trade.price, trade.volume, trade.price, 
+        TradeBubble bubble(x_pos, trade.price, trade.volume, trade.price,
                            trade.side == BTQuant::Data::TradeSide::BUY,
                            trade.timestamp);
         bubble.radius = calculateBubbleRadius(trade.volume);
         trade_bubbles_.push_back(bubble);
       }
     }
-    
-    pending_trades_queue_.pop();
   }
-  
+
   // Clean up bubbles that are outside the current view range to prevent accumulation
   cleanupOldTradeBubbles();
 }

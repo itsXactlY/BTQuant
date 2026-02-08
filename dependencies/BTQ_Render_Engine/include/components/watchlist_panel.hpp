@@ -4,10 +4,13 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "concurrentqueue.h"
+
+// CRITICAL: Must include ConcurrentQueue for thread-safe enqueuing
+#include <concurrentqueue.h> 
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -233,9 +236,12 @@ class WatchlistPanel : public PanelBase {
     std::string symbol;
     std::string exchange;
   };
+  
+  // FIXED: Changed from std::queue to moodycamel::ConcurrentQueue
   moodycamel::ConcurrentQueue<PendingSubscription> pending_subscriptions_;
 
-  mutable std::mutex watchlist_mutex_;
+  // Using recursive mutex to prevent deadlocks in rendering logic
+  mutable std::recursive_mutex watchlist_mutex_;
 };
 
 }  // namespace BTQuant

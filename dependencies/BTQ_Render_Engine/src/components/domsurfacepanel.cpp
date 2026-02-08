@@ -1213,7 +1213,7 @@ void DomSurfacePanel::updateTradeBubbles() {
   auto symbol_analytics = processor_->getSymbolAnalytics(current_symbol_id_);
 
   // Process recent trades from the analytics
-  for (const auto& trade : symbol_analytics.recent_trades) {
+  for (const auto& trade : symbol_analytics.recent_trades_db.read()) {
     // Only add trades that are newer than our last processed timestamp
     if (trade.timestamp > last_trade_timestamp_) {
       // Convert from the internal TradeData to the external TradeData format

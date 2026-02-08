@@ -37,34 +37,34 @@ public:
 
     // Configuration methods
     void setLogLevel(LogLevel level) { 
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         log_level_ = level; 
     }
     
     LogLevel getLogLevel() const { 
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         return log_level_; 
     }
     
     void enableConsoleLogging(bool enabled) { 
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         console_logging_enabled_ = enabled; 
     }
     
     void enableFileLogging(const std::string& filename) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         log_file_ = std::make_unique<std::ofstream>(filename, std::ios::app);
         file_logging_enabled_ = true;
     }
     
     void disableFileLogging() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         log_file_.reset();
         file_logging_enabled_ = false;
     }
     
     void setLogFormat(bool json_format) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         json_format_ = json_format;
     }
 
@@ -79,7 +79,8 @@ public:
         LogMetadata metadata;
         populateMetadata(metadata, level, file, line, function);
 
-        std::lock_guard<std::mutex> lock(mutex_);
+        // FIXED: Using recursive_mutex lock guard
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         
         std::string formatted_log;
         if (json_format_) {
@@ -282,7 +283,8 @@ private:
         return result;
     }
 
-    mutable std::mutex mutex_;
+    // FIXED: Changed to recursive_mutex to support recursive logging calls
+    mutable std::recursive_mutex mutex_;
     LogLevel log_level_;
     bool console_logging_enabled_;
     bool file_logging_enabled_;

@@ -18,8 +18,7 @@ namespace ui {
 
 /**
  * @brief Manages loading states and progress indicators in the UI
- * 
- * This class provides functionality to show loading states, progress bars,
+ * * This class provides functionality to show loading states, progress bars,
  * and prevent UI freezing during long operations. It's thread-safe and can
  * be used to wrap long-running operations with loading indicators.
  */
@@ -135,8 +134,9 @@ public:
     std::future<void> executeAsyncWithLoading(const std::string& operation_name, std::function<void()> task_func);
 
 private:
-    mutable std::mutex mutex_;                  ///< Mutex for thread safety
-    std::condition_variable cv_;               ///< Condition variable for waiting
+    // FIXED: Must use std::mutex for condition_variable support
+    mutable std::mutex mutex_;                  
+    std::condition_variable cv_;               
     std::string current_operation_;            ///< Current operation name/message
     float progress_;                           ///< Current progress (0.0 to 1.0)
     std::atomic<bool> is_loading_;             ///< Flag indicating if loading is in progress

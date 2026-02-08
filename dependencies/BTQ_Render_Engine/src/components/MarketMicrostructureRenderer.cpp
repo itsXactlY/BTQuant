@@ -476,9 +476,9 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
 
     // Convert to HotspineTradeTick
     std::vector<HotspineTradeTick> ticks;
-    ticks.reserve(analytics.recent_trades.size());
+    ticks.reserve(analytics.recent_trades_db.read().size());
 
-    for (const auto& t : analytics.recent_trades) {
+    for (const auto& t : analytics.recent_trades_db.read()) {
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);
 

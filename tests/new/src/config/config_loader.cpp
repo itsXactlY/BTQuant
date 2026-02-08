@@ -149,7 +149,7 @@ std::vector<std::string> ConfigLoader::get_sections() const {
 }
 
 void ConfigLoader::register_change_callback(ConfigChangeCallback callback) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   change_callbacks_.push_back(callback);
 }
 

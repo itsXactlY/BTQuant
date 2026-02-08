@@ -9,20 +9,14 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-#include "concurrentqueue.h"
 
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "symbol_manager.hpp"
 #include "ui_data_manager.hpp"
 
-// Handle concurrentqueue include path variations for consistency across modules
-// This addresses the requirement to modify both files to handle FetchContent path variations
-// The include is conditionally added to ensure both files can handle path variations independently
-// NOTE: Only include if not already available through market_data_processor.hpp
-#ifndef MOODYCAMEL_CONCURRENTQUEUE_H
-#include "concurrentqueue.h"
-#endif
+// Include market data processor which contains the concurrentqueue dependency
+// The concurrentqueue header is included via CMake's FetchContent and include directories
 
 namespace BTQuant {
 namespace Data {

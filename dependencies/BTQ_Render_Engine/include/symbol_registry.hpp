@@ -55,7 +55,9 @@ class SymbolRegistry {
  private:
   std::string make_key(const std::string& exchange, const std::string& symbol) const;
   SymbolRegistry() = default;
-  mutable std::mutex mutex_;
+  
+  // FIXED: Changed to recursive_mutex
+  mutable std::recursive_mutex mutex_;
   std::unordered_map<uint32_t, SymbolInfo> id_to_info_;
   std::unordered_map<std::string, uint32_t> key_to_id_;
   uint32_t next_auto_id_ = 1;

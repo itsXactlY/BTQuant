@@ -10,7 +10,7 @@ OrderBookHistory::OrderBookHistory(size_t capacity)
 }
 
 void OrderBookHistory::addSnapshot(std::unique_ptr<L2Snapshot> snapshot) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (size_ < capacity_) {
         // Buffer is not full, just append
@@ -24,7 +24,7 @@ void OrderBookHistory::addSnapshot(std::unique_ptr<L2Snapshot> snapshot) {
 }
 
 std::unique_ptr<L2Snapshot> OrderBookHistory::getSnapshotByIndex(size_t index) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (index >= size_) {
         return nullptr;
@@ -47,7 +47,7 @@ std::unique_ptr<L2Snapshot> OrderBookHistory::getSnapshotByIndex(size_t index) c
 }
 
 std::unique_ptr<L2Snapshot> OrderBookHistory::getSnapshotByTime(int64_t targetTime) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (size_ == 0) {
         return nullptr;
@@ -84,7 +84,7 @@ std::unique_ptr<L2Snapshot> OrderBookHistory::getSnapshotByTime(int64_t targetTi
 }
 
 std::unique_ptr<L2Snapshot> OrderBookHistory::getLatestSnapshot() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (size_ == 0) {
         return nullptr;
@@ -106,22 +106,22 @@ std::unique_ptr<L2Snapshot> OrderBookHistory::getLatestSnapshot() const {
 }
 
 size_t OrderBookHistory::size() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return size_;
 }
 
 size_t OrderBookHistory::capacity() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return capacity_;
 }
 
 bool OrderBookHistory::empty() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return size_ == 0;
 }
 
 void OrderBookHistory::clear() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     for (auto& ptr : buffer_) {
         ptr.reset();  // Explicitly reset each unique_ptr
     }
@@ -130,7 +130,7 @@ void OrderBookHistory::clear() {
 }
 
 std::vector<int64_t> OrderBookHistory::getAllTimestamps() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<int64_t> timestamps;
     timestamps.reserve(size_);
 
@@ -153,7 +153,7 @@ std::vector<int64_t> OrderBookHistory::getAllTimestamps() const {
 }
 
 std::vector<std::unique_ptr<L2Snapshot>> OrderBookHistory::getSnapshotsInRange(int64_t startTime, int64_t endTime) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::unique_ptr<L2Snapshot>> result;
 
     for (size_t i = 0; i < size_; ++i) {
@@ -177,7 +177,7 @@ std::vector<std::unique_ptr<L2Snapshot>> OrderBookHistory::getSnapshotsInRange(i
 }
 
 int64_t OrderBookHistory::getSnapshotTimeAtInternalIndex(size_t internalIdx) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (internalIdx >= size_) {
         throw std::out_of_range("Index out of range");

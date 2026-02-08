@@ -1234,7 +1234,7 @@ ObjectPool<T>::ObjectPool(size_t initial_capacity)
 template<typename T>
 ObjectPool<T>::~ObjectPool() {
     // Clean up all objects
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     blocks_.clear();
     // Clear the stack
     std::stack<T*> empty_stack;
@@ -1244,7 +1244,7 @@ ObjectPool<T>::~ObjectPool() {
 template<typename T>
 template<typename... Args>
 T* ObjectPool<T>::allocate(Args&&... args) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (free_list_.empty()) {
         // Double the capacity if we run out
@@ -1270,7 +1270,7 @@ void ObjectPool<T>::deallocate(T* obj) {
     // Destruct the object
     obj->~T();
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Add back to free list
     free_list_.push(obj);
@@ -1278,7 +1278,7 @@ void ObjectPool<T>::deallocate(T* obj) {
 
 template<typename T>
 void ObjectPool<T>::preallocate(size_t count) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);
@@ -1314,7 +1314,7 @@ ThreadLocalObjectPool<T>::ThreadLocalObjectPool(size_t initial_capacity)
 template<typename T>
 template<typename... Args>
 T* ThreadLocalObjectPool<T>::allocate(Args&&... args) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (free_list_.empty()) {
         // Double the capacity if we run out
@@ -1343,7 +1343,7 @@ void ThreadLocalObjectPool<T>::deallocate(T* obj) {
     // Destruct the object
     obj->~T();
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Add back to free list
     free_list_.push(obj);
@@ -1354,7 +1354,7 @@ void ThreadLocalObjectPool<T>::deallocate(T* obj) {
 
 template<typename T>
 void ThreadLocalObjectPool<T>::preallocate(size_t count) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);

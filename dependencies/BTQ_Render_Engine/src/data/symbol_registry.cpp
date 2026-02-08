@@ -20,7 +20,7 @@ std::string SymbolRegistry::make_key(const std::string& exchange, const std::str
 }
 
 bool SymbolRegistry::load_from_file(const std::string& filepath) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   try {
     std::ifstream file(filepath);
@@ -114,7 +114,7 @@ bool SymbolRegistry::load_from_file(const std::string& filepath) {
 }
 
 uint32_t SymbolRegistry::register_symbol(const std::string& exchange, const std::string& symbol) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::string key = make_key(exchange, symbol);
 
@@ -135,7 +135,7 @@ uint32_t SymbolRegistry::register_symbol(const std::string& exchange, const std:
 }
 
 std::optional<SymbolInfo> SymbolRegistry::get_symbol_info(uint32_t id) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   auto it = id_to_info_.find(id);
   if (it != id_to_info_.end()) {
@@ -146,7 +146,7 @@ std::optional<SymbolInfo> SymbolRegistry::get_symbol_info(uint32_t id) const {
 
 std::optional<uint32_t> SymbolRegistry::get_symbol_id(const std::string& exchange,
                                                       const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::string key = make_key(exchange, symbol);
   auto it = key_to_id_.find(key);
@@ -157,7 +157,7 @@ std::optional<uint32_t> SymbolRegistry::get_symbol_id(const std::string& exchang
 }
 
 std::vector<SymbolInfo> SymbolRegistry::get_exchange_symbols(const std::string& exchange) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::vector<SymbolInfo> result;
   for (const auto& [id, info] : id_to_info_) {
@@ -169,7 +169,7 @@ std::vector<SymbolInfo> SymbolRegistry::get_exchange_symbols(const std::string& 
 }
 
 std::vector<std::string> SymbolRegistry::get_exchanges() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::vector<std::string> result;
   for (const auto& [id, info] : id_to_info_) {
@@ -181,18 +181,18 @@ std::vector<std::string> SymbolRegistry::get_exchanges() const {
 }
 
 bool SymbolRegistry::has_symbol(uint32_t id) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   return id_to_info_.find(id) != id_to_info_.end();
 }
 
 bool SymbolRegistry::has_symbol(const std::string& exchange, const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::string key = make_key(exchange, symbol);
   return key_to_id_.find(key) != key_to_id_.end();
 }
 
 bool SymbolRegistry::save_to_file(const std::string& filepath) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   try {
     std::ofstream file(filepath);
@@ -225,7 +225,7 @@ bool SymbolRegistry::save_to_file(const std::string& filepath) const {
 }
 
 std::vector<SymbolInfo> SymbolRegistry::get_all_symbols() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::vector<SymbolInfo> result;
   result.reserve(id_to_info_.size());
@@ -238,7 +238,7 @@ std::vector<SymbolInfo> SymbolRegistry::get_all_symbols() const {
 }
 
 std::optional<SymbolInfo> SymbolRegistry::get_symbol_by_name(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Search for symbol across all exchanges
   for (const auto& [id, info] : id_to_info_) {
@@ -252,14 +252,14 @@ std::optional<SymbolInfo> SymbolRegistry::get_symbol_by_name(const std::string& 
 }
 
 void SymbolRegistry::clear() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   id_to_info_.clear();
   key_to_id_.clear();
   next_auto_id_ = 1;
 }
 
 bool SymbolRegistry::add_symbol(const SymbolInfo& symbol_info) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Check if symbol already exists
   auto key = make_key(symbol_info.exchange, symbol_info.symbol);

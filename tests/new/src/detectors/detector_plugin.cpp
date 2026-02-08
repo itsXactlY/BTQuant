@@ -37,7 +37,7 @@ DetectorRegistry &DetectorRegistry::instance() {
 
 bool DetectorRegistry::register_detector(const std::string &name,
                                          DetectorFactory factory) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   if (plugins_.find(name) != plugins_.end()) {
     std::cerr << "Warning: Detector '" << name << "' already registered"
@@ -54,7 +54,7 @@ bool DetectorRegistry::register_detector(const std::string &name,
 }
 
 bool DetectorRegistry::register_detector(const PluginInfo &plugin) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   if (plugins_.find(plugin.name) != plugins_.end()) {
     std::cerr << "Warning: Detector '" << plugin.name << "' already registered"
@@ -96,7 +96,7 @@ DetectorRegistry::load_plugin(const std::string &path) {
 
   if (info_func) {
     PluginInfo info = info_func();
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     info.path = path;
     plugins_[info.name] = info;
   }
@@ -106,7 +106,7 @@ DetectorRegistry::load_plugin(const std::string &path) {
 
 std::shared_ptr<IDetector>
 DetectorRegistry::get_detector(const std::string &name) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   auto it = instances_.find(name);
   if (it != instances_.end()) {
@@ -124,7 +124,7 @@ DetectorRegistry::get_detector(const std::string &name) {
 }
 
 std::vector<std::string> DetectorRegistry::get_available_detectors() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::vector<std::string> names;
   for (const auto &[name, _] : plugins_) {
@@ -134,7 +134,7 @@ std::vector<std::string> DetectorRegistry::get_available_detectors() const {
 }
 
 std::vector<std::shared_ptr<IDetector>> DetectorRegistry::get_all_detectors() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   std::vector<std::shared_ptr<IDetector>> detectors;
   for (auto &[name, plugin] : plugins_) {
@@ -150,7 +150,7 @@ std::vector<std::shared_ptr<IDetector>> DetectorRegistry::get_all_detectors() {
 }
 
 bool DetectorRegistry::has_detector(const std::string &name) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   return plugins_.find(name) != plugins_.end();
 }
 
@@ -171,7 +171,7 @@ void DetectorRegistry::register_builtin_detectors() {
 }
 
 void DetectorRegistry::clear() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   for (auto &[name, instance] : instances_) {
     if (instance) {

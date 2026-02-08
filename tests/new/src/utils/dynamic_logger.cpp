@@ -129,7 +129,7 @@ bool DynamicLogger::initialize(const std::string &) {
 void DynamicLogger::set_level(LogLevel level) { global_level_.store(level); }
 
 void DynamicLogger::set_level(const std::string &component, LogLevel level) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   component_levels_[component] = level;
 }
 
@@ -149,12 +149,12 @@ void DynamicLogger::set_level_from_string(const std::string &level_str) {
 void DynamicLogger::set_min_level(LogLevel level) { min_level_.store(level); }
 
 void DynamicLogger::add_sink(std::shared_ptr<ILogSink> sink) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   sinks_[sink->get_name()] = sink;
 }
 
 void DynamicLogger::remove_sink(const std::string &name) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   sinks_.erase(name);
 }
 
@@ -238,12 +238,12 @@ void DynamicLogger::configure(
 }
 
 void DynamicLogger::register_component(const std::string &) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   // Components are registered automatically when first logged
 }
 
 void DynamicLogger::unregister_component(const std::string &name) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   component_levels_.erase(name);
 }
 
@@ -257,13 +257,13 @@ uint64_t DynamicLogger::get_total_message_count() const {
 }
 
 void DynamicLogger::reset_statistics() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   message_counts_.clear();
   total_messages_.store(0);
 }
 
 void DynamicLogger::shutdown() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   for (auto &[name, sink] : sinks_) {
     sink->flush();
@@ -286,7 +286,7 @@ void DynamicLogger::write_message(LogLevel level, const std::string &component,
   msg.function = function;
   msg.message = message;
 
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   // Write to all sinks
   for (auto &[name, sink] : sinks_) {

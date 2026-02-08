@@ -92,7 +92,7 @@ void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, ui
 
   // Filter trades to only include those within the specified time range
   cached_trades_.clear();
-  for (const auto& trade : analytics.recent_trades) {
+  for (const auto& trade : analytics.recent_trades_db.read()) {
     if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
       cached_trades_.push_back(trade);
     }
@@ -134,7 +134,7 @@ void HistoricalTimeSalesPanel::render() {
   if (processor_ && symbol_id_ != 0 && cached_trades_.empty()) {
     if (consumeDirty()) {
       auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-      cached_trades_ = analytics.recent_trades;
+      cached_trades_ = analytics.recent_trades_db.read();
 
       // Keep only most recent trades for display
       if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
@@ -1284,7 +1284,7 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
       // Filter trades to only include those within the specified time range
       std::vector<RenderEngine::TradeData> trades_for_bar;
-      for (const auto& trade : analytics.recent_trades) {
+      for (const auto& trade : analytics.recent_trades_db.read()) {
         if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
           trades_for_bar.push_back(trade);
         }

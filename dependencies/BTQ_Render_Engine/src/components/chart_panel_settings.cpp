@@ -144,15 +144,28 @@ void ChartPanelSettings::render() {
       apply_settings();
       save_settings();  // Save settings when applied
       is_modal_open_ = false;
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("chart_settings_apply");
+    
     ImGui::SameLine();
     if (ImGui::Button("Cancel")) {
       is_modal_open_ = false;
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("chart_settings_cancel");
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
       reset_temp_config();
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("chart_settings_reset");
   }
   ImGui::End();
 }

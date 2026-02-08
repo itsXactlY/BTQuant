@@ -560,7 +560,12 @@ void VolumeProfilePanel::build_volume_profile() {
 void VolumeProfilePanel::render_controls() {
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("volume_profile_reset_view");
+  
   ImGui::SameLine();
   ImGui::Text("Symbol: %s", symbol_name_.c_str());
   ImGui::SameLine();

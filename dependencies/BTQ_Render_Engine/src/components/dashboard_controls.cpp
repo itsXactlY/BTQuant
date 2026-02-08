@@ -622,6 +622,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::CHART);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_chart_panel");
       ImGui::NextColumn();
@@ -630,6 +632,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_footprint_panel");
       ImGui::NextColumn();
@@ -638,6 +642,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_volume_profile_panel");
       ImGui::NextColumn();
@@ -646,6 +652,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ORDERBOOK);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_order_book_panel");
       ImGui::NextColumn();
@@ -655,6 +663,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_time_sales_panel");
       ImGui::NextColumn();
@@ -663,6 +673,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::WATCHLIST);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_watchlist_panel");
       ImGui::NextColumn();
@@ -671,6 +683,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ALERTS);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       BTQuant::UI::show_control_tooltip("add_news_panel");
       ImGui::NextColumn();
@@ -679,6 +693,8 @@ void DashboardControls::render_dashboard_controls() {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::RISK_ANALYZER);
         }
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
       // Add tooltip for Risk Analyzer
       if (ImGui::IsItemHovered()) {

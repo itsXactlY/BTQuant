@@ -1508,6 +1508,8 @@ void ChartPanel::render_indicator_overlay_panel() {
     BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     ImGui::OpenPopup("AddIndicatorPopup");
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("chart_add_indicator");
 
   // Add indicator popup
   if (ImGui::BeginPopup("AddIndicatorPopup")) {
@@ -1583,6 +1585,8 @@ void ChartPanel::render_indicator_overlay_panel() {
     BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     ImGui::OpenPopup("AddMultiTFIndicatorPopup");
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("chart_add_multitf_indicator");
 
   // Add multi-timeframe indicator popup
   if (ImGui::BeginPopup("AddMultiTFIndicatorPopup")) {

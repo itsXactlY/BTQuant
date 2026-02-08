@@ -356,7 +356,11 @@ void TapePanel::render_controls() {
   ImGui::SameLine();
   if (ImGui::Button("Export to CSV")) {
     exportTradesToCSV();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("tape_panel_export_csv");
 
   // Add audio alert controls
   ImGui::Separator();
@@ -559,7 +563,11 @@ void TapePanel::render_controls() {
     }
 
     markDirty();  // Refresh the display with new filters
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("tape_panel_apply");
 
   ImGui::SameLine();
   if (ImGui::Button("Reset")) {
@@ -574,7 +582,11 @@ void TapePanel::render_controls() {
     strcpy(start_time_input_, "");
     strcpy(end_time_input_, "");
     markDirty();  // Refresh the display
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("tape_panel_reset");
 
   // Add collapsible section for trade clustering configuration
   if (ImGui::CollapsingHeader("Trade Clustering Detection")) {

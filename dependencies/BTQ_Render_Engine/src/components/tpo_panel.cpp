@@ -32,12 +32,21 @@ void TpoPanel::render() {
   // Enhanced toolbar with more options
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("tpo_panel_reset_view");
+  
   ImGui::SameLine();
   if (ImGui::Button("Clear TPO Data")) {
     tpo_engine_.clear();
     last_processed_timestamp_ns_ = 0;  // Reset the tracking timestamp
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("tpo_panel_clear_data");
   ImGui::SameLine();
   ImGui::Checkbox("Delta Labels", &show_text_);
   ImGui::SameLine();

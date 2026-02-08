@@ -65,6 +65,28 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("enable_fibonacci", "Enable Fibonacci retracement and extension levels");
     register_tooltip("enable_volume_profile", "Enable volume profile showing volume distribution by price");
     register_tooltip("enable_crosshair_info", "Enable crosshair information panel with price/time details");
+    register_tooltip("chart_settings_reset", "Reset all chart indicator settings to their default values");
+    register_tooltip("chart_settings_apply", "Apply the current chart indicator settings and close dialog");
+    register_tooltip("chart_settings_cancel", "Discard changes and close the chart settings dialog");
+    register_tooltip("time_and_sales_apply", "Apply the current time and sales filters to the display");
+    register_tooltip("time_and_sales_reset", "Reset all time and sales filters to their default values");
+    register_tooltip("tape_panel_apply", "Apply the current tape panel filters to the display");
+    register_tooltip("tape_panel_reset", "Reset all tape panel filters to their default values");
+    register_tooltip("dom_surface_reset_view", "Reset the DOM surface view to fit all available data");
+    register_tooltip("footprint_panel_reset_view", "Reset the footprint chart view to fit all available data");
+    register_tooltip("tpo_panel_reset_view", "Reset the TPO profile chart view to fit all available data");
+    register_tooltip("tpo_panel_clear_data", "Clear all accumulated TPO profile data and start fresh");
+    register_tooltip("volume_profile_reset_view", "Reset the volume profile chart view to fit all available data");
+    register_tooltip("domsurfacepanel_reset_view", "Reset the DOM surface panel view to fit all available data");
+    register_tooltip("time_and_sales_export_csv", "Export the current time and sales data to a CSV file");
+    register_tooltip("tape_panel_export_csv", "Export the current tape panel data to a CSV file");
+    register_tooltip("historical_time_sales_export_csv", "Export the historical time and sales data to a CSV file");
+    register_tooltip("chart_add_indicator", "Add a new technical indicator to the chart");
+    register_tooltip("chart_add_multitf_indicator", "Add a new multi-timeframe technical indicator to the chart");
+    register_tooltip("multi_vwap_add_daily", "Add a daily VWAP (Volume Weighted Average Price) line to the chart");
+    register_tooltip("multi_vwap_add_weekly", "Add a weekly VWAP (Volume Weighted Average Price) line to the chart");
+    register_tooltip("multi_vwap_add_monthly", "Add a monthly VWAP (Volume Weighted Average Price) line to the chart");
+    register_tooltip("multi_vwap_add_custom", "Add a custom VWAP (Volume Weighted Average Price) line to the chart");
     
     // Appearance Settings tooltips
     register_tooltip("theme_selector", "Choose between Dark, Light, or High Contrast themes");
@@ -109,6 +131,10 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("panel_duplicate", "Create a copy of this panel with the same settings");
     register_tooltip("panel_export", "Export this panel's configuration to a file");
     register_tooltip("panel_import", "Import a panel configuration from a file");
+    register_tooltip("panel_settings_button", "Open panel-specific settings and configuration options");
+    register_tooltip("panel_close_button", "Close this panel and remove it from the workspace");
+    register_tooltip("confirmation_dialog_yes", "Confirm the action and proceed with the operation");
+    register_tooltip("confirmation_dialog_no", "Cancel the action and return to the previous state");
     
     // Time & Sales tooltips
     register_tooltip("trade_direction_filter", "Filter trades by direction (buy/sell/initiator)");

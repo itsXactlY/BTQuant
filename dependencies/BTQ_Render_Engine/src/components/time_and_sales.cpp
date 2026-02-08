@@ -273,7 +273,11 @@ void TimeAndSalesPanel::render_controls() {
   ImGui::SameLine();
   if (ImGui::Button("Export to CSV")) {
     exportTradesToCSV();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("time_and_sales_export_csv");
 
   // Add audio alert controls
   ImGui::Separator();
@@ -453,9 +457,12 @@ void TimeAndSalesPanel::render_controls() {
           start_time_filter_ = 0;
         }
       }
-    } else {
-      start_time_filter_ = 0;
     }
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
+  }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("time_and_sales_apply");
 
     // Parse end time - supports both raw timestamp and HH:MM:SS format
     if (strlen(end_time_input_) > 0) {
@@ -491,7 +498,11 @@ void TimeAndSalesPanel::render_controls() {
     strcpy(start_time_input_, "");
     strcpy(end_time_input_, "");
     markDirty();  // Refresh the display
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("time_and_sales_reset");
 
   // Add collapsible section for trade clustering configuration
   if (ImGui::CollapsingHeader("Trade Clustering Detection")) {

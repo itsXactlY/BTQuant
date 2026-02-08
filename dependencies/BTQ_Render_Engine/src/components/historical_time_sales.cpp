@@ -179,7 +179,11 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::SameLine();
   if (ImGui::Button("Export to CSV")) {
     exportTradesToCSV();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("historical_time_sales_export_csv");
 
   // Add trade filtering controls directly in the header
   ImGui::Separator();

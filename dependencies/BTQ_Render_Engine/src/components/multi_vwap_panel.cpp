@@ -94,19 +94,38 @@ void MultiVWAPPanel::render_add_vwap_section() {
 
     if (ImGui::Button("Add Daily VWAP")) {
         add_daily_vwap();
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("multi_vwap_add_daily");
+    
     ImGui::SameLine();
     if (ImGui::Button("Add Weekly VWAP")) {
         add_weekly_vwap();
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("multi_vwap_add_weekly");
+    
     ImGui::SameLine();
     if (ImGui::Button("Add Monthly VWAP")) {
         add_monthly_vwap();
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("multi_vwap_add_monthly");
+    
     ImGui::SameLine();
     if (ImGui::Button("Add Custom VWAP")) {
         add_custom_vwap();
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("multi_vwap_add_custom");
 }
 
 void MultiVWAPPanel::render_vwap_list() {

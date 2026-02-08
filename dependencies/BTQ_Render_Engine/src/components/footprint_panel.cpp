@@ -780,7 +780,12 @@ void FootprintPanel::render() {
   // Enhanced toolbar with more options
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("footprint_panel_reset_view");
+  
   ImGui::SameLine();
   ImGui::Checkbox("Volume Labels", &show_volume_labels_);
   ImGui::SameLine();

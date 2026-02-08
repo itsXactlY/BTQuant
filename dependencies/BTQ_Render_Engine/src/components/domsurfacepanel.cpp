@@ -650,7 +650,12 @@ void DomSurfacePanel::render() {
   // DOM Surface controls
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("domsurfacepanel_reset_view");
+  
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();

@@ -239,11 +239,20 @@ void PanelBase::render_symbol_link_icon() {
         }
       }
       ImGui::CloseCurrentPopup();
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("confirmation_dialog_yes");
+    
     ImGui::SameLine();
     if (ImGui::Button("No")) {
       ImGui::CloseCurrentPopup();
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("confirmation_dialog_no");
     ImGui::EndPopup();
   }
 }
@@ -268,7 +277,12 @@ void PanelBase::render_panel_header() {
                     15.0f);  // Position before close button
     if (ImGui::Button("⚙", ImVec2(button_size, button_size))) {
       open_settings();
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("panel_settings_button");
   }
 
   // Close button (right aligned)
@@ -277,7 +291,12 @@ void PanelBase::render_panel_header() {
     ImGui::SameLine(ImGui::GetWindowWidth() - close_size - 10.0f);
     if (ImGui::Button("X", ImVec2(close_size, close_size))) {
       config_.visible = false;
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
     }
+    
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("panel_close_button");
   }
 
   // Right-click context menu

@@ -18,15 +18,11 @@ TaskScheduler::TaskScheduler(size_t num_threads)
 }
 
 bool TaskScheduler::is_stopping() const {
-    std::shared_lock<std::shared_mutex> lock(stop_mutex_);
-    return stop_;
+    return stop_.load();
 }
 
 TaskScheduler::~TaskScheduler() {
-    {
-        std::unique_lock<std::shared_mutex> lock(stop_mutex_);
-        stop_ = true;
-    }
+    stop_.store(true);
     task_available_signal_.notify_all();
 
     for (std::thread& worker : workers_) {
@@ -47,18 +43,15 @@ void TaskScheduler::worker_loop() {
             }
         } else {
             // No task available, check if we should stop
-            {
-                std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
-                if (stop_ && tasks_.size_approx() == 0) {
-                    return;
-                }
+            if (stop_.load() && tasks_.size_approx() == 0) {
+                return;
             }
 
             // Wait for a task to become available or for stop signal
             // Use a timeout to periodically check the stop condition
             auto start_time = std::chrono::steady_clock::now();
             auto timeout_time = start_time + std::chrono::milliseconds(10);
-            
+
             // Wait for a task to be available with a timeout
             if (!task_available_signal_.wait_for(std::chrono::milliseconds(10))) {
                 // Timeout occurred, continue to check stop condition
@@ -69,11 +62,8 @@ void TaskScheduler::worker_loop() {
 }
 
 void TaskScheduler::enqueue_task(std::function<void()> task) {
-    {
-        std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
-        if (stop_) {
-            throw std::runtime_error("TaskScheduler is stopped");
-        }
+    if (stop_.load()) {
+        throw std::runtime_error("TaskScheduler is stopped");
     }
 
     tasks_.enqueue(std::move(task));

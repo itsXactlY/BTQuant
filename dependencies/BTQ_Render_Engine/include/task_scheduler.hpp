@@ -5,6 +5,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <vector>
+#include <atomic>
 #include <functional>
 #include <future>
 #include <chrono>
@@ -251,10 +252,9 @@ private:
     std::vector<std::thread> workers_;
     moodycamel::ConcurrentQueue<std::function<void()>> tasks_;
 
-    mutable std::shared_mutex stop_mutex_;  // For thread-safe access to stop_ flag
     btq::threading::AtomicSignal task_available_signal_;  // Atomic signal for task availability
     size_t num_threads_;
-    bool stop_;
+    std::atomic<bool> stop_;
 
 public:
     void enqueue_task(std::function<void()> task);

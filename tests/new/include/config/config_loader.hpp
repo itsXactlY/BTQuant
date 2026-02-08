@@ -11,6 +11,8 @@
 #include <variant>
 #include <vector>
 
+#include "../../../dependencies/BTQ_Render_Engine/include/rcu/rcu_config_wrapper.hpp"
+
 namespace BTQuant::Config {
 
 // Configuration value types
@@ -366,15 +368,14 @@ private:
   void load_config_file(const std::string &path);
   void merge_configurations();
 
-  ConfigMap config_;
-  std::unordered_map<std::string, ConfigSource> source_map_;
+  BTQ::rcu_unordered_map<std::string, ConfigSection> config_;
+  BTQ::rcu_unordered_map<std::string, ConfigSource> source_map_;
   std::vector<ConfigChangeCallback> change_callbacks_;
   std::vector<std::string> config_search_paths_;
   std::string app_path_;
   std::string main_config_path_;
   std::string symbol_mapping_path_;
   bool initialized_ = false;
-  mutable std::mutex mutex_;
 };
 
 // Template implementations
@@ -421,10 +422,10 @@ inline std::string value_to_string(const ConfigValue &value) {
 template <typename T>
 std::optional<T> ConfigLoader::get_as(const std::string &section,
                                       const std::string &key) const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  auto config_guard = config_.read_lock();
 
-  auto section_it = config_.find(section);
-  if (section_it == config_.end()) {
+  auto section_it = (*config_guard).find(section);
+  if (section_it == (*config_guard).end()) {
     return std::nullopt;
   }
 

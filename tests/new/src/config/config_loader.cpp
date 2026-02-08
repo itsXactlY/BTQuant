@@ -19,8 +19,6 @@ ConfigLoader &ConfigLoader::instance() {
 }
 
 bool ConfigLoader::initialize(const std::string &app_path) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   if (initialized_) {
     return true;
   }
@@ -67,8 +65,6 @@ bool ConfigLoader::initialize(const std::string &app_path) {
 }
 
 bool ConfigLoader::load() {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   if (!initialized_) {
     initialize();
   }
@@ -86,15 +82,16 @@ bool ConfigLoader::load() {
     load_config_file(symbol_mapping_path_);
   }
 
-  return !config_.empty();
+  // Check if config is empty by getting a read lock and checking size
+  auto config_guard = config_.read_lock();
+  return !(*config_guard).empty();
 }
 
 std::optional<ConfigValue> ConfigLoader::get(const std::string &section,
                                              const std::string &key) const {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  auto section_it = config_.find(section);
-  if (section_it == config_.end()) {
+  auto config_guard = config_.read_lock();
+  auto section_it = (*config_guard).find(section);
+  if (section_it == (*config_guard).end()) {
     return std::nullopt;
   }
 
@@ -108,22 +105,31 @@ std::optional<ConfigValue> ConfigLoader::get(const std::string &section,
 
 bool ConfigLoader::set(const std::string &section, const std::string &key,
                        const ConfigValue &value) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   ConfigValue old_value;
   bool had_old = false;
 
-  auto section_it = config_.find(section);
-  if (section_it != config_.end()) {
-    auto key_it = section_it->second.find(key);
-    if (key_it != section_it->second.end()) {
-      old_value = key_it->second;
-      had_old = true;
+  // First, check if there's an old value
+  {
+    auto config_guard = config_.read_lock();
+    auto section_it = (*config_guard).find(section);
+    if (section_it != (*config_guard).end()) {
+      auto key_it = section_it->second.find(key);
+      if (key_it != section_it->second.end()) {
+        old_value = key_it->second;
+        had_old = true;
+      }
     }
   }
 
-  config_[section][key] = value;
-  source_map_[section + "." + key] = ConfigSource::CLI_ARGUMENT;
+  // Update the config using RCU
+  config_.update([section, key, value](ConfigMap &config_map) {
+    config_map[section][key] = value;
+  });
+
+  // Update the source map using RCU
+  source_map_.update([section, key](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+    source_map_ref[section + "." + key] = ConfigSource::CLI_ARGUMENT;
+  });
 
   // Notify callbacks
   for (const auto &callback : change_callbacks_) {
@@ -134,10 +140,9 @@ bool ConfigLoader::set(const std::string &section, const std::string &key,
 }
 
 std::vector<std::string> ConfigLoader::get_sections() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   std::vector<std::string> sections;
-  for (const auto &[section, _] : config_) {
+  auto config_guard = config_.read_lock();
+  for (const auto &[section, _] : *config_guard) {
     sections.push_back(section);
   }
   return sections;
@@ -149,10 +154,15 @@ void ConfigLoader::register_change_callback(ConfigChangeCallback callback) {
 }
 
 bool ConfigLoader::reload() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  // Clear the config using RCU
+  config_.update([](ConfigMap &config_map) {
+    config_map.clear();
+  });
 
-  config_.clear();
-  source_map_.clear();
+  // Clear the source map using RCU
+  source_map_.update([](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+    source_map_ref.clear();
+  });
 
   return load();
 }
@@ -160,23 +170,22 @@ bool ConfigLoader::reload() {
 std::optional<ConfigSource>
 ConfigLoader::get_source(const std::string &section,
                          const std::string &key) const {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  auto it = source_map_.find(section + "." + key);
-  if (it != source_map_.end()) {
+  auto source_guard = source_map_.read_lock();
+  auto it = (*source_guard).find(section + "." + key);
+  if (it != (*source_guard).end()) {
     return it->second;
   }
   return std::nullopt;
 }
 
 std::string ConfigLoader::export_to_json() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   std::stringstream ss;
+  auto config_guard = config_.read_lock();
+  
   ss << "{\n";
   bool first_section = true;
 
-  for (const auto &[section, values] : config_) {
+  for (const auto &[section, values] : *config_guard) {
     if (!first_section)
       ss << ",\n";
     first_section = false;
@@ -227,12 +236,12 @@ std::string ConfigLoader::export_to_json() const {
 }
 
 std::string ConfigLoader::export_to_yaml() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-
   std::stringstream ss;
+  auto config_guard = config_.read_lock();
+  
   ss << "# Auto-generated configuration export\n\n";
 
-  for (const auto &[section, values] : config_) {
+  for (const auto &[section, values] : *config_guard) {
     ss << section << ":\n";
 
     for (const auto &[key, value] : values) {
@@ -276,6 +285,10 @@ std::string ConfigLoader::export_to_yaml() const {
 
 void ConfigLoader::load_environment_variables() {
   // Load BTQ_ prefixed environment variables
+  // Collect all updates to apply in a single RCU update
+  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>> updates;
+  std::unordered_map<std::string, ConfigSource> source_updates;
+
   for (char **env = environ; *env != nullptr; env++) {
     std::string env_str = *env;
     if (env_str.rfind(ENV_PREFIX, 0) == 0) {
@@ -297,28 +310,45 @@ void ConfigLoader::load_environment_variables() {
           std::replace(key.begin(), key.end(), '_', '.');
 
           // Try to detect type
+          ConfigValue parsed_value;
           if (value == "true" || value == "false") {
-            config_[section][key] = ConfigValue(value == "true");
+            parsed_value = ConfigValue(value == "true");
           } else if (value.find('.') != std::string::npos) {
             try {
-              config_[section][key] = ConfigValue(std::stod(value));
+              parsed_value = ConfigValue(std::stod(value));
             } catch (...) {
-              config_[section][key] = ConfigValue(value);
+              parsed_value = ConfigValue(value);
             }
           } else {
             try {
-              config_[section][key] =
+              parsed_value =
                   ConfigValue(static_cast<int64_t>(std::stoll(value)));
             } catch (...) {
-              config_[section][key] = ConfigValue(value);
+              parsed_value = ConfigValue(value);
             }
           }
 
-          source_map_[section + "." + key] = ConfigSource::ENVIRONMENT;
+          updates[section][key] = parsed_value;
+          source_updates[section + "." + key] = ConfigSource::ENVIRONMENT;
         }
       }
     }
   }
+
+  // Apply all updates using RCU
+  config_.update([&updates](ConfigMap &config_map) {
+    for (const auto &[section, values] : updates) {
+      for (const auto &[key, value] : values) {
+        config_map[section][key] = value;
+      }
+    }
+  });
+
+  source_map_.update([&source_updates](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+    for (const auto &[key, source] : source_updates) {
+      source_map_ref[key] = source;
+    }
+  });
 }
 
 void ConfigLoader::load_config_file(const std::string &path) {
@@ -337,6 +367,10 @@ void ConfigLoader::load_config_file(const std::string &path) {
 
   std::istringstream stream(content);
   std::string line;
+
+  // Collect all updates to apply in a single RCU update
+  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>> updates;
+  std::unordered_map<std::string, ConfigSource> source_updates;
 
   while (std::getline(stream, line)) {
     // Skip empty lines and comments
@@ -364,7 +398,7 @@ void ConfigLoader::load_config_file(const std::string &path) {
                     section.end());
 
       current_section = section;
-      config_[current_section] = {};
+      updates[current_section] = {};
 
       // Handle inline value
       std::string trimmed_value = value;
@@ -373,7 +407,7 @@ void ConfigLoader::load_config_file(const std::string &path) {
       if (start != std::string::npos && end != std::string::npos) {
         trimmed_value = trimmed_value.substr(start, end - start + 1);
         if (!trimmed_value.empty()) {
-          config_[current_section]["_section_value"] = trimmed_value;
+          updates[current_section]["_section_value"] = ConfigValue(trimmed_value);
         }
       }
     }
@@ -410,35 +444,53 @@ void ConfigLoader::load_config_file(const std::string &path) {
       value.erase(std::remove(value.begin(), value.end(), '\''), value.end());
 
       // Parse value
+      ConfigValue parsed_value;
       if (value == "true" || value == "false") {
-        config_[current_section][key] = ConfigValue(value == "true");
+        parsed_value = ConfigValue(value == "true");
       } else if (value.empty()) {
         // Empty value, skip
+        continue;
       } else if (value.find('.') != std::string::npos ||
                  value.find('e') != std::string::npos ||
                  value.find('E') != std::string::npos) {
         try {
-          config_[current_section][key] = ConfigValue(std::stod(value));
+          parsed_value = ConfigValue(std::stod(value));
         } catch (...) {
-          config_[current_section][key] = ConfigValue(value);
+          parsed_value = ConfigValue(value);
         }
       } else {
         try {
-          config_[current_section][key] =
-              ConfigValue(static_cast<int64_t>(std::stoll(value)));
+          parsed_value = ConfigValue(static_cast<int64_t>(std::stoll(value)));
         } catch (...) {
-          config_[current_section][key] = ConfigValue(value);
+          parsed_value = ConfigValue(value);
         }
       }
 
-      source_map_[current_section + "." + key] = ConfigSource::LOCAL_CONFIG;
+      updates[current_section][key] = parsed_value;
+      source_updates[current_section + "." + key] = ConfigSource::LOCAL_CONFIG;
     }
   }
+
+  // Apply all updates using RCU
+  config_.update([&updates](ConfigMap &config_map) {
+    for (const auto &[section, values] : updates) {
+      for (const auto &[key, value] : values) {
+        config_map[section][key] = value;
+      }
+    }
+  });
+
+  source_map_.update([&source_updates](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+    for (const auto &[key, source] : source_updates) {
+      source_map_ref[key] = source;
+    }
+  });
 }
 
 void ConfigLoader::merge_configurations() {
   // Higher priority sources override lower ones
   // Order: ENVIRONMENT > CLI > USER > LOCAL > SYSTEM > BUILTIN
+  // This is handled by the order of loading, so no special implementation needed for RCU
 }
 
 std::string ConfigLoader::get_env_var(const std::string &name) {

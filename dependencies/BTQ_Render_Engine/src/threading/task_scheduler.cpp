@@ -40,51 +40,39 @@ void TaskScheduler::worker_loop() {
     while (true) {
         std::function<void()> task;
 
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            condition_.wait(lock, [this] { 
-                std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
-                return stop_ || !tasks_.empty(); 
-            });
-
-            // Check stop condition again with proper synchronization
+        // Try to dequeue a task
+        if (tasks_.try_dequeue(task)) {
+            if (task) {
+                task();
+            }
+        } else {
+            // No task available, check if we should stop
             {
                 std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
-                if (stop_ && tasks_.empty()) {
+                if (stop_ && tasks_.size_approx() == 0) {
                     return;
                 }
             }
 
-            if (!tasks_.empty()) {
-                task = std::move(tasks_.front());
-                tasks_.pop();
-            }
-        }
-
-        if (task) {
-            task();
+            // Wait for a short time before checking again
+            std::unique_lock<std::mutex> lock(notification_mutex_);
+            condition_.wait_for(lock, std::chrono::milliseconds(10), [this] {
+                std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
+                return stop_ || tasks_.size_approx() > 0;
+            });
         }
     }
 }
 
 void TaskScheduler::enqueue_task(std::function<void()> task) {
     {
-        std::unique_lock<std::shared_mutex> stop_lock(stop_mutex_);
+        std::shared_lock<std::shared_mutex> stop_lock(stop_mutex_);
         if (stop_) {
             throw std::runtime_error("TaskScheduler is stopped");
         }
     }
-    
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        {
-            std::shared_lock<std::shared_mutex> stop_check_lock(stop_mutex_);
-            if (stop_) {
-                throw std::runtime_error("TaskScheduler is stopped");
-            }
-        }
-        tasks_.emplace(std::move(task));
-    }
+
+    tasks_.enqueue(std::move(task));
     condition_.notify_one();
 }
 

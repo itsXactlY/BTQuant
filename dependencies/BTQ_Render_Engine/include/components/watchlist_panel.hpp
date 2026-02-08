@@ -4,10 +4,10 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "concurrentqueue.h"
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -233,7 +233,7 @@ class WatchlistPanel : public PanelBase {
     std::string symbol;
     std::string exchange;
   };
-  std::queue<PendingSubscription> pending_subscriptions_;
+  moodycamel::ConcurrentQueue<PendingSubscription> pending_subscriptions_;
 
   mutable std::mutex watchlist_mutex_;
 };

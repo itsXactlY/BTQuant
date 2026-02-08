@@ -9,6 +9,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include "concurrentqueue.h"
 
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
@@ -126,12 +127,12 @@ class UnifiedDataPipeline {
   std::unordered_map<uint32_t, DataSubscription> subscriptions_;
   std::atomic<uint32_t> next_subscription_id_{1};
 
-  std::vector<DataEvent> event_queue_;
-  mutable std::mutex queue_mutex_;
+  moodycamel::ConcurrentQueue<DataEvent> event_queue_;
   mutable std::mutex subscriptions_mutex_;
 
   std::atomic<bool> running_{false};
   std::thread processing_thread_;
+  std::mutex process_mutex_;  // Mutex for condition variable notification
   std::condition_variable cv_;
 
   std::string current_symbol_;

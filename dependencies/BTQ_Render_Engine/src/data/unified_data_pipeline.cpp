@@ -71,10 +71,7 @@ void UnifiedDataPipeline::publish(DataType type, uint32_t symbol_id, const std::
                                               std::chrono::system_clock::now().time_since_epoch())
                                               .count());
 
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    event_queue_.push_back(event);
-  }
+  event_queue_.enqueue(event);
 
   // Notify processing thread
   cv_.notify_one();
@@ -112,10 +109,7 @@ void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
                                               std::chrono::system_clock::now().time_since_epoch())
                                               .count());
 
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    event_queue_.push_back(event);
-  }
+  event_queue_.enqueue(event);
 
   cv_.notify_one();
 }
@@ -135,10 +129,11 @@ std::vector<std::string> UnifiedDataPipeline::get_available_symbols() const {
 
 void UnifiedDataPipeline::process_events() {
   std::vector<DataEvent> local_queue;
-
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    local_queue.swap(event_queue_);
+  
+  // Dequeue all available events
+  DataEvent event;
+  while (event_queue_.try_dequeue(event)) {
+    local_queue.push_back(std::move(event));
   }
 
   for (const auto& event : local_queue) {
@@ -175,18 +170,26 @@ void UnifiedDataPipeline::dispatch_event(const DataEvent& event) {
 
 void UnifiedDataPipeline::processing_loop() {
   while (running_) {
-    std::unique_lock<std::mutex> lock(queue_mutex_);
-    cv_.wait(lock, [this] { return !event_queue_.empty() || !running_; });
+    // Check if there are events to process
+    if (event_queue_.size_approx() > 0) {
+      // Process all available events
+      std::vector<DataEvent> local_queue;
+      
+      // Dequeue all available events
+      DataEvent event;
+      while (event_queue_.try_dequeue(event)) {
+        local_queue.push_back(std::move(event));
+      }
 
-    if (!running_) break;
-
-    // Process all queued events
-    std::vector<DataEvent> local_queue;
-    local_queue.swap(event_queue_);
-    lock.unlock();
-
-    for (const auto& event : local_queue) {
-      dispatch_event(event);
+      for (const auto& event : local_queue) {
+        dispatch_event(event);
+      }
+    } else {
+      // No events available, wait for notification
+      std::unique_lock<std::mutex> lock(process_mutex_);
+      cv_.wait_for(lock, std::chrono::milliseconds(10), [this] { 
+        return event_queue_.size_approx() > 0 || !running_; 
+      });
     }
   }
 }

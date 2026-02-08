@@ -7,8 +7,8 @@
 #include <deque>
 #include <memory>
 #include <vector>
-#include <queue>
 #include <mutex>
+#include "concurrentqueue.h"
 
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
@@ -152,8 +152,7 @@ class DomSurfacePanel : public PanelBase {
   static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_US = 30'000'000;  // 30 seconds fade-out duration in microseconds
 
   // Thread-safe queue for trade updates from background thread
-  std::queue<BTQuant::Data::TradeData> pending_trades_queue_;
-  mutable std::mutex pending_trades_mutex_;
+  moodycamel::ConcurrentQueue<BTQuant::Data::TradeData> pending_trades_queue_;
 
   // Vulkan resources for accelerated rendering
   VulkanCore* vulkan_core_ = nullptr;

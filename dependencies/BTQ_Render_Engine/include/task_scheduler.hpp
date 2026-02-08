@@ -5,7 +5,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <condition_variable>
-#include <queue>
 #include <vector>
 #include <functional>
 #include <future>
@@ -13,6 +12,7 @@
 #include <system_error>
 #include <limits>
 #include <map>
+#include "concurrentqueue.h"
 
 namespace btq {
 
@@ -249,10 +249,10 @@ private:
     void worker_loop();
 
     std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
+    moodycamel::ConcurrentQueue<std::function<void()>> tasks_;
 
-    std::mutex queue_mutex_;
     mutable std::shared_mutex stop_mutex_;  // For thread-safe access to stop_ flag
+    std::mutex notification_mutex_;  // Mutex for condition variable notification
     std::condition_variable condition_;
     size_t num_threads_;
     bool stop_;

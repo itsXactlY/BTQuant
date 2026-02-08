@@ -18,6 +18,7 @@
 #include "performance/debug_overlay.hpp"
 #include "performance_monitor.hpp"
 #include "ui/layout_manager.hpp"
+#include "ui/tutorial.hpp"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -84,6 +85,9 @@ void VulkanDashboard::init_components() {
 
   workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
                                                          micro_renderer_.get());
+
+  // Show tutorial on first run (after components are initialized)
+  BTQuant::UI::show_tutorial_if_first_run();
 
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
@@ -329,6 +333,9 @@ void VulkanDashboard::render_frame() {
 
   // Visual indicator for active layout
   render_layout_indicator();
+
+  // Render tutorial if active (moved here to ensure it's within proper frame scope)
+  BTQuant::UI::render_tutorial();
 
   // Process updates and UI
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;

@@ -180,7 +180,7 @@ void TutorialManager::render_tutorial_window() {
     }
 
     // Check if we're in a valid ImGui frame scope to prevent assertion errors
-    // This is a workaround for the g.WithinFrameScope assertion issue
+    // This is critical to avoid the g.WithinFrameScope assertion failure
     ImGuiContext& g = *GImGui;
     if (!g.WithinFrameScope) {
         // If we're not within a frame scope, skip rendering this frame to avoid the assertion

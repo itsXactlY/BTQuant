@@ -739,3 +739,6 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Delete the "Parallel Implementation Divergence". Merge `RealtimeDashboard` logic into `PanelManager` and establish `QuantWorkspaceComponent` as the single source of truth.
 - [x] **Build RELEASE Build**: Make sure the Release build executes, renders, has no race conditions, is reactive, works flawless. Use tools like gdb etc.
 - [x] **Debug:** run the Terminal with gdb to figure out crashes, like this: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build/_deps/imgui-src/imgui.cpp:7744: bool ImGui::Begin(const char*, bool*, ImGuiWindowFlags): Assertion `g.WithinFrameScope' failed.
+
+
+- [x] **Compare and Fix**: Compare gitcommmit e743995183d1798ff24ae1bb173c08ebff89a271 against dfe3503f9057fd9db1b84d8dc77c088b6154747e from "Revert" branch, make a list what is broken, why the rendering never happening, and it freezes.

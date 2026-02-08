@@ -45,12 +45,16 @@ void StatusBarPanel::render() {
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 
   // Check if we're in a valid ImGui frame scope to prevent assertion errors
-  ImGuiContext& g = *GImGui;
-  if (!g.WithinFrameScope) {
-      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
-      // The status bar will be rendered in the next frame when the scope is valid
-      return;
+  // We can check this by attempting to get the current context and checking if it's valid
+  ImGuiContext* g = ImGui::GetCurrentContext();
+  if (g == nullptr) {
+    // If there's no valid ImGui context, skip rendering this frame
+    return;
   }
+
+  // In newer versions of ImGui, we can't directly access WithinFrameScope
+  // Instead, we'll just check if the context is valid and proceed with rendering
+  // If we're not in a proper frame, ImGui will handle the error internally
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |

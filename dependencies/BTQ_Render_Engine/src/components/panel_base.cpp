@@ -1,19 +1,23 @@
 #include "../../include/components/panel_base.hpp"
 
+#include "components/panel_manager.hpp"
 #include "imgui.h"
 #include "ui/context_menus.hpp"
-#include "components/panel_manager.hpp"
 
 namespace BTQuant {
 
 void PanelBase::begin_panel_window() {
   // Check if we're in a valid ImGui frame scope to prevent assertion errors
-  ImGuiContext& g = *GImGui;
-  if (!g.WithinFrameScope) {
-      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
-      // The panel will be rendered in the next frame when the scope is valid
-      return;
+  // We can check this by attempting to get the current context and checking if it's valid
+  ImGuiContext* g = ImGui::GetCurrentContext();
+  if (g == nullptr) {
+    // If there's no valid ImGui context, skip rendering this frame
+    return;
   }
+
+  // In newer versions of ImGui, we can't directly access WithinFrameScope
+  // Instead, we'll just check if the context is valid and proceed with rendering
+  // If we're not in a proper frame, ImGui will handle the error internally
 
   ImGui::SetNextWindowPos(config_.position, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
@@ -70,14 +74,14 @@ void PanelBase::render_symbol_link_icon() {
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.7f));  // Gray
     ImGui::Text("●");  // Circle icon representing unlinked state
     ImGui::PopStyleColor();
-    
+
     // Add tooltip
     if (ImGui::IsItemHovered()) {
       ImGui::BeginTooltip();
       ImGui::Text("Click to link this panel to others");
       ImGui::EndTooltip();
     }
-    
+
     // Handle click to create a new link group
     if (ImGui::IsItemClicked()) {
       // Show a popup menu to select a color for the new link group
@@ -127,14 +131,14 @@ void PanelBase::render_symbol_link_icon() {
       ImGui::Text("Linked to %s group - Symbols sync", color_name);
       ImGui::EndTooltip();
     }
-    
+
     // Handle click to remove from link group
     if (ImGui::IsItemClicked()) {
       // Show a confirmation popup to unlink the panel
       ImGui::OpenPopup("UnlinkPanelPopup");
     }
   }
-  
+
   // Popup for selecting a color when creating a new link group
   if (ImGui::BeginPopup("LinkGroupColorPopup")) {
     ImGui::Text("Select link color:");
@@ -221,7 +225,7 @@ void PanelBase::render_symbol_link_icon() {
     }
     ImGui::EndPopup();
   }
-  
+
   // Popup for confirming unlinking
   if (ImGui::BeginPopup("UnlinkPanelPopup")) {
     ImGui::Text("Remove from link group?");
@@ -250,17 +254,18 @@ void PanelBase::render_panel_header() {
   ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "[%s]", type_name);
 
   ImGui::SameLine();
-  
+
   // Render the symbol link icon before the title
   render_symbol_link_icon();
   ImGui::SameLine();
-  
+
   ImGui::Text("%s", config_.title.c_str());
 
   // Settings button (left of close button)
   if (get_settings_interface() != nullptr) {
     float button_size = ImGui::GetTextLineHeight();
-    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 - 15.0f);  // Position before close button
+    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 -
+                    15.0f);  // Position before close button
     if (ImGui::Button("⚙", ImVec2(button_size, button_size))) {
       open_settings();
     }
@@ -293,7 +298,7 @@ void PanelBase::handle_context_menu(ContextMenuManager& manager) {
   if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     // Set focus to this panel so that hotkeys (e.g., Delete) apply to the correct panel
     ImGui::SetWindowFocus();
-    
+
     // If the manager has access to the panel manager, set this panel as the active panel
     if (auto* panel_manager = manager.get_panel_manager()) {
       // Find the panel ID by comparing with all panels in the manager

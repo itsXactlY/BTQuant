@@ -26,6 +26,7 @@ add_executable(market_data_collector
 # Market Data Processor Library (Header-only implementation)
 add_library(market_data_processor_lib INTERFACE)
 
+
 # Link libraries
 target_link_libraries(market_data_collector
     Threads::Threads
@@ -47,22 +48,37 @@ set_target_properties(market_data_collector PROPERTIES
 # Test executable for MarketDataProcessor
 if(BUILD_TESTS)
     enable_testing()
-    
+
     add_executable(test_market_data_processor
         tests/test_market_data_processor.cpp
     )
-    
+
+    add_executable(latency_test
+        tests/latency_test.cpp
+    )
+
     target_include_directories(test_market_data_processor PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
-    
+
+    target_include_directories(latency_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
     target_link_libraries(test_market_data_processor
         Threads::Threads
         market_data_processor_lib
     )
-    
+
+    target_link_libraries(latency_test
+        Threads::Threads
+        market_data_processor_lib
+    )
+
     add_test(NAME test_market_data_processor COMMAND test_market_data_processor)
+    add_test(NAME latency_test COMMAND latency_test)
 endif()
+
 
 # Add the Render Engine subdirectory to build BTQuantTerminal
 add_subdirectory(dependencies/BTQ_Render_Engine)

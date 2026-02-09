@@ -160,7 +160,6 @@ class ResizablePanel : public UIComponent {
   float grid_size_ = 10.0f;
 };
 
-
 class SearchEngine {
  public:
   void index_symbol(const std::string& s, const std::string& d);
@@ -306,7 +305,7 @@ class VulkanDashboard {
   const VulkanDashboardConfig& get_config() const { return config_; }
 
   /// @brief Update the frame budget in the configuration
-  void update_frame_budget_config(float budget_ms) { 
+  void update_frame_budget_config(float budget_ms) {
     config_.frame_budget_ms = budget_ms;
     frame_budget_ms_ = budget_ms;
   }
@@ -346,9 +345,10 @@ class VulkanDashboard {
   uint32_t current_image_index_ = 0;
   bool is_running_ = true;
   bool window_resized_ = false;
-  
+
   // Frame budgeting
-  float frame_budget_ms_ = 6.944f;  // Default to ~144 FPS (1000ms/144)
+  // Frame budgeting
+  float frame_budget_ms_ = 16.0f;  // Relaxed to ~60 FPS (16ms) to ensure UI interactivity
 
   /**
    * @brief Callback for when the window framebuffer is resized

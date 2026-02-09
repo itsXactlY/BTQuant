@@ -14,8 +14,8 @@
 #include <iostream>
 #include <print>
 
-#include "../../include/structured_logger.hpp"
 #include "../../include/market_data_processor.hpp"
+#include "../../include/structured_logger.hpp"
 #include "../../include/symbol_registry.hpp"
 
 namespace BTQuant {
@@ -88,10 +88,11 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
   // Magic number should be "BTQ3" = 0x42545155
   constexpr uint32_t EXPECTED_MAGIC = 0x42545155;  // "BTQ3"
   constexpr uint32_t EXPECTED_VERSION = 2;         // Version 3
-  
+
   if (header_->magic != EXPECTED_MAGIC) [[unlikely]] {
-    std::string error_msg = std::format("Invalid magic number in shared memory. Expected: 0x{:X}, Got: 0x{:X}", 
-                                        EXPECTED_MAGIC, header_->magic);
+    std::string error_msg =
+        std::format("Invalid magic number in shared memory. Expected: 0x{:X}, Got: 0x{:X}",
+                    EXPECTED_MAGIC, header_->magic);
     BTQ_LOG_ERROR(error_msg);
     munmap(shm_ptr_, shm_size_);
     shm_ptr_ = nullptr;
@@ -100,9 +101,9 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
     shm_fd_ = -1;
     return std::unexpected(error_msg);
   }
-  
+
   if (header_->version != EXPECTED_VERSION) [[unlikely]] {
-    std::string error_msg = std::format("Invalid version in shared memory. Expected: {}, Got: {}", 
+    std::string error_msg = std::format("Invalid version in shared memory. Expected: {}, Got: {}",
                                         EXPECTED_VERSION, header_->version);
     BTQ_LOG_ERROR(error_msg);
     munmap(shm_ptr_, shm_size_);
@@ -116,21 +117,24 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
   // Calculate ring buffer positions based on the new layout
   // The ring buffer data starts right after the header
   char* buffer_start = reinterpret_cast<char*>(header_) + sizeof(SharedMemoryHeader);
-  
+
   // Calculate how many trade and orderbook entries we can fit in the remaining space
   size_t remaining_size = shm_size_ - sizeof(SharedMemoryHeader);
   size_t entry_size = std::max(sizeof(HotTrade), sizeof(HotOrderbookSnapshot));
   size_t max_entries = remaining_size / entry_size;
-  
+
   // For simplicity, assume equal distribution between trades and orderbooks
   size_t trade_capacity = max_entries / 2;
   size_t book_capacity = max_entries / 2;
-  
-  trades_ = reinterpret_cast<HotTrade*>(buffer_start);
-  books_ = reinterpret_cast<HotOrderbookSnapshot*>(buffer_start + (trade_capacity * sizeof(HotTrade)));
 
-  std::string success_msg = std::format("[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={}, book_capacity={})",
-                                        shm_path_, header_->magic, header_->version, trade_capacity, book_capacity);
+  trades_ = reinterpret_cast<HotTrade*>(buffer_start);
+  books_ =
+      reinterpret_cast<HotOrderbookSnapshot*>(buffer_start + (trade_capacity * sizeof(HotTrade)));
+
+  std::string success_msg = std::format(
+      "[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={}, "
+      "book_capacity={})",
+      shm_path_, header_->magic, header_->version, trade_capacity, book_capacity);
   BTQ_LOG_INFO(success_msg);
 
   BTQ_LOG_INFO("HotSpineDataBridge connected successfully");
@@ -173,7 +177,8 @@ std::span<const HotTrade> HotSpineDataBridge::getTradeBuffer() const {
   // Return a span based on the available data in the ring buffer
   uint64_t available_count = header_->get_available_count();
   // Limit to a reasonable size to avoid returning huge spans
-  size_t count = std::min(static_cast<size_t>(available_count), static_cast<size_t>(HotSpine::V3::RING_BUFFER_SIZE));
+  size_t count = std::min(static_cast<size_t>(available_count),
+                          static_cast<size_t>(HotSpine::V3::RING_BUFFER_SIZE));
   return std::span<const HotTrade>(trades_, count);
 }
 
@@ -227,20 +232,16 @@ void HotSpineDataBridge::sync_shm() {
     return;
   }
 
-  // Get available count from the new ring buffer header
-  uint64_t available_count = header_->get_available_count();
-  if (available_count == 0) {
-    return; // Nothing to process
-  }
+  // Get current write index from the new ring buffer header
+  uint64_t current_write_idx = header_->write_head.load(std::memory_order_acquire);
+  uint64_t capacity = HotSpine::V3::RING_BUFFER_SIZE;  // Use the new constant
 
   // --- Process Trades (Legacy approach adapted to new layout) ---
   // Since the new layout is different, we need to adapt the original approach
   // to work with the new ring buffer structure.
-  
+
   // For now, let's implement a hybrid approach that works with the new layout
   // but maintains the original functionality
-  uint64_t current_write_idx = header_->write_head.load(std::memory_order_acquire);
-  uint64_t capacity = HotSpine::V3::RING_BUFFER_SIZE; // Use the new constant
 
   // Initial catch-up: Process ENTIRE ring buffer on first sync
   uint64_t last_read = last_read_idx_.load(std::memory_order_acquire);
@@ -252,8 +253,8 @@ void HotSpineDataBridge::sync_shm() {
       last_read = 0;  // Buffer not full, process from beginning
     }
     last_read_idx_.store(last_read, std::memory_order_release);
-    BTQ_LOG_INFO(
-        std::format("Processing full ring buffer. Start: {} End: {}", last_read, current_write_idx));
+    BTQ_LOG_INFO(std::format("Processing full ring buffer. Start: {} End: {}", last_read,
+                             current_write_idx));
   }
 
   // Batch processing
@@ -261,9 +262,8 @@ void HotSpineDataBridge::sync_shm() {
   const uint64_t BATCH_SIZE = 100000;
   trade_batch.reserve(BATCH_SIZE);
 
-  // Timestamp reasonable filter: Jan 1st 2024 = 1704067200 sec -> 1.704e15
-  // micros
-  const uint64_t MIN_VALID_TS = 1704067200000000ULL;
+  // Timestamp filter: Relaxed to allow replay/simulation data (since epoch)
+  const uint64_t MIN_VALID_TS = 1000ULL;
 
   while (last_read < current_write_idx) {
     // Use the new ring buffer mask for indexing

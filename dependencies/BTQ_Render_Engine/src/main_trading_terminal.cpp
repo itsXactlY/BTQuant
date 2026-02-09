@@ -189,8 +189,8 @@ int main(int argc, char** argv) {
     (void)dt;  // Suppress unused variable warning
     last_frame_time = frame_begin;
 
-    // Data Sync
-    data_bridge->sync();
+    // Data Sync - Handled by background thread
+    // data_bridge->sync();
 
     // Event Handling
     dashboard->handle_events();

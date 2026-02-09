@@ -346,18 +346,21 @@ void VulkanDashboard::render_frame() {
 
   // Check frame budget before processing updates
   auto elapsed_before_updates = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
-  
+                                    std::chrono::high_resolution_clock::now() - frame_start_time)
+                                    .count() /
+                                1000.0;  // Convert to ms
+
   if (elapsed_before_updates >= frame_budget_ms_) {
     // Skip updates if we've already exceeded the frame budget
     // Finalize ImGui and Record Graphics commands
     ImGui::Render();
 
-    vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
-      if (micro_renderer_) {
-        micro_renderer_->executeGraphics(cmd);
-      }
-    });
+    vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
+                                      [this](VkCommandBuffer cmd) {
+                                        if (micro_renderer_) {
+                                          micro_renderer_->executeGraphics(cmd);
+                                        }
+                                      });
 
     vulkan_core_->PresentFrame(imageIndex);
     return;
@@ -367,12 +370,18 @@ void VulkanDashboard::render_frame() {
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
-    workspace_->render_gui();
+
+    // Clear Screen for Tutorial: Only render GUI if tutorial is NOT active
+    if (!BTQuant::UI::get_global_tutorial_manager().is_active()) {
+      workspace_->render_gui();
+    }
 
     // Check frame budget before syncing data
     auto elapsed_before_sync = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
-    
+                                   std::chrono::high_resolution_clock::now() - frame_start_time)
+                                   .count() /
+                               1000.0;  // Convert to ms
+
     if (elapsed_before_sync < frame_budget_ms_) {
       // Sync UI state to Data feed (Fixing the Data Disconnect)
       // Extract UI state from workspace and propagate to data bridge
@@ -429,15 +438,17 @@ void VulkanDashboard::render_frame() {
         // ... (existing code) ...
 
         // Sync any UI-driven configuration changes back to the data bridge
-        hotspine_bridge_->sync();
+        // REMOVED: hotspine_bridge_->sync(); to prevent race condition with background thread
       }
     }
   }
 
   // Check frame budget before microstructure rendering
   auto elapsed_before_rendering = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
-  
+                                      std::chrono::high_resolution_clock::now() - frame_start_time)
+                                      .count() /
+                                  1000.0;  // Convert to ms
+
   if (elapsed_before_rendering < frame_budget_ms_ && micro_renderer_) {
     // Handle high-performance microstructure rendering (Data Ingestion & Compute
     // Phase)
@@ -489,17 +500,24 @@ void VulkanDashboard::shutdown() {
   }
   already_shutdown = true;
 
-  if (vulkan_core_) {
-    vulkan_core_->wait_idle();
-  }
-
-  workspace_.reset();
-
+  // Shutdown ImGui first before destroying window or Vulkan resources
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImPlot::DestroyContext();
   ImGui::DestroyContext();
 
+  // Cleanup components that might hold Vulkan resources
+  // CRITICAL: specific order to prevent use-after-free
+  micro_renderer_.reset();
+  workspace_.reset();
+
+  // Cleanup Vulkan resources
+  if (vulkan_core_) {
+    vulkan_core_->wait_idle();
+    vulkan_core_.reset();
+  }
+
+  // Cleanup GLFW
   if (window_) {
     glfwDestroyWindow(window_);
     glfwTerminate();
@@ -534,8 +552,14 @@ void VulkanDashboard::pollDataToRenderer() {
 
   // 1. Resolve Symbol ID from active_symbol_
   uint32_t symbol_id = 0;
+
+  // Try direct lookup first
   auto id_opt = SymbolRegistry::instance().get_symbol_id("Binance", active_symbol_);
-  if (!id_opt) {
+
+  if (id_opt) {
+    symbol_id = *id_opt;
+  } else {
+    // Try to find by symbol name only (ignoring exchange)
     auto all_symbols = SymbolRegistry::instance().get_all_symbols();
     for (const auto& info : all_symbols) {
       if (info.symbol == active_symbol_) {
@@ -543,11 +567,23 @@ void VulkanDashboard::pollDataToRenderer() {
         break;
       }
     }
-  } else {
-    symbol_id = *id_opt;
+
+    // Fallback: If still 0 and we have symbols, just pick the first one to ensure connectivity
+    if (symbol_id == 0 && !all_symbols.empty()) {
+      symbol_id = all_symbols[0].id;
+      // Auto-correct active symbol
+      active_symbol_ = all_symbols[0].symbol;
+      std::println("[VulkanDashboard] Warning: generating fallback symbol ID {} for '{}'",
+                   symbol_id, active_symbol_);
+    }
   }
 
   if (symbol_id == 0) {
+    static int warn_counter = 0;
+    if (warn_counter++ % 600 == 0) {  // Log every ~10 seconds at 60fps
+      std::println("[VulkanDashboard] Error: Could not resolve symbol ID for '{}'. ActiveSyms=0",
+                   active_symbol_);
+    }
     return;
   }
 
@@ -603,8 +639,8 @@ void VulkanDashboard::pollDataToRenderer() {
     size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades_db.read().size());
     ticks.reserve(count);
 
-    for (size_t i = analytics.recent_trades_db.read().size() - count; i < analytics.recent_trades_db.read().size();
-         ++i) {
+    for (size_t i = analytics.recent_trades_db.read().size() - count;
+         i < analytics.recent_trades_db.read().size(); ++i) {
       const auto& t = analytics.recent_trades_db.read()[i];
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);

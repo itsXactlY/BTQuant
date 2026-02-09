@@ -68,17 +68,18 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowSize(ImVec2(300, 250), ImGuiCond_FirstUseEver);
 
   // Ensure the Dashboard Controls window stays on top
-  ImGui::SetNextWindowFocus();
+  // REMOVED: ImGui::SetNextWindowFocus(); - causing input blocking and dropdown issues
 
   // Check if we're in a valid ImGui frame scope to prevent assertion errors
   ImGuiContext& g = *GImGui;
   if (!g.WithinFrameScope) {
-      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
-      // The quant workspace controls will be rendered in the next frame when the scope is valid
-      return;
+    // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+    // The quant workspace controls will be rendered in the next frame when the scope is valid
+    return;
   }
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_,
+                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 

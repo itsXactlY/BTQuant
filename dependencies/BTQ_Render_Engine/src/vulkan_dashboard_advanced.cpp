@@ -35,7 +35,10 @@ VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
       height_(height),
       hotspine_bridge_(bridge),
       market_data_processor_(processor),
-      config_(config) {}
+      config_(config) {
+  // Initialize frame budget from config if available
+  frame_budget_ms_ = config.frame_budget_ms;
+}
 
 VulkanDashboard::~VulkanDashboard() { shutdown(); }
 
@@ -287,6 +290,9 @@ void VulkanDashboard::init_components() {
 }
 
 void VulkanDashboard::render_frame() {
+  // Start frame timing for budgeting
+  auto frame_start_time = std::chrono::high_resolution_clock::now();
+
   if (window_resized_) {
     vulkan_core_->recreate_swapchain(width_, height_);
     window_resized_ = false;
@@ -338,74 +344,103 @@ void VulkanDashboard::render_frame() {
   // Render tutorial if active (moved here to ensure it's within proper frame scope)
   BTQuant::UI::render_tutorial();
 
+  // Check frame budget before processing updates
+  auto elapsed_before_updates = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
+  
+  if (elapsed_before_updates >= frame_budget_ms_) {
+    // Skip updates if we've already exceeded the frame budget
+    // Finalize ImGui and Record Graphics commands
+    ImGui::Render();
+
+    vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
+      if (micro_renderer_) {
+        micro_renderer_->executeGraphics(cmd);
+      }
+    });
+
+    vulkan_core_->PresentFrame(imageIndex);
+    return;
+  }
+
   // Process updates and UI
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
     workspace_->render_gui();
 
-    // Sync UI state to Data feed (Fixing the Data Disconnect)
-    // Extract UI state from workspace and propagate to data bridge
-    if (hotspine_bridge_ && market_data_processor_) {
-      // Sync selected symbol from UI to active symbol
-      const std::string& selected_symbol = workspace_->getSelectedSymbol();
-      if (!selected_symbol.empty() && selected_symbol != active_symbol_) {
-        active_symbol_ = selected_symbol;
-        // Update the dashboard's active symbol to sync with data feed
-        set_active_symbol(selected_symbol);
+    // Check frame budget before syncing data
+    auto elapsed_before_sync = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
+    
+    if (elapsed_before_sync < frame_budget_ms_) {
+      // Sync UI state to Data feed (Fixing the Data Disconnect)
+      // Extract UI state from workspace and propagate to data bridge
+      if (hotspine_bridge_ && market_data_processor_) {
+        // Sync selected symbol from UI to active symbol
+        const std::string& selected_symbol = workspace_->getSelectedSymbol();
+        if (!selected_symbol.empty() && selected_symbol != active_symbol_) {
+          active_symbol_ = selected_symbol;
+          // Update the dashboard's active symbol to sync with data feed
+          set_active_symbol(selected_symbol);
 
-        // Propagate the symbol change to all relevant components
-        auto symbol_id_opt = SymbolRegistry::instance().get_symbol_id("Binance", selected_symbol);
-        if (symbol_id_opt) {
-          // Update the panel manager with the new active symbol
-          if (workspace_->getPanelManager()) {
-            workspace_->getPanelManager()->set_active_symbol(*symbol_id_opt, selected_symbol);
-          }
-        }
-      }
-
-      // Sync order state if any changes occurred in the UI
-      // double order_qty = workspace_->getOrderQuantity();
-      // double order_price = workspace_->getOrderPrice();
-      // int order_side = workspace_->getSelectedOrderSide();  // 0 = Buy, 1 = Sell
-      // int order_type = workspace_->getSelectedOrderType();  // 0 = Market, 1 = Limit
-
-      // If there are pending orders from UI, submit them to the order manager
-      auto order_manager = workspace_->getOrderManager();
-      if (order_manager) {
-        // Process any UI-initiated order submissions
-        // This would typically happen through button clicks in the UI
-        // For now, we'll just ensure the state is consistent
-
-        // Sync hierarchical selector state to data feed
-        const auto& selector_state = workspace_->getSelectorState();
-        if (!selector_state.selected_symbol.empty()) {
-          // Ensure the dashboard's active symbol matches the selector
-          if (selector_state.selected_symbol != active_symbol_) {
-            active_symbol_ = selector_state.selected_symbol;
-            set_active_symbol(selector_state.selected_symbol);
-
-            // Propagate to panel manager
+          // Propagate the symbol change to all relevant components
+          auto symbol_id_opt = SymbolRegistry::instance().get_symbol_id("Binance", selected_symbol);
+          if (symbol_id_opt) {
+            // Update the panel manager with the new active symbol
             if (workspace_->getPanelManager()) {
-              workspace_->getPanelManager()->set_active_symbol(selector_state.selected_symbol_id,
-                                                               selector_state.selected_symbol);
+              workspace_->getPanelManager()->set_active_symbol(*symbol_id_opt, selected_symbol);
             }
           }
         }
+
+        // Sync order state if any changes occurred in the UI
+        // double order_qty = workspace_->getOrderQuantity();
+        // double order_price = workspace_->getOrderPrice();
+        // int order_side = workspace_->getSelectedOrderSide();  // 0 = Buy, 1 = Sell
+        // int order_type = workspace_->getSelectedOrderType();  // 0 = Market, 1 = Limit
+
+        // If there are pending orders from UI, submit them to the order manager
+        auto order_manager = workspace_->getOrderManager();
+        if (order_manager) {
+          // Process any UI-initiated order submissions
+          // This would typically happen through button clicks in the UI
+          // For now, we'll just ensure the state is consistent
+
+          // Sync hierarchical selector state to data feed
+          const auto& selector_state = workspace_->getSelectorState();
+          if (!selector_state.selected_symbol.empty()) {
+            // Ensure the dashboard's active symbol matches the selector
+            if (selector_state.selected_symbol != active_symbol_) {
+              active_symbol_ = selector_state.selected_symbol;
+              set_active_symbol(selector_state.selected_symbol);
+
+              // Propagate to panel manager
+              if (workspace_->getPanelManager()) {
+                workspace_->getPanelManager()->set_active_symbol(selector_state.selected_symbol_id,
+                                                                 selector_state.selected_symbol);
+              }
+            }
+          }
+        }
+
+        // Sync mixed UI/Data state
+
+        // ... (existing code) ...
+
+        // Sync any UI-driven configuration changes back to the data bridge
+        hotspine_bridge_->sync();
       }
-
-      // Sync mixed UI/Data state
-
-      // ... (existing code) ...
-
-      // Sync any UI-driven configuration changes back to the data bridge
-      hotspine_bridge_->sync();
     }
   }
 
-  // Handle high-performance microstructure rendering (Data Ingestion & Compute
-  // Phase)
-  if (micro_renderer_) {
+  // Check frame budget before microstructure rendering
+  auto elapsed_before_rendering = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::high_resolution_clock::now() - frame_start_time).count() / 1000.0; // Convert to ms
+  
+  if (elapsed_before_rendering < frame_budget_ms_ && micro_renderer_) {
+    // Handle high-performance microstructure rendering (Data Ingestion & Compute
+    // Phase)
     pollDataToRenderer();
     auto result = micro_renderer_->prepare();
     if (!result) {

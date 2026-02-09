@@ -49,6 +49,9 @@ struct VulkanDashboardConfig {
   bool enable_command_buffer_recycling = true;
   bool enable_gpu_memory_budgeting = true;
   bool enable_low_latency_mode = true;
+  
+  // Frame budgeting configuration
+  float frame_budget_ms = 6.944f;  // Default to ~144 FPS (1000ms/144)
 };
 
 struct BufferAllocation {

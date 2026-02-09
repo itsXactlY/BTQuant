@@ -33,6 +33,7 @@ struct DisplayConfig {
   bool vsync = true;
   uint32_t target_fps = 60;
   uint32_t msaa_samples = 4;
+  float frame_budget_ms = 6.944f;  // Default to ~144 FPS (1000ms/144)
 };
 
 // Theme configuration

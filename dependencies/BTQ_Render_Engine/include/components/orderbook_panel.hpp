@@ -249,6 +249,22 @@ class OrderbookPanel : public PanelBase {
 
   std::map<double, VolumeLevelHistory> volume_level_history_;
   uint64_t volume_delta_period_us_ = 5000000;  // 5 seconds in microseconds
+  
+  // Orderbook polling functionality
+  void poll_orderbook_data();
+  void update_orderbook_statistics(const RenderEngine::OrderbookData& orderbook);
+  
+  // Polling configuration
+  std::chrono::high_resolution_clock::time_point last_poll_time_ = 
+      std::chrono::high_resolution_clock::now();
+  int poll_interval_ms_ = 100;  // Poll every 100ms by default
+  
+  // Orderbook statistics
+  RenderEngine::OrderbookData current_orderbook_;
+  double best_bid_price_ = 0.0;
+  double best_ask_price_ = 0.0;
+  double spread_ = 0.0;
+  double bid_ask_ratio_ = 0.0;
 };
 
 }  // namespace BTQuant

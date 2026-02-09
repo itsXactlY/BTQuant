@@ -106,6 +106,9 @@ class WatchlistPanel : public PanelBase {
   void focus_add_symbol_input();
   void clear_all_symbols();
   void set_sorting(int column_id, bool ascending);
+  
+  // Test method for verifying queue functionality
+  size_t get_pending_updates_count() const { return pending_updates_.size_approx(); }
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

@@ -78,7 +78,7 @@ namespace Analytics {
 class ClusterEngine {
  public:
   explicit ClusterEngine(double tick_size)
-      : tick_size_(tick_size), min_tick_index_(0), session_start_us_(0) {
+      : tick_size_(tick_size), min_tick_index_(0), session_start_us_(0), is_bypass_mode_(false) {
     // Reserve some initial space to avoid immediate reallocations
     canvas_.reserve(10000);
     cluster_canvas_.reserve(10000);  // Reserve similar space for cluster canvas
@@ -212,9 +212,24 @@ class ClusterEngine {
 
   void processTradeInternal(const MarketData::Trade& trade, int time_bucket);
 
+  // Bypass mode methods
+  void SetBypassMode(bool bypass) { is_bypass_mode_ = bypass; }
+  bool IsBypassMode() const { return is_bypass_mode_; }
+
+  // Analytics bypass result structure
+  struct AnalyticsBypassResult {
+    double average_price = 0.0;
+    double volatility = 0.0;
+    double trend = 0.0;
+  };
+  
+  // Analytics bypass function
+  AnalyticsBypassResult GetAnalyticsBypassResult() const;
+
   double tick_size_;
   int64_t min_tick_index_;
   int64_t session_start_us_;
+  bool is_bypass_mode_;
   mutable std::mutex engine_mutex_;
   std::vector<HotSpine::V3::VolumeNode> canvas_;
 

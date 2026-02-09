@@ -434,6 +434,11 @@ class MarketDataProcessor {
   // Worker threads (C++20 jthread automatically joins on destruction)
   std::vector<std::jthread> workers_;
   std::atomic<bool> running_{true};
+  
+  // Ring buffer polling thread
+  std::thread polling_thread_;
+  uint64_t local_read_tail_{0};
+  HotSpine::V3::SharedMemoryLayoutV3 hotspine_layout_;  // Local copy of shared memory layout
 
   // Performance metrics (Atomic is fine)
   struct AtomicPerformanceMetrics {
@@ -500,6 +505,10 @@ class MarketDataProcessor {
   // Worker Loop
   void processQueueLoop();
   void processUpdate(const MarketDataUpdate& update);
+  
+  // Ring buffer polling methods
+  void pollingLoop();
+  void pollSharedMemoryRingBuffer();
 
   // Helper to get shard for a symbol
   Shard& getShard(uint32_t symbol_id) const { return *shards_[symbol_id % NUM_SHARDS]; }

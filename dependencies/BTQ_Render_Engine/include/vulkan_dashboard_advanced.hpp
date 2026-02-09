@@ -296,6 +296,21 @@ class VulkanDashboard {
   /// @brief Check if always on top is enabled
   bool is_always_on_top() const { return always_on_top_; }
 
+  /// @brief Set the frame time budget in milliseconds
+  void set_frame_budget_ms(float budget_ms) { frame_budget_ms_ = budget_ms; }
+
+  /// @brief Get the current frame time budget in milliseconds
+  float get_frame_budget_ms() const { return frame_budget_ms_; }
+
+  /// @brief Get the dashboard configuration
+  const VulkanDashboardConfig& get_config() const { return config_; }
+
+  /// @brief Update the frame budget in the configuration
+  void update_frame_budget_config(float budget_ms) { 
+    config_.frame_budget_ms = budget_ms;
+    frame_budget_ms_ = budget_ms;
+  }
+
  private:
   /// @brief Initialize all UI components
   void init_components();
@@ -331,6 +346,9 @@ class VulkanDashboard {
   uint32_t current_image_index_ = 0;
   bool is_running_ = true;
   bool window_resized_ = false;
+  
+  // Frame budgeting
+  float frame_budget_ms_ = 6.944f;  // Default to ~144 FPS (1000ms/144)
 
   /**
    * @brief Callback for when the window framebuffer is resized

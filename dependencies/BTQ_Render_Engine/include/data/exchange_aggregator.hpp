@@ -832,6 +832,10 @@ class ExchangeAggregator {
   std::optional<AggregatedMarketData> getExchangeSpecificAggregatedDataWithFeatures(
       const std::string& symbol, const std::vector<std::string>& exchanges) const;
 
+  // Bypass internal queues to directly insert data without processing overhead
+  void bypassInternalQueues(const std::string& exchange, const std::string& symbol,
+                           const RenderEngine::MarketDataUpdate& update);
+
  private:
   // Enhanced risk metrics calculation
   void calculateEnhancedRiskMetrics(

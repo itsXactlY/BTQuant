@@ -7338,5 +7338,29 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedMultiExchange
   return aggregated_data;
 }
 
+// Bypass internal queues to directly insert data without processing overhead
+void ExchangeAggregator::bypassInternalQueues(const std::string& exchange,
+                                            const std::string& symbol,
+                                            const RenderEngine::MarketDataUpdate& update) {
+  // Directly insert data into the internal storage without going through
+  // the normal processing pipeline, validation, or feature adjustments
+  // This bypasses all internal queues and processing overhead
+  
+  // Acquire lock to ensure thread safety during direct insertion
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  
+  // Directly store the data without any validation or processing
+  exchange_data_[symbol][exchange] = update;
+  
+  // Update the last update time for this exchange
+  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
+  
+  // Mark the exchange as valid
+  exchange_validity_[exchange] = true;
+  
+  // Update statistics
+  updateStatistics();
+}
+
 }  // namespace Data
 }  // namespace BTQuant

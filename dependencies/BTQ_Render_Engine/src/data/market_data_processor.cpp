@@ -31,8 +31,11 @@ MarketDataProcessor::MarketDataProcessor()
     workers_.emplace_back(&MarketDataProcessor::processQueueLoop, this);
   }
 
-  std::cout << "[MarketDataProcessor] Initialized with " << NUM_SHARDS << " shards and "
-            << workers_.size() << " worker threads" << std::endl;
+  // Start the polling thread
+  polling_thread_ = std::thread(&MarketDataProcessor::pollingLoop, this);
+
+  std::cout << "[MarketDataProcessor] Initialized with " << NUM_SHARDS << " shards, "
+            << workers_.size() << " worker threads, and polling thread" << std::endl;
 }
 
 MarketDataProcessor::~MarketDataProcessor() {
@@ -44,6 +47,11 @@ MarketDataProcessor::~MarketDataProcessor() {
     if (worker.joinable()) {
       worker.join();
     }
+  }
+
+  // Wait for polling thread to finish
+  if (polling_thread_.joinable()) {
+    polling_thread_.join();
   }
 
   std::cout << "[MarketDataProcessor] Shutdown complete" << std::endl;
@@ -916,6 +924,87 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
       now - std::chrono::high_resolution_clock::time_point(
                std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
   symbol_data.last_update_time = now.time_since_epoch().count();
+}
+
+// Define constants for the polling loop
+constexpr size_t MAX_BATCH_SIZE = 4096;
+
+// Main polling loop that reads from shared memory ring buffer
+void MarketDataProcessor::pollingLoop() {
+    while (running_.load(std::memory_order_acquire)) {
+        pollSharedMemoryRingBuffer();
+
+        // Brief sleep to prevent 100% CPU usage when no data is available
+        std::this_thread::sleep_for(std::chrono::microseconds(10)); // 10 microsecond delay
+    }
+}
+
+// Poll the shared memory ring buffer for new events
+void MarketDataProcessor::pollSharedMemoryRingBuffer() {
+    // Get the current write head from the shared memory layout
+    // This assumes we have access to the shared memory layout structure
+    // In a real implementation, this would be mapped shared memory
+    uint64_t shared_write_head = hotspine_layout_.header.write_head.load(std::memory_order_acquire);
+
+    // If no new data is available, return early
+    if (local_read_tail_ >= shared_write_head) {
+        return;
+    }
+
+    // Calculate how many events we need to process
+    uint64_t events_to_process = std::min(
+        static_cast<uint64_t>(MAX_BATCH_SIZE),
+        shared_write_head - local_read_tail_
+    );
+
+    // Process up to MAX_BATCH_SIZE events per cycle
+    for (uint64_t i = 0; i < events_to_process; ++i) {
+        uint64_t current_index = (local_read_tail_ + i) & (HotSpine::V3::RING_BUFFER_MASK);
+
+        // Bounds check: ensure the calculated address is within the allocated buffer
+        uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
+        uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(RenderEngine::HotspineData));
+        uint8_t* event_addr = buffer_start + (current_index * sizeof(RenderEngine::HotspineData));
+        
+        // Verify that the event address plus the event size doesn't exceed buffer bounds
+        if (event_addr >= buffer_end || (event_addr + sizeof(RenderEngine::HotspineData)) > buffer_end) {
+            std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer!" << std::endl;
+            continue; // Skip this event and continue with others
+        }
+
+        // Access the event from the ring buffer
+        // In a real implementation, this would read from the actual shared memory buffer
+        // For now, we'll simulate reading from a buffer
+        RenderEngine::HotspineData* event_ptr = reinterpret_cast<RenderEngine::HotspineData*>(event_addr);
+
+        // Check if this is a warmup event
+        if (event_ptr->flags & RenderEngine::HotspineData::IS_WARMUP) {
+            // For warmup events, just touch memory to keep cache hot, but skip processing
+            continue;
+        }
+
+        // Convert HotspineData to MarketDataUpdate and process
+        MarketDataUpdate update;
+        update.timestamp = event_ptr->timestamp;
+        update.symbol_id = event_ptr->symbolId;
+        update.price = event_ptr->price;
+        update.size = event_ptr->volume;
+
+        // Determine event type based on eventType
+        if (event_ptr->eventType == 0) { // Assuming 0 is TRADE
+            update.type = MarketDataType::TRADE;
+            update.side = (event_ptr->flags & 0x04) ? "buy" : "sell"; // Assuming bit 2 indicates side
+        } else { // Assuming other values are ORDERBOOK
+            update.type = MarketDataType::ORDERBOOK;
+            // Note: bids/asks would need to be reconstructed from the payload
+        }
+
+        // Process the actual market data event
+        processUpdate(update);
+    }
+
+    // Update our local read tail to reflect the processed events
+    local_read_tail_ += events_to_process;
 }
 
 }  // namespace RenderEngine

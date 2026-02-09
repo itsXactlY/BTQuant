@@ -1,6 +1,7 @@
 #include "../../include/analytics/cluster_engine.hpp"
 
 #include <execution>  // For std::execution::par_unseq
+#include <iostream>   // For std::cout
 #include <limits>
 #include <map>
 #include <mutex>
@@ -521,6 +522,66 @@ void ClusterEngine::process_trade_batch(const std::vector<MarketData::Trade>& tr
     
     processTradeInternal(trade, time_bucket);
   }
+}
+
+// Implementation of the analytics bypass result method
+Analytics::ClusterEngine::AnalyticsBypassResult Analytics::ClusterEngine::GetAnalyticsBypassResult() const {
+  AnalyticsBypassResult result;
+  
+  // In bypass mode, we return simplified analytics without intensive clustering
+  if (is_bypass_mode_) {
+    std::cout << "[Analytics Bypass] Returning simplified analytics result\n";
+    
+    // For bypass mode, we could aggregate some basic stats from the canvas
+    // This is a simplified implementation - in practice, you might want to store
+    // additional data for quick bypass calculations
+    std::lock_guard<std::mutex> lock(engine_mutex_);
+    
+    if (!canvas_.empty()) {
+      // Calculate simple statistics from the canvas
+      double total_volume = 0.0;
+      double total_price = 0.0;
+      int count = 0;
+      
+      for (size_t i = 0; i < canvas_.size(); ++i) {
+        const auto& node = canvas_[i];
+        double avg_price = tick_size_ * (min_tick_index_ + i); // Approximate price
+        
+        // Add contributions from buy and sell volumes
+        total_volume += node.buy_vol + node.sell_vol;
+        total_price += avg_price * (node.buy_vol + node.sell_vol);
+        count++;
+      }
+      
+      if (total_volume > 0) {
+        result.average_price = total_price / total_volume;
+      }
+    }
+  } else {
+    // In normal mode, we would perform more complex analytics
+    // This is just a placeholder - in a real implementation, you'd calculate
+    // more sophisticated metrics
+    std::lock_guard<std::mutex> lock(engine_mutex_);
+    
+    if (!canvas_.empty()) {
+      double total_volume = 0.0;
+      double total_price = 0.0;
+      
+      for (size_t i = 0; i < canvas_.size(); ++i) {
+        const auto& node = canvas_[i];
+        double avg_price = tick_size_ * (min_tick_index_ + i);
+        
+        total_volume += node.buy_vol + node.sell_vol;
+        total_price += avg_price * (node.buy_vol + node.sell_vol);
+      }
+      
+      if (total_volume > 0) {
+        result.average_price = total_price / total_volume;
+      }
+    }
+  }
+  
+  return result;
 }
 
 }  // namespace Analytics

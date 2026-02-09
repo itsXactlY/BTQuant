@@ -6,12 +6,12 @@
 #include <future>
 #include <atomic>
 #include <mutex>
-#include <condition_variable>
 #include <chrono>
 #include <algorithm>
 #include <cmath>
 
 #include <imgui.h>
+#include "../include/threading/atomic_signal.hpp"
 
 namespace btq {
 namespace ui {
@@ -134,10 +134,9 @@ public:
     std::future<void> executeAsyncWithLoading(const std::string& operation_name, std::function<void()> task_func);
 
 private:
-    // FIXED: Must use std::mutex for condition_variable support
-    mutable std::mutex mutex_;                  
-    std::condition_variable cv_;               
-    std::string current_operation_;            ///< Current operation name/message
+    mutable std::mutex mutex_;
+    btq::threading::AtomicBooleanSignal loading_complete_signal_;
+    std::string current_operation_;            ///< Current operation name<message>
     float progress_;                           ///< Current progress (0.0 to 1.0)
     std::atomic<bool> is_loading_;             ///< Flag indicating if loading is in progress
     std::chrono::steady_clock::time_point operation_start_time_;  ///< Time when operation started

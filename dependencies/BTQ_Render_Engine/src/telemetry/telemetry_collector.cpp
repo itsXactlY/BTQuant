@@ -13,7 +13,7 @@ namespace btq {
 
 // Static member initialization
 std::unique_ptr<TelemetryCollector> TelemetryCollector::instance_ = nullptr;
-std::mutex TelemetryCollector::mutex_;
+std::recursive_mutex TelemetryCollector::mutex_;  // Changed to recursive_mutex for consistency
 
 TelemetryCollector::TelemetryCollector() : enabled_(true), initialized_(false), 
                                           session_id_(generateSessionId()),
@@ -24,7 +24,7 @@ TelemetryCollector::TelemetryCollector() : enabled_(true), initialized_(false),
 
 
 TelemetryCollector& TelemetryCollector::getInstance() {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);  // Already using recursive_mutex, keeping consistent
     if (!instance_) {
         instance_ = std::unique_ptr<TelemetryCollector>(new TelemetryCollector());
     }

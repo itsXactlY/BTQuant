@@ -11,8 +11,10 @@
 namespace btq {
 namespace ui {
 
-LoadingStateManager::LoadingStateManager() 
+LoadingStateManager::LoadingStateManager()
     : progress_(0.0f), is_loading_(false) {
+    // Initialize the signal to false (loading not complete)
+    loading_complete_signal_.reset();
 }
 
 LoadingStateManager::~LoadingStateManager() {
@@ -27,8 +29,8 @@ void LoadingStateManager::startLoading(const std::string& operation_name, float 
         is_loading_ = true;
         operation_start_time_ = std::chrono::steady_clock::now();
     }
-    // Notify any waiters that state has changed (though usually we wait for completion, not start)
-    cv_.notify_all();
+    // Reset the completion signal since loading has started again
+    loading_complete_signal_.reset();
 }
 
 void LoadingStateManager::updateProgress(float new_progress, const std::string& status_message) {
@@ -57,7 +59,8 @@ void LoadingStateManager::finishLoading() {
         progress_ = 1.0f;
         is_loading_ = false;
     }
-    cv_.notify_all();
+    // Signal that loading is complete
+    loading_complete_signal_.signal();
 }
 
 void LoadingStateManager::stopLoading() {
@@ -65,7 +68,8 @@ void LoadingStateManager::stopLoading() {
         LOCK_GUARD;
         is_loading_ = false;
     }
-    cv_.notify_all();
+    // Signal that loading is complete (stopped)
+    loading_complete_signal_.signal();
 }
 
 bool LoadingStateManager::isLoading() const {
@@ -95,9 +99,9 @@ double LoadingStateManager::getElapsedTime() const {
 void LoadingStateManager::waitForCompletion() {
     // Optimization: check atomic flag first without lock
     if (!is_loading_) return;
-    
-    std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [this] { return !is_loading_; });
+
+    // Wait for the loading complete signal
+    loading_complete_signal_.wait();
 }
 
 void LoadingStateManager::renderLoadingOverlay() {

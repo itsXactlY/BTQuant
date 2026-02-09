@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -14,6 +13,7 @@
 #include "market_data_processor.hpp"
 #include "symbol_manager.hpp"
 #include "ui_data_manager.hpp"
+#include "../include/threading/atomic_signal.hpp"
 
 // Include market data processor which contains the concurrentqueue dependency
 // The concurrentqueue header is included via CMake's FetchContent and include directories
@@ -126,8 +126,8 @@ class UnifiedDataPipeline {
 
   std::atomic<bool> running_{false};
   std::thread processing_thread_;
-  std::mutex process_mutex_;  // Mutex for condition variable notification
-  std::condition_variable cv_;
+  std::mutex process_mutex_;  // May still be needed for other synchronization
+  btq::threading::AtomicSignal data_available_signal_;
 
   std::string current_symbol_;
   uint32_t current_symbol_id_{0};

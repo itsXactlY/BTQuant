@@ -15,7 +15,7 @@ UnifiedDataPipeline::UnifiedDataPipeline(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     std::shared_ptr<RenderEngine::SymbolManager> symbol_manager)
-    : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager) {
+    : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager), data_available_signal_() {
   // Initialize UI data manager
   ui_data_manager_ = std::make_shared<UIDataManager>();
 
@@ -74,7 +74,7 @@ void UnifiedDataPipeline::publish(DataType type, uint32_t symbol_id, const std::
   event_queue_.enqueue(event);
 
   // Notify processing thread
-  cv_.notify_one();
+  data_available_signal_.notify_one();
 }
 
 std::string UnifiedDataPipeline::get_current_symbol() const { return current_symbol_; }
@@ -111,7 +111,7 @@ void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
 
   event_queue_.enqueue(event);
 
-  cv_.notify_one();
+  data_available_signal_.notify_one();
 }
 
 std::vector<std::string> UnifiedDataPipeline::get_available_symbols() const {
@@ -174,7 +174,7 @@ void UnifiedDataPipeline::processing_loop() {
     if (event_queue_.size_approx() > 0) {
       // Process all available events
       std::vector<DataEvent> local_queue;
-      
+
       // Dequeue all available events
       DataEvent event;
       while (event_queue_.try_dequeue(event)) {
@@ -185,11 +185,9 @@ void UnifiedDataPipeline::processing_loop() {
         dispatch_event(event);
       }
     } else {
-      // No events available, wait for notification
-      std::unique_lock<std::mutex> lock(process_mutex_);
-      cv_.wait_for(lock, std::chrono::milliseconds(10), [this] { 
-        return event_queue_.size_approx() > 0 || !running_; 
-      });
+      // No events available, wait for notification with timeout
+      // We need to wake up periodically to check the running_ flag
+      data_available_signal_.wait_for(std::chrono::milliseconds(10));
     }
   }
 }
@@ -197,7 +195,7 @@ void UnifiedDataPipeline::processing_loop() {
 void UnifiedDataPipeline::shutdown() {
   if (running_) {
     running_ = false;
-    cv_.notify_all();
+    data_available_signal_.notify_all();  // Wake up the processing thread
 
     if (processing_thread_.joinable()) {
       processing_thread_.join();

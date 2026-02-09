@@ -10,6 +10,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Disable treating warnings as errors
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-deprecated-declarations -Wno-deprecated-literal-operator")
 
+# Enable Address Sanitizer for memory stability testing
+if(NOT MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=address")
+endif()
+
 # Find Dependencies
 find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)

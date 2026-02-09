@@ -112,6 +112,10 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_na
 
 void OrderbookPanel::update(float /*dt*/) {
   std::lock_guard<std::mutex> lock(data_mutex_);
+  
+  // Poll for orderbook data updates
+  poll_orderbook_data();
+  
   // Request data update from data bridge
   bridge_->sync();
 
@@ -1386,6 +1390,51 @@ void OrderbookPanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
+}
+
+void OrderbookPanel::poll_orderbook_data() {
+  // Poll for new orderbook data at regular intervals
+  auto current_time = std::chrono::high_resolution_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                   current_time - last_poll_time_).count();
+
+  // Poll every 100ms by default, but this could be configurable
+  if (elapsed >= poll_interval_ms_) {
+    // Request fresh orderbook data from the processor
+    auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+    
+    if (orderbook_opt.has_value()) {
+      // Update our local copy of the orderbook data
+      current_orderbook_ = orderbook_opt.value();
+      
+      // Update statistics based on the new data
+      update_orderbook_statistics(current_orderbook_);
+    }
+    
+    last_poll_time_ = current_time;
+  }
+}
+
+void OrderbookPanel::update_orderbook_statistics(const RenderEngine::OrderbookData& orderbook) {
+  // Calculate bid/ask spread
+  if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
+    best_bid_price_ = orderbook.bids[0].price;
+    best_ask_price_ = orderbook.asks[0].price;
+    spread_ = best_ask_price_ - best_bid_price_;
+    
+    // Calculate bid/ask ratio
+    double total_bid_volume = 0.0;
+    double total_ask_volume = 0.0;
+    
+    for (const auto& bid : orderbook.bids) {
+      total_bid_volume += bid.size;
+    }
+    for (const auto& ask : orderbook.asks) {
+      total_ask_volume += ask.size;
+    }
+    
+    bid_ask_ratio_ = (total_ask_volume > 0) ? total_bid_volume / total_ask_volume : 0.0;
+  }
 }
 
 }  // namespace BTQuant

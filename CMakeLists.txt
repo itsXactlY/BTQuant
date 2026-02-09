@@ -23,6 +23,17 @@ add_executable(market_data_collector
     market_data_collector/src/data/hotspine_data_bridge.cpp
 )
 
+# Soak Test for Performance Validation
+add_executable(soak_test
+    market_data_collector/src/soak_test.cpp
+)
+
+# Ring Buffer Memory Stability Test
+add_executable(ring_buffer_stability_test
+    test_ring_buffer_stability.cpp
+    market_data_collector/src/data/hotspine_data_bridge.cpp
+)
+
 # Market Data Processor Library (Header-only implementation)
 add_library(market_data_processor_lib INTERFACE)
 
@@ -33,11 +44,24 @@ target_link_libraries(market_data_collector
     market_data_processor_lib
 )
 
+target_link_libraries(soak_test
+    Threads::Threads
+)
+
+target_link_libraries(ring_buffer_stability_test
+    Threads::Threads
+    market_data_processor_lib
+)
+
 # Compiler-specific options
 if(MSVC)
     target_compile_options(market_data_collector PRIVATE /W4)
+    target_compile_definitions(market_data_collector PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(market_data_collector PRIVATE -Wall -Wextra -pthread)
+    # Enable Address Sanitizer for memory stability testing
+    target_compile_options(market_data_collector PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(market_data_collector PRIVATE -fsanitize=address)
 endif()
 
 # Set output directory

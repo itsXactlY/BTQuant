@@ -130,7 +130,7 @@
     - **Buffer:** Define the data area as a flexible array member or fixed offset calculation, not a `std::vector`.
     - **Logic:** Add inline helper methods `get_next_write_slot()` and `commit_write()` directly in the header using `std::memory_order_release`.
 
-- [ ] **42.1.3: Shared Memory Manager (`include/hotspine_data_bridge.hpp`)**
+- [x] **42.1.3: Shared Memory Manager (`include/hotspine_data_bridge.hpp`)**
     - Refactor `HotSpineDataBridge` to manage the raw memory mapping.
     - **Consumer Mode:** Ensure `mmap` is read-only or read-write (depending on consumer feedback needs) but strictly non-blocking.
     - **Validation:** Add a startup check in `connect()` to verify the "Magic Number" and Version in `HotSpineLayoutV3` match exactly.
@@ -138,12 +138,12 @@
 ## 42.2: Producer Integration (Market Data Collector)
 **Context:** Modifying the ingestion path in `market_data_collector/` to write directly to SHM without intermediate queues.
 
-- [ ] **42.2.1: Bypass Internal Queues (`market_data_collector/src/data/exchange_aggregator.cpp`)**
+- [x] **42.2.1: Bypass Internal Queues (`market_data_collector/src/data/exchange_aggregator.cpp`)**
     - Identify `on_trade_update` and `on_depth_update` callbacks.
     - **Action:** Instead of pushing to an internal `std::queue` or `concurrentqueue`, call `HotSpineDataBridge::write_direct()`.
     - **Constraint:** Zero allocation in the callback. Use stack-allocated `HotspineData` structs only.
 
-- [ ] **42.2.2: Ring Buffer Writer (`market_data_collector/src/data/hotspine_data_bridge.cpp`)**
+- [x] **42.2.2: Ring Buffer Writer (`market_data_collector/src/data/hotspine_data_bridge.cpp`)**
     - Implement `write_direct(const HotspineData& event)`.
     - **Logic:**
         1. Load `write_head` (relaxed).
@@ -152,7 +152,7 @@
         4. Atomic store `write_head` (release).
     - **Overflow:** If `write_head - read_tail > RING_SIZE`, increment a `dropped_count` atomic (diagnostic only) and overwrite (circular) or yield. *Decision: Overwrite for HFT.*
 
-- [ ] **42.2.3: Warm-Up Generator (`market_data_collector/src/main.cpp`)**
+- [x] **42.2.3: Warm-Up Generator (`market_data_collector/src/main.cpp`)**
     - Create a simple timer loop in the main thread (or dedicated thread).
     - **Action:** Every 100ms, inject a `HotspineData` event with `flags |= IS_WARMUP`.
     - **Purpose:** Keep the CPU cache lines of the ring buffer and processor hot during low-volume periods.
@@ -160,7 +160,7 @@
 ## 42.3: Consumer Path (Render Engine / MarketDataProcessor)
 **Context:** Converting `MarketDataProcessor` from a queue consumer to a ring buffer poller.
 
-- [ ] **42.3.1: Atomic Storage (`include/market_data_processor.hpp`)**
+- [x] **42.3.1: Atomic Storage (`include/market_data_processor.hpp`)**
     - Replace `std::unordered_map<uint32_t, SymbolData>` with `std::vector<AtomicSymbolInfo>`.
     - **Struct:** Define `AtomicSymbolInfo` inside the header:
       ```cpp
@@ -173,7 +173,7 @@
       ```
     - **Access:** Add `get_atomic_snapshot(uint32_t symbol_id)` returning a const pointer.
 
-- [ ] **42.3.2: Polling Ingestion Loop (`src/data/market_data_processor.cpp`)**
+- [x] **42.3.2: Polling Ingestion Loop (`src/data/market_data_processor.cpp`)**
     - Refactor `process_events()` to poll the SHM ring buffer.
     - **Batching:** Process up to `MAX_BATCH_SIZE` (e.g., 4096) events per cycle.
     - **Logic:**
@@ -184,7 +184,7 @@
            - If real, update `atomic_storage_[symbol_id]` fields using `std::memory_order_relaxed`.
     - **Zero Locks:** Ensure strictly NO `mutex` usage in this loop.
 
-- [ ] **42.3.3: Cluster & Analytics Bypass (`src/analytics/cluster_engine.cpp`)**
+- [x] **42.3.3: Cluster & Analytics Bypass (`src/analytics/cluster_engine.cpp`)**
     - **Current State:** Likely waits for `MarketDataProcessor` to push data.
     - **New State:** The ingestion loop calls `ClusterEngine::ingest_batch(start_ptr, count)` directly.
     - **Threading:** If `ClusterEngine` runs on a separate thread, use a *Single-Producer Single-Consumer* (SPSC) pointer pass-through, NOT a copying queue.
@@ -192,7 +192,7 @@
 ## 42.4: UI Pull Model (Decoupled Rendering)
 **Context:** Rewriting UI panels to pull data from `MarketDataProcessor`'s atomic storage.
 
-- [ ] **42.4.1: Watchlist De-Queueing (`src/components/watchlist_panel.cpp`)**
+- [x] **42.4.1: Watchlist De-Queueing (`src/components/watchlist_panel.cpp`)**
     - **Delete:** `pending_subscriptions_` queue and `on_market_data_update` callback.
     - **Refactor `render()`:**
         - Iterate strictly over *visible* rows (ImGui Clipper).
@@ -200,45 +200,45 @@
         - Read atomic doubles/uints directly into local variables for `ImGui::Text`.
     - **Benefit:** Rendering cost becomes O(Visible Rows), not O(Market Activity).
 
-- [ ] **42.4.2: Orderbook Polling (`src/components/orderbook_panel.cpp`)**
+- [x] **42.4.2: Orderbook Polling (`src/components/orderbook_panel.cpp`)**
     - Similar to Watchlist. Instead of processing delta updates in the UI thread:
     - **Logic:** `MarketDataProcessor` maintains the L2 Book in a lock-free/double-buffered structure.
     - **Render:** `OrderbookPanel` requests a "Reader Snapshot" pointer. If the pointer is valid, read and render. If invalid (writer swapping), skip update for one frame (imperceptible at 60FPS).
 
-- [ ] **42.4.3: Frame Budgeting (`src/vulkan_dashboard_advanced.cpp`)**
+- [x] **42.4.3: Frame Budgeting (`src/vulkan_dashboard_advanced.cpp`)**
     - In `render_frame()`, verify that the `MarketDataProcessor::poll()` call happens *before* the UI render pass.
     - Ensure the polling duration is capped (e.g., 2ms) to prevent frame drops during market storms.
 
 ## 42.6: Static Data & Optimization
 **Context:** Removing dynamic lookups from the hot path.
 
-- [ ] **42.6.1: Static Symbol Map (`include/symbol_registry.hpp`)**
+- [x] **42.6.1: Static Symbol Map (`include/symbol_registry.hpp`)**
     - Replace `std::unordered_map` with a sorted `std::vector<SymbolEntry>` + `std::binary_search` for ID lookups during configuration/startup.
     - **Hot Path:** Ensure `symbol_id` (integer) is used exclusively in the hot path. No string comparisons (`"BTC-USDT"`) during ingestion.
 
-- [ ] **42.6.2: Pre-Allocation Strategy (`src/system/memory_optimizer.cpp`)**
+- [x] **42.6.2: Pre-Allocation Strategy (`src/system/memory_optimizer.cpp`)**
     - Ensure `AtomicSymbolInfo` vector in `MarketDataProcessor` is `reserve()`d to `MAX_SYMBOLS` at startup.
     - Verify `ClusterEngine` pools are pre-allocated.
 
 ## 42.7: Global Concurrency Audit (Search & Destroy)
-- [ ] **42.7.1: Mutex Audit**
+- [x] **42.7.1: Mutex Audit**
     - Grep for `std::lock_guard` and `std::unique_lock` in `src/data/` and `src/components/`.
     - **Action:**
         - If in `WatchlistPanel`: Replace with Atomic Pull (Task 42.4.1).
         - If in `MarketDataProcessor`: Replace with Atomic Storage (Task 42.3.1).
         - If in `Logger`: Ensure it's using the new `recursive_mutex` fix, but verify logging is DISABLED in the hot loop.
 
-- [ ] **42.7.2: Condition Variable Purge**
+- [x] **42.7.2: Condition Variable Purge**
     - Grep for `std::condition_variable`.
     - **Rule:** Allowed *only* in `TaskScheduler` (worker sleep) and `LoadingStateManager`.
     - **Ban:** Strictly prohibited in `HotSpineDataBridge` or `MarketDataProcessor`. Replace with busy-spin/yield logic for HFT components.
 
 ## 42.8: Validation & Verification
-- [ ] **42.8.1: Latency Test**
+- [x] **42.8.1: Latency Test**
     - Instrument the pipeline to record timestamps: `T0 (Ingest)` -> `T1 (Atomic Write)` -> `T2 (UI Read)`.
     - **Goal:** T1 - T0 < 10 microseconds (High performance).
 
-- [ ] **42.8.2: Soak Test**
+- [x] **42.8.2: Soak Test**
     - Run the terminal connected to the `market_data_collector` (Producer).
     - Simulate 1 million events/sec (using the Warmer or Replay).
     - **Pass Criteria:** UI remains interactive (mouse hover works, buttons click instantly).

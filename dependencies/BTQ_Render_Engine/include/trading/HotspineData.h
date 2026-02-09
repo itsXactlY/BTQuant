@@ -122,6 +122,38 @@ struct alignas(16) HotspineTradeTick {
 
 static_assert(GpuAlignable<HotspineTradeTick>, "HotspineTradeTick must be GPU-alignable");
 
+// Canonical event definition for lock-free shared memory pipeline
+struct alignas(64) HotspineData {
+  uint64_t timestamp;            // Nanosecond timestamp of the event
+  uint32_t symbolId;             // Symbol identifier
+  uint32_t eventType;            // Type of event (trade, quote, etc.)
+  double price;                  // Price value
+  double volume;                 // Volume value
+  uint8_t flags;                 // Flags: Bit 0: IS_WARMUP, Bit 1: IS_SNAPSHOT
+  uint8_t reserved_flags[3];     // Reserved for future flags
+  uint32_t sequenceNumber;       // Sequence number for ordering
+  uint32_t payloadSize;          // Size of additional payload data
+  uint8_t padding[20];           // Explicit padding to reach 64 bytes total
+
+  // Flag bit positions
+  static constexpr uint8_t IS_WARMUP = 0x01;    // Bit 0: Warm-up event
+  static constexpr uint8_t IS_SNAPSHOT = 0x02;  // Bit 1: Snapshot event
+
+  HotspineData() = default;
+
+  HotspineData(uint64_t ts, uint32_t symId, uint32_t evtType, double prc, double vol)
+      : timestamp(ts), symbolId(symId), eventType(evtType), price(prc), volume(vol),
+        flags(0), reserved_flags{0, 0, 0}, sequenceNumber(0), payloadSize(0) {
+    // Initialize padding to zero
+    memset(padding, 0, sizeof(padding));
+  }
+};
+
+static_assert(std::is_standard_layout_v<HotspineData>, "HotspineData must be standard layout");
+static_assert(std::is_trivially_copyable_v<HotspineData>, "HotspineData must be trivially copyable");
+static_assert(sizeof(HotspineData) == 64, "HotspineData must be exactly 64 bytes for cache alignment");
+static_assert(GpuAlignable<HotspineData>, "HotspineData must be GPU-alignable");
+
 // ============================================================================
 // Configuration Structures
 // ============================================================================

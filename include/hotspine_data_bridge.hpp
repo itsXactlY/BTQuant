@@ -108,7 +108,6 @@ class HotSpineDataBridge {
   ~HotSpineDataBridge();
 
   [[nodiscard]] std::expected<void, std::string> start();
-  [[nodiscard]] std::expected<void, std::string> connect();  // New method for validation
   void stop();
   void sync();  // Performs real-time synchronization
 

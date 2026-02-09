@@ -118,13 +118,13 @@
 ## 42.1: Shared Memory Core Infrastructure
 **Context:** Leveraging existing `HotspineData` and Layout files to enforce cache-aligned, lock-free structures.
 
-- [ ] **42.1.1: Canonical Event Definition (`include/trading/HotspineData.h`)**
+- [x] **42.1.1: Canonical Event Definition (`include/trading/HotspineData.h`)**
     - Refactor `HotspineData` struct to be `standard_layout` and trivially copyable.
     - **Fields:** Ensure explicit padding to 64 bytes (cache line size).
     - **Flags:** Add `uint8_t flags` field (Bit 0: `IS_WARMUP`, Bit 1: `IS_SNAPSHOT`).
     - **Alignment:** Add `alignas(64)` to the struct definition.
 
-- [ ] **42.1.2: Ring Buffer Layout (`include/hotspine_layout_v3.hpp`)**
+- [x] **42.1.2: Ring Buffer Layout (`include/hotspine_layout_v3.hpp`)**
     - Modify `HotSpineLayoutV3` struct to implement a raw ring buffer header.
     - **Indices:** Add `alignas(64) std::atomic<uint64_t> write_head;` and `alignas(64) std::atomic<uint64_t> read_tail;`.
     - **Buffer:** Define the data area as a flexible array member or fixed offset calculation, not a `std::vector`.

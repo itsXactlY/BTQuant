@@ -221,10 +221,10 @@ void PanelManager::render() {
       // Start timing the panel render
       BTQuant::g_panel_profiler.start_panel_render(panel_id, panel->get_title());
 
-      std::cout << "[PanelManager] Rendering panel: " << panel->get_title() << std::endl;
+      // std::cout << "[PanelManager] Rendering panel: " << panel->get_title() << std::endl;
       // Cast back to non-const pointer to call render (since render() is non-const)
       const_cast<BTQuant::PanelBase*>(panel)->render();
-      std::cout << "[PanelManager] Finished rendering panel: " << panel->get_title() << std::endl;
+      // std::cout << "[PanelManager] Finished rendering panel: " << panel->get_title() << std::endl;
 
       // End timing the panel render
       BTQuant::g_panel_profiler.end_panel_render(panel_id);

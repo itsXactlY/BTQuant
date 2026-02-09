@@ -1,0 +1,334 @@
+{
+    "grid": {
+        "columns": 6,
+        "rows": 10
+    },
+    "groups": [],
+    "panels": [
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 3,
+            "original_id": 15,
+            "position": [
+                0.0,
+                345.0
+            ],
+            "settings": {
+                "active_tab_id": 4,
+                "tabbed_panels": [
+                    4,
+                    6,
+                    5
+                ]
+            },
+            "size": [
+                640.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Tabbed Group",
+            "type": 29,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 0,
+            "original_id": 14,
+            "position": [
+                0.0,
+                30.0
+            ],
+            "settings": {
+                "active_tab_id": 2,
+                "tabbed_panels": [
+                    2,
+                    1
+                ]
+            },
+            "size": [
+                320.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Tabbed Group",
+            "type": 29,
+            "visible": true
+        },
+        {
+            "grid_height": 3,
+            "grid_width": 4,
+            "grid_x": 0,
+            "grid_y": 0,
+            "original_id": 1,
+            "position": [
+                0.0,
+                30.0
+            ],
+            "size": [
+                1280.0,
+                315.0
+            ],
+            "symbol": "",
+            "tabbed_group_id": 14,
+            "title": "BNBUSDT Chart [1s]",
+            "type": 0,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 0,
+            "original_id": 2,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "settings": {
+                "auto_scale_price": true,
+                "enable_fade_out": false,
+                "heatmap_intensity": 1.0,
+                "large_order_threshold": 10.0,
+                "max_large_order_markers": 100,
+                "persistence_threshold_ms": 30000,
+                "persistence_timeout_ms": 60000.0,
+                "price_bins": 100,
+                "price_range": 0.02,
+                "show_persistent_lines": true,
+                "symbol_id": 10012
+            },
+            "size": [
+                400.0,
+                270.0
+            ],
+            "symbol": "",
+            "tabbed_group_id": 14,
+            "title": "DOM Surface",
+            "type": 2,
+            "visible": false
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 4,
+            "grid_y": 2,
+            "original_id": 3,
+            "position": [
+                1280.0,
+                240.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "BNBUSDT Orderbook",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 3,
+            "original_id": 4,
+            "position": [
+                0.0,
+                345.0
+            ],
+            "size": [
+                640.0,
+                75.0
+            ],
+            "symbol": "",
+            "tabbed_group_id": 15,
+            "title": "Time & Sales",
+            "type": 13,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 2,
+            "grid_y": 3,
+            "original_id": 5,
+            "position": [
+                640.0,
+                345.0
+            ],
+            "size": [
+                640.0,
+                105.0
+            ],
+            "symbol": "",
+            "tabbed_group_id": 15,
+            "title": "Active Orders",
+            "type": 6,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 4,
+            "original_id": 6,
+            "position": [
+                0.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                105.0
+            ],
+            "symbol": "",
+            "tabbed_group_id": 15,
+            "title": "Positions",
+            "type": 7,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 2,
+            "grid_y": 4,
+            "original_id": 7,
+            "position": [
+                640.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Volume Profile",
+            "type": 14,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 4,
+            "grid_y": 4,
+            "original_id": 8,
+            "position": [
+                1280.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 3,
+            "grid_x": 0,
+            "grid_y": 5,
+            "original_id": 9,
+            "position": [
+                0.0,
+                555.0
+            ],
+            "size": [
+                960.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Footprint Chart",
+            "type": 18,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 3,
+            "grid_x": 3,
+            "grid_y": 5,
+            "original_id": 10,
+            "position": [
+                960.0,
+                555.0
+            ],
+            "settings": {
+                "show_grid": true,
+                "show_heatmap": true,
+                "show_text": true,
+                "symbol_id": 10012,
+                "time_window": 30.0
+            },
+            "size": [
+                960.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "TPO Profile",
+            "type": 19,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 6,
+            "grid_x": 0,
+            "grid_y": 7,
+            "original_id": 11,
+            "position": [
+                0.0,
+                765.0
+            ],
+            "size": [
+                1920.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Performance Monitor",
+            "type": 20,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 4,
+            "grid_y": 5,
+            "original_id": 12,
+            "position": [
+                1280.0,
+                555.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Alerts",
+            "type": 9,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 6,
+            "grid_x": 0,
+            "grid_y": 8,
+            "original_id": 13,
+            "position": [
+                0.0,
+                870.0
+            ],
+            "size": [
+                1920.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Strategy Builder Footer",
+            "type": 27,
+            "visible": true
+        }
+    ]
+}

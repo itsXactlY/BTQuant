@@ -78,7 +78,7 @@ constexpr size_t RING_BUFFER_SIZE = 8192; // Power of 2 for efficient masking
 constexpr size_t RING_BUFFER_MASK = RING_BUFFER_SIZE - 1; // For indexing: idx = counter & MASK
 
 struct alignas(64) RingBufferHeader {
-  uint32_t magic;  // 0x42545133 "BTQ3"
+  uint32_t magic;  // 0x42545155 "BTQ3"
   uint32_t version; // Version identifier
   alignas(64) std::atomic<uint64_t> write_head{0};  // Index of next write slot
   alignas(64) std::atomic<uint64_t> read_tail{0};   // Index of next read slot

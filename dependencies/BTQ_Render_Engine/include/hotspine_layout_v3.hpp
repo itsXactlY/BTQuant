@@ -72,24 +72,60 @@ struct alignas(64) HeatmapBin {
 };
 
 // =========================================================================================
-// 1.4 The Global Layout
+// 1.4 Ring Buffer Layout (Raw Ring Buffer Header)
+// =========================================================================================
+constexpr size_t RING_BUFFER_SIZE = 8192; // Power of 2 for efficient masking
+constexpr size_t RING_BUFFER_MASK = RING_BUFFER_SIZE - 1; // For indexing: idx = counter & MASK
+
+struct alignas(64) RingBufferHeader {
+  uint32_t magic;  // 0x42545133 "BTQ3"
+  uint32_t version; // Version identifier
+  alignas(64) std::atomic<uint64_t> write_head{0};  // Index of next write slot
+  alignas(64) std::atomic<uint64_t> read_tail{0};   // Index of next read slot
+  std::atomic<uint64_t> dropped_count{0};  // Count of dropped events due to overflow
+  uint8_t reserved[24];  // Padding to align to 64-byte boundary
+  
+  // Inline helper methods
+  inline uint64_t get_next_write_slot() const {
+    return write_head.load(std::memory_order_acquire) & RING_BUFFER_MASK;
+  }
+  
+  inline void commit_write() {
+    write_head.fetch_add(1, std::memory_order_release);
+  }
+  
+  inline uint64_t get_available_count() const {
+    uint64_t write_idx = write_head.load(std::memory_order_acquire);
+    uint64_t read_idx = read_tail.load(std::memory_order_acquire);
+    return write_idx - read_idx;
+  }
+  
+  inline bool is_full() const {
+    return get_available_count() >= RING_BUFFER_SIZE;
+  }
+  
+  inline bool is_empty() const {
+    return get_available_count() == 0;
+  }
+};
+
+// =========================================================================================
+// 1.5 The Global Layout
 // =========================================================================================
 struct SharedMemoryLayoutV3 {
-  struct Header {
-    uint32_t magic;  // 0x42545133 "BTQ3"
-    uint32_t padding;
-    SeqLock global_lock;
-    std::atomic<uint64_t> head_index;
-    uint8_t reserved[32];  // Padding to align body
-  };
-
-  Header header;
-
-  // Body
-  ClusterColumn history[1024];  // Ring buffer
+  RingBufferHeader header;  // Ring buffer header with write_head and read_tail
+  
+  // Flexible array member for ring buffer data (C++ equivalent using byte array)
+  // Using a fixed size for now - individual events will be written at calculated offsets
+  alignas(64) uint8_t ring_buffer_data[RING_BUFFER_SIZE * 64]; // Assuming max 64 bytes per event
+  
+  // Legacy fields preserved for compatibility (may be removed later)
+  ClusterColumn history[1024];  // Ring buffer (kept for backward compatibility)
   HeatmapBin dom[512];          // Aggregated DOM
 };
 
 static_assert(sizeof(VolumeNode) == 16);
 static_assert(alignof(ClusterColumn) == 64);
+static_assert(alignof(RingBufferHeader) == 64);
+
 }  // namespace HotSpine::V3

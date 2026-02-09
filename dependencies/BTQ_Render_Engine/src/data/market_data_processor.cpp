@@ -1,5 +1,6 @@
 #include "market_data_processor.hpp"
 #include "cache_manager.hpp"
+#include "trading/HotspineData.h"
 
 #include <algorithm>
 #include <cmath>
@@ -963,27 +964,27 @@ void MarketDataProcessor::pollSharedMemoryRingBuffer() {
 
         // Bounds check: ensure the calculated address is within the allocated buffer
         uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
-        uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(RenderEngine::HotspineData));
-        uint8_t* event_addr = buffer_start + (current_index * sizeof(RenderEngine::HotspineData));
+        uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(HotspineData));
+        uint8_t* event_addr = buffer_start + (current_index * sizeof(HotspineData));
 
         // Verify that the slot address is within valid range
         if (event_addr < buffer_start || event_addr >= buffer_end) {
-            std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! event_addr=" 
-                      << reinterpret_cast<void*>(event_addr) 
+            std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! event_addr="
+                      << reinterpret_cast<void*>(event_addr)
                       << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
                       << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
             continue; // Skip this event and continue with others
         }
 
         // Verify that the event address plus the event size doesn't exceed buffer bounds
-        if ((event_addr + sizeof(RenderEngine::HotspineData)) > buffer_end) {
+        if ((event_addr + sizeof(HotspineData)) > buffer_end) {
             std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer! Attempted to read past buffer end." << std::endl;
             continue; // Skip this event and continue with others
         }
 
         // Additional validation: ensure we're not reading from an invalid memory region
         // by checking that the calculated offset doesn't wrap around due to integer overflow
-        if ((current_index * sizeof(RenderEngine::HotspineData)) / sizeof(RenderEngine::HotspineData) != current_index) {
+        if ((current_index * sizeof(HotspineData)) / sizeof(HotspineData) != current_index) {
             std::cerr << "[MarketDataProcessor] Integer overflow detected in address calculation!" << std::endl;
             continue; // Skip this event and continue with others
         }
@@ -991,10 +992,10 @@ void MarketDataProcessor::pollSharedMemoryRingBuffer() {
         // Access the event from the ring buffer
         // In a real implementation, this would read from the actual shared memory buffer
         // For now, we'll simulate reading from a buffer
-        RenderEngine::HotspineData* event_ptr = reinterpret_cast<RenderEngine::HotspineData*>(event_addr);
+        HotspineData* event_ptr = reinterpret_cast<HotspineData*>(event_addr);
 
         // Check if this is a warmup event
-        if (event_ptr->flags & RenderEngine::HotspineData::IS_WARMUP) {
+        if (event_ptr->flags & HotspineData::IS_WARMUP) {
             // For warmup events, just touch memory to keep cache hot, but skip processing
             continue;
         }

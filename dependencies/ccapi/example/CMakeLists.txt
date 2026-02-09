@@ -57,9 +57,23 @@ if(NOT HFFIX_INCLUDE_DIR)
 else()
   add_library(hffix INTERFACE)
 endif()
+if(NOT CONCURRENTQUEUE_INCLUDE_DIR)
+  include(ExternalProject)
+  ExternalProject_Add(
+    concurrentqueue
+    URL https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.3.tar.gz
+    SOURCE_DIR "${CMAKE_BINARY_DIR}/concurrentqueue"
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    TEST_COMMAND "")
+  set(CONCURRENTQUEUE_INCLUDE_DIR "${CMAKE_BINARY_DIR}/concurrentqueue")
+else()
+  add_library(concurrentqueue INTERFACE)
+endif()
 include_directories(
   ${CCAPI_PROJECT_DIR}/include ${BOOST_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR}
-  ${HFFIX_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
+  ${HFFIX_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${CONCURRENTQUEUE_INCLUDE_DIR})
 
 find_package(OpenSSL REQUIRED)
 set(ADDITIONAL_LINK_LIBRARIES "")

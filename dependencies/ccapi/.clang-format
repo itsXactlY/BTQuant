@@ -1,6 +1,0 @@
-BasedOnStyle: Google
-ColumnLimit: 160
-SeparateDefinitionBlocks: Always
-MaxEmptyLinesToKeep: 1
-Standard: c++17
-InsertNewlineAtEOF: true

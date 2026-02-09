@@ -34,6 +34,12 @@ add_executable(ring_buffer_stability_test
     market_data_collector/src/data/hotspine_data_bridge.cpp
 )
 
+# Enhanced Ring Buffer Memory Stability Test
+add_executable(enhanced_memory_stability_test
+    enhanced_memory_stability_test.cpp
+    market_data_collector/src/data/hotspine_data_bridge.cpp
+)
+
 # Market Data Processor Library (Header-only implementation)
 add_library(market_data_processor_lib INTERFACE)
 
@@ -53,15 +59,28 @@ target_link_libraries(ring_buffer_stability_test
     market_data_processor_lib
 )
 
+target_link_libraries(enhanced_memory_stability_test
+    Threads::Threads
+    market_data_processor_lib
+)
+
 # Compiler-specific options
 if(MSVC)
     target_compile_options(market_data_collector PRIVATE /W4)
     target_compile_definitions(market_data_collector PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(market_data_collector PRIVATE -Wall -Wextra -pthread)
+    target_compile_options(ring_buffer_stability_test PRIVATE -Wall -Wextra -pthread)
+    target_compile_options(enhanced_memory_stability_test PRIVATE -Wall -Wextra -pthread)
+    
     # Enable Address Sanitizer for memory stability testing
     target_compile_options(market_data_collector PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_compile_options(ring_buffer_stability_test PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_compile_options(enhanced_memory_stability_test PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    
     target_link_options(market_data_collector PRIVATE -fsanitize=address)
+    target_link_options(ring_buffer_stability_test PRIVATE -fsanitize=address)
+    target_link_options(enhanced_memory_stability_test PRIVATE -fsanitize=address)
 endif()
 
 # Set output directory

@@ -965,10 +965,26 @@ void MarketDataProcessor::pollSharedMemoryRingBuffer() {
         uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
         uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(RenderEngine::HotspineData));
         uint8_t* event_addr = buffer_start + (current_index * sizeof(RenderEngine::HotspineData));
-        
+
+        // Verify that the slot address is within valid range
+        if (event_addr < buffer_start || event_addr >= buffer_end) {
+            std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! event_addr=" 
+                      << reinterpret_cast<void*>(event_addr) 
+                      << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
+                      << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
+            continue; // Skip this event and continue with others
+        }
+
         // Verify that the event address plus the event size doesn't exceed buffer bounds
-        if (event_addr >= buffer_end || (event_addr + sizeof(RenderEngine::HotspineData)) > buffer_end) {
-            std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer!" << std::endl;
+        if ((event_addr + sizeof(RenderEngine::HotspineData)) > buffer_end) {
+            std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer! Attempted to read past buffer end." << std::endl;
+            continue; // Skip this event and continue with others
+        }
+
+        // Additional validation: ensure we're not reading from an invalid memory region
+        // by checking that the calculated offset doesn't wrap around due to integer overflow
+        if ((current_index * sizeof(RenderEngine::HotspineData)) / sizeof(RenderEngine::HotspineData) != current_index) {
+            std::cerr << "[MarketDataProcessor] Integer overflow detected in address calculation!" << std::endl;
             continue; // Skip this event and continue with others
         }
 

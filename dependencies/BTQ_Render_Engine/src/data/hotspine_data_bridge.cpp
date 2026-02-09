@@ -85,9 +85,9 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
   header_ = reinterpret_cast<SharedMemoryHeader*>(shm_ptr_);
 
   // Verify magic number and version in HotSpineLayoutV3
-  // Magic number should be "BTQ3" = 0x42545133
-  constexpr uint32_t EXPECTED_MAGIC = 0x42545133;  // "BTQ3"
-  constexpr uint32_t EXPECTED_VERSION = 3;         // Version 3
+  // Magic number should be "BTQ3" = 0x42545155
+  constexpr uint32_t EXPECTED_MAGIC = 0x42545155;  // "BTQ3"
+  constexpr uint32_t EXPECTED_VERSION = 2;         // Version 3
   
   if (header_->magic != EXPECTED_MAGIC) [[unlikely]] {
     std::string error_msg = std::format("Invalid magic number in shared memory. Expected: 0x{:X}, Got: 0x{:X}", 

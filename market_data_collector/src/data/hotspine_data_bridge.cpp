@@ -72,7 +72,7 @@ bool HotSpineDataBridge::connect_to_shared_memory() {
     // Initialize header if needed
     if (needs_initialization) {
         // Set magic number and version
-        header_->magic = 0x42545133; // "BTQ3"
+        header_->magic = 0x42545155; // "BTQ3"
         header_->version = 3;
         header_->write_head.store(0, std::memory_order_relaxed);
         header_->read_tail.store(0, std::memory_order_relaxed);
@@ -82,7 +82,7 @@ bool HotSpineDataBridge::connect_to_shared_memory() {
                   << shm_size << " bytes" << std::endl;
     } else {
         // Validate header
-        if (header_->magic != 0x42545133) { // "BTQ3"
+        if (header_->magic != 0x42545155) { // "BTQ3"
             std::cerr << "[HotSpineDataBridge] Invalid magic number in shared memory: 0x" 
                       << std::hex << header_->magic << std::dec << std::endl;
             munmap(shm_ptr_, shm_size);
@@ -112,14 +112,16 @@ bool HotSpineDataBridge::connect_to_shared_memory() {
 
 void HotSpineDataBridge::disconnect_from_shared_memory() {
     if (shm_ptr_ && shm_ptr_ != MAP_FAILED) {
-        munmap(shm_ptr_,
-               sizeof(HotSpine::V3::RingBufferHeader) +
-               (RING_BUFFER_SIZE * sizeof(HotspineData)));
+        // Calculate the exact size that was mapped to ensure proper cleanup
+        size_t mapped_size = sizeof(HotSpine::V3::RingBufferHeader) +
+                            (RING_BUFFER_SIZE * sizeof(HotspineData));
+        
+        munmap(shm_ptr_, mapped_size);
         shm_ptr_ = nullptr;
         header_ = nullptr;
         ring_buffer_data_ = nullptr;
     }
-    
+
     if (shm_fd_ != -1) {
         close(shm_fd_);
         shm_fd_ = -1;
@@ -135,15 +137,34 @@ bool HotSpineDataBridge::write_direct(const HotspineData& event) {
     uint64_t write_head = header_->write_head.load(std::memory_order_relaxed);
 
     // Calculate slot index: idx = write_head & (RING_SIZE - 1) - Step 2
+    // Apply mask to ensure index is within valid range [0, RING_BUFFER_SIZE-1]
     uint64_t slot_idx = write_head & RING_BUFFER_MASK;
 
     // Bounds check: ensure the calculated address is within the allocated buffer
+    // Calculate the address where we'll write the event
     uint8_t* slot_addr = ring_buffer_data_ + (slot_idx * sizeof(HotspineData));
-    uint8_t* buffer_end = ring_buffer_data_ + (RING_BUFFER_SIZE * sizeof(HotspineData));
-    
+    uint8_t* buffer_start = ring_buffer_data_;
+    uint8_t* buffer_end = buffer_start + (RING_BUFFER_SIZE * sizeof(HotspineData));
+
+    // Verify that the slot address is within valid range
+    if (slot_addr < buffer_start || slot_addr >= buffer_end) {
+        std::cerr << "[HotSpineDataBridge] Buffer bounds violation in write_direct! slot_addr=" 
+                  << reinterpret_cast<void*>(slot_addr) 
+                  << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
+                  << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
+        return false;
+    }
+
     // Verify that the slot address plus the event size doesn't exceed buffer bounds
-    if (slot_addr >= buffer_end || (slot_addr + sizeof(HotspineData)) > buffer_end) {
-        std::cerr << "[HotSpineDataBridge] Buffer overflow detected in write_direct!" << std::endl;
+    if ((slot_addr + sizeof(HotspineData)) > buffer_end) {
+        std::cerr << "[HotSpineDataBridge] Buffer overflow detected in write_direct! Attempted to write past buffer end." << std::endl;
+        return false;
+    }
+
+    // Additional validation: ensure we're not writing to an invalid memory region
+    // by checking that the calculated offset doesn't wrap around due to integer overflow
+    if ((slot_idx * sizeof(HotspineData)) / sizeof(HotspineData) != slot_idx) {
+        std::cerr << "[HotSpineDataBridge] Integer overflow detected in address calculation!" << std::endl;
         return false;
     }
 

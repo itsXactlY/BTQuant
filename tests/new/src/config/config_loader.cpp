@@ -127,9 +127,11 @@ bool ConfigLoader::set(const std::string &section, const std::string &key,
   });
 
   // Update the source map using RCU
-  source_map_.update([section, key](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
-    source_map_ref[section + "." + key] = ConfigSource::CLI_ARGUMENT;
-  });
+  source_map_.update(
+      [section,
+       key](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+        source_map_ref[section + "." + key] = ConfigSource::CLI_ARGUMENT;
+      });
 
   // Notify callbacks
   for (const auto &callback : change_callbacks_) {
@@ -149,20 +151,18 @@ std::vector<std::string> ConfigLoader::get_sections() const {
 }
 
 void ConfigLoader::register_change_callback(ConfigChangeCallback callback) {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
   change_callbacks_.push_back(callback);
 }
 
 bool ConfigLoader::reload() {
   // Clear the config using RCU
-  config_.update([](ConfigMap &config_map) {
-    config_map.clear();
-  });
+  config_.update([](ConfigMap &config_map) { config_map.clear(); });
 
   // Clear the source map using RCU
-  source_map_.update([](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
-    source_map_ref.clear();
-  });
+  source_map_.update(
+      [](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+        source_map_ref.clear();
+      });
 
   return load();
 }
@@ -181,7 +181,7 @@ ConfigLoader::get_source(const std::string &section,
 std::string ConfigLoader::export_to_json() const {
   std::stringstream ss;
   auto config_guard = config_.read_lock();
-  
+
   ss << "{\n";
   bool first_section = true;
 
@@ -238,7 +238,7 @@ std::string ConfigLoader::export_to_json() const {
 std::string ConfigLoader::export_to_yaml() const {
   std::stringstream ss;
   auto config_guard = config_.read_lock();
-  
+
   ss << "# Auto-generated configuration export\n\n";
 
   for (const auto &[section, values] : *config_guard) {
@@ -286,7 +286,8 @@ std::string ConfigLoader::export_to_yaml() const {
 void ConfigLoader::load_environment_variables() {
   // Load BTQ_ prefixed environment variables
   // Collect all updates to apply in a single RCU update
-  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>> updates;
+  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>>
+      updates;
   std::unordered_map<std::string, ConfigSource> source_updates;
 
   for (char **env = environ; *env != nullptr; env++) {
@@ -344,11 +345,13 @@ void ConfigLoader::load_environment_variables() {
     }
   });
 
-  source_map_.update([&source_updates](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
-    for (const auto &[key, source] : source_updates) {
-      source_map_ref[key] = source;
-    }
-  });
+  source_map_.update(
+      [&source_updates](
+          std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+        for (const auto &[key, source] : source_updates) {
+          source_map_ref[key] = source;
+        }
+      });
 }
 
 void ConfigLoader::load_config_file(const std::string &path) {
@@ -369,7 +372,8 @@ void ConfigLoader::load_config_file(const std::string &path) {
   std::string line;
 
   // Collect all updates to apply in a single RCU update
-  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>> updates;
+  std::unordered_map<std::string, std::unordered_map<std::string, ConfigValue>>
+      updates;
   std::unordered_map<std::string, ConfigSource> source_updates;
 
   while (std::getline(stream, line)) {
@@ -407,7 +411,8 @@ void ConfigLoader::load_config_file(const std::string &path) {
       if (start != std::string::npos && end != std::string::npos) {
         trimmed_value = trimmed_value.substr(start, end - start + 1);
         if (!trimmed_value.empty()) {
-          updates[current_section]["_section_value"] = ConfigValue(trimmed_value);
+          updates[current_section]["_section_value"] =
+              ConfigValue(trimmed_value);
         }
       }
     }
@@ -480,17 +485,20 @@ void ConfigLoader::load_config_file(const std::string &path) {
     }
   });
 
-  source_map_.update([&source_updates](std::unordered_map<std::string, ConfigSource> &source_map_ref) {
-    for (const auto &[key, source] : source_updates) {
-      source_map_ref[key] = source;
-    }
-  });
+  source_map_.update(
+      [&source_updates](
+          std::unordered_map<std::string, ConfigSource> &source_map_ref) {
+        for (const auto &[key, source] : source_updates) {
+          source_map_ref[key] = source;
+        }
+      });
 }
 
 void ConfigLoader::merge_configurations() {
   // Higher priority sources override lower ones
   // Order: ENVIRONMENT > CLI > USER > LOCAL > SYSTEM > BUILTIN
-  // This is handled by the order of loading, so no special implementation needed for RCU
+  // This is handled by the order of loading, so no special implementation
+  // needed for RCU
 }
 
 std::string ConfigLoader::get_env_var(const std::string &name) {

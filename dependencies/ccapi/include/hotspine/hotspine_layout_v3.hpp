@@ -1,74 +1,161 @@
 #pragma once
 
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <atomic>
+#include <limits>
 
-// Check if HotSpine V3 types are already defined
+// This header mirrors the canonical layout defined in
+// BTQ_Render_Engine/include/hotspine_layout_v3.hpp
+// Both sides MUST stay in sync.
+
 #ifndef HOTSPINE_LAYOUT_V3_HPP
 #define HOTSPINE_LAYOUT_V3_HPP
 
 namespace HotSpine {
 namespace V3 {
 
-// Ring buffer size definition (2^20 = 1048576)
-constexpr uint64_t RING_BUFFER_SIZE = 1048576;
-
-// Magic number for HotSpine shared memory (0x42545155 = "BTQU" in little endian)
-constexpr uint32_t HOTSPINE_MAGIC = 0x42545155;
-
-// Shared memory layout constants
-constexpr uint64_t HOTSPINE_VERSION = 3;
-constexpr size_t HEADER_SIZE = 4096;                     // 4KB for header
-
-// SeqLock for synchronization
+// =========================================================================================
+// 1.1 Atomic Primitives (The SeqLock)
+// =========================================================================================
 struct SeqLock {
-  std::atomic<uint64_t> sequence{0};
+  std::atomic<uint64_t> seq{0};
+
+  void write_begin() {
+    seq.fetch_add(1, std::memory_order_release);
+    std::atomic_thread_fence(std::memory_order_acquire);
+  }
+
+  void write_end() {
+    std::atomic_thread_fence(std::memory_order_release);
+    seq.fetch_add(1, std::memory_order_release);
+  }
+
+  uint64_t read_begin() const { return seq.load(std::memory_order_acquire); }
+
+  bool read_retry(uint64_t start_seq) const {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    return (start_seq % 2 != 0) ||
+           (seq.load(std::memory_order_relaxed) != start_seq);
+  }
 };
 
-// Shared memory header structure
-struct SharedMemoryHeaderV3 {
-  uint32_t magic;                                    // Magic number for validation (0x42545155)
-  uint32_t version;                                  // Version number
-  uint64_t capacity;                                 // Number of entries in buffer (should be RING_BUFFER_SIZE)
-  std::atomic<uint64_t> write_head{0};               // Write position (next slot to write)
-  std::atomic<uint64_t> read_tail{0};                // Read position (next slot to read)
-  std::atomic<uint64_t> lost_count{0};               // Number of lost entries due to buffer overflow
+// =========================================================================================
+// 1.2 Data Atoms (The "Pixel")
+// =========================================================================================
+struct alignas(16) VolumeNode {
+  float buy_vol;        // 4B
+  float sell_vol;       // 4B
+  uint16_t trade_count; // 2B
+  uint16_t tpo_bits;    // 2B - Bitmask for 30min brackets (0-15)
+  uint8_t padding[4];   // 4B
+};
+static_assert(sizeof(VolumeNode) == 16, "VolumeNode size mismatch");
 
-  uint8_t padding[4016];                             // remaining space for alignment (4096 - 80 bytes used)
+// =========================================================================================
+// 1.3 The Viewport (The Render Window)
+// =========================================================================================
+constexpr std::size_t VIEWPORT_ROWS = 256;
+
+struct alignas(64) ClusterColumn {
+  int64_t timestamp_us;
+  double open;
+  double high;
+  double low;
+  double close;
+  int64_t base_tick_index; // The absolute price index of row 0
+  double tick_size;
+
+  VolumeNode rows[VIEWPORT_ROWS]; // The visual rows
 };
 
-// Shared memory layout structure
-struct SharedMemoryLayoutV3 {
-  SeqLock seqlock;                    // Sequence lock for synchronization
-  SharedMemoryHeaderV3 header;        // Header with metadata
-  uint8_t padding[0];                 // Flexible array member equivalent for data
+struct alignas(64) HeatmapBin {
+  int64_t price_tick_index;
+  double total_volume;
+  uint32_t order_count;
+  uint32_t padding;
 };
 
-// Data entry structure (to be defined based on actual data type)
-struct HotSpineData {
-  // Placeholder for actual data structure
-  // This would typically be HotTrade, HotOrderbookSnapshot, or similar
-  uint64_t timestamp;
-  uint32_t symbol_id;
+// =========================================================================================
+// 1.4 Ring Buffer Layout (Raw Ring Buffer Header)
+// =========================================================================================
+constexpr size_t RING_BUFFER_SIZE = 8192; // Power of 2 for efficient masking
+constexpr size_t RING_BUFFER_MASK =
+    RING_BUFFER_SIZE - 1; // For indexing: idx = counter & MASK
+
+struct alignas(64) RingBufferHeader {
+  uint32_t magic;                                  // 0x42545155 "BTQ3"
+  uint32_t version;                                // Version identifier
+  alignas(64) std::atomic<uint64_t> write_head{0}; // Index of next write slot
+  alignas(64) std::atomic<uint64_t> read_tail{0};  // Index of next read slot
+  std::atomic<uint64_t> dropped_count{
+      0};               // Count of dropped events due to overflow
+  uint8_t reserved[24]; // Padding to align to 64-byte boundary
+
+  // Inline helper methods
+  inline uint64_t get_next_write_slot() const {
+    return write_head.load(std::memory_order_acquire) & RING_BUFFER_MASK;
+  }
+
+  inline void commit_write() {
+    write_head.fetch_add(1, std::memory_order_release);
+  }
+
+  inline uint64_t get_available_count() const {
+    uint64_t write_idx = write_head.load(std::memory_order_acquire);
+    uint64_t read_idx = read_tail.load(std::memory_order_acquire);
+    return write_idx - read_idx;
+  }
+
+  inline bool is_full() const {
+    return get_available_count() >= RING_BUFFER_SIZE;
+  }
+
+  inline bool is_empty() const { return get_available_count() == 0; }
+};
+
+// =========================================================================================
+// 1.5 HotTrade — the trade struct the reader (HotSpineDataBridge) expects
+// =========================================================================================
+struct HotTrade {
+  uint64_t ts_exchange; // exchange timestamp in microseconds
+  uint64_t ts_local;    // local receive timestamp in microseconds
   double price;
   double size;
-  uint8_t data_type;     // 0=trade, 1=orderbook, etc.
-  uint8_t side;          // 0=buy, 1=sell (for trades)
-  uint8_t padding[2];    // Explicit padding for alignment
+  uint32_t symbol_id; // symbol ID from SymbolRegistry
+  uint8_t side;       // 0=Buy, 1=Sell
+  uint8_t padding[3]; // Explicit padding for 8-byte alignment
 };
 
-// Calculate index using mask (efficient modulo operation)
-static inline uint64_t getIndex(uint64_t head) {
-  return head & (RING_BUFFER_SIZE - 1);
+// =========================================================================================
+// 1.6 The Global Layout
+// =========================================================================================
+struct SharedMemoryLayoutV3 {
+  RingBufferHeader header; // Ring buffer header with write_head and read_tail
+
+  // Flexible array member for ring buffer data (C++ equivalent using byte
+  // array)
+  alignas(64) uint8_t ring_buffer_data[RING_BUFFER_SIZE *
+                                       64]; // Assuming max 64 bytes per event
+
+  // Legacy fields preserved for compatibility (may be removed later)
+  ClusterColumn history[1024]; // Ring buffer (kept for backward compatibility)
+  HeatmapBin dom[512];         // Aggregated DOM
+};
+
+// =========================================================================================
+// Helper: calculate SHM size for HotTrade ring buffer (header + trades)
+// =========================================================================================
+static inline size_t calculateTradeSharedMemorySize() {
+  return sizeof(RingBufferHeader) + (RING_BUFFER_SIZE * sizeof(HotTrade));
 }
 
-// Calculate total shared memory size needed
-static inline size_t calculateSharedMemorySize(uint64_t capacity = RING_BUFFER_SIZE) {
-  return HEADER_SIZE + (capacity * sizeof(HotSpineData));
-}
+static_assert(sizeof(VolumeNode) == 16);
+static_assert(alignof(ClusterColumn) == 64);
+static_assert(alignof(RingBufferHeader) == 64);
 
-}  // namespace V3
-}  // namespace HotSpine
+} // namespace V3
+} // namespace HotSpine
 
-#endif  // HOTSPINE_LAYOUT_V3_HPP
+#endif // HOTSPINE_LAYOUT_V3_HPP

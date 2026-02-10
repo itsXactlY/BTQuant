@@ -631,7 +631,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
                                            RenderEngine::NotificationType type) {
   // Fast Path: Simply enqueue the update struct. Return immediately. (Zero lock contention).
   // The actual processing will happen in process_pending_updates() which is called from update()
-  
+
   // For market data updates, we can use the more comprehensive WatchlistUpdate structure
   // which allows us to handle all types of updates through the same queue
   WatchlistUpdate update(WatchlistUpdate::MARKET_DATA_UPDATE, symbol_id);
@@ -2948,7 +2948,6 @@ void WatchlistPanel::process_pending_subscriptions() {
   // Process all pending subscriptions to avoid calling ImGui functions during rendering
   BTQuant::WatchlistPanel::PendingSubscription pending;
   while (pending_subscriptions_.try_dequeue(pending)) {
-
     std::cout << "[WatchlistPanel] Processing pending subscription for symbol ID: "
               << pending.symbol_id << " (" << pending.symbol << ")" << std::endl;
 
@@ -3550,7 +3549,8 @@ void WatchlistPanel::process_pending_updates() {
                 it->second.previous_volume = prev_volume;
 
                 // Calculate 24h change using the longest available timeframe candles
-                auto candles = processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+                auto candles =
+                    processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
                 if (!candles.empty()) {
                   const auto& oldest_candle = candles.front();
                   const auto& newest_candle = candles.back();
@@ -3585,7 +3585,9 @@ void WatchlistPanel::process_pending_updates() {
 
                 // Check if price changed significantly (more than 0.01% or minimum tick)
                 double price_change_pct =
-                    (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+                    (prev_price != 0)
+                        ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
+                        : 0;
                 if (price_change_pct > 0.01 ||
                     std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
                   significant_change = true;
@@ -3593,14 +3595,16 @@ void WatchlistPanel::process_pending_updates() {
 
                 // Check if VWAP changed significantly
                 double vwap_change_pct =
-                    (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
+                    (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0
+                                     : 0;
                 if (vwap_change_pct > 0.01 ||
                     std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
                   significant_change = true;
                 }
 
                 // Check if change percentages changed significantly
-                if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) {  // At least 0.01% difference
+                if (std::abs(it->second.change_pct - prev_change_pct) >
+                    0.01) {  // At least 0.01% difference
                   significant_change = true;
                 }
 
@@ -3624,17 +3628,7 @@ void WatchlistPanel::process_pending_updates() {
                 if (significant_change) {
                   // Reset animation timer to start fresh animation with brief flash effect
                   it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-
-                  // Log the animation trigger for debugging
-                  std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                            << " (ID: " << update.symbol_id << "). Price: " << prev_price << " -> "
-                            << it->second.price << ", Change: " << price_change_pct << "%" << std::endl;
                 }
-
-                // Log every market data update for monitoring
-                std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                          << " (ID: " << update.symbol_id << "). New price: " << it->second.price
-                          << ", Timestamp: " << it->second.last_update_ts << std::endl;
               }
             }
 
@@ -3666,7 +3660,8 @@ void WatchlistPanel::process_pending_updates() {
                   it->second.previous_volume = prev_volume;
 
                   // Calculate 24h change using the longest available timeframe candles
-                  auto candles = processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+                  auto candles =
+                      processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
                   if (!candles.empty()) {
                     const auto& oldest_candle = candles.front();
                     const auto& newest_candle = candles.back();
@@ -3701,15 +3696,18 @@ void WatchlistPanel::process_pending_updates() {
 
                   // Check if price changed significantly (more than 0.01% or minimum tick)
                   double price_change_pct =
-                      (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
-                  if (price_change_pct > 0.01 ||
-                      std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
+                      (prev_price != 0)
+                          ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
+                          : 0;
+                  if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) >
+                                                     0.001) {  // 0.01% or $0.001 threshold
                     significant_change = true;
                   }
 
                   // Check if VWAP changed significantly
                   double vwap_change_pct =
-                      (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
+                      (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0
+                                       : 0;
                   if (vwap_change_pct > 0.01 ||
                       std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
                     significant_change = true;
@@ -3741,19 +3739,7 @@ void WatchlistPanel::process_pending_updates() {
                   if (significant_change) {
                     // Reset animation timer to start fresh animation with brief flash effect
                     it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-
-                    // Log the animation trigger for debugging
-                    std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                              << " (ID: " << update.symbol_id << ") in group '" << group_name
-                              << "'. Price: " << prev_price << " -> " << it->second.price
-                              << ", Change: " << price_change_pct << "%" << std::endl;
                   }
-
-                  // Log every market data update for monitoring
-                  std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                            << " (ID: " << update.symbol_id << ") in group '" << group_name
-                            << "'. New price: " << it->second.price
-                            << ", Timestamp: " << it->second.last_update_ts << std::endl;
                 }
               }
             }
@@ -3761,7 +3747,7 @@ void WatchlistPanel::process_pending_updates() {
           break;
         case WatchlistUpdate::PRICE_ALERT:
           add_price_alert(update.symbol_id, update.symbol, update.value,
-                         static_cast<WatchlistPriceAlert::Direction>(update.alert_direction));
+                          static_cast<WatchlistPriceAlert::Direction>(update.alert_direction));
           break;
         case WatchlistUpdate::SYMBOL_RENAME:
           // TODO: Implement symbol rename functionality if needed
@@ -3770,8 +3756,9 @@ void WatchlistPanel::process_pending_updates() {
     }
   }
 
-  // Then, process any remaining pending market data updates that were queued by on_market_data_update
-  // First, dequeue all pending updates to a local vector to minimize time spent with mutex locked
+  // Then, process any remaining pending market data updates that were queued by
+  // on_market_data_update First, dequeue all pending updates to a local vector to minimize time
+  // spent with mutex locked
   std::vector<QueuedMarketDataUpdate> updates;
   QueuedMarketDataUpdate update;
   while (pending_market_data_updates_.try_dequeue(update)) {
@@ -3813,7 +3800,8 @@ void WatchlistPanel::process_pending_updates() {
           it->second.previous_volume = prev_volume;
 
           // Calculate 24h change using the longest available timeframe candles
-          auto candles = processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+          auto candles =
+              processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
           if (!candles.empty()) {
             const auto& oldest_candle = candles.front();
             const auto& newest_candle = candles.back();
@@ -3848,7 +3836,8 @@ void WatchlistPanel::process_pending_updates() {
 
           // Check if price changed significantly (more than 0.01% or minimum tick)
           double price_change_pct =
-              (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+              (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
+                                : 0;
           if (price_change_pct > 0.01 ||
               std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
             significant_change = true;
@@ -3863,7 +3852,8 @@ void WatchlistPanel::process_pending_updates() {
           }
 
           // Check if change percentages changed significantly
-          if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) {  // At least 0.01% difference
+          if (std::abs(it->second.change_pct - prev_change_pct) >
+              0.01) {  // At least 0.01% difference
             significant_change = true;
           }
 
@@ -3887,17 +3877,7 @@ void WatchlistPanel::process_pending_updates() {
           if (significant_change) {
             // Reset animation timer to start fresh animation with brief flash effect
             it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-
-            // Log the animation trigger for debugging
-            std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                      << " (ID: " << update.symbol_id << "). Price: " << prev_price << " -> "
-                      << it->second.price << ", Change: " << price_change_pct << "%" << std::endl;
           }
-
-          // Log every market data update for monitoring
-          std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                    << " (ID: " << update.symbol_id << "). New price: " << it->second.price
-                    << ", Timestamp: " << it->second.last_update_ts << std::endl;
         }
       }
 
@@ -3929,7 +3909,8 @@ void WatchlistPanel::process_pending_updates() {
             it->second.previous_volume = prev_volume;
 
             // Calculate 24h change using the longest available timeframe candles
-            auto candles = processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+            auto candles =
+                processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
             if (!candles.empty()) {
               const auto& oldest_candle = candles.front();
               const auto& newest_candle = candles.back();
@@ -3964,7 +3945,8 @@ void WatchlistPanel::process_pending_updates() {
 
             // Check if price changed significantly (more than 0.01% or minimum tick)
             double price_change_pct =
-                (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+                (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
+                                  : 0;
             if (price_change_pct > 0.01 ||
                 std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
               significant_change = true;
@@ -4004,19 +3986,7 @@ void WatchlistPanel::process_pending_updates() {
             if (significant_change) {
               // Reset animation timer to start fresh animation with brief flash effect
               it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-
-              // Log the animation trigger for debugging
-              std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                        << " (ID: " << update.symbol_id << ") in group '" << group_name
-                        << "'. Price: " << prev_price << " -> " << it->second.price
-                        << ", Change: " << price_change_pct << "%" << std::endl;
             }
-
-            // Log every market data update for monitoring
-            std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                      << " (ID: " << update.symbol_id << ") in group '" << group_name
-                      << "'. New price: " << it->second.price
-                      << ", Timestamp: " << it->second.last_update_ts << std::endl;
           }
         }
       }

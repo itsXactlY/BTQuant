@@ -114,27 +114,19 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
     return std::unexpected(error_msg);
   }
 
-  // Calculate ring buffer positions based on the new layout
-  // The ring buffer data starts right after the header
+  // The ring buffer data (HotTrade entries) starts right after the header
   char* buffer_start = reinterpret_cast<char*>(header_) + sizeof(SharedMemoryHeader);
 
-  // Calculate how many trade and orderbook entries we can fit in the remaining space
-  size_t remaining_size = shm_size_ - sizeof(SharedMemoryHeader);
-  size_t entry_size = std::max(sizeof(HotTrade), sizeof(HotOrderbookSnapshot));
-  size_t max_entries = remaining_size / entry_size;
-
-  // For simplicity, assume equal distribution between trades and orderbooks
-  size_t trade_capacity = max_entries / 2;
-  size_t book_capacity = max_entries / 2;
+  // The SHM layout is: RingBufferHeader + HotTrade[RING_BUFFER_SIZE]
+  // No orderbook data is stored in SHM — orderbook panels use other data sources
+  size_t trade_capacity = HotSpine::V3::RING_BUFFER_SIZE;
 
   trades_ = reinterpret_cast<HotTrade*>(buffer_start);
-  books_ =
-      reinterpret_cast<HotOrderbookSnapshot*>(buffer_start + (trade_capacity * sizeof(HotTrade)));
+  books_ = nullptr;  // No orderbook data in SHM
 
   std::string success_msg = std::format(
-      "[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={}, "
-      "book_capacity={})",
-      shm_path_, header_->magic, header_->version, trade_capacity, book_capacity);
+      "[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={})",
+      shm_path_, header_->magic, header_->version, trade_capacity);
   BTQ_LOG_INFO(success_msg);
 
   BTQ_LOG_INFO("HotSpineDataBridge connected successfully");
@@ -203,7 +195,7 @@ void HotSpineDataBridge::sync_loop() {
   }
 
   const auto sync_interval =
-      std::chrono::microseconds(100);  // 10kHz sync rate for ultra-low latency
+      std::chrono::microseconds(1000);  // 1kHz sync rate — sub-ms latency, less CPU pressure
   auto next_sync = std::chrono::steady_clock::now() + sync_interval;
 
   BTQ_LOG_INFO("HotSpineDataBridge sync loop started");

@@ -1,14 +1,16 @@
 #include "market_data_processor.hpp"
-#include "cache_manager.hpp"
-#include "trading/HotspineData.h"
 
 #include <algorithm>
 #include <cmath>
 #include <execution>
 #include <iostream>
+#include <map>
 #include <numeric>
+#include <ranges>
 #include <stdexcept>
 
+#include "cache_manager.hpp"
+#include "trading/HotspineData.h"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -468,8 +470,7 @@ void MarketDataProcessor::updateVWAP(SymbolAnalytics& symbol_data) {
   double total_price_volume = 0.0;
 
   size_t count = std::min(vwap_window_size_, recent_trades.size());
-  for (size_t i = recent_trades.size() - count; i < recent_trades.size();
-       ++i) {
+  for (size_t i = recent_trades.size() - count; i < recent_trades.size(); ++i) {
     const auto& trade = recent_trades[i];
     total_volume += trade.size;
     total_price_volume += trade.price * trade.size;
@@ -492,8 +493,7 @@ void MarketDataProcessor::updateMomentum(SymbolAnalytics& symbol_data) {
   std::vector<double> prices;
   prices.reserve(count);
 
-  for (size_t i = recent_trades.size() - count; i < recent_trades.size();
-       ++i) {
+  for (size_t i = recent_trades.size() - count; i < recent_trades.size(); ++i) {
     prices.push_back(recent_trades[i].price);
   }
 
@@ -521,8 +521,7 @@ void MarketDataProcessor::updateVolatility(SymbolAnalytics& symbol_data) {
   std::vector<double> returns;
   returns.reserve(count - 1);
 
-  for (size_t i = recent_trades.size() - count + 1;
-       i < recent_trades.size(); ++i) {
+  for (size_t i = recent_trades.size() - count + 1; i < recent_trades.size(); ++i) {
     double prev = recent_trades[i - 1].price;
     double curr = recent_trades[i].price;
     returns.push_back(std::log(curr / prev));
@@ -640,10 +639,10 @@ void MarketDataProcessor::updateSpreadAnalysis(SymbolAnalytics& symbol_data) {
 
 void MarketDataProcessor::updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade) {
   for (auto timeframe :
-       {TimeFrame::TF_1MS, TimeFrame::TF_10MS, TimeFrame::TF_100MS, TimeFrame::TF_500MS,
-        TimeFrame::TF_1SEC, TimeFrame::TF_3SEC, TimeFrame::TF_5SEC, TimeFrame::TF_15SEC,
-        TimeFrame::TF_30SEC, TimeFrame::TF_1MIN, TimeFrame::TF_2MIN, TimeFrame::TF_5MIN,
-        TimeFrame::TF_15MIN, TimeFrame::TF_30MIN, TimeFrame::TF_1HOUR, TimeFrame::TF_2HOUR,
+       {TimeFrame::TF_1MS,   TimeFrame::TF_10MS,  TimeFrame::TF_100MS,  TimeFrame::TF_500MS,
+        TimeFrame::TF_1SEC,  TimeFrame::TF_3SEC,  TimeFrame::TF_5SEC,   TimeFrame::TF_15SEC,
+        TimeFrame::TF_30SEC, TimeFrame::TF_1MIN,  TimeFrame::TF_2MIN,   TimeFrame::TF_5MIN,
+        TimeFrame::TF_15MIN, TimeFrame::TF_30MIN, TimeFrame::TF_1HOUR,  TimeFrame::TF_2HOUR,
         TimeFrame::TF_4HOUR, TimeFrame::TF_6HOUR, TimeFrame::TF_12HOUR, TimeFrame::TF_1DAY,
         TimeFrame::TF_1WEEK}) {
     updateCandleForTimeframe(symbol_data, trade, timeframe);
@@ -852,6 +851,15 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
       updateSpreadAnalysis(symbol_data);
     }
   }
+  // Publish snapshot at most ~60 fps per symbol (every 16ms)
+  {
+    auto now = std::chrono::steady_clock::now();
+    auto& last_pub = shard.last_publish_time[update.symbol_id];
+    if (now - last_pub >= std::chrono::milliseconds(16)) {
+      last_pub = now;
+      publishSnapshot(update.symbol_id, symbol_data);
+    }
+  }
 
   // Release lock before notifying subscribers (avoid holding while calling
   // callbacks)
@@ -865,7 +873,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
   notifySubscribers(notify_symbol_id, notify_type);
 }
 
-void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade) {
+void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data,
+                                                    const TradeData& trade) {
   // Update basic trade analytics
   symbol_data.last_trade_price = trade.price;
   symbol_data.last_trade_size = trade.size;
@@ -901,29 +910,26 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
     symbol_data.recent_trades_db.swap();
   }
 
-  // Update VWAP
-  updateVWAP(symbol_data);
+  // Update OHLCV candles every trade (O(1) per timeframe)
+  updateCandles(symbol_data, trade);
 
-  // Update momentum
-  updateMomentum(symbol_data);
-
-  // Update volatility
-  updateVolatility(symbol_data);
-
-  // Update trading metrics
+  // Update trading metrics every trade (O(1))
   updateTradingMetrics(symbol_data, trade);
 
-  // Update spread analysis
-  updateSpreadAnalysis(symbol_data);
-
-  // Update OHLCV candles
-  updateCandles(symbol_data, trade);
+  // Throttle expensive O(n) analytics to every 100th trade
+  // to reduce lock hold time and prevent render thread starvation
+  if (symbol_data.trade_count % 100 == 0) {
+    updateVWAP(symbol_data);
+    updateMomentum(symbol_data);
+    updateVolatility(symbol_data);
+    updateSpreadAnalysis(symbol_data);
+  }
 
   // Update performance metrics
   auto now = std::chrono::high_resolution_clock::now();
   auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(
       now - std::chrono::high_resolution_clock::time_point(
-               std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
+                std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
   symbol_data.last_update_time = now.time_since_epoch().count();
 }
 
@@ -932,96 +938,202 @@ constexpr size_t MAX_BATCH_SIZE = 4096;
 
 // Main polling loop that reads from shared memory ring buffer
 void MarketDataProcessor::pollingLoop() {
-    while (running_.load(std::memory_order_acquire)) {
-        pollSharedMemoryRingBuffer();
+  while (running_.load(std::memory_order_acquire)) {
+    pollSharedMemoryRingBuffer();
 
-        // Brief sleep to prevent 100% CPU usage when no data is available
-        std::this_thread::sleep_for(std::chrono::microseconds(10)); // 10 microsecond delay
-    }
+    // Brief sleep to prevent 100% CPU usage when no data is available
+    std::this_thread::sleep_for(std::chrono::microseconds(10));  // 10 microsecond delay
+  }
 }
 
 // Poll the shared memory ring buffer for new events
 void MarketDataProcessor::pollSharedMemoryRingBuffer() {
-    // Get the current write head from the shared memory layout
-    // This assumes we have access to the shared memory layout structure
-    // In a real implementation, this would be mapped shared memory
-    uint64_t shared_write_head = hotspine_layout_.header.write_head.load(std::memory_order_acquire);
+  // Get the current write head from the shared memory layout
+  // This assumes we have access to the shared memory layout structure
+  // In a real implementation, this would be mapped shared memory
+  uint64_t shared_write_head = hotspine_layout_.header.write_head.load(std::memory_order_acquire);
 
-    // If no new data is available, return early
-    if (local_read_tail_ >= shared_write_head) {
-        return;
+  // If no new data is available, return early
+  if (local_read_tail_ >= shared_write_head) {
+    return;
+  }
+
+  // Calculate how many events we need to process
+  uint64_t events_to_process =
+      std::min(static_cast<uint64_t>(MAX_BATCH_SIZE), shared_write_head - local_read_tail_);
+
+  // Process up to MAX_BATCH_SIZE events per cycle
+  for (uint64_t i = 0; i < events_to_process; ++i) {
+    uint64_t current_index = (local_read_tail_ + i) & (HotSpine::V3::RING_BUFFER_MASK);
+
+    // Bounds check: ensure the calculated address is within the allocated buffer
+    uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
+    uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(HotspineData));
+    uint8_t* event_addr = buffer_start + (current_index * sizeof(HotspineData));
+
+    // Verify that the slot address is within valid range
+    if (event_addr < buffer_start || event_addr >= buffer_end) {
+      std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! "
+                   "event_addr="
+                << reinterpret_cast<void*>(event_addr)
+                << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
+                << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
+      continue;  // Skip this event and continue with others
     }
 
-    // Calculate how many events we need to process
-    uint64_t events_to_process = std::min(
-        static_cast<uint64_t>(MAX_BATCH_SIZE),
-        shared_write_head - local_read_tail_
-    );
-
-    // Process up to MAX_BATCH_SIZE events per cycle
-    for (uint64_t i = 0; i < events_to_process; ++i) {
-        uint64_t current_index = (local_read_tail_ + i) & (HotSpine::V3::RING_BUFFER_MASK);
-
-        // Bounds check: ensure the calculated address is within the allocated buffer
-        uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
-        uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(HotspineData));
-        uint8_t* event_addr = buffer_start + (current_index * sizeof(HotspineData));
-
-        // Verify that the slot address is within valid range
-        if (event_addr < buffer_start || event_addr >= buffer_end) {
-            std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! event_addr="
-                      << reinterpret_cast<void*>(event_addr)
-                      << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
-                      << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
-            continue; // Skip this event and continue with others
-        }
-
-        // Verify that the event address plus the event size doesn't exceed buffer bounds
-        if ((event_addr + sizeof(HotspineData)) > buffer_end) {
-            std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer! Attempted to read past buffer end." << std::endl;
-            continue; // Skip this event and continue with others
-        }
-
-        // Additional validation: ensure we're not reading from an invalid memory region
-        // by checking that the calculated offset doesn't wrap around due to integer overflow
-        if ((current_index * sizeof(HotspineData)) / sizeof(HotspineData) != current_index) {
-            std::cerr << "[MarketDataProcessor] Integer overflow detected in address calculation!" << std::endl;
-            continue; // Skip this event and continue with others
-        }
-
-        // Access the event from the ring buffer
-        // In a real implementation, this would read from the actual shared memory buffer
-        // For now, we'll simulate reading from a buffer
-        HotspineData* event_ptr = reinterpret_cast<HotspineData*>(event_addr);
-
-        // Check if this is a warmup event
-        if (event_ptr->flags & HotspineData::IS_WARMUP) {
-            // For warmup events, just touch memory to keep cache hot, but skip processing
-            continue;
-        }
-
-        // Convert HotspineData to MarketDataUpdate and process
-        MarketDataUpdate update;
-        update.timestamp = event_ptr->timestamp;
-        update.symbol_id = event_ptr->symbolId;
-        update.price = event_ptr->price;
-        update.size = event_ptr->volume;
-
-        // Determine event type based on eventType
-        if (event_ptr->eventType == 0) { // Assuming 0 is TRADE
-            update.type = MarketDataType::TRADE;
-            update.side = (event_ptr->flags & 0x04) ? "buy" : "sell"; // Assuming bit 2 indicates side
-        } else { // Assuming other values are ORDERBOOK
-            update.type = MarketDataType::ORDERBOOK;
-            // Note: bids/asks would need to be reconstructed from the payload
-        }
-
-        // Process the actual market data event
-        processUpdate(update);
+    // Verify that the event address plus the event size doesn't exceed buffer bounds
+    if ((event_addr + sizeof(HotspineData)) > buffer_end) {
+      std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer! "
+                   "Attempted to read past buffer end."
+                << std::endl;
+      continue;  // Skip this event and continue with others
     }
 
-    // Update our local read tail to reflect the processed events
-    local_read_tail_ += events_to_process;
+    // Additional validation: ensure we're not reading from an invalid memory region
+    // by checking that the calculated offset doesn't wrap around due to integer overflow
+    if ((current_index * sizeof(HotspineData)) / sizeof(HotspineData) != current_index) {
+      std::cerr << "[MarketDataProcessor] Integer overflow detected in address calculation!"
+                << std::endl;
+      continue;  // Skip this event and continue with others
+    }
+
+    // Access the event from the ring buffer
+    // In a real implementation, this would read from the actual shared memory buffer
+    // For now, we'll simulate reading from a buffer
+    HotspineData* event_ptr = reinterpret_cast<HotspineData*>(event_addr);
+
+    // Check if this is a warmup event
+    if (event_ptr->flags & HotspineData::IS_WARMUP) {
+      // For warmup events, just touch memory to keep cache hot, but skip processing
+      continue;
+    }
+
+    // Convert HotspineData to MarketDataUpdate and process
+    MarketDataUpdate update;
+    update.timestamp = event_ptr->timestamp;
+    update.symbol_id = event_ptr->symbolId;
+    update.price = event_ptr->price;
+    update.size = event_ptr->volume;
+
+    // Determine event type based on eventType
+    if (event_ptr->eventType == 0) {  // Assuming 0 is TRADE
+      update.type = MarketDataType::TRADE;
+      update.side = (event_ptr->flags & 0x04) ? "buy" : "sell";  // Assuming bit 2 indicates side
+    } else {  // Assuming other values are ORDERBOOK
+      update.type = MarketDataType::ORDERBOOK;
+      // Note: bids/asks would need to be reconstructed from the payload
+    }
+
+    // Process the actual market data event
+    processUpdate(update);
+  }
+
+  // Update our local read tail to reflect the processed events
+  local_read_tail_ += events_to_process;
+}
+
+void MarketDataProcessor::publishSnapshot(uint32_t symbol_id, const SymbolAnalytics& analytics) {
+  auto& shard = getShard(symbol_id);
+  // Create per-symbol buffer on first use (caller holds unique_lock on shard)
+  auto& buf_ptr = shard.snapshot_buffers[symbol_id];
+  if (!buf_ptr) {
+    buf_ptr = std::make_unique<TripleBuffer<RenderSnapshot>>();
+  }
+  auto& snap = buf_ptr->write_buffer();
+
+  // Clear and reuse allocated memory
+  snap.clear();
+  snap.symbol_id = symbol_id;
+  snap.last_update_time = analytics.last_update_time;
+  snap.last_price = analytics.last_trade_price;
+  snap.vwap = analytics.vwap;
+  snap.momentum = analytics.momentum;
+  snap.volatility = analytics.volatility;
+
+  // --- Pre-flatten orderbook (maps → flat vectors) ---
+  snap.bids.reserve(analytics.consolidated_bids.size());
+  for (const auto& [price, size] : analytics.consolidated_bids) {
+    snap.bids.push_back({static_cast<float>(price), static_cast<float>(size)});
+  }
+  snap.asks.reserve(analytics.consolidated_asks.size());
+  for (const auto& [price, size] : analytics.consolidated_asks) {
+    snap.asks.push_back({static_cast<float>(price), static_cast<float>(size)});
+  }
+
+  // Compute price range for LOB
+  if (!snap.bids.empty()) {
+    snap.ob_max_price = snap.bids.front().price;  // Highest bid
+    snap.ob_min_price = snap.bids.back().price;   // Lowest bid
+  }
+  if (!snap.asks.empty()) {
+    snap.ob_min_price = std::min(snap.ob_min_price, snap.asks.front().price);
+    snap.ob_max_price = std::max(snap.ob_max_price, snap.asks.back().price);
+  }
+
+  // --- Pre-convert recent trades to GPU-ready format ---
+  const auto& trades = analytics.recent_trades_db.read();
+  size_t trade_count = std::min(static_cast<size_t>(1000), trades.size());
+  snap.trade_ticks.reserve(trade_count);
+  for (size_t i = trades.size() - trade_count; i < trades.size(); ++i) {
+    const auto& t = trades[i];
+    snap.trade_ticks.emplace_back(t.timestamp, static_cast<float>(t.price),
+                                  static_cast<float>(t.size), t.symbol_id, t.is_buy);
+  }
+
+  // --- Pre-aggregate footprint clusters ---
+  if (analytics.last_update_time > 0 && !trades.empty()) {
+    const uint64_t now_us = analytics.last_update_time;
+    const uint64_t timeframe_us = 1'000'000;  // 1 second bins
+    const uint64_t window_us = 30'000'000;    // 30 seconds window
+    constexpr float tickSize = 0.5f;
+
+    struct ClusterKey {
+      uint64_t time;
+      int32_t price_bin;
+      auto operator<=>(const ClusterKey&) const = default;
+    };
+
+    struct ClusterValue {
+      uint32_t bidVol = 0, askVol = 0, count = 0;
+      uint32_t buyCount = 0, sellCount = 0;
+      float maxTradeVol = 0.0f, totalTradeSize = 0.0f;
+    };
+
+    std::map<ClusterKey, ClusterValue> aggregator;
+
+    for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
+      if (it->timestamp <= now_us - window_us) break;
+
+      const uint64_t timeBin = (it->timestamp / timeframe_us) * timeframe_us;
+      const int32_t priceBin = static_cast<int32_t>(std::round(it->price / tickSize));
+
+      auto& val = aggregator[ClusterKey{timeBin, priceBin}];
+      uint32_t sz = static_cast<uint32_t>(it->size);
+      if (it->is_buy) {
+        val.bidVol += sz;
+        val.buyCount++;
+      } else {
+        val.askVol += sz;
+        val.sellCount++;
+      }
+      if (it->size > val.maxTradeVol) val.maxTradeVol = static_cast<float>(it->size);
+      val.totalTradeSize += static_cast<float>(it->size);
+      val.count++;
+    }
+
+    snap.footprint_clusters.reserve(aggregator.size());
+    for (const auto& [key, val] : aggregator) {
+      const float rel_time_sec = static_cast<float>(key.time - (now_us - window_us)) / 1'000'000.0f;
+      snap.footprint_clusters.emplace_back(
+          rel_time_sec, static_cast<float>(key.price_bin) * tickSize,
+          static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f, tickSize * 0.9f, val.bidVol,
+          val.askVol, val.count, 0.0f, true, val.buyCount, val.sellCount, val.maxTradeVol,
+          (key.time - timeframe_us) * 1000, key.time * 1000);
+    }
+  }
+
+  // Atomically publish — render thread can now see this snapshot
+  buf_ptr->publish();
 }
 
 }  // namespace RenderEngine

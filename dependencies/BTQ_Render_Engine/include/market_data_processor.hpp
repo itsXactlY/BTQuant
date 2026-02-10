@@ -20,15 +20,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "hotspine_data_bridge.hpp"
-#include "data/data_types.hpp"
 #include "cache_manager.hpp"
+#include "data/data_types.hpp"
+#include "hotspine_data_bridge.hpp"
+#include "render_snapshot.hpp"
 #include "threading/double_buffered_state.hpp"
+#include "triple_buffer.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
-// Lock-free hash map (assuming available or use std::unordered_map with atomic
-// ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
-// lock-free map
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -72,7 +71,6 @@ struct OrderbookData {
   double total_depth;
   double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
-
 
 // Indicator cache entry
 struct IndicatorCacheEntry {
@@ -268,6 +266,19 @@ class MarketDataProcessor {
   SymbolAnalytics getSymbolAnalytics(uint32_t symbol_id) const;
 
   /**
+   * Get lock-free snapshot buffer for a symbol (render thread).
+   * Returns nullptr if the symbol hasn't been seen yet.
+   * Once obtained, call consume() then read() — zero copies.
+   */
+  TripleBuffer<RenderSnapshot>* getSnapshotBuffer(uint32_t symbol_id) {
+    auto& shard = getShard(symbol_id);
+    std::shared_lock lock(shard.mutex);  // Brief lookup only, no data copy
+    auto it = shard.snapshot_buffers.find(symbol_id);
+    if (it != shard.snapshot_buffers.end()) return it->second.get();
+    return nullptr;
+  }
+
+  /**
    * Get list of all active symbols (thread-safe)
    * @return Vector of symbol IDs that have recent data
    */
@@ -414,6 +425,10 @@ class MarketDataProcessor {
   struct Shard {
     mutable std::shared_mutex mutex;
     std::unordered_map<uint32_t, SymbolAnalytics> data;
+    // Per-symbol lock-free snapshot buffers for render thread
+    std::unordered_map<uint32_t, std::unique_ptr<TripleBuffer<RenderSnapshot>>> snapshot_buffers;
+    // Per-symbol publish throttle timestamps (accessed under unique_lock)
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> last_publish_time;
     // Padding to prevent false sharing cache line contention (64 bytes)
     char padding[64];
   };
@@ -434,7 +449,7 @@ class MarketDataProcessor {
   // Worker threads (C++20 jthread automatically joins on destruction)
   std::vector<std::jthread> workers_;
   std::atomic<bool> running_{true};
-  
+
   // Ring buffer polling thread
   std::thread polling_thread_;
   uint64_t local_read_tail_{0};
@@ -505,7 +520,10 @@ class MarketDataProcessor {
   // Worker Loop
   void processQueueLoop();
   void processUpdate(const MarketDataUpdate& update);
-  
+
+  // Build and publish a RenderSnapshot from SymbolAnalytics (worker thread)
+  void publishSnapshot(uint32_t symbol_id, const SymbolAnalytics& analytics);
+
   // Ring buffer polling methods
   void pollingLoop();
   void pollSharedMemoryRingBuffer();

@@ -76,7 +76,7 @@
                 "show_grid": true,
                 "show_heatmap": true,
                 "show_text": true,
-                "symbol_id": 10012,
+                "symbol_id": 10011,
                 "time_window": 30.0
             },
             "size": [
@@ -217,7 +217,7 @@
                 210.0
             ],
             "symbol": "",
-            "title": "BNBUSDT Orderbook",
+            "title": "ETHUSDT Orderbook",
             "type": 10,
             "visible": true
         },
@@ -242,7 +242,7 @@
                 "price_bins": 100,
                 "price_range": 0.02,
                 "show_persistent_lines": true,
-                "symbol_id": 10012
+                "symbol_id": 10011
             },
             "size": [
                 400.0,
@@ -268,7 +268,7 @@
                 315.0
             ],
             "symbol": "",
-            "title": "BNBUSDT Chart [1s]",
+            "title": "ETHUSDT Chart [1s]",
             "type": 0,
             "visible": true
         }

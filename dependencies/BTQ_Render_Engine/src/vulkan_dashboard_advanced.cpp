@@ -553,13 +553,10 @@ void VulkanDashboard::pollDataToRenderer() {
   // 1. Resolve Symbol ID from active_symbol_
   uint32_t symbol_id = 0;
 
-  // Try direct lookup first
   auto id_opt = SymbolRegistry::instance().get_symbol_id("Binance", active_symbol_);
-
   if (id_opt) {
     symbol_id = *id_opt;
   } else {
-    // Try to find by symbol name only (ignoring exchange)
     auto all_symbols = SymbolRegistry::instance().get_all_symbols();
     for (const auto& info : all_symbols) {
       if (info.symbol == active_symbol_) {
@@ -567,35 +564,29 @@ void VulkanDashboard::pollDataToRenderer() {
         break;
       }
     }
-
-    // Fallback: If still 0 and we have symbols, just pick the first one to ensure connectivity
     if (symbol_id == 0 && !all_symbols.empty()) {
       symbol_id = all_symbols[0].id;
-      // Auto-correct active symbol
       active_symbol_ = all_symbols[0].symbol;
-      std::println("[VulkanDashboard] Warning: generating fallback symbol ID {} for '{}'",
-                   symbol_id, active_symbol_);
     }
   }
 
   if (symbol_id == 0) {
-    static int warn_counter = 0;
-    if (warn_counter++ % 600 == 0) {  // Log every ~10 seconds at 60fps
-      std::println("[VulkanDashboard] Error: Could not resolve symbol ID for '{}'. ActiveSyms=0",
-                   active_symbol_);
-    }
     return;
   }
 
-  // 2. Fetch Latest Analytics
-  auto analytics = market_data_processor_->getSymbolAnalytics(symbol_id);
-  if (analytics.last_update_time == 0) {
+  // 2. Lock-free snapshot consume — zero locks, zero copies
+  auto* snapshot_buf = market_data_processor_->getSnapshotBuffer(symbol_id);
+  if (!snapshot_buf) return;  // Symbol not yet seen by worker threads
+  snapshot_buf->consume();    // Swap middle→front if new data available
+  const auto& snap = snapshot_buf->read();
+
+  if (snap.last_update_time == 0) {
     return;
   }
 
-  // 3. Update LOB Heatmap Data
-  uint32_t bidsCount = static_cast<uint32_t>(analytics.consolidated_bids.size());
-  uint32_t asksCount = static_cast<uint32_t>(analytics.consolidated_asks.size());
+  // 3. Update LOB Heatmap — data is pre-flattened by worker thread
+  uint32_t bidsCount = static_cast<uint32_t>(snap.bids.size());
+  uint32_t asksCount = static_cast<uint32_t>(snap.asks.size());
   uint32_t totalLevels = bidsCount + asksCount;
 
   if (totalLevels > 0) {
@@ -605,120 +596,29 @@ void VulkanDashboard::pollDataToRenderer() {
 
     snapshot->currentTimeIndex = static_cast<uint32_t>(vulkan_core_->get_current_frame_index());
     snapshot->priceLevelsCount = totalLevels;
-
-    // Calculate dynamic price range for the snapshot
-    float minPrice = 1e9f, maxPrice = -1e9f;
-    if (!analytics.consolidated_bids.empty()) {
-      minPrice =
-          std::min(minPrice, static_cast<float>(analytics.consolidated_bids.rbegin()->first));
-      maxPrice = std::max(maxPrice, static_cast<float>(analytics.consolidated_bids.begin()->first));
-    }
-    if (!analytics.consolidated_asks.empty()) {
-      minPrice = std::min(minPrice, static_cast<float>(analytics.consolidated_asks.begin()->first));
-      maxPrice =
-          std::max(maxPrice, static_cast<float>(analytics.consolidated_asks.rbegin()->first));
-    }
-
-    snapshot->basePrice = minPrice;
-    snapshot->priceRange = (maxPrice - minPrice) > 1e-6f ? (maxPrice - minPrice) : 1.0f;
+    snapshot->basePrice = snap.ob_min_price;
+    float range = snap.ob_max_price - snap.ob_min_price;
+    snapshot->priceRange = range > 1e-6f ? range : 1.0f;
 
     uint32_t idx = 0;
-    for (auto const& [price, size] : analytics.consolidated_bids) {
-      snapshot->levels[idx++] = {static_cast<float>(price), 0, static_cast<uint32_t>(size), 0};
+    for (const auto& level : snap.bids) {
+      snapshot->levels[idx++] = {level.price, 0, static_cast<uint32_t>(level.size), 0};
     }
-    for (auto const& [price, size] : analytics.consolidated_asks) {
-      snapshot->levels[idx++] = {static_cast<float>(price), static_cast<uint32_t>(size), 0, 0};
+    for (const auto& level : snap.asks) {
+      snapshot->levels[idx++] = {level.price, static_cast<uint32_t>(level.size), 0, 0};
     }
 
     micro_renderer_->updateLOBData(*snapshot);
   }
 
-  // 4. Update Trade Data
-  if (!analytics.recent_trades_db.read().empty()) {
-    std::vector<RenderEngine::HotspineTradeTick> ticks;
-    size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades_db.read().size());
-    ticks.reserve(count);
-
-    for (size_t i = analytics.recent_trades_db.read().size() - count;
-         i < analytics.recent_trades_db.read().size(); ++i) {
-      const auto& t = analytics.recent_trades_db.read()[i];
-      ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
-                         t.symbol_id, t.is_buy);
-    }
-    micro_renderer_->updateTradeData(ticks);
+  // 4. Update Trade Data — pre-converted by worker thread
+  if (!snap.trade_ticks.empty()) {
+    micro_renderer_->updateTradeData(snap.trade_ticks);
   }
 
-  // 5. Aggregate Footprint Clusters (Exocharts Style)
-  // We use current 1s candle to generate clusters for the footprint
-  auto candle_opt =
-      market_data_processor_->getCurrentCandle(symbol_id, RenderEngine::TimeFrame::TF_1SEC);
-  if (candle_opt) {
-    // 5. Optimized Aggregate Footprint Clusters (C++26 Zero-Copy)
-    const uint64_t now_us = analytics.last_update_time;
-    const uint64_t timeframe_us = 1'000'000;  // 1 second bins
-    const uint64_t window_us = 30'000'000;    // 30 seconds window
-    constexpr float tickSize = 0.5f;
-
-    std::vector<BTQuant::RenderEngine::CandleCluster> clusters;
-
-    // Efficiency: Use an ordered map for aggregation (stable for rendering)
-    struct ClusterKey {
-      uint64_t time;
-      int32_t price_bin;
-      auto operator<=>(const ClusterKey&) const = default;
-    };
-
-    struct ClusterValue {
-      uint32_t bidVol = 0;
-      uint32_t askVol = 0;
-      uint32_t count = 0;
-      uint32_t buyCount = 0;        // Number of buy trades
-      uint32_t sellCount = 0;       // Number of sell trades
-      float maxTradeVol = 0.0f;     // Maximum single trade volume
-      float totalTradeSize = 0.0f;  // For calculating VWAP
-    };
-    std::map<ClusterKey, ClusterValue> aggregator;
-
-    // Process trades in reverse for window efficiency
-    for (const auto& t : std::views::reverse(analytics.recent_trades_db.read())) {
-      if (t.timestamp <= now_us - window_us) break;
-
-      const uint64_t timeBin = (t.timestamp / timeframe_us) * timeframe_us;
-      const int32_t priceBin = static_cast<int32_t>(std::round(t.price / tickSize));
-
-      auto& val = aggregator[ClusterKey{timeBin, priceBin}];
-      if (t.is_buy) [[likely]] {
-        val.bidVol += static_cast<uint32_t>(t.size);  // Buy trade contributes to bid volume
-        val.buyCount++;                               // Increment buy trade count
-        if (t.size > val.maxTradeVol)
-          val.maxTradeVol = static_cast<float>(t.size);  // Track max trade volume
-        val.totalTradeSize += static_cast<float>(t.size);
-      } else {
-        val.askVol += static_cast<uint32_t>(t.size);  // Sell trade contributes to ask volume
-        val.sellCount++;                              // Increment sell trade count
-        if (t.size > val.maxTradeVol)
-          val.maxTradeVol = static_cast<float>(t.size);  // Track max trade volume
-        val.totalTradeSize += static_cast<float>(t.size);
-      }
-      val.count++;
-    }
-
-    clusters.reserve(aggregator.size());
-    for (auto const& [key, val] : aggregator) {
-      // Use relative seconds from window start for better float precision in
-      // coordinates
-      const float rel_time_sec = static_cast<float>(key.time - (now_us - window_us)) / 1'000'000.0f;
-
-      clusters.emplace_back(rel_time_sec, static_cast<float>(key.price_bin) * tickSize,
-                            static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f, tickSize * 0.9f,
-                            val.bidVol, val.askVol, val.count, 0.0f, true, val.buyCount,
-                            val.sellCount, val.maxTradeVol, (key.time - timeframe_us) * 1000,
-                            key.time * 1000);  // Convert to nanoseconds
-    }
-
-    if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(clusters);
-    }
+  // 5. Update Footprint Clusters — pre-aggregated by worker thread
+  if (!snap.footprint_clusters.empty()) {
+    micro_renderer_->updateFootprintClusters(snap.footprint_clusters);
   }
 }
 

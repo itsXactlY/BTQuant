@@ -112,7 +112,7 @@ class HotSpineDataBridge {
   void stop();
   void sync();  // Performs real-time synchronization
 
-  // Direkter Zugriff auf MarketDataProcessor für alle Datenoperationen
+  // Direct access to MarketDataProcessor for all data operations
   void setMarketDataProcessor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
     data_processor_ = processor;
   }

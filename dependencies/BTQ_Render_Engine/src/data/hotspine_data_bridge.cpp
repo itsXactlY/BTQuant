@@ -228,13 +228,6 @@ void HotSpineDataBridge::sync_shm() {
   uint64_t current_write_idx = header_->write_head.load(std::memory_order_acquire);
   uint64_t capacity = HotSpine::V3::RING_BUFFER_SIZE;  // Use the new constant
 
-  // --- Process Trades (Legacy approach adapted to new layout) ---
-  // Since the new layout is different, we need to adapt the original approach
-  // to work with the new ring buffer structure.
-
-  // For now, let's implement a hybrid approach that works with the new layout
-  // but maintains the original functionality
-
   // Initial catch-up: Process ENTIRE ring buffer on first sync
   uint64_t last_read = last_read_idx_.load(std::memory_order_acquire);
   if (last_read == 0 && current_write_idx > 0) {
@@ -249,8 +242,10 @@ void HotSpineDataBridge::sync_shm() {
                              current_write_idx));
   }
 
-  // Batch processing
-  std::vector<RenderEngine::MarketDataUpdate> trade_batch;
+  // Batch processing - lock-free approach
+  // Use a pre-allocated vector to avoid dynamic allocation during processing
+  thread_local static std::vector<RenderEngine::MarketDataUpdate> trade_batch;
+  trade_batch.clear(); // Clear instead of creating new vector each time
   const uint64_t BATCH_SIZE = 100000;
   trade_batch.reserve(BATCH_SIZE);
 
@@ -287,6 +282,7 @@ void HotSpineDataBridge::sync_shm() {
     last_read++;
 
     if (trade_batch.size() >= BATCH_SIZE) {
+      // Send batch to processor - this uses lock-free queue internally
       data_processor_->processTradeUpdates(trade_batch);
       static uint64_t batch_count = 0;
       if (++batch_count % 10 == 0) {
@@ -305,10 +301,6 @@ void HotSpineDataBridge::sync_shm() {
   // Update the read tail using the new atomic approach
   header_->read_tail.store(last_read, std::memory_order_release);
   last_read_idx_.store(last_read, std::memory_order_release);
-
-  // Note: The new layout may need a different approach for orderbooks
-  // depending on how the producer writes data to the shared memory.
-  // For now, we'll keep the original approach but adapted to the new layout.
 }
 
 }  // namespace BTQuant

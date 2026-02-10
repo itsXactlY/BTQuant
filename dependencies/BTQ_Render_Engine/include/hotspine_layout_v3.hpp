@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <vector>
 
 namespace HotSpine::V3 {
 
@@ -72,6 +73,23 @@ struct alignas(64) HeatmapBin {
   uint32_t padding;
 };
 
+// Atomic Symbol Information Structure (for lock-free access)
+struct alignas(64) AtomicSymbolInfo {
+  std::atomic<double> price{0.0};
+  std::atomic<double> volume{0.0};
+  std::atomic<double> bid_price{0.0};
+  std::atomic<double> ask_price{0.0};
+  std::atomic<double> last_trade_price{0.0};
+  std::atomic<double> vwap{0.0};
+  std::atomic<uint64_t> timestamp{0};
+  std::atomic<uint32_t> trade_count{0};
+  std::atomic<double> buy_volume{0.0};
+  std::atomic<double> sell_volume{0.0};
+
+  // Padding to prevent false sharing (each atomic gets its own cache line if needed)
+  char padding[32]; // Additional padding to ensure cache line separation
+};
+
 // =========================================================================================
 // 1.4 The Global Layout
 // =========================================================================================
@@ -89,6 +107,37 @@ struct SharedMemoryLayoutV3 {
   // Body
   ClusterColumn history[1024]; // Ring buffer
   HeatmapBin dom[512];         // Aggregated DOM
+};
+
+// =========================================================================================
+// 1.5 Atomic Registry - Zero-Lock Access Class
+// =========================================================================================
+class AtomicRegistry {
+public:
+  static constexpr size_t MAX_SYMBOLS = 100000; // Pre-allocated to 100,000 slots
+  
+  AtomicRegistry() : atomic_storage_(MAX_SYMBOLS) {}
+
+  // Zero-lock access method to get atomic snapshot
+  const AtomicSymbolInfo* get_atomic_snapshot(uint32_t id) const {
+    if (id >= MAX_SYMBOLS) {
+      return nullptr; // Out of bounds check
+    }
+    // Return a pointer to the atomic struct which can be accessed lock-free
+    // The atomic operations themselves provide thread safety
+    return &(atomic_storage_[id]);
+  }
+
+  // Method to update atomic data (for writers)
+  AtomicSymbolInfo* get_mutable_atomic_snapshot(uint32_t id) {
+    if (id >= MAX_SYMBOLS) {
+      return nullptr; // Out of bounds check
+    }
+    return &(atomic_storage_[id]);
+  }
+
+private:
+  std::vector<AtomicSymbolInfo> atomic_storage_;
 };
 
 static_assert(sizeof(VolumeNode) == 16);

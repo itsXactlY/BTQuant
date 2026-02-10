@@ -8,81 +8,102 @@
 - Dependencies between modules are clearly marked
 - Estimated complexity: S (Small, 1-2 days), M (Medium, 3-5 days), L (Large, 1+ weeks)
 - Prerequisites must be completed before starting dependent tasks
-- Your workdir is exlusivly /home/alca/projects/PubBTQuant/dependencies/ccapi/
-- Never do or build TEST files - work only on livecode
+- Your workdir is exlusivly /home/alca/projects/PubBTQuant/dependencies/ccapi/example/src/market_data_collector/
 - Fully autonomous handle conflicts in the most harmonic way with C++23/26 only.
 ---
 
 
-# Phase 43: C++26 Lock-Free HotSpine Migration [Complexity: L]
+# Phase 43: Producer-Side HotSpine Alignment (Market Data Collector)
+**Objective:** convert `market_data_collector` into a pure, low-latency "Feed Handler" that does strictly one thing: normalize trades and push them to the Shared Memory Ring Buffer.
 
-**C++26 Requirements:** `<hazard_pointer>`, `<rcu>`, `std::atomic::wait/notify`, `std::for_each(std::execution::par_unseq)`, zero `std::mutex`/`std::condition_variable`/`std::shared_mutex` in hot path.
+## 43.1: Shared Memory Layout Alignment [Critical]
+- [x] **Import Layout Header:** Ensure `market_data_collector` uses the exact same `hotspine_layout_v3.hpp` as the Terminal.
+- [x] **Fix Ring Buffer Size:**
+  - **Current Bug:** `market_data_processor.cpp:330` uses `current_head % 1024`.
+  - **Fix:** Use `current_head & (HotSpine::V3::RING_BUFFER_SIZE - 1)`.
+  - **Requirement:** Ensure `RING_BUFFER_SIZE` is defined as `1048576` (2^20) in the shared header.
 
-## 43.1: C++26 Lock-Free Infrastructure
+## 43.2: The "Raw Feed" Refactor (Performance)
+**Context:** The Collector is currently running `engine_.process_trade()` and `snapshot_to_viewport()`. This is **WRONG**. The Collector should write *Raw Trades*, and the Terminal (Consumer) should calculate Clusters/Viewports.
 
-- [ ] **43.1.1: C++26 Hazard Pointer Ring Buffer** [M]
-  - `include/hotspine/c26_lockfree_ring.hpp`: Use `<hazard_pointer>` for safe reclamation of retired events
-  - `std::hazard_ptr_registry` for producer/consumer nodes
-  - `std::hazard_ptr_retire` when overwriting old slots
+- [x] **Remove Analytics from Collector:**
+  - Delete `Analytics::ClusterEngine engine_;` from `MarketDataProcessor`.
+  - Remove `engine_.process_trade(t)` and `engine_.snapshot_to_viewport(...)` calls.
+- [x] **Implement Raw Write:**
+  - Modify the SHM write block in `handleTradeMessage` to write a `HotspineData` struct (Raw Trade) instead of a `Viewport`.
+  - **Fields:** `timestamp`, `price`, `volume`, `flags` (Buy/Sell/Liquidation).
 
-- [ ] **43.1.2: RCU Shared Memory Manager** [M]
-  - `include/hotspine/c26_rcu_shm.hpp`: `<rcu>` for shared memory configuration
-  - `std::rcu_obj_base` for ring buffer metadata
-  - `std::rcu_read_lock()` in consumer, `synchronize_rcu()` on writer updates
+## 43.3: Hot Path Optimization (C++26 Style)
+- [x] **Remove Mutexes:**
+  - In `handleTradeMessage`, remove `std::lock_guard<std::mutex> lock(buffer_mutex_);`.
+  - **Logic:** If `enable_exclusive_hotspine_` is true, **SKIP** all `trade_buffer_.push_back` (DB buffering). The DB path is too slow for the HotSpine.
+- [x] **Fast Parsing:**
+  - Replace `safeParseDouble` (which uses `std::stod` and `try-catch`) with `std::from_chars` (no exceptions, zero allocation).
+  - Use `std::string_view` for all parsing helpers to avoid `std::string` copies.
 
-- [ ] **43.1.3: Atomic Wait/Notify Signaling** [S]
-  - `std::atomic<uint64_t> generation_{0}` → `generation_.wait(old_val)` / `generation_.notify_one()`
-  - Replace all `std::condition_variable` in health monitoring
+## 43.4: Producer-Side Flow Control
+- [x] **Overflow Handling:**
+  - Before writing, check: `write_head - read_tail > RING_BUFFER_SIZE`.
+  - **Action:** If full, increment a `dropped_packet_count` atomic and **yield** (`std::this_thread::yield()`). Do not overwrite unread data blindly unless in "Turbo Mode".
+- [x] **Affinity & Priority:**
+  - Verify `threadAffinityCheck` pins to an Isolated Core (e.g., Core 3).
+  - Set thread priority to `SCHED_FIFO` (Real-time) if running as root/admin.
 
-## 43.2: ExchangeConnectionManager → Pure Atomic Producer
+## 43.5: Validation
+- [x] **Verification Step:**
+  - Start Collector.
+  - Start Terminal.
+  - **Expected:** Terminal should receive raw trades and build its own Heatmap/Clusters.
+  - **Metric:** Latency (Collector Ingest -> Terminal Render) should be < 50 microseconds.
 
-- [ ] **43.2.1: Eliminate Session Queues** [M]
-  - `exchange_connection_manager.cpp`: Remove `maxEventQueueSize`, direct atomic writes
-  - CCAPI callbacks → `ring_->hazard_produce(ev)` (hazard-safe)
+# Phase 44: Build System Repair & Type Alignment
+**Objective:** Fix breaking changes in the CCAPI library headers and align the HotSpine Reader with the current Shared Memory Layout V3.
 
-- [ ] **43.2.2: Par_Unseq Event Processing** [M]
-  - `std::for_each(std::execution::par_unseq, batch.begin(), batch.end(), [](auto& ev){ atomic_snapshots_[ev.symbol_id].update(ev); })`
+## 44.1: Fix CCAPI Library Internals (Critical)
+**Context:** The compiler cannot find `UtilString::safeParseDouble`. This suggests a partial optimization was applied to `ccapi_util_private.h`.
 
-## 43.3: MarketDataProcessor → C++26 Consumer
+- [x] **Define `safeParseDouble` in `UtilString`:**
+  - Open `dependencies/ccapi/include/ccapi_cpp/ccapi_util_private.h`.
+  - Locate the `class UtilString` definition.
+  - Add the static method implementation (using `std::from_chars` for C++17/26 compliance and speed):
+    ```cpp
+    static double safeParseDouble(std::string_view sv) {
+        double result = 0.0;
+        auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), result);
+        if (ec != std::errc()) return 0.0; // Fallback
+        return result;
+    }
+    // Overload for std::string if needed by legacy code
+    static double safeParseDouble(const std::string& s) {
+        return safeParseDouble(std::string_view(s));
+    }
+    ```
+  - **Verification:** This needs to be inside the `struct UtilString` or `class UtilString` scope to satisfy `UtilString::safeParseDouble`.
 
-- [ ] **43.3.1: RCU Consumer Polling** [M]
-  - `std::rcu_read_lock()` around `ring_->consume(batch, MAX_BATCH)`
-  - `std::for_each(std::execution::par_unseq)` for batch updates
+## 44.2: Fix HotSpine Reader Type Mismatch
+**Context:** `hotspine_reader.cpp` is referencing `ClusterColumn`, which likely doesn't exist in your new V3 layout.
 
-- [ ] **43.3.2: Hazard Pointer Snapshots** [M]
-  - `AtomicSnapshot` → `std::hazard_ptr<Snapshot>` for safe reader access
-  - Producer retires old snapshots via `hazard_ptr_retire()`
+- [x] **Identify Correct Type:**
+  - Check `include/hotspine_layout_v3.hpp`. Look for the main struct definition (likely `HotspineData` or `Viewport`).
+- [x] **Update Header (`src/hotspine/hotspine_reader.hpp`):**
+  - Replace `bool pollLatestViewport(HotSpine::V3::ClusterColumn& out_viewport);`
+  - With: `bool pollLatestViewport(HotSpine::V3::Viewport& out_viewport);` (or whatever the actual struct name is in `hotspine_layout_v3.hpp`).
+- [x] **Update Source (`src/hotspine/hotspine_reader.cpp`):**
+  - Update the function signature to match the header.
+  - Update any internal member access (e.g., if `ClusterColumn` had `price_levels` and `Viewport` has `clusters`, update the mapping).
 
-## 43.4: C++26 Cache Warming + Branchless
+## 44.3: Market Data Collector Cleanup
+**Context:** Once 44.1 is fixed, `market_data_collector` might still have issues if it repeats the `safeParseDouble` mistake in its own `utilities.h`.
 
-- [ ] **43.4.1: Branchless Accumulators** [S]
-  - `std::array<std::atomic<double>, 2> real_volume_{};` → `real_volume_[ev.is_warming()].store(+= qty, relaxed)`
+- [x] **Check `market_data_collector/utilities.h`:**
+  - Ensure `safeParseDouble` is defined `inline` to avoid ODR (One Definition Rule) violations if included in multiple translation units.
+- [x] **Sync Includes:**
+  - Ensure `market_data_processor.cpp` includes the corrected `hotspine_layout_v3.hpp`.
 
-- [ ] **43.4.2: Atomic Wait Warmer** [S]
-  - `std::atomic<uint64_t> warmup_gen_{0}` → `warmup_gen_.wait(0); inject_dummy(); warmup_gen_.notify_one()`
-
-## 43.5: CMake C++26 Flags
-
-- [ ] **43.5.1: C++26 Standard** [S]
-  - `CMakeLists.txt`: `set(CMAKE_CXX_STANDARD 26)` + `-std=c++26 -stdlib=libstdc++`
-  - Link `-lhazardptr -lrcu` if separate libs needed
-
-## 43.6: C++26 Validation
-
-- [ ] **43.6.1: Zero Lock Audit** [S]
-  - `grep -r "std::mutex\|std::condition_variable\|std::shared_mutex" src/data/ src/hotspine/` → 0 results
-
-- [ ] **43.6.2: Hazard/RCU Coverage** [M]
-  - All shared mutable state uses `<hazard_pointer>` or `<rcu>`
-  - Producer/consumer nodes registered in global `hazard_ptr_registry`
-
-- [ ] **43.6.3: Par_Unseq Scaling** [M]
-  - Benchmark: `std::execution::par_unseq` scales to all cores on 1M events/sec
-
-## Critical C++26 Targets
-
-- [ ] **Zero Traditional Locks**: No `std::mutex`/`std::shared_mutex`/`std::condition_variable` anywhere
-- [ ] **Hazard Pointers Everywhere**: All dynamic deallocation uses `<hazard_pointer>`
-- [ ] **RCU for Config**: All shared config uses `<rcu>`
-- [ ] **Atomic Wait/Notify**: All signaling uses `std::atomic::wait/notify_*`
-- [ ] **Par Unseq Batches**: All event processing uses `std::execution::par_unseq`
+## 44.4: Validation
+- [x] **Rebuild CCAPI Targets:**
+  - Run `ninja src/market_data_simple_request/market_data_simple_request` to verify the CCAPI fix.
+- [x] **Rebuild HotSpine:**
+  - Run `ninja src/hotspine/hotspine_reader` to verify the type fix.
+- [x] **Full Build:**
+  - Run `ninja` to ensure all targets link correctly.

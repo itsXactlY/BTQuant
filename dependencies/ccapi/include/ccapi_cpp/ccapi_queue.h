@@ -1,7 +1,7 @@
 #ifndef INCLUDE_CCAPI_CPP_CCAPI_QUEUE_H_
 #define INCLUDE_CCAPI_CPP_CCAPI_QUEUE_H_
-#include <mutex>
 #include <vector>
+#include "concurrentqueue.h"
 
 #include "ccapi_cpp/ccapi_logger.h"
 
@@ -20,69 +20,69 @@ class Queue {
   explicit Queue(const size_t maxSize = 0) : maxSize(maxSize) {}
 
   void pushBack(const T& t) {
-    std::lock_guard<std::mutex> lock(this->m);
-    if (this->maxSize <= 0 || this->queue.size() < this->maxSize) {
-      CCAPI_LOGGER_TRACE("this->queue.size() = " + size_tToString(this->queue.size()));
-      this->queue.push_back(t);
+    // Note: ConcurrentQueue doesn't have a built-in max size check, so we approximate
+    if (this->maxSize <= 0 || this->moody_queue.size_approx() < this->maxSize) {
+      CCAPI_LOGGER_TRACE("this->queue.size() = " + size_tToString(this->moody_queue.size_approx()));
+      this->moody_queue.enqueue(t);
     } else {
       throw std::runtime_error(EXCEPTION_QUEUE_FULL);
     }
   }
 
   void pushBack(T&& t) {
-    std::lock_guard<std::mutex> lock(this->m);
-    if (this->maxSize <= 0 || this->queue.size() < this->maxSize) {
-      CCAPI_LOGGER_TRACE("this->queue.size() = " + size_tToString(this->queue.size()));
-      this->queue.push_back(t);
+    // Note: ConcurrentQueue doesn't have a built-in max size check, so we approximate
+    if (this->maxSize <= 0 || this->moody_queue.size_approx() < this->maxSize) {
+      CCAPI_LOGGER_TRACE("this->queue.size() = " + size_tToString(this->moody_queue.size_approx()));
+      this->moody_queue.enqueue(std::move(t));
     } else {
       throw std::runtime_error(EXCEPTION_QUEUE_FULL);
     }
   }
 
   T popBack() {
-    std::lock_guard<std::mutex> lock(this->m);
-    if (this->queue.empty()) {
-      throw std::runtime_error(EXCEPTION_QUEUE_EMPTY);
-    } else {
-      T t = std::move(this->queue.back());
-      this->queue.pop_back();
+    T t;
+    if (this->moody_queue.try_dequeue(t)) {
       return t;
+    } else {
+      throw std::runtime_error(EXCEPTION_QUEUE_EMPTY);
     }
   }
 
   std::vector<T> purge() {
-    std::lock_guard<std::mutex> lock(this->m);
     std::vector<T> p;
-    std::swap(p, this->queue);
+    T item;
+    while (this->moody_queue.try_dequeue(item)) {
+      p.push_back(std::move(item));
+    }
     return p;
   }
 
   void removeAll(std::vector<T>& c) {
-    std::lock_guard<std::mutex> lock(this->m);
+    T item;
     if (c.empty()) {
-      c = std::move(this->queue);
+      while (this->moody_queue.try_dequeue(item)) {
+        c.push_back(std::move(item));
+      }
     } else {
-      c.reserve(c.size() + this->queue.size());
-      std::move(std::begin(this->queue), std::end(this->queue), std::back_inserter(c));
+      c.reserve(c.size() + this->moody_queue.size_approx());
+      while (this->moody_queue.try_dequeue(item)) {
+        c.push_back(std::move(item));
+      }
     }
-    this->queue.clear();
   }
 
   size_t size() const {
-    std::lock_guard<std::mutex> lock(this->m);
-    return this->queue.size();
+    return this->moody_queue.size_approx();
   }
 
   bool empty() const {
-    std::lock_guard<std::mutex> lock(this->m);
-    return this->queue.empty();
+    return this->moody_queue.size_approx() == 0;
   }
 #ifndef CCAPI_EXPOSE_INTERNAL
 
  private:
 #endif
-  std::vector<T> queue;
-  mutable std::mutex m;
+  mutable moodycamel::ConcurrentQueue<T> moody_queue;
   size_t maxSize{};
 };
 

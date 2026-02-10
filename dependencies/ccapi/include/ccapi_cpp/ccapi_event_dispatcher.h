@@ -3,9 +3,7 @@
 #include <stddef.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <functional>
-#include <mutex>
 #include <thread>
 #include <vector>
 #include "concurrentqueue.h"
@@ -40,7 +38,6 @@ class EventDispatcher {
     if (this->shouldContinue.load()) {
       CCAPI_LOGGER_TRACE("start to dispatch an operation");
       this->queue.enqueue(op);
-      this->cv.notify_all();
     } else {
       CCAPI_LOGGER_WARN("dispatching of events were paused");
     }
@@ -59,10 +56,7 @@ class EventDispatcher {
   void pause() { this->shouldContinue = false; }
 
   void stop() {
-    std::unique_lock<std::mutex> lock(this->lock);
     this->quit = true;
-    lock.unlock();
-    this->cv.notify_all();
     for (auto& dispatcherThread : this->dispatcherThreads) {
       dispatcherThread.join();
     }
@@ -78,11 +72,8 @@ class EventDispatcher {
       if (this->queue.try_dequeue(op)) {
         op();
       } else {
-        // No task available, wait for notification
-        std::unique_lock<std::mutex> lock(this->lock);
-        this->cv.wait_for(lock, std::chrono::milliseconds(10), [&] { 
-          return (this->queue.size_approx() > 0 || this->quit); 
-        });
+        // No task available, sleep briefly to avoid busy-waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     } while (!this->quit);
     CCAPI_LOGGER_FUNCTION_EXIT;
@@ -91,10 +82,8 @@ class EventDispatcher {
   size_t numDispatcherThreads{};
   std::atomic<bool> shouldContinue{};
   std::vector<std::thread> dispatcherThreads;
-  std::mutex lock;
   moodycamel::ConcurrentQueue<std::function<void()>> queue;
-  std::condition_variable cv;
-  bool quit{};
+  std::atomic<bool> quit{};
 };
 
 } /* namespace ccapi */

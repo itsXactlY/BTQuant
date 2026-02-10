@@ -48,7 +48,7 @@ class UtilString {
 
   static std::string roundInputBySignificantFigure(double input, int numSignificantFigure, int roundDirection) {
     const auto& splitted = UtilString::split(UtilString::printDoubleScientific(input), 'e');
-    double a = std::stod(splitted.at(0)) * std::pow(10, numSignificantFigure - 1);
+    double a = UtilString::safeParseDouble(splitted.at(0)) * std::pow(10, numSignificantFigure - 1);
     double b;
     if (roundDirection > 0) {
       b = std::ceil(a);
@@ -334,6 +334,41 @@ class UtilString {
       copy.append(padToLength - copy.size(), paddingChar);
     }
     return copy;
+  }
+
+  /**
+   * Safely parse a double value from a string using std::from_chars (no exceptions, zero allocation).
+   * @param s The string containing the numeric string to parse
+   * @return The parsed double value
+   * @throws std::invalid_argument if parsing fails
+   */
+  static double safeParseDouble(const std::string& s) {
+    return safeParseDouble(std::string_view(s));
+  }
+
+  /**
+   * Safely parse a double value from a string_view using std::from_chars (no exceptions, zero allocation).
+   * @param sv The string_view containing the numeric string to parse
+   * @return The parsed double value
+   * @throws std::invalid_argument if parsing fails
+   */
+  static double safeParseDouble(std::string_view sv) {
+    double result = 0.0;
+    const char* start = sv.data();
+    const char* end = start + sv.size();
+
+    auto [ptr, ec] = std::from_chars(start, end, result);
+
+    if (ec == std::errc::invalid_argument) {
+      throw std::invalid_argument("Invalid numeric input: " + std::string(sv));
+    } else if (ec == std::errc::result_out_of_range) {
+      throw std::out_of_range("Numeric input out of range: " + std::string(sv));
+    } else if (ptr != end) {
+      // Additional characters after the number
+      throw std::invalid_argument("Invalid numeric input: " + std::string(sv));
+    }
+
+    return result;
   }
 };
 
@@ -923,7 +958,7 @@ class UtilSystem {
   static double getEnvAsDouble(const std::string& variableName, const double defaultValue = 0) {
     const char* env_p = std::getenv(variableName.c_str());
     if (env_p) {
-      return std::stod(std::string(env_p));
+      return UtilString::safeParseDouble(std::string_view(env_p, strlen(env_p)));
     } else {
       return defaultValue;
     }
@@ -936,6 +971,31 @@ class UtilSystem {
     } else {
       return false;
     }
+  }
+
+  /**
+   * Safely parse a double value from a string_view using std::from_chars (no exceptions, zero allocation).
+   * @param sv The string_view containing the numeric string to parse
+   * @return The parsed double value
+   * @throws std::invalid_argument if parsing fails
+   */
+  static double safeParseDouble(std::string_view sv) {
+    double result = 0.0;
+    const char* start = sv.data();
+    const char* end = start + sv.size();
+    
+    auto [ptr, ec] = std::from_chars(start, end, result);
+    
+    if (ec == std::errc::invalid_argument) {
+      throw std::invalid_argument("Invalid numeric input: " + std::string(sv));
+    } else if (ec == std::errc::result_out_of_range) {
+      throw std::out_of_range("Numeric input out of range: " + std::string(sv));
+    } else if (ptr != end) {
+      // Additional characters after the number
+      throw std::invalid_argument("Invalid numeric input: " + std::string(sv));
+    }
+    
+    return result;
   }
 };
 
@@ -1065,7 +1125,7 @@ class Decimal {
 
   double toDouble() const {
     if (!this->cachedToDouble) {
-      cachedToDouble.emplace(std::stod(this->toString()));
+      cachedToDouble.emplace(UtilString::safeParseDouble(this->toString()));
     }
     return *this->cachedToDouble;
   }

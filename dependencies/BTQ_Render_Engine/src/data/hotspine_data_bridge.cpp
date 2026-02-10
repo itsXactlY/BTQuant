@@ -121,6 +121,7 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
   // No orderbook data is stored in SHM — orderbook panels use other data sources
   size_t data_capacity = HotSpine::V3::RING_BUFFER_SIZE;
 
+  // Map the SHM segment to a raw HotspineData* pointer for efficient indexing
   base_ptr_ = reinterpret_cast<HotSpine::V3::HotspineData*>(buffer_start);
   books_ = nullptr;  // No orderbook data in SHM
 
@@ -255,7 +256,8 @@ void HotSpineDataBridge::sync_shm() {
   const uint64_t MIN_VALID_TS = 1000ULL;
 
   while (last_read < current_write_idx) {
-    // Use the new ring buffer mask for indexing with raw HotspineData pointer
+    // Pointer arithmetic: Map the SHM segment to a raw HotspineData* pointer.
+    // Indexing becomes base_ptr[index & mask] for efficient modulo-free access
     const auto& hotspine_data = base_ptr_[(last_read & HotSpine::V3::RING_BUFFER_MASK)];
 
     // Convert HotspineData to HotTrade for compatibility

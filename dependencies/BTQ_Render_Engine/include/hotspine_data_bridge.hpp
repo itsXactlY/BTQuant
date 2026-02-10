@@ -11,7 +11,7 @@
 #include <thread>
 #include <vector>
 
-#include "hotspine_layout_v3.hpp"  // Include the layout definition
+#include "../../../include/hotspine_layout_v3.hpp"  // Include the main layout definition
 
 namespace BTQuant {
 namespace RenderEngine {

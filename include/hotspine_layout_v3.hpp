@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace hotspine {
+namespace HotSpine::V3 {
 
 // Ring buffer constants
 constexpr size_t RING_BUFFER_SIZE = 8192; // Power of 2 for efficient masking
@@ -43,9 +43,31 @@ struct alignas(64) RingBufferHeader {
     }
 };
 
+// Core data structure for shared memory
+struct alignas(64) HotspineData {
+    std::uint64_t timestamp;            // Nanosecond timestamp of the event
+    std::uint32_t symbol_id;            // Symbol identifier
+    std::uint32_t event_type;           // Type of event (trade, quote, etc.)
+    double price;                       // Price value
+    double volume;                      // Volume value
+    std::uint8_t flags;                 // Flags: Bit 0: IS_WARMUP, Bit 1: IS_SNAPSHOT
+    std::uint8_t reserved_flags[3];     // Reserved for future flags
+    std::uint32_t sequence_number;      // Sequence number for ordering
+    std::uint32_t payload_size;         // Size of additional payload data
+    std::uint8_t padding[20];           // Explicit padding to reach 64 bytes total
+
+    // Flag bit positions
+    static constexpr std::uint8_t IS_WARMUP = 0x01;    // Bit 0: Warm-up event
+    static constexpr std::uint8_t IS_SNAPSHOT = 0x02;  // Bit 1: Snapshot event
+};
+
 // Constants
 constexpr size_t HEADER_SIZE = sizeof(RingBufferHeader);
 
-} // namespace hotspine
+// Static assertions to ensure proper alignment and size
+static_assert(sizeof(HotspineData) == 64, "HotspineData must be exactly 64 bytes for cache alignment");
+static_assert(alignof(HotspineData) == 64, "HotspineData must be 64-byte aligned");
+
+} // namespace HotSpine::V3
 
 #endif // HOTSPINE_LAYOUT_V3_HPP

@@ -10,7 +10,7 @@
 **Dependencies:** None. Must be done first to fix the build.
 
 ### 0.1: HotSpine Type Alignment
-- [ ] **Sync Data Structures:**
+- [x] **Sync Data Structures:**
     - In `include/hotspine_layout_v3.hpp`, define the `HotspineData` struct as strictly POD (Plain Old Data), `alignas(64)`.
     - **Remove:** Any `std::vector`, `std::string`, or complex types from shared memory structs.
     - **Fix:** Update `src/hotspine/hotspine_reader.cpp` to use `HotSpine::V3::Viewport` (or `HotspineData`) instead of the non-existent `ClusterColumn`.
@@ -21,14 +21,14 @@
 **Dependencies:** Module 0. Defines the rigid contract between Collector and Terminal.
 
 ### 1.1: Lock-Free Ring Buffer Layout
-- [ ] **Define `RingBufferHeader` (`include/hotspine_layout_v3.hpp`):**
+- [x] **Define `RingBufferHeader` (`include/hotspine_layout_v3.hpp`):**
     - Implement struct with `std::atomic<uint64_t> write_head` and `std::atomic<uint64_t> read_tail` (aligned to 64 bytes).
     - Hardcode `RING_BUFFER_SIZE = 1048576` (2^20) for bitwise masking operations.
-- [ ] **Implement Inline Accessors:**
+- [x] **Implement Inline Accessors:**
     - Add `load_acquire()` and `store_release()` helpers directly in the header to enforce memory ordering.
 
 ### 1.2: Shared Memory Manager (`include/hotspine_data_bridge.hpp`)**
-- [ ] **Refactor Bridge:** Remove all `std::queue` and `std::mutex`.
+- [x] **Refactor Bridge:** Remove all `std::queue` and `std::mutex`.
 - [ ] **Pointer Arithmetic:** Map the SHM segment to a raw `HotspineData*` pointer. Indexing becomes `base_ptr[index & mask]`.
 
 ---

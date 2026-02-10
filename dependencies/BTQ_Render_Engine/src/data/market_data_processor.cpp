@@ -948,10 +948,13 @@ void MarketDataProcessor::pollingLoop() {
 
 // Poll the shared memory ring buffer for new events
 void MarketDataProcessor::pollSharedMemoryRingBuffer() {
-  // Get the current write head from the shared memory layout
-  // This assumes we have access to the shared memory layout structure
-  // In a real implementation, this would be mapped shared memory
-  uint64_t shared_write_head = hotspine_layout_.header.write_head.load(std::memory_order_acquire);
+  // Check if we have a valid HotSpineDataBridge
+  if (!hotspine_bridge_) {
+    return; // No bridge available, nothing to poll
+  }
+
+  // Get the current write head from the shared memory header via the bridge
+  uint64_t shared_write_head = hotspine_bridge_->getHeader()->write_head.load(std::memory_order_acquire);
 
   // If no new data is available, return early
   if (local_read_tail_ >= shared_write_head) {
@@ -962,63 +965,31 @@ void MarketDataProcessor::pollSharedMemoryRingBuffer() {
   uint64_t events_to_process =
       std::min(static_cast<uint64_t>(MAX_BATCH_SIZE), shared_write_head - local_read_tail_);
 
-  // Process up to MAX_BATCH_SIZE events per cycle
+  // Process up to MAX_BATCH_SIZE events per cycle using pointer arithmetic
   for (uint64_t i = 0; i < events_to_process; ++i) {
+    // Use the new indexing pattern: base_ptr[index & mask]
     uint64_t current_index = (local_read_tail_ + i) & (HotSpine::V3::RING_BUFFER_MASK);
-
-    // Bounds check: ensure the calculated address is within the allocated buffer
-    uint8_t* buffer_start = hotspine_layout_.ring_buffer_data;
-    uint8_t* buffer_end = buffer_start + (HotSpine::V3::RING_BUFFER_SIZE * sizeof(HotspineData));
-    uint8_t* event_addr = buffer_start + (current_index * sizeof(HotspineData));
-
-    // Verify that the slot address is within valid range
-    if (event_addr < buffer_start || event_addr >= buffer_end) {
-      std::cerr << "[MarketDataProcessor] Buffer bounds violation in pollSharedMemoryRingBuffer! "
-                   "event_addr="
-                << reinterpret_cast<void*>(event_addr)
-                << ", buffer_start=" << reinterpret_cast<void*>(buffer_start)
-                << ", buffer_end=" << reinterpret_cast<void*>(buffer_end) << std::endl;
-      continue;  // Skip this event and continue with others
-    }
-
-    // Verify that the event address plus the event size doesn't exceed buffer bounds
-    if ((event_addr + sizeof(HotspineData)) > buffer_end) {
-      std::cerr << "[MarketDataProcessor] Buffer overflow detected in pollSharedMemoryRingBuffer! "
-                   "Attempted to read past buffer end."
-                << std::endl;
-      continue;  // Skip this event and continue with others
-    }
-
-    // Additional validation: ensure we're not reading from an invalid memory region
-    // by checking that the calculated offset doesn't wrap around due to integer overflow
-    if ((current_index * sizeof(HotspineData)) / sizeof(HotspineData) != current_index) {
-      std::cerr << "[MarketDataProcessor] Integer overflow detected in address calculation!"
-                << std::endl;
-      continue;  // Skip this event and continue with others
-    }
-
-    // Access the event from the ring buffer
-    // In a real implementation, this would read from the actual shared memory buffer
-    // For now, we'll simulate reading from a buffer
-    HotspineData* event_ptr = reinterpret_cast<HotspineData*>(event_addr);
+    
+    // Access the event directly using pointer arithmetic: base_ptr[index & mask]
+    const auto& event_ref = hotspine_bridge_->getBasePtr()[current_index];
 
     // Check if this is a warmup event
-    if (event_ptr->flags & HotspineData::IS_WARMUP) {
+    if (event_ref.flags & HotSpine::V3::HotspineData::IS_WARMUP) {
       // For warmup events, just touch memory to keep cache hot, but skip processing
       continue;
     }
 
     // Convert HotspineData to MarketDataUpdate and process
     MarketDataUpdate update;
-    update.timestamp = event_ptr->timestamp;
-    update.symbol_id = event_ptr->symbolId;
-    update.price = event_ptr->price;
-    update.size = event_ptr->volume;
+    update.timestamp = event_ref.timestamp;
+    update.symbol_id = event_ref.symbol_id;
+    update.price = event_ref.price;
+    update.size = event_ref.volume;
 
     // Determine event type based on eventType
-    if (event_ptr->eventType == 0) {  // Assuming 0 is TRADE
+    if (event_ref.event_type == 0) {  // Assuming 0 is TRADE
       update.type = MarketDataType::TRADE;
-      update.side = (event_ptr->flags & 0x04) ? "buy" : "sell";  // Assuming bit 2 indicates side
+      update.side = (event_ref.flags & 0x04) ? "buy" : "sell";  // Assuming bit 2 indicates side
     } else {  // Assuming other values are ORDERBOOK
       update.type = MarketDataType::ORDERBOOK;
       // Note: bids/asks would need to be reconstructed from the payload

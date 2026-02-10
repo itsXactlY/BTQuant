@@ -114,19 +114,19 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
     return std::unexpected(error_msg);
   }
 
-  // The ring buffer data (HotTrade entries) starts right after the header
+  // The ring buffer data (HotspineData entries) starts right after the header
   char* buffer_start = reinterpret_cast<char*>(header_) + sizeof(SharedMemoryHeader);
 
-  // The SHM layout is: RingBufferHeader + HotTrade[RING_BUFFER_SIZE]
+  // The SHM layout is: RingBufferHeader + HotspineData[RING_BUFFER_SIZE]
   // No orderbook data is stored in SHM — orderbook panels use other data sources
-  size_t trade_capacity = HotSpine::V3::RING_BUFFER_SIZE;
+  size_t data_capacity = HotSpine::V3::RING_BUFFER_SIZE;
 
-  trades_ = reinterpret_cast<HotTrade*>(buffer_start);
+  base_ptr_ = reinterpret_cast<HotSpine::V3::HotspineData*>(buffer_start);
   books_ = nullptr;  // No orderbook data in SHM
 
   std::string success_msg = std::format(
       "[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={})",
-      shm_path_, header_->magic, header_->version, trade_capacity);
+      shm_path_, header_->magic, header_->version, data_capacity);
   BTQ_LOG_INFO(success_msg);
 
   BTQ_LOG_INFO("HotSpineDataBridge connected successfully");
@@ -165,13 +165,15 @@ std::vector<uint32_t> HotSpineDataBridge::getActiveSymbols() const {
 }
 
 std::span<const HotTrade> HotSpineDataBridge::getTradeBuffer() const {
-  if (!trades_ || !header_) return {};
+  if (!base_ptr_ || !header_) return {};
   // Return a span based on the available data in the ring buffer
+  // Cast the base_ptr to HotTrade for compatibility with existing interfaces
+  const HotTrade* trades = reinterpret_cast<const HotTrade*>(base_ptr_);
   uint64_t available_count = header_->get_available_count();
   // Limit to a reasonable size to avoid returning huge spans
   size_t count = std::min(static_cast<size_t>(available_count),
                           static_cast<size_t>(HotSpine::V3::RING_BUFFER_SIZE));
-  return std::span<const HotTrade>(trades_, count);
+  return std::span<const HotTrade>(trades, count);
 }
 
 std::span<const HotOrderbookSnapshot> HotSpineDataBridge::getBookBuffer() const {
@@ -253,8 +255,24 @@ void HotSpineDataBridge::sync_shm() {
   const uint64_t MIN_VALID_TS = 1000ULL;
 
   while (last_read < current_write_idx) {
-    // Use the new ring buffer mask for indexing
-    const HotTrade& trade = trades_[(last_read & HotSpine::V3::RING_BUFFER_MASK)];
+    // Use the new ring buffer mask for indexing with raw HotspineData pointer
+    const auto& hotspine_data = base_ptr_[(last_read & HotSpine::V3::RING_BUFFER_MASK)];
+
+    // Convert HotspineData to HotTrade for compatibility
+    // Create a temporary HotTrade from the HotspineData fields
+    HotTrade trade;
+    trade.ts_exchange = hotspine_data.timestamp;  // Use timestamp from HotspineData
+    trade.ts_local = hotspine_data.timestamp;     // Same timestamp for local
+    trade.price = hotspine_data.price;
+    trade.size = hotspine_data.volume;
+    trade.symbol_id = hotspine_data.symbol_id;
+    // Determine side from flags or other field
+    trade.side = (hotspine_data.flags & HotSpine::V3::HotspineData::IS_WARMUP) ? 1 : 0;  // Default to sell if warmup flag is set
+    
+    // Initialize padding
+    trade.padding[0] = 0;
+    trade.padding[1] = 0;
+    trade.padding[2] = 0;
 
     // SANITY CHECK: Skip uninitialized or corrupt trades
     if (trade.ts_exchange < MIN_VALID_TS) {

@@ -128,6 +128,10 @@ class HotSpineDataBridge {
   std::string getSymbolName(uint32_t symbol_id) const;
   std::string getExchangeName(uint32_t symbol_id) const;
 
+  // Public accessors for direct SHM access
+  SharedMemoryHeader* getHeader() const { return header_; }
+  HotSpine::V3::HotspineData* getBasePtr() const { return base_ptr_; }
+
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> data_processor_;
   std::string shm_path_;
@@ -140,7 +144,7 @@ class HotSpineDataBridge {
 
   // Ring Buffer Pointers
   SharedMemoryHeader* header_ = nullptr;
-  HotTrade* trades_ = nullptr;
+  HotSpine::V3::HotspineData* base_ptr_ = nullptr;  // Raw pointer to HotspineData array
   HotOrderbookSnapshot* books_ = nullptr;
 
   // Local tracking of read progress

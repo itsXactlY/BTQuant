@@ -5,16 +5,11 @@
 #include <cstdint>
 #include <limits>
 
-// Constants
-constexpr uint32_t HOTSPINE_MAGIC = 0x42545155;  // "BTQU"
-constexpr size_t HEADER_SIZE = sizeof(RingBufferHeader);
-
 namespace HotSpine::V3 {
 
-// Helper functions
-inline constexpr uint64_t getIndex(uint64_t counter) {
-    return counter & RING_BUFFER_MASK;
-}
+// Constants
+constexpr uint32_t HOTSPINE_MAGIC = 0x42545155;  // "BTQU"
+
 
 // =========================================================================================
 // 1.1 Atomic Primitives (The SeqLock)
@@ -85,6 +80,11 @@ struct alignas(64) HeatmapBin {
 // =========================================================================================
 constexpr size_t RING_BUFFER_SIZE = 8192; // Power of 2 for efficient masking
 constexpr size_t RING_BUFFER_MASK = RING_BUFFER_SIZE - 1; // For indexing: idx = counter & MASK
+
+// Helper functions
+inline constexpr uint64_t getIndex(uint64_t counter) {
+    return counter & RING_BUFFER_MASK;
+}
 
 struct alignas(64) RingBufferHeader {
   uint32_t magic;  // 0x42545155 "BTQ3"
@@ -167,11 +167,6 @@ static_assert(alignof(HotspineData) == 64, "HotspineData must be 64-byte aligned
 // Helper: calculate total shared memory size
 static inline constexpr size_t calculateSharedMemorySize(size_t ring_buffer_size) {
   return sizeof(SharedMemoryLayoutV3) + (ring_buffer_size * 64);
-}
-
-// Helper functions
-inline constexpr uint64_t getIndex(uint64_t counter) {
-    return counter & RING_BUFFER_MASK;
 }
 
 }  // namespace HotSpine::V3

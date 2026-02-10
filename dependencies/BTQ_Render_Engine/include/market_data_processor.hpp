@@ -453,7 +453,7 @@ class MarketDataProcessor {
   // Ring buffer polling thread
   std::thread polling_thread_;
   uint64_t local_read_tail_{0};
-  HotSpine::V3::SharedMemoryLayoutV3 hotspine_layout_;  // Local copy of shared memory layout
+  std::shared_ptr<BTQuant::HotSpineDataBridge> hotspine_bridge_;  // Reference to the HotSpineDataBridge
 
   // Performance metrics (Atomic is fine)
   struct AtomicPerformanceMetrics {
@@ -527,6 +527,11 @@ class MarketDataProcessor {
   // Ring buffer polling methods
   void pollingLoop();
   void pollSharedMemoryRingBuffer();
+  
+  // Method to set the HotSpineDataBridge for direct SHM access
+  void setHotSpineBridge(std::shared_ptr<BTQuant::HotSpineDataBridge> bridge) { 
+    hotspine_bridge_ = bridge; 
+  }
 
   // Helper to get shard for a symbol
   Shard& getShard(uint32_t symbol_id) const { return *shards_[symbol_id % NUM_SHARDS]; }

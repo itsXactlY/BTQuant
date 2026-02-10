@@ -16,10 +16,13 @@
 namespace HotSpine {
 namespace V3 {
 
+// Constants
+constexpr uint32_t HOTSPINE_MAGIC = 0x42545155;  // "BTQU"
+
 // =========================================================================================
 // 1.1 Atomic Primitives (The SeqLock)
 // =========================================================================================
-struct SeqLock {
+struct alignas(64) SeqLock {
   std::atomic<uint64_t> seq{0};
 
   void write_begin() {
@@ -129,9 +132,30 @@ struct HotTrade {
 };
 
 // =========================================================================================
-// 1.6 The Global Layout
+// 1.6 HotspineData — the core data struct for shared memory
+// =========================================================================================
+struct alignas(64) HotspineData {
+  uint64_t timestamp;            // Nanosecond timestamp of the event
+  uint32_t symbol_id;            // Symbol identifier
+  uint32_t event_type;           // Type of event (trade, quote, etc.)
+  double price;                  // Price value
+  double volume;                 // Volume value
+  uint8_t flags;                 // Flags: Bit 0: IS_WARMUP, Bit 1: IS_SNAPSHOT
+  uint8_t reserved_flags[3];     // Reserved for future flags
+  uint32_t sequence_number;      // Sequence number for ordering
+  uint32_t payload_size;         // Size of additional payload data
+  uint8_t padding[20];           // Explicit padding to reach 64 bytes total
+
+  // Flag bit positions
+  static constexpr uint8_t IS_WARMUP = 0x01;    // Bit 0: Warm-up event
+  static constexpr uint8_t IS_SNAPSHOT = 0x02;  // Bit 1: Snapshot event
+};
+
+// =========================================================================================
+// 1.7 The Global Layout
 // =========================================================================================
 struct SharedMemoryLayoutV3 {
+  SeqLock seqlock;             // SeqLock for atomic reads
   RingBufferHeader header; // Ring buffer header with write_head and read_tail
 
   // Flexible array member for ring buffer data (C++ equivalent using byte
@@ -151,9 +175,24 @@ static inline size_t calculateTradeSharedMemorySize() {
   return sizeof(RingBufferHeader) + (RING_BUFFER_SIZE * sizeof(HotTrade));
 }
 
+// Constants
+constexpr size_t HEADER_SIZE = sizeof(RingBufferHeader);
+
 static_assert(sizeof(VolumeNode) == 16);
 static_assert(alignof(ClusterColumn) == 64);
 static_assert(alignof(RingBufferHeader) == 64);
+static_assert(sizeof(HotspineData) == 64, "HotspineData must be exactly 64 bytes for cache alignment");
+static_assert(alignof(HotspineData) == 64, "HotspineData must be 64-byte aligned");
+
+// Helper: calculate total shared memory size
+static inline constexpr size_t calculateSharedMemorySize(size_t ring_buffer_size) {
+  return sizeof(SharedMemoryLayoutV3) + (ring_buffer_size * 64);
+}
+
+// Helper functions
+inline constexpr uint64_t getIndex(uint64_t counter) {
+    return counter & RING_BUFFER_MASK;
+}
 
 } // namespace V3
 } // namespace HotSpine

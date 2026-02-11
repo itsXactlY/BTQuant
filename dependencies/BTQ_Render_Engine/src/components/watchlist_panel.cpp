@@ -285,9 +285,6 @@ void WatchlistPanel::update(float dt) {
     }
   }
 
-  // Handle real-time price updates for all symbols in the current watchlist group
-  // Process any pending market data updates
-  process_pending_updates();
 }
 
 void WatchlistPanel::render() {
@@ -497,6 +494,73 @@ void WatchlistPanel::render() {
       for (uint32_t symbol_id : filtered_symbols) {
         auto it = get_current_watchlist().find(symbol_id);
         if (it != get_current_watchlist().end()) {
+          // Update the entry with fresh data from the processor
+          auto analytics = processor_->getSymbolAnalytics(symbol_id);
+          if (analytics.symbol_id != 0) {
+            // Update the entry with fresh data for rendering
+            // Note: This temporarily modifies the entry for rendering purposes
+            // Store previous values for animation
+            double prev_price = it->second.price;
+            double prev_vwap = it->second.vwap;
+            double prev_volume = it->second.volume_24h;
+            double prev_change_pct = it->second.change_pct;
+            double prev_change_dollar = it->second.change_dollar;
+            double prev_high_24h = it->second.high_24h;
+            double prev_low_24h = it->second.low_24h;
+            double prev_open_24h = it->second.open_24h;
+
+            // Update with fresh data
+            it->second.price = analytics.last_trade_price;
+            it->second.vwap = analytics.vwap;
+            it->second.last_update_ts = analytics.last_trade_time;
+
+            // Calculate 24h change using the longest available timeframe candles
+            auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+            if (!candles.empty()) {
+              const auto& oldest_candle = candles.front();
+              const auto& newest_candle = candles.back();
+
+              // Calculate percentage change
+              it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
+
+              // Calculate dollar change
+              it->second.change_dollar = newest_candle.close - oldest_candle.close;
+
+              // Store open, high, low values from the oldest candle (representing 24h period)
+              it->second.open_24h = oldest_candle.open;
+              it->second.high_24h = oldest_candle.high;
+              it->second.low_24h = oldest_candle.low;
+
+              // Estimate 24h volume by summing available candles (best effort)
+              double total_vol = 0.0;
+              for (const auto& c : candles) total_vol += c.volume;
+              it->second.volume_24h = total_vol;
+            } else {
+              it->second.change_pct = 0.0;
+              it->second.change_dollar = 0.0;
+              it->second.open_24h = 0.0;
+              it->second.high_24h = 0.0;
+              it->second.low_24h = 0.0;
+              it->second.volume_24h = analytics.volume_1m;  // Fallback
+            }
+
+            // Maintain animation state for visual feedback
+            it->second.previous_price = prev_price;
+            it->second.previous_vwap = prev_vwap;
+            it->second.previous_volume = prev_volume;
+
+            // Start animation for any significant value change
+            bool significant_change = false;
+            double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+            if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) {
+              significant_change = true;
+            }
+
+            if (significant_change) {
+              it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+            }
+          }
+
           render_table_row(it->second);
         }
       }
@@ -627,16 +691,6 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
             << current_group_name_ << "' and queued for subscription" << std::endl;
 }
 
-void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
-                                           RenderEngine::NotificationType type) {
-  // Fast Path: Simply enqueue the update struct. Return immediately. (Zero lock contention).
-  // The actual processing will happen in process_pending_updates() which is called from update()
-
-  // For market data updates, we can use the more comprehensive WatchlistUpdate structure
-  // which allows us to handle all types of updates through the same queue
-  WatchlistUpdate update(WatchlistUpdate::MARKET_DATA_UPDATE, symbol_id);
-  pending_updates_.enqueue(update);
-}
 
 void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
   std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
@@ -683,7 +737,6 @@ void WatchlistPanel::clear_watchlist() {
 
 void WatchlistPanel::update_watchlist_data() {
   // This method is now deprecated since we use real-time updates
-  // The data is updated in on_market_data_update() when new market data arrives
   // This method remains for backward compatibility but does nothing
 }
 
@@ -2352,10 +2405,7 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
 
     // Create a subscription for this specific symbol to receive real-time price updates
     uint64_t sub_id =
-        processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
-                              [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
-                                this->on_market_data_update(symbol_id, type);
-                              });
+        processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE, nullptr);
 
     // Store the subscription ID for this symbol
     symbol_subscriptions_[symbol_id] = sub_id;
@@ -3493,505 +3543,5 @@ void WatchlistPanel::set_sorting(int column_id, bool ascending) {
   }
 }
 
-void WatchlistPanel::process_pending_updates() {
-  // Process pending market data updates that were queued by on_market_data_update
-  // This method is called from update() and can safely acquire the mutex
-
-  // First, process pending watchlist updates
-  std::vector<WatchlistUpdate> watchlist_updates;
-  WatchlistUpdate watchlist_update;
-  while (pending_updates_.try_dequeue(watchlist_update)) {
-    watchlist_updates.push_back(watchlist_update);
-  }
-
-  // Process watchlist updates while holding the mutex once
-  if (!watchlist_updates.empty()) {
-    std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
-
-    for (const auto& update : watchlist_updates) {
-      switch (update.type) {
-        case WatchlistUpdate::ADD_SYMBOL:
-          add_symbol(update.symbol_id, update.symbol, update.exchange);
-          break;
-        case WatchlistUpdate::REMOVE_SYMBOL:
-          remove_symbol(update.symbol_id);
-          break;
-        case WatchlistUpdate::CLEAR_WATCHLIST:
-          clear_watchlist();
-          break;
-        case WatchlistUpdate::MARKET_DATA_UPDATE:
-          // Handle market data updates within the locked section
-          {
-            // Check if this symbol is in our current watchlist group
-            auto it = get_current_watchlist().find(update.symbol_id);
-            if (it != get_current_watchlist().end()) {
-              // Get the latest analytics data for this symbol
-              auto analytics = processor_->getSymbolAnalytics(update.symbol_id);
-              if (analytics.symbol_id != 0) {
-                // Store previous values for animation
-                double prev_price = it->second.price;
-                double prev_vwap = it->second.vwap;
-                double prev_volume = it->second.volume_24h;
-                double prev_change_pct = it->second.change_pct;
-                double prev_change_dollar = it->second.change_dollar;
-                double prev_high_24h = it->second.high_24h;
-                double prev_low_24h = it->second.low_24h;
-                double prev_open_24h = it->second.open_24h;
-
-                // Update the entry with new data from real-time price feed
-                it->second.price = analytics.last_trade_price;
-                it->second.vwap = analytics.vwap;
-                it->second.last_update_ts = analytics.last_trade_time;
-
-                // Store the previous values in the entry for animation purposes
-                it->second.previous_price = prev_price;
-                it->second.previous_vwap = prev_vwap;
-                it->second.previous_volume = prev_volume;
-
-                // Calculate 24h change using the longest available timeframe candles
-                auto candles =
-                    processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-                if (!candles.empty()) {
-                  const auto& oldest_candle = candles.front();
-                  const auto& newest_candle = candles.back();
-
-                  // Calculate percentage change
-                  it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-                  // Calculate dollar change
-                  it->second.change_dollar = newest_candle.close - oldest_candle.close;
-
-                  // Store open, high, low values from the oldest candle (representing 24h period)
-                  it->second.open_24h = oldest_candle.open;
-                  it->second.high_24h = oldest_candle.high;
-                  it->second.low_24h = oldest_candle.low;
-
-                  // Estimate 24h volume by summing available candles (best effort)
-                  double total_vol = 0.0;
-                  for (const auto& c : candles) total_vol += c.volume;
-                  it->second.volume_24h = total_vol;
-                } else {
-                  it->second.change_pct = 0.0;
-                  it->second.change_dollar = 0.0;
-                  it->second.open_24h = 0.0;
-                  it->second.high_24h = 0.0;
-                  it->second.low_24h = 0.0;
-                  it->second.volume_24h = analytics.volume_1m;  // Fallback
-                }
-
-                // Start animation for any significant value change
-                // Only restart animation if there's a meaningful change
-                bool significant_change = false;
-
-                // Check if price changed significantly (more than 0.01% or minimum tick)
-                double price_change_pct =
-                    (prev_price != 0)
-                        ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
-                        : 0;
-                if (price_change_pct > 0.01 ||
-                    std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
-                  significant_change = true;
-                }
-
-                // Check if VWAP changed significantly
-                double vwap_change_pct =
-                    (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0
-                                     : 0;
-                if (vwap_change_pct > 0.01 ||
-                    std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
-                  significant_change = true;
-                }
-
-                // Check if change percentages changed significantly
-                if (std::abs(it->second.change_pct - prev_change_pct) >
-                    0.01) {  // At least 0.01% difference
-                  significant_change = true;
-                }
-
-                // Check if change dollars changed significantly
-                if (std::abs(it->second.change_dollar - prev_change_dollar) >
-                    0.001) {  // At least $0.001 difference
-                  significant_change = true;
-                }
-
-                // Check if high/low/open changed significantly
-                if (std::abs(it->second.high_24h - prev_high_24h) > 0.001) {
-                  significant_change = true;
-                }
-                if (std::abs(it->second.low_24h - prev_low_24h) > 0.001) {
-                  significant_change = true;
-                }
-                if (std::abs(it->second.open_24h - prev_open_24h) > 0.001) {
-                  significant_change = true;
-                }
-
-                if (significant_change) {
-                  // Reset animation timer to start fresh animation with brief flash effect
-                  it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-                }
-              }
-            }
-
-            // Also check other groups to update their entries if needed
-            for (auto& [group_name, group] : watchlist_groups_) {
-              auto it = group.find(update.symbol_id);
-              if (it != group.end() && group_name != current_group_name_) {
-                // Update the entry in other groups too
-                auto analytics = processor_->getSymbolAnalytics(update.symbol_id);
-                if (analytics.symbol_id != 0) {
-                  // Store previous values for animation
-                  double prev_price = it->second.price;
-                  double prev_vwap = it->second.vwap;
-                  double prev_volume = it->second.volume_24h;
-                  double prev_change_pct = it->second.change_pct;
-                  double prev_change_dollar = it->second.change_dollar;
-                  double prev_high_24h = it->second.high_24h;
-                  double prev_low_24h = it->second.low_24h;
-                  double prev_open_24h = it->second.open_24h;
-
-                  // Update the entry with new data from real-time price feed
-                  it->second.price = analytics.last_trade_price;
-                  it->second.vwap = analytics.vwap;
-                  it->second.last_update_ts = analytics.last_trade_time;
-
-                  // Store the previous values in the entry for animation purposes
-                  it->second.previous_price = prev_price;
-                  it->second.previous_vwap = prev_vwap;
-                  it->second.previous_volume = prev_volume;
-
-                  // Calculate 24h change using the longest available timeframe candles
-                  auto candles =
-                      processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-                  if (!candles.empty()) {
-                    const auto& oldest_candle = candles.front();
-                    const auto& newest_candle = candles.back();
-
-                    // Calculate percentage change
-                    it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-                    // Calculate dollar change
-                    it->second.change_dollar = newest_candle.close - newest_candle.close;
-
-                    // Store open, high, low values from the oldest candle (representing 24h period)
-                    it->second.open_24h = oldest_candle.open;
-                    it->second.high_24h = oldest_candle.high;
-                    it->second.low_24h = oldest_candle.low;
-
-                    // Estimate 24h volume by summing available candles (best effort)
-                    double total_vol = 0.0;
-                    for (const auto& c : candles) total_vol += c.volume;
-                    it->second.volume_24h = total_vol;
-                  } else {
-                    it->second.change_pct = 0.0;
-                    it->second.change_dollar = 0.0;
-                    it->second.open_24h = 0.0;
-                    it->second.high_24h = 0.0;
-                    it->second.low_24h = 0.0;
-                    it->second.volume_24h = analytics.volume_1m;  // Fallback
-                  }
-
-                  // Start animation for any significant value change
-                  // Only restart animation if there's a meaningful change
-                  bool significant_change = false;
-
-                  // Check if price changed significantly (more than 0.01% or minimum tick)
-                  double price_change_pct =
-                      (prev_price != 0)
-                          ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
-                          : 0;
-                  if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) >
-                                                     0.001) {  // 0.01% or $0.001 threshold
-                    significant_change = true;
-                  }
-
-                  // Check if VWAP changed significantly
-                  double vwap_change_pct =
-                      (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0
-                                       : 0;
-                  if (vwap_change_pct > 0.01 ||
-                      std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
-                    significant_change = true;
-                  }
-
-                  // Check if change percentages changed significantly
-                  if (std::abs(it->second.change_pct - prev_change_pct) >
-                      0.01) {  // At least 0.01% difference
-                    significant_change = true;
-                  }
-
-                  // Check if change dollars changed significantly
-                  if (std::abs(it->second.change_dollar - prev_change_dollar) >
-                      0.001) {  // At least $0.001 difference
-                    significant_change = true;
-                  }
-
-                  // Check if high/low/open changed significantly
-                  if (std::abs(it->second.high_24h - prev_high_24h) > 0.001) {
-                    significant_change = true;
-                  }
-                  if (std::abs(it->second.low_24h - prev_low_24h) > 0.001) {
-                    significant_change = true;
-                  }
-                  if (std::abs(it->second.open_24h - prev_open_24h) > 0.001) {
-                    significant_change = true;
-                  }
-
-                  if (significant_change) {
-                    // Reset animation timer to start fresh animation with brief flash effect
-                    it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-                  }
-                }
-              }
-            }
-          }
-          break;
-        case WatchlistUpdate::PRICE_ALERT:
-          add_price_alert(update.symbol_id, update.symbol, update.value,
-                          static_cast<WatchlistPriceAlert::Direction>(update.alert_direction));
-          break;
-        case WatchlistUpdate::SYMBOL_RENAME:
-          // TODO: Implement symbol rename functionality if needed
-          break;
-      }
-    }
-  }
-
-  // Then, process any remaining pending market data updates that were queued by
-  // on_market_data_update First, dequeue all pending updates to a local vector to minimize time
-  // spent with mutex locked
-  std::vector<QueuedMarketDataUpdate> updates;
-  QueuedMarketDataUpdate update;
-  while (pending_market_data_updates_.try_dequeue(update)) {
-    // Only process trade updates for real-time price feed
-    if (update.type == RenderEngine::NotificationType::TRADE) {
-      updates.push_back(update);
-    }
-  }
-
-  // Process all updates while holding the mutex once
-  if (!updates.empty()) {
-    std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);
-
-    for (const auto& update : updates) {
-      // Check if this symbol is in our current watchlist group
-      auto it = get_current_watchlist().find(update.symbol_id);
-      if (it != get_current_watchlist().end()) {
-        // Get the latest analytics data for this symbol
-        auto analytics = processor_->getSymbolAnalytics(update.symbol_id);
-        if (analytics.symbol_id != 0) {
-          // Store previous values for animation
-          double prev_price = it->second.price;
-          double prev_vwap = it->second.vwap;
-          double prev_volume = it->second.volume_24h;
-          double prev_change_pct = it->second.change_pct;
-          double prev_change_dollar = it->second.change_dollar;
-          double prev_high_24h = it->second.high_24h;
-          double prev_low_24h = it->second.low_24h;
-          double prev_open_24h = it->second.open_24h;
-
-          // Update the entry with new data from real-time price feed
-          it->second.price = analytics.last_trade_price;
-          it->second.vwap = analytics.vwap;
-          it->second.last_update_ts = analytics.last_trade_time;
-
-          // Store the previous values in the entry for animation purposes
-          it->second.previous_price = prev_price;
-          it->second.previous_vwap = prev_vwap;
-          it->second.previous_volume = prev_volume;
-
-          // Calculate 24h change using the longest available timeframe candles
-          auto candles =
-              processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-          if (!candles.empty()) {
-            const auto& oldest_candle = candles.front();
-            const auto& newest_candle = candles.back();
-
-            // Calculate percentage change
-            it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-            // Calculate dollar change
-            it->second.change_dollar = newest_candle.close - oldest_candle.close;
-
-            // Store open, high, low values from the oldest candle (representing 24h period)
-            it->second.open_24h = oldest_candle.open;
-            it->second.high_24h = oldest_candle.high;
-            it->second.low_24h = oldest_candle.low;
-
-            // Estimate 24h volume by summing available candles (best effort)
-            double total_vol = 0.0;
-            for (const auto& c : candles) total_vol += c.volume;
-            it->second.volume_24h = total_vol;
-          } else {
-            it->second.change_pct = 0.0;
-            it->second.change_dollar = 0.0;
-            it->second.open_24h = 0.0;
-            it->second.high_24h = 0.0;
-            it->second.low_24h = 0.0;
-            it->second.volume_24h = analytics.volume_1m;  // Fallback
-          }
-
-          // Start animation for any significant value change
-          // Only restart animation if there's a meaningful change
-          bool significant_change = false;
-
-          // Check if price changed significantly (more than 0.01% or minimum tick)
-          double price_change_pct =
-              (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
-                                : 0;
-          if (price_change_pct > 0.01 ||
-              std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
-            significant_change = true;
-          }
-
-          // Check if VWAP changed significantly
-          double vwap_change_pct =
-              (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
-          if (vwap_change_pct > 0.01 ||
-              std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
-            significant_change = true;
-          }
-
-          // Check if change percentages changed significantly
-          if (std::abs(it->second.change_pct - prev_change_pct) >
-              0.01) {  // At least 0.01% difference
-            significant_change = true;
-          }
-
-          // Check if change dollars changed significantly
-          if (std::abs(it->second.change_dollar - prev_change_dollar) >
-              0.001) {  // At least $0.001 difference
-            significant_change = true;
-          }
-
-          // Check if high/low/open changed significantly
-          if (std::abs(it->second.high_24h - prev_high_24h) > 0.001) {
-            significant_change = true;
-          }
-          if (std::abs(it->second.low_24h - prev_low_24h) > 0.001) {
-            significant_change = true;
-          }
-          if (std::abs(it->second.open_24h - prev_open_24h) > 0.001) {
-            significant_change = true;
-          }
-
-          if (significant_change) {
-            // Reset animation timer to start fresh animation with brief flash effect
-            it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-          }
-        }
-      }
-
-      // Also check other groups to update their entries if needed
-      for (auto& [group_name, group] : watchlist_groups_) {
-        auto it = group.find(update.symbol_id);
-        if (it != group.end() && group_name != current_group_name_) {
-          // Update the entry in other groups too
-          auto analytics = processor_->getSymbolAnalytics(update.symbol_id);
-          if (analytics.symbol_id != 0) {
-            // Store previous values for animation
-            double prev_price = it->second.price;
-            double prev_vwap = it->second.vwap;
-            double prev_volume = it->second.volume_24h;
-            double prev_change_pct = it->second.change_pct;
-            double prev_change_dollar = it->second.change_dollar;
-            double prev_high_24h = it->second.high_24h;
-            double prev_low_24h = it->second.low_24h;
-            double prev_open_24h = it->second.open_24h;
-
-            // Update the entry with new data from real-time price feed
-            it->second.price = analytics.last_trade_price;
-            it->second.vwap = analytics.vwap;
-            it->second.last_update_ts = analytics.last_trade_time;
-
-            // Store the previous values in the entry for animation purposes
-            it->second.previous_price = prev_price;
-            it->second.previous_vwap = prev_vwap;
-            it->second.previous_volume = prev_volume;
-
-            // Calculate 24h change using the longest available timeframe candles
-            auto candles =
-                processor_->getCandles(update.symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-            if (!candles.empty()) {
-              const auto& oldest_candle = candles.front();
-              const auto& newest_candle = candles.back();
-
-              // Calculate percentage change
-              it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-              // Calculate dollar change
-              it->second.change_dollar = newest_candle.close - oldest_candle.close;
-
-              // Store open, high, low values from the oldest candle (representing 24h period)
-              it->second.open_24h = oldest_candle.open;
-              it->second.high_24h = oldest_candle.high;
-              it->second.low_24h = oldest_candle.low;
-
-              // Estimate 24h volume by summing available candles (best effort)
-              double total_vol = 0.0;
-              for (const auto& c : candles) total_vol += c.volume;
-              it->second.volume_24h = total_vol;
-            } else {
-              it->second.change_pct = 0.0;
-              it->second.change_dollar = 0.0;
-              it->second.open_24h = 0.0;
-              it->second.high_24h = 0.0;
-              it->second.low_24h = 0.0;
-              it->second.volume_24h = analytics.volume_1m;  // Fallback
-            }
-
-            // Start animation for any significant value change
-            // Only restart animation if there's a meaningful change
-            bool significant_change = false;
-
-            // Check if price changed significantly (more than 0.01% or minimum tick)
-            double price_change_pct =
-                (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0
-                                  : 0;
-            if (price_change_pct > 0.01 ||
-                std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
-              significant_change = true;
-            }
-
-            // Check if VWAP changed significantly
-            double vwap_change_pct =
-                (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
-            if (vwap_change_pct > 0.01 ||
-                std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
-              significant_change = true;
-            }
-
-            // Check if change percentages changed significantly
-            if (std::abs(it->second.change_pct - prev_change_pct) >
-                0.01) {  // At least 0.01% difference
-              significant_change = true;
-            }
-
-            // Check if change dollars changed significantly
-            if (std::abs(it->second.change_dollar - prev_change_dollar) >
-                0.001) {  // At least $0.001 difference
-              significant_change = true;
-            }
-
-            // Check if high/low/open changed significantly
-            if (std::abs(it->second.high_24h - prev_high_24h) > 0.001) {
-              significant_change = true;
-            }
-            if (std::abs(it->second.low_24h - prev_low_24h) > 0.001) {
-              significant_change = true;
-            }
-            if (std::abs(it->second.open_24h - prev_open_24h) > 0.001) {
-              significant_change = true;
-            }
-
-            if (significant_change) {
-              // Reset animation timer to start fresh animation with brief flash effect
-              it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-            }
-          }
-        }
-      }
-    }
-  }
-}
 
 }  // namespace BTQuant

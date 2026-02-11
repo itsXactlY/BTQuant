@@ -107,8 +107,6 @@ class WatchlistPanel : public PanelBase {
   void clear_all_symbols();
   void set_sorting(int column_id, bool ascending);
   
-  // Test method for verifying queue functionality
-  size_t get_pending_updates_count() const { return pending_updates_.size_approx(); }
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -202,8 +200,6 @@ class WatchlistPanel : public PanelBase {
   static const char* get_sort_column_name(int column);
   const char* get_column_name_by_index(int column_index);
 
-  // Real-time update handler
-  void on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type);
 
   // Helper methods for managing subscriptions
   void subscribe_to_symbol(uint32_t symbol_id);
@@ -211,7 +207,6 @@ class WatchlistPanel : public PanelBase {
   void verify_subscriptions();
   void refresh_all_subscriptions();
   void ensure_all_symbols_subscribed();
-  void process_pending_updates();
   void subscribe_to_all_watchlist_symbols();
   void process_pending_subscriptions();
 
@@ -280,12 +275,6 @@ class WatchlistPanel : public PanelBase {
     WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val, int dir)
         : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(dir) {}
   };
-
-  // Queue for pending market data updates to avoid mutex acquisition in callback
-  moodycamel::ConcurrentQueue<QueuedMarketDataUpdate> pending_market_data_updates_;
-
-  // Queue for pending watchlist updates to handle operations from different threads
-  moodycamel::ConcurrentQueue<WatchlistUpdate> pending_updates_;
 
   // Using recursive mutex to prevent deadlocks in rendering logic
   mutable std::recursive_mutex watchlist_mutex_;

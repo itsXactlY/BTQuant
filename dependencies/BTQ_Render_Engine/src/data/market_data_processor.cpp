@@ -9,6 +9,7 @@
 #include <ranges>
 #include <stdexcept>
 
+#include "analytics/cluster_engine.hpp"
 #include "cache_manager.hpp"
 #include "trading/HotspineData.h"
 
@@ -37,6 +38,12 @@ MarketDataProcessor::MarketDataProcessor()
   // Start the polling thread
   polling_thread_ = std::thread(&MarketDataProcessor::pollingLoop, this);
 
+  // Initialize Cluster Engine with a default tick size of 0.01
+  cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.01);
+
+  // Initialize Orderbook Snapshot Manager
+  orderbook_snapshot_manager_ = std::make_unique<OrderbookSnapshotManager>();
+
   std::cout << "[MarketDataProcessor] Initialized with " << NUM_SHARDS << " shards, "
             << workers_.size() << " worker threads, and polling thread" << std::endl;
 }
@@ -56,6 +63,9 @@ MarketDataProcessor::~MarketDataProcessor() {
   if (polling_thread_.joinable()) {
     polling_thread_.join();
   }
+
+  // Clean up Orderbook Snapshot Manager
+  orderbook_snapshot_manager_.reset();
 
   std::cout << "[MarketDataProcessor] Shutdown complete" << std::endl;
 }
@@ -836,6 +846,12 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
       symbol_data.recent_orderbooks.erase(symbol_data.recent_orderbooks.begin());
     }
     symbol_data.recent_orderbooks.push_back(orderbook);
+    
+    // Update the atomic orderbook snapshot for renderer access (double-buffering)
+    // via the dedicated OrderbookSnapshotManager
+    if (orderbook_snapshot_manager_) {
+        orderbook_snapshot_manager_->updateSnapshot(update.symbol_id, orderbook);
+    }
   }
 
   // Invalidate cache for this symbol and all timeframes when new data arrives
@@ -1045,23 +1061,23 @@ void MarketDataProcessor::poll_hotspine() {
       atomic_info->volume.store(event_ref.volume, std::memory_order_relaxed);
       atomic_info->timestamp.store(event_ref.timestamp, std::memory_order_relaxed);
       atomic_info->last_update_time.store(event_ref.timestamp, std::memory_order_relaxed);
-      
+
       // Update last trade price specifically for trade events
       if (event_ref.event_type == 0) { // Assuming 0 is TRADE
         atomic_info->last_trade_price.store(event_ref.price, std::memory_order_relaxed);
-        
+
         // Update high/low prices - this would normally be updated periodically, not per trade
         // For now, we'll update them per trade for simplicity
         double current_high = atomic_info->high_price.load(std::memory_order_relaxed);
         double current_low = atomic_info->low_price.load(std::memory_order_relaxed);
-        
+
         if (current_high == 0.0 || event_ref.price > current_high) {
           atomic_info->high_price.store(event_ref.price, std::memory_order_relaxed);
         }
         if (current_low == 0.0 || event_ref.price < current_low) {
           atomic_info->low_price.store(event_ref.price, std::memory_order_relaxed);
         }
-        
+
         // Update buy/sell volume based on flags
         if (event_ref.flags & 0x04) { // Assuming bit 2 indicates buy
           atomic_info->buy_volume.fetch_add(event_ref.volume, std::memory_order_relaxed);
@@ -1069,9 +1085,32 @@ void MarketDataProcessor::poll_hotspine() {
           atomic_info->sell_volume.fetch_add(event_ref.volume, std::memory_order_relaxed);
         }
       }
-      
+
       // Increment trade count
       atomic_info->trade_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    // Feed raw trades into ClusterEngine *after* updating the atomic price
+    // Use a thread-local buffer for ClusterEngine updates to avoid locking the main atomic storage
+    if (cluster_engine_ && event_ref.event_type == 0) { // Assuming 0 is TRADE
+      // Use thread-local buffer to collect trades before batch processing
+      thread_local std::vector<MarketData::Trade> trade_buffer;
+      
+      // Create a temporary MarketData::Trade object from the HotspineData
+      MarketData::Trade trade;
+      trade.price = event_ref.price;
+      trade.quantity = event_ref.volume;
+      trade.timestamp_us = event_ref.timestamp;
+      trade.is_buyer_maker = (event_ref.flags & 0x04) != 0; // Assuming bit 2 indicates buyer maker
+      
+      // Add trade to thread-local buffer
+      trade_buffer.push_back(trade);
+      
+      // Process the buffer in batches to minimize lock contention on ClusterEngine
+      if (trade_buffer.size() >= 100) { // Process in batches of 100
+        cluster_engine_->process_trade_batch(trade_buffer);
+        trade_buffer.clear(); // Clear the buffer after processing
+      }
     }
   }
 
@@ -1127,9 +1166,14 @@ void MarketDataProcessor::publishSnapshot(uint32_t symbol_id, const SymbolAnalyt
                                   static_cast<float>(t.size), t.symbol_id, t.is_buy);
   }
 
-
   // Atomically publish — render thread can now see this snapshot
   buf_ptr->publish();
+  
+  // Also update the atomic orderbook snapshot if we have recent orderbook data
+  if (!analytics.recent_orderbooks.empty() && orderbook_snapshot_manager_) {
+    const auto& latest_orderbook = analytics.recent_orderbooks.back();
+    orderbook_snapshot_manager_->updateSnapshot(symbol_id, latest_orderbook);
+  }
 }
 
 }  // namespace RenderEngine

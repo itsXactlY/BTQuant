@@ -26,8 +26,14 @@
 #include "render_snapshot.hpp"
 #include "threading/double_buffered_state.hpp"
 #include "triple_buffer.hpp"
+#include "data/orderbook_snapshot_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
+
+// Forward declaration to avoid including heavy headers
+namespace Analytics {
+class ClusterEngine;
+}
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -57,20 +63,6 @@ struct TradeData {
   bool is_buy;
 };
 
-// Orderbook data for analytics
-struct OrderbookData {
-  std::string symbol;
-  uint32_t symbol_id = 0;
-  uint64_t timestamp;
-  std::vector<PriceLevel> bids;
-  std::vector<PriceLevel> asks;
-  double spread;
-  double spread_percent;
-  double bid_depth;
-  double ask_depth;
-  double total_depth;
-  double imbalance;  // (bid_depth - ask_depth) / total_depth
-};
 
 // Indicator cache entry
 struct IndicatorCacheEntry {
@@ -413,6 +405,14 @@ class MarketDataProcessor {
     return atomic_registry_.get_atomic_snapshot(id);
   }
 
+  // Public accessor for orderbook snapshots via the dedicated manager (atomic access for UI/rendering)
+  const std::shared_ptr<const OrderbookData> get_orderbook_snapshot(uint32_t symbol_id) const {
+    if (orderbook_snapshot_manager_) {
+      return orderbook_snapshot_manager_->getSnapshot(symbol_id);
+    }
+    return nullptr;
+  }
+
  private:
   // Configuration parameters
   size_t vwap_window_size_;
@@ -432,6 +432,8 @@ class MarketDataProcessor {
     std::unordered_map<uint32_t, SymbolAnalytics> data;
     // Per-symbol lock-free snapshot buffers for render thread
     std::unordered_map<uint32_t, std::unique_ptr<TripleBuffer<RenderSnapshot>>> snapshot_buffers;
+    // Per-symbol orderbook snapshots for atomic access by renderer
+    std::unordered_map<uint32_t, std::shared_ptr<const OrderbookData>> orderbook_snapshots;
     // Per-symbol publish throttle timestamps (accessed under unique_lock)
     std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> last_publish_time;
     // Padding to prevent false sharing cache line contention (64 bytes)
@@ -557,6 +559,12 @@ class MarketDataProcessor {
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
+
+  // Cluster Engine for advanced analytics
+  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+  
+  // Orderbook snapshot manager for atomic access by renderer
+  std::unique_ptr<OrderbookSnapshotManager> orderbook_snapshot_manager_;
 };
 
 }  // namespace RenderEngine

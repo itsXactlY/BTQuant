@@ -225,6 +225,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/incremental_updater.cpp
     src/data/exchange_aggregator.cpp
     src/data/quality_monitor.cpp
+    src/components/atomic_orderbook_panel.cpp
     src/monitoring/performance_monitor.cpp
     src/performance/debug_overlay.cpp
     src/analytics/technical_analysis.cpp

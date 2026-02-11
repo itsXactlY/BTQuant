@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <string>
 
 struct VolumeProfileLevel {
   double price;
@@ -55,6 +56,21 @@ struct OHLCVCandle {
   double close;
   double volume;
   uint64_t trade_count;
+};
+
+// Orderbook data for analytics
+struct OrderbookData {
+  std::string symbol;
+  uint32_t symbol_id = 0;
+  uint64_t timestamp;
+  std::vector<PriceLevel> bids;
+  std::vector<PriceLevel> asks;
+  double spread;
+  double spread_percent;
+  double bid_depth;
+  double ask_depth;
+  double total_depth;
+  double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
 } // namespace RenderEngine

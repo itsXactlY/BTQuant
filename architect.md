@@ -59,11 +59,11 @@
 - [x] **Zero-Lock Access:** Implement `get_atomic_snapshot(uint32_t id)` that returns a const pointer to the atomic struct.
 
 ### 3.2: The Polling Loop (`src/data/market_data_processor.cpp`)
-- [ ] **Implement `poll_hotspine()`:**
+- [x] **Implement `poll_hotspine()`:**
     - A tight loop that reads from SHM `write_head`.
     - Updates `atomic_storage_` using `std::memory_order_relaxed`.
     - **Batching:** Process max 50,000 events per frame to ensure UI responsiveness.
-- [ ] **Cluster Engine Integration:**
+- [x] **Cluster Engine Integration:**
     - Feed raw trades into `ClusterEngine` *after* updating the atomic price.
     - **Optimization:** Use a thread-local buffer for `ClusterEngine` updates to avoid locking the main atomic storage.
 
@@ -73,8 +73,8 @@
 **Dependencies:** Module 3. Converting all Panels to "Poll" instead of "Push".
 
 ### 4.1: Watchlist & Dashboard ("Lobotomy")
-- [ ] **Remove Queues:** Delete `pending_updates_` queue and `on_market_data_update` callback from `WatchlistPanel`.
-- [ ] **Polling Render:** In `WatchlistPanel::render()`, iterate visible rows and read directly from `processor_->get_atomic_snapshot(id)`.
+- [x] **Remove Queues:** Delete `pending_updates_` queue and `on_market_data_update` callback from `WatchlistPanel`.
+- [x] **Polling Render:** In `WatchlistPanel::render()`, iterate visible rows and read directly from `processor_->get_atomic_snapshot(id)`.
 - [x] **Result:** Rendering cost becomes `O(Visible_Rows)`, decoupling FPS from Market Rate.
 
 ### 4.2: Orderbook Double-Buffering

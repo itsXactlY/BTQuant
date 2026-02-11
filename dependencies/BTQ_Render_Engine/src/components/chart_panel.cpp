@@ -4024,45 +4024,148 @@ void ChartPanel::poll_atomic_indicators() {
   if (!symbol_id_opt) {
     return; // Symbol not found
   }
-  
+
   uint32_t symbol_id = *symbol_id_opt;
-  
+
   // Get the atomic indicator values from the MarketDataProcessor
   const auto* atomic_values = processor_->get_atomic_indicator_values(symbol_id);
   if (!atomic_values) {
     return; // No atomic indicator values available for this symbol
   }
+
+  // Get chart instance to determine data size for cache key
+  auto chart_opt = chart_manager_->get_chart_instance(chart_id_);
+  if (!chart_opt) {
+    return; // Chart not found
+  }
   
-  // Update the active indicators with the atomic values
-  // This is a simplified approach - in a real implementation, you'd want to update
-  // the indicator rendering system to use these atomic values directly
+  const ChartInstance& chart = *chart_opt;
+  size_t data_size = chart.closes.size();
+
+  // Update cached indicators with atomic values
+  // SMA indicators
+  if (indicator_config_.show_sma_9) {
+    IndicatorCacheKey key{IndicatorType::SMA, data_size, 9, 0, 0.0};
+    std::vector<double> sma_value(data_size, atomic_values->sma_9.load(std::memory_order_relaxed));
+    cached_indicators_[key] = sma_value;
+  }
   
-  // Example: Update SMA indicators if they are active
-  for (auto& indicator : active_indicators_) {
-    if (indicator.name == "SMA 9" && indicator.isVisible) {
-      // In a real implementation, you'd update the indicator's value with the atomic value
-      // For now, we just acknowledge that the value is available
-    } else if (indicator.name == "SMA 20" && indicator.isVisible) {
-      // Similar update for SMA 20
-    } else if (indicator.name == "SMA 50" && indicator.isVisible) {
-      // Similar update for SMA 50
-    } else if (indicator.name == "SMA 200" && indicator.isVisible) {
-      // Similar update for SMA 200
-    } else if (indicator.name == "EMA 9" && indicator.isVisible) {
-      // Similar update for EMA 9
-    } else if (indicator.name == "EMA 21" && indicator.isVisible) {
-      // Similar update for EMA 21
-    } else if (indicator.name == "RSI" && indicator.isVisible) {
-      // Similar update for RSI
-    } else if (indicator.name == "MACD" && indicator.isVisible) {
-      // Similar update for MACD
-    } else if (indicator.name == "Bollinger Bands" && indicator.isVisible) {
-      // Similar update for Bollinger Bands
-    } else if (indicator.name == "Stochastic" && indicator.isVisible) {
-      // Similar update for Stochastic
-    } else if (indicator.name == "ATR" && indicator.isVisible) {
-      // Similar update for ATR
-    }
+  if (indicator_config_.show_sma_10) {
+    IndicatorCacheKey key{IndicatorType::SMA, data_size, 10, 0, 0.0};
+    std::vector<double> sma_value(data_size, atomic_values->sma_10.load(std::memory_order_relaxed));
+    cached_indicators_[key] = sma_value;
+  }
+  
+  if (indicator_config_.show_sma_20) {
+    IndicatorCacheKey key{IndicatorType::SMA, data_size, 20, 0, 0.0};
+    std::vector<double> sma_value(data_size, atomic_values->sma_20.load(std::memory_order_relaxed));
+    cached_indicators_[key] = sma_value;
+  }
+  
+  if (indicator_config_.show_sma_50) {
+    IndicatorCacheKey key{IndicatorType::SMA, data_size, 50, 0, 0.0};
+    std::vector<double> sma_value(data_size, atomic_values->sma_50.load(std::memory_order_relaxed));
+    cached_indicators_[key] = sma_value;
+  }
+  
+  if (indicator_config_.show_sma_200) {
+    IndicatorCacheKey key{IndicatorType::SMA, data_size, 200, 0, 0.0};
+    std::vector<double> sma_value(data_size, atomic_values->sma_200.load(std::memory_order_relaxed));
+    cached_indicators_[key] = sma_value;
+  }
+
+  // EMA indicators
+  if (indicator_config_.show_ema_9) {
+    IndicatorCacheKey key{IndicatorType::EMA, data_size, 9, 0, 0.0};
+    std::vector<double> ema_value(data_size, atomic_values->ema_9.load(std::memory_order_relaxed));
+    cached_indicators_[key] = ema_value;
+  }
+  
+  if (indicator_config_.show_ema_10) {
+    IndicatorCacheKey key{IndicatorType::EMA, data_size, 10, 0, 0.0};
+    std::vector<double> ema_value(data_size, atomic_values->ema_10.load(std::memory_order_relaxed));
+    cached_indicators_[key] = ema_value;
+  }
+  
+  if (indicator_config_.show_ema_21) {
+    IndicatorCacheKey key{IndicatorType::EMA, data_size, 21, 0, 0.0};
+    std::vector<double> ema_value(data_size, atomic_values->ema_21.load(std::memory_order_relaxed));
+    cached_indicators_[key] = ema_value;
+  }
+  
+  if (indicator_config_.show_ema_50) {
+    IndicatorCacheKey key{IndicatorType::EMA, data_size, 50, 0, 0.0};
+    std::vector<double> ema_value(data_size, atomic_values->ema_50.load(std::memory_order_relaxed));
+    cached_indicators_[key] = ema_value;
+  }
+  
+  if (indicator_config_.show_ema_200) {
+    IndicatorCacheKey key{IndicatorType::EMA, data_size, 200, 0, 0.0};
+    std::vector<double> ema_value(data_size, atomic_values->ema_200.load(std::memory_order_relaxed));
+    cached_indicators_[key] = ema_value;
+  }
+
+  // RSI indicator
+  if (indicator_config_.show_rsi) {
+    IndicatorCacheKey key{IndicatorType::RSI, data_size, 14, 0, 0.0};
+    std::vector<double> rsi_value(data_size, atomic_values->rsi.load(std::memory_order_relaxed));
+    cached_indicators_[key] = rsi_value;
+  }
+
+  // MACD indicators
+  if (indicator_config_.show_macd) {
+    // MACD Line
+    IndicatorCacheKey line_key{IndicatorType::MACD_LINE, data_size, 26, 12, 0.0};
+    std::vector<double> macd_line_value(data_size, atomic_values->macd_line.load(std::memory_order_relaxed));
+    cached_indicators_[line_key] = macd_line_value;
+    
+    // MACD Signal Line
+    IndicatorCacheKey signal_key{IndicatorType::MACD_SIGNAL, data_size, 26, 9, 0.0};
+    std::vector<double> macd_signal_value(data_size, atomic_values->macd_signal.load(std::memory_order_relaxed));
+    cached_indicators_[signal_key] = macd_signal_value;
+    
+    // MACD Histogram
+    IndicatorCacheKey hist_key{IndicatorType::MACD_HISTOGRAM, data_size, 26, 0, 0.0};
+    std::vector<double> macd_hist_value(data_size, atomic_values->macd_histogram.load(std::memory_order_relaxed));
+    cached_indicators_[hist_key] = macd_hist_value;
+  }
+
+  // Bollinger Bands
+  if (indicator_config_.show_bollinger) {
+    // Upper band
+    IndicatorCacheKey upper_key{IndicatorType::BB_UPPER, data_size, 20, 0, 2.0};
+    std::vector<double> bb_upper_value(data_size, atomic_values->bollinger_upper.load(std::memory_order_relaxed));
+    cached_indicators_[upper_key] = bb_upper_value;
+    
+    // Middle band
+    IndicatorCacheKey middle_key{IndicatorType::BB_MIDDLE, data_size, 20, 0, 2.0};
+    std::vector<double> bb_middle_value(data_size, atomic_values->bollinger_middle.load(std::memory_order_relaxed));
+    cached_indicators_[middle_key] = bb_middle_value;
+    
+    // Lower band
+    IndicatorCacheKey lower_key{IndicatorType::BB_LOWER, data_size, 20, 0, 2.0};
+    std::vector<double> bb_lower_value(data_size, atomic_values->bollinger_lower.load(std::memory_order_relaxed));
+    cached_indicators_[lower_key] = bb_lower_value;
+  }
+
+  // Stochastic indicators
+  if (indicator_config_.show_stochastic) {
+    // Stochastic K
+    IndicatorCacheKey k_key{IndicatorType::STOCH_K, data_size, 14, 0, 0.0};
+    std::vector<double> stoch_k_value(data_size, atomic_values->stochastic_k.load(std::memory_order_relaxed));
+    cached_indicators_[k_key] = stoch_k_value;
+    
+    // Stochastic D
+    IndicatorCacheKey d_key{IndicatorType::STOCH_D, data_size, 14, 0, 0.0};
+    std::vector<double> stoch_d_value(data_size, atomic_values->stochastic_d.load(std::memory_order_relaxed));
+    cached_indicators_[d_key] = stoch_d_value;
+  }
+
+  // ATR indicator
+  if (indicator_config_.show_atr) {
+    IndicatorCacheKey key{IndicatorType::ATR, data_size, 14, 0, 0.0};
+    std::vector<double> atr_value(data_size, atomic_values->atr.load(std::memory_order_relaxed));
+    cached_indicators_[key] = atr_value;
   }
 }
 

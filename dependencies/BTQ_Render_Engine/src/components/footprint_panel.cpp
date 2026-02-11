@@ -112,6 +112,7 @@ FootprintPanel::FootprintPanel(const PanelConfig& config,
                                RenderEngine::MarketMicrostructureRenderer* renderer)
     : PanelBase(config),
       renderer_(renderer),
+      cluster_engine_(renderer ? renderer->getClusterEngine() : nullptr),
       data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT),
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
@@ -968,7 +969,15 @@ void FootprintPanel::render() {
 
   // Get clusters from renderer
   auto clusters = renderer_->getFootprintClusters();
-  auto cluster_cells = renderer_->getClusterCells();  // Get ClusterCell data
+  
+  // Get ClusterCell data directly from ClusterEngine if available, otherwise from renderer
+  std::vector<std::vector<Analytics::ClusterCell>> cluster_cells;
+  if (cluster_engine_) {
+    cluster_cells = cluster_engine_->getClusterCanvas();  // Direct access to ClusterEngine data
+  } else {
+    cluster_cells = renderer_->getClusterCells();  // Fallback to renderer method
+  }
+  
   auto stats = renderer_->getStats();
 
   // Base time for absolute labeling (relative to 30s window)

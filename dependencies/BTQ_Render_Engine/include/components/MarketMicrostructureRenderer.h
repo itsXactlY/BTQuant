@@ -161,6 +161,9 @@ class MarketMicrostructureRenderer {
   // This provides access to the underlying ClusterCell data for advanced analysis
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
+  // Get const pointer to ClusterEngine for direct access to data structures
+  const Analytics::ClusterEngine* getClusterEngine() const { return cluster_engine_.get(); }
+
   // Method to set panel manager reference for dirty state updates
   void set_panel_manager(void* panel_manager);
 

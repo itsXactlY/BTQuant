@@ -11,6 +11,7 @@
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 #include "panel_manager.hpp"  // Include for PanelManager methods
+#include "../../include/analytics/cluster_engine.hpp"  // For direct access to ClusterEngine
 
 namespace BTQuant {
 
@@ -153,6 +154,9 @@ class FootprintPanel : public PanelBase {
  private:
   RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
+  
+  // Direct access to ClusterEngine data structures
+  const Analytics::ClusterEngine* cluster_engine_ = nullptr;
 
   // Data Type Selection
   Data::UnifiedDataPipeline::DataType data_type_ = Data::UnifiedDataPipeline::DataType::FOOTPRINT;

@@ -78,7 +78,7 @@
 - [x] **Result:** Rendering cost becomes `O(Visible_Rows)`, decoupling FPS from Market Rate.
 
 ### 4.2: Orderbook Double-Buffering
-- [ ] **Implement Snapshotting:**
+- [x] **Implement Snapshotting:**
     - `MarketDataProcessor` maintains the live L2 book.
     - Once per frame (start of frame), `MarketDataProcessor` atomically swaps a "Reader Snapshot" pointer.
 - [ ] **Render:** `OrderbookPanel` reads strictly from the "Reader Snapshot". No mutexes required during render.

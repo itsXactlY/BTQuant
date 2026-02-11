@@ -313,7 +313,8 @@ void OrderbookPanel::trackVolumeChanges(const HotOrderbookSnapshot& snapshot, ui
 }
 
 void OrderbookPanel::render() {
-  std::lock_guard<std::mutex> lock(data_mutex_);
+  // Acquire lock only for UI state, not for data access
+  std::lock_guard<std::mutex> ui_lock(data_mutex_);
   begin_panel_window();
 
   // If panel is hidden via X button, we still need to call end
@@ -334,13 +335,14 @@ void OrderbookPanel::render() {
 
   if (!active_symbols.empty()) {
     // Check if current symbol has orderbook data, re-select if not
-    auto current_ob = processor_->getOrderbookData(symbol_id_);
-    bool need_reselect = (symbol_id_ == 0) || !current_ob.has_value();
+    // Use atomic snapshot access for rendering
+    auto current_snapshot = processor_->get_orderbook_snapshot(symbol_id_);
+    bool need_reselect = (symbol_id_ == 0) || !current_snapshot;
 
     if (need_reselect) {
       for (uint32_t sym_id : active_symbols) {
-        auto ob_opt = processor_->getOrderbookData(sym_id);
-        if (ob_opt.has_value()) {
+        auto ob_snapshot = processor_->get_orderbook_snapshot(sym_id);
+        if (ob_snapshot) {
           if (symbol_id_ != sym_id) {
             symbol_id_ = sym_id;
             symbol_name_ = bridge_->getSymbolName(symbol_id_);
@@ -454,10 +456,10 @@ void OrderbookPanel::render() {
   }
   ImGui::Separator();
 
-  // Get orderbook data
-  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+  // Get orderbook data from atomic snapshot (lock-free access)
+  auto orderbook_snapshot = processor_->get_orderbook_snapshot(symbol_id_);
 
-  if (!orderbook_opt.has_value()) {
+  if (!orderbook_snapshot) {
     ImGui::Text("Waiting for Orderbook: %s", symbol_name_.c_str());
     ImGui::Text("ID: %u", symbol_id_);
     ImGui::ProgressBar(((frame_count % 100) / 100.0f), ImVec2(-1, 0), "Polling Data Processor...");
@@ -465,7 +467,8 @@ void OrderbookPanel::render() {
     return;
   }
 
-  const auto& orderbook = orderbook_opt.value();
+  // Access the orderbook data directly from the snapshot (atomic access, no mutex needed)
+  const auto& orderbook = *orderbook_snapshot;
 
   // Calculate bid/ask ratio
   double total_bid_volume = 0.0;
@@ -1347,10 +1350,10 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
 void OrderbookPanel::center_price() {
   // This method would center the view on the current mid-price
   // For now, we'll just log that the action was triggered
-  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+  auto orderbook_snapshot = processor_->get_orderbook_snapshot(symbol_id_);
 
-  if (orderbook_opt.has_value()) {
-    const auto& orderbook = orderbook_opt.value();
+  if (orderbook_snapshot) {
+    const auto& orderbook = *orderbook_snapshot;
 
     // Calculate mid price (average of best bid and best ask)
     if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
@@ -1400,17 +1403,17 @@ void OrderbookPanel::poll_orderbook_data() {
 
   // Poll every 100ms by default, but this could be configurable
   if (elapsed >= poll_interval_ms_) {
-    // Request fresh orderbook data from the processor
-    auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
-    
-    if (orderbook_opt.has_value()) {
+    // Request fresh orderbook data from the processor using atomic snapshot
+    auto orderbook_snapshot = processor_->get_orderbook_snapshot(symbol_id_);
+
+    if (orderbook_snapshot) {
       // Update our local copy of the orderbook data
-      current_orderbook_ = orderbook_opt.value();
-      
+      current_orderbook_ = *orderbook_snapshot;
+
       // Update statistics based on the new data
       update_orderbook_statistics(current_orderbook_);
     }
-    
+
     last_poll_time_ = current_time;
   }
 }

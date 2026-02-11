@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 
 // Check if HotSpine types are already defined (by tests/new version)
 #ifndef HOTSPINE_LAYOUT_HPP
@@ -20,21 +21,21 @@ constexpr uint64_t DEFAULT_ORDERBOOK_CAPACITY = 100000; // 100k orderbooks
 constexpr size_t HEADER_SIZE = 4096;                    // 4KB for header
 
 // Shared memory header structure
-struct SharedMemoryHeader {
-  uint32_t magic;       // Magic number for validation (0x42545155)
-  uint32_t version;     // Version number
-  uint64_t capacity;    // Number of trade entries in buffer
-  uint64_t write_index; // Write position (next slot to write)
-  uint64_t read_index;  // Read position (next slot to read)
-  uint64_t lost_count;  // Number of lost trades due to buffer overflow
+struct alignas(64) SharedMemoryHeader {
+  uint32_t magic;                                    // Magic number for validation (0x42545155)
+  uint32_t version;                                  // Version number
+  uint64_t capacity;                                 // Number of trade entries in buffer
+  std::atomic<uint64_t> write_index{0};              // Write position (next slot to write)
+  std::atomic<uint64_t> read_index{0};               // Read position (next slot to read)
+  uint64_t lost_count;                               // Number of lost trades due to buffer overflow
 
   // Orderbook fields (replaces previous padding to match Python side)
-  uint64_t orderbook_write_index;
-  uint64_t orderbook_read_index;
-  uint64_t orderbook_lost_count;
-  uint64_t orderbook_capacity; // Number of orderbook entries in buffer
+  std::atomic<uint64_t> orderbook_write_index{0};
+  std::atomic<uint64_t> orderbook_read_index{0};
+  uint64_t orderbook_lost_count;                     // Number of lost orderbook updates dropped
+  uint64_t orderbook_capacity;                       // Number of orderbook entries in buffer
 
-  uint8_t padding[8]; // remaining padding for alignment
+  uint8_t padding[8];                                // remaining padding for alignment
 };
 
 // Trade data structure (must match between writer and reader)

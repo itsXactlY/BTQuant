@@ -1,8 +1,8 @@
 #pragma once
 
-#include "hotspine_layout.hpp"
+#include "hotspine_layout_v3.hpp"  // Updated to use V3 layout with atomic operations
+#include "hotspine_layout.hpp"     // For HotOrderbookSnapshot compatibility
 #include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -40,7 +40,7 @@ public:
    * @param trade Output structure to fill with trade data
    * @return true if trade was read, false if no new data
    */
-  bool pollTrade(HotTrade &trade);
+  bool pollTrade(HotSpine::V3::HotspineData &trade);
 
   /**
    * Poll for next orderbook snapshot
@@ -81,7 +81,8 @@ private:
   int fd_ = -1;
   void *mapped_region_ = nullptr;
   size_t mapped_size_ = 0;
-  mutable std::mutex mutex_;
+  // Removed mutex for lock-free operation in hot path
+  // Using atomic operations for thread safety where needed
 };
 
 } // namespace HotSpine

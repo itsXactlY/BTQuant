@@ -1,5 +1,5 @@
 #include "hotspine_reader.hpp"
-#include "hotspine_layout.hpp"
+#include "hotspine_layout_v3.hpp"  // Updated to use V3 layout with atomic operations
 #include "utils/dynamic_logger.hpp"
 #include <chrono>
 #include <cstring>
@@ -92,25 +92,26 @@ void HotSpineReader::detach_from_shm() {
 }
 
 bool HotSpineReader::validate_header() {
-  if (!mapped_region_ || mapped_size_ < sizeof(SharedMemoryHeader)) {
+  if (!mapped_region_ || mapped_size_ < sizeof(HotSpine::V3::SharedMemoryLayoutV3)) {
     std::cerr << "[SHM] Shared memory too small for header" << std::endl;
     return false;
   }
 
-  SharedMemoryHeader *header =
-      static_cast<SharedMemoryHeader *>(mapped_region_);
+  HotSpine::V3::SharedMemoryLayoutV3 *layout =
+      static_cast<HotSpine::V3::SharedMemoryLayoutV3 *>(mapped_region_);
+  HotSpine::V3::RingBufferHeader *header = &layout->header;
 
   // Verify magic number
-  if (header->magic != HOTSPINE_MAGIC) {
+  if (header->magic != HotSpine::V3::HOTSPINE_MAGIC) {
     std::cerr << "[SHM] Invalid magic number in shared memory: 0x" << std::hex
               << header->magic << std::endl;
     return false;
   }
 
   // Verify version
-  if (header->version != HOTSPINE_VERSION) {
+  if (header->version != HotSpine::V3::HOTSPINE_VERSION) {
     std::cerr << "[SHM] Invalid version in shared memory: " << std::dec
-              << header->version << " (expected: " << HOTSPINE_VERSION << ")"
+              << header->version << " (expected: " << HotSpine::V3::HOTSPINE_VERSION << ")"
               << std::endl;
     return false;
   }
@@ -120,117 +121,76 @@ bool HotSpineReader::validate_header() {
 
 bool HotSpineReader::isAttached() const { return attached_; }
 
-bool HotSpineReader::pollTrade(HotTrade &trade) {
+bool HotSpineReader::pollTrade(HotSpine::V3::HotspineData &trade) {
   if (!attached_ || !mapped_region_) {
     return false;
   }
 
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-  SharedMemoryHeader *header =
-      static_cast<SharedMemoryHeader *>(mapped_region_);
-  uint64_t write_pos = header->write_index;
-  uint64_t read_pos = header->read_index;
+  HotSpine::V3::SharedMemoryLayoutV3 *layout =
+      static_cast<HotSpine::V3::SharedMemoryLayoutV3 *>(mapped_region_);
+  HotSpine::V3::RingBufferHeader *header = &layout->header;
+  
+  // Atomically load the current write head
+  uint64_t write_head = header->write_head.load(std::memory_order_acquire);
+  uint64_t read_tail = header->read_tail.load(std::memory_order_relaxed);
 
   // Debug logging for header fields (throttled)
   static int debug_counter = 0;
   if (++debug_counter % 1000 == 0) { // Log every 1000 calls
     std::cout << "[DEBUG] Header fields: magic=0x" << std::hex << header->magic
               << ", version=" << std::dec << header->version
-              << ", capacity=" << header->capacity
-              << ", write_index=" << header->write_index
-              << ", read_index=" << header->read_index
-              << ", lost_count=" << header->lost_count
-              << ", orderbook_write_index=" << header->orderbook_write_index
-              << ", orderbook_read_index=" << header->orderbook_read_index
+              << ", write_head=" << header->write_head.load(std::memory_order_acquire)
+              << ", read_tail=" << header->read_tail.load(std::memory_order_acquire)
+              << ", dropped_count=" << header->dropped_count.load()
               << std::endl;
   }
 
-  // Check if there's data available (and handle potential read_index exceeding
-  // write_index)
-  if (header->capacity == 0) {
-    return false;
+  // Check if there's data available
+  if (read_tail >= write_head) {
+    return false; // Buffer empty
   }
 
-  if (read_pos >= write_pos) {
-    if (read_pos > write_pos) {
-      header->read_index = write_pos; // Reset to write_pos to recover
-    }
-    return false; // Buffer empty or synchronized
-  }
-
-  // Calculate entry position (entries start after FIXED HEADER SIZE)
-  // Note: Use HEADER_SIZE from layout, not sizeof(SharedMemoryHeader)
-  size_t entry_offset =
-      HEADER_SIZE + (read_pos % header->capacity) * sizeof(HotTrade);
-
-  if (entry_offset + sizeof(HotTrade) > mapped_size_) {
-    std::cerr << "[SHM] Trade entry exceeds shared memory bounds" << std::endl;
-    header->read_index = write_pos; // Skip this entry
-    return false;
-  }
-
-  HotTrade *entry = reinterpret_cast<HotTrade *>(
-      static_cast<char *>(mapped_region_) + entry_offset);
+  // Calculate ring buffer index using mask
+  uint64_t index = read_tail & HotSpine::V3::RING_BUFFER_MASK;
+  
+  // Get the ring buffer data pointer
+  HotSpine::V3::HotspineData *ring_buffer = 
+      reinterpret_cast<HotSpine::V3::HotspineData *>(
+          layout->ring_buffer_data);
 
   // Copy data to output
-  trade = *entry;
+  trade = ring_buffer[index];
 
-  // Advance read position
-  header->read_index = read_pos + 1;
+  // Atomically advance read tail using compare-and-swap to avoid race conditions
+  uint64_t expected = read_tail;
+  while (!header->read_tail.compare_exchange_weak(expected, read_tail + 1, 
+                                                 std::memory_order_release, 
+                                                 std::memory_order_relaxed)) {
+    // If another thread updated read_tail, check if we should continue
+    if (expected > read_tail) {
+      // Another thread already consumed this entry, return false
+      return false;
+    }
+    // Retry with new expected value
+    read_tail = expected;
+    
+    // Recalculate ring buffer index with new read_tail
+    index = read_tail & HotSpine::V3::RING_BUFFER_MASK;
+    
+    // Update trade with new entry
+    trade = ring_buffer[index];
+  }
 
   return true;
 }
 
 bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
-  if (!attached_ || !mapped_region_) {
-    return false;
-  }
-
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-  SharedMemoryHeader *header =
-      static_cast<SharedMemoryHeader *>(mapped_region_);
-  uint64_t write_pos = header->orderbook_write_index;
-  uint64_t read_pos = header->orderbook_read_index;
-
-  // Check if there's data available
-  if (header->orderbook_capacity == 0) {
-    return false;
-  }
-
-  if (read_pos >= write_pos) {
-    if (read_pos > write_pos) {
-      header->orderbook_read_index = write_pos; // Reset to recover
-    }
-    return false; // Buffer empty or synchronized
-  }
-
-  // Calculate trade buffer size to skip
-  size_t trade_buffer_bytes = header->capacity * sizeof(HotTrade);
-
-  // Calculate entry position (Orderbooks start after Header + Trade Buffer)
-  size_t entry_offset =
-      HEADER_SIZE + trade_buffer_bytes +
-      (read_pos % header->orderbook_capacity) * sizeof(HotOrderbookSnapshot);
-
-  if (entry_offset + sizeof(HotOrderbookSnapshot) > mapped_size_) {
-    std::cerr << "[SHM] Orderbook entry exceeds shared memory bounds"
-              << std::endl;
-    header->orderbook_read_index = write_pos; // Skip this entry
-    return false;
-  }
-
-  HotOrderbookSnapshot *entry = reinterpret_cast<HotOrderbookSnapshot *>(
-      static_cast<char *>(mapped_region_) + entry_offset);
-
-  // Copy data to output
-  snapshot = *entry;
-
-  // Advance read position
-  header->orderbook_read_index = read_pos + 1;
-
-  return true;
+  // For now, we'll return false since the V3 layout doesn't have a separate orderbook buffer
+  // The V3 layout uses a unified ring buffer for all data types
+  // Orderbook data would need to be handled differently in a unified approach
+  
+  // TODO: Implement orderbook polling when orderbook data is integrated into the V3 layout
+  return false;
 }
 
 const std::string &HotSpineReader::getShmName() const { return shm_name_; }
@@ -246,27 +206,24 @@ std::pair<uint64_t, uint64_t> HotSpineReader::get_buffer_status() const {
     return {0, 0};
   }
 
-  SharedMemoryHeader *header =
-      static_cast<SharedMemoryHeader *>(mapped_region_);
+  HotSpine::V3::SharedMemoryLayoutV3 *layout =
+      static_cast<HotSpine::V3::SharedMemoryLayoutV3 *>(mapped_region_);
+  HotSpine::V3::RingBufferHeader *header = &layout->header;
 
-  // Calculate used count from write_index and read_index
-  // For circular buffer: used = (write_index - read_index) % capacity
-  uint64_t capacity = header->capacity;
-  uint64_t write_idx = header->write_index;
-  uint64_t read_idx = header->read_index;
-
-  // Logic for linear counter (reader chases writer)
-  // The indices are monotonic counters, so straight subtraction works if
-  // unsigned arithmetic wraps properly (which it does) But logically, used =
-  // write - read.
+  // Calculate used count from write_head and read_tail
+  uint64_t write_head = header->write_head.load(std::memory_order_acquire);
+  uint64_t read_tail = header->read_tail.load(std::memory_order_acquire);
+  uint64_t capacity = HotSpine::V3::RING_BUFFER_SIZE;
 
   uint64_t used = 0;
-  if (write_idx >= read_idx) {
-    used = write_idx - read_idx;
+  if (write_head >= read_tail) {
+    used = write_head - read_tail;
+    // Cap at capacity to handle cases where reader falls behind significantly
+    if (used > capacity) {
+      used = capacity;
+    }
   } else {
-    // This theoretically shouldn't happen with monotonic counters unless
-    // overflowed Or if the writer reset but reader didn't (unlikely with same
-    // shm) Treat as 0 or full reset
+    // This shouldn't normally happen with monotonic counters, but handle it
     used = 0;
   }
 
@@ -276,8 +233,8 @@ std::pair<uint64_t, uint64_t> HotSpineReader::get_buffer_status() const {
     double usage_pct =
         capacity > 0 ? (static_cast<double>(used) / capacity) * 100.0 : 0.0;
     std::cout << "[DEBUG] Buffer status: used=" << used
-              << ", capacity=" << capacity << ", write_index=" << write_idx
-              << ", read_index=" << read_idx << ", usage=" << usage_pct << "%"
+              << ", capacity=" << capacity << ", write_head=" << write_head
+              << ", read_tail=" << read_tail << ", usage=" << usage_pct << "%"
               << std::endl;
   }
 

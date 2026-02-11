@@ -507,60 +507,61 @@ void WatchlistPanel::render() {
               if (it != get_current_watchlist().end()) {
                 // Polling Render: Read directly from atomic snapshot
                 const auto* atomic_snapshot = processor_->get_atomic_snapshot(symbol_id);
+                
                 if (atomic_snapshot != nullptr) {
-                  // Update the entry with fresh data for rendering
-                  // Note: This temporarily modifies the entry for rendering purposes
-                  // Store previous values for animation
-                  double prev_price = it->second.price;
-                  double prev_vwap = it->second.vwap;
-                  double prev_volume = it->second.volume_24h;
-                  double prev_change_pct = it->second.change_pct;
-                  double prev_change_dollar = it->second.change_dollar;
-                  double prev_high_24h = it->second.high_24h;
-                  double prev_low_24h = it->second.low_24h;
-                  double prev_open_24h = it->second.open_24h;
+                  // Create a temporary copy of the entry with fresh data for rendering
+                  // This avoids modifying the stored entry and maintains data consistency
+                  WatchlistEntry temp_entry = it->second; // Copy the original entry
+                  
+                  // Store previous values for animation calculations
+                  double prev_price = temp_entry.price;
+                  double prev_vwap = temp_entry.vwap;
+                  double prev_volume = temp_entry.volume_24h;
 
                   // Update with fresh data from atomic snapshot
-                  it->second.price = atomic_snapshot->price.load();
-                  it->second.vwap = atomic_snapshot->vwap.load();
-                  it->second.last_update_ts = atomic_snapshot->last_update_time.load();
+                  temp_entry.price = atomic_snapshot->price.load();
+                  temp_entry.vwap = atomic_snapshot->vwap.load();
+                  temp_entry.last_update_ts = atomic_snapshot->last_update_time.load();
 
                   // Update other fields from atomic snapshot
-                  it->second.high_24h = atomic_snapshot->high_price.load();
-                  it->second.low_24h = atomic_snapshot->low_price.load();
-                  it->second.volume_24h = atomic_snapshot->volume.load();
+                  temp_entry.high_24h = atomic_snapshot->high_price.load();
+                  temp_entry.low_24h = atomic_snapshot->low_price.load();
+                  temp_entry.volume_24h = atomic_snapshot->volume.load();
 
                   // Calculate change percentage based on previous price
                   if (prev_price != 0) {
-                    it->second.change_pct = ((it->second.price - prev_price) / prev_price) * 100.0;
-                    it->second.change_dollar = it->second.price - prev_price;
+                    temp_entry.change_pct = ((temp_entry.price - prev_price) / prev_price) * 100.0;
+                    temp_entry.change_dollar = temp_entry.price - prev_price;
                   } else {
-                    it->second.change_pct = 0.0;
-                    it->second.change_dollar = 0.0;
+                    temp_entry.change_pct = 0.0;
+                    temp_entry.change_dollar = 0.0;
                   }
 
                   // Set open_24h to previous day's close or current price if no previous data
-                  it->second.open_24h = prev_price != 0 ? prev_price : it->second.price;
+                  temp_entry.open_24h = prev_price != 0 ? prev_price : temp_entry.price;
 
                   // Maintain animation state for visual feedback
-                  it->second.previous_price = prev_price;
-                  it->second.previous_vwap = prev_vwap;
-                  it->second.previous_volume = prev_volume;
+                  temp_entry.previous_price = prev_price;
+                  temp_entry.previous_vwap = prev_vwap;
+                  temp_entry.previous_volume = prev_volume;
 
                   // Start animation for any significant value change
                   bool significant_change = false;
-                  double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
-                  if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) {
+                  double price_change_pct = (prev_price != 0) ? std::abs((temp_entry.price - prev_price) / prev_price) * 100.0 : 0;
+                  if (price_change_pct > 0.01 || std::abs(temp_entry.price - prev_price) > 0.001) {
                     significant_change = true;
                   }
 
                   if (significant_change) {
-                    it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+                    temp_entry.animation_timer = WatchlistEntry::ANIMATION_DURATION;
                   }
-                }
 
-                // Render the table row (only for visible rows)
-                render_table_row(it->second);
+                  // Render the table row with the temporary entry containing fresh data
+                  render_table_row(temp_entry);
+                } else {
+                  // Fallback to original entry if atomic snapshot is not available
+                  render_table_row(it->second);
+                }
               }
           }
       }

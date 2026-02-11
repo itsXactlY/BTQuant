@@ -669,19 +669,15 @@ class ExchangeAggregator {
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<RenderEngine::SymbolManager> symbol_manager_;
 
-  mutable std::mutex data_mutex_;
-  std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>
-      exchange_data_;
-  std::unordered_map<std::string, ExchangeFeatures> exchange_features_;
+  // Atomic shared_ptr for lock-free access to data structures
+  mutable std::atomic<std::shared_ptr<
+    std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>> exchange_data_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, ExchangeFeatures>>> exchange_features_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, bool>>> exchange_validity_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>> exchange_last_update_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, std::unordered_map<std::string, double>>>> exchange_correlations_ptr_;
 
-  // Additional data structures for enhanced functionality
-  std::unordered_map<std::string, bool> exchange_validity_;  // Track validity of each exchange
-  std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>
-      exchange_last_update_;  // Track last update time
-  std::unordered_map<std::string, std::unordered_map<std::string, double>>
-      exchange_correlations_;  // Track correlations between exchanges
-
-  TimeSyncStrategy sync_strategy_ = TimeSyncStrategy::EARLIEST_TIMESTAMP;
+  std::atomic<TimeSyncStrategy> sync_strategy_{TimeSyncStrategy::EARLIEST_TIMESTAMP};
   AggregationStats stats_;
 
   // Thread for continuous aggregation

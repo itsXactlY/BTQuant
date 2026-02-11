@@ -14,7 +14,7 @@
 #include <map>
 #include <numeric>
 #include <stop_token>
-#include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
+#include "concurrentqueue.h"
 #include "threading/atomic_signal.hpp"
 
 namespace btq {

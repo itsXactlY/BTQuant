@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -105,7 +106,7 @@ class GlobalAlertManager {
   std::vector<GlobalAlert> get_alerts_for_symbol(uint32_t symbol_id) const;
 
   // Get all alerts
-  const std::map<std::string, GlobalAlert>& get_all_alerts() const { return alerts_; }
+  std::shared_ptr<const std::map<std::string, GlobalAlert>> get_all_alerts() const { return alerts_ptr_.load(); }
 
   // Set callback for when an alert is triggered
   void set_alert_triggered_callback(GlobalAlertTriggeredCallback callback) {
@@ -116,7 +117,10 @@ class GlobalAlertManager {
   void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) { alerts_panel_ = alerts_panel; }
 
   // Get statistics about alerts
-  size_t get_total_alerts_count() const { return alerts_.size(); }
+  size_t get_total_alerts_count() const { 
+    auto alerts = alerts_ptr_.load();
+    return alerts ? alerts->size() : 0;
+  }
   size_t get_active_alerts_count() const;
   size_t get_triggered_alerts_count() const;
 
@@ -124,9 +128,8 @@ class GlobalAlertManager {
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<AlertsPanel> alerts_panel_;
-  std::map<std::string, GlobalAlert> alerts_;
+  mutable std::atomic<std::shared_ptr<std::map<std::string, GlobalAlert>>> alerts_ptr_;
   GlobalAlertTriggeredCallback on_alert_triggered_;
-  mutable std::mutex alerts_mutex_;  // Mutex for thread-safe access
 
   // Check if a specific alert should be triggered based on current data
   bool should_trigger_alert(const GlobalAlert& alert, double current_price,

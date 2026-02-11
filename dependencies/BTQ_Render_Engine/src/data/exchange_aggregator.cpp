@@ -15,7 +15,14 @@ namespace Data {
 ExchangeAggregator::ExchangeAggregator(std::shared_ptr<HotSpineDataBridge> bridge,
                                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                        std::shared_ptr<RenderEngine::SymbolManager> symbol_manager)
-    : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager) {}
+    : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager) {
+  // Initialize atomic shared_ptr containers
+  exchange_data_ptr_.store(std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>());
+  exchange_features_ptr_.store(std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>());
+  exchange_validity_ptr_.store(std::make_shared<std::unordered_map<std::string, bool>>());
+  exchange_last_update_ptr_.store(std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>());
+  exchange_correlations_ptr_.store(std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>());
+}
 
 ExchangeAggregator::~ExchangeAggregator() {
   if (running_) {
@@ -36,60 +43,110 @@ bool ExchangeAggregator::initialize() {
 
 void ExchangeAggregator::addExchange(const std::string& exchange_name,
                                      const ExchangeFeatures& features) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  exchange_features_[exchange_name] = features;
+  // Update exchange features
+  {
+    auto current_features = exchange_features_ptr_.load();
+    auto new_features = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current_features);
+    (*new_features)[exchange_name] = features;
+    exchange_features_ptr_.store(new_features);
+  }
 
   // Initialize exchange-specific data structures
-  exchange_validity_[exchange_name] = true;
-  exchange_last_update_[exchange_name] = std::chrono::high_resolution_clock::now();
+  {
+    auto current_validity = exchange_validity_ptr_.load();
+    auto new_validity = std::make_shared<std::unordered_map<std::string, bool>>(*current_validity);
+    (*new_validity)[exchange_name] = true;
+    exchange_validity_ptr_.store(new_validity);
+  }
+
+  {
+    auto current_updates = exchange_last_update_ptr_.load();
+    auto new_updates = std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current_updates);
+    (*new_updates)[exchange_name] = std::chrono::high_resolution_clock::now();
+    exchange_last_update_ptr_.store(new_updates);
+  }
 
   // Initialize exchange correlation tracking
-  exchange_correlations_[exchange_name] = std::unordered_map<std::string, double>();
+  {
+    auto current_correlations = exchange_correlations_ptr_.load();
+    auto new_correlations = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(*current_correlations);
+    (*new_correlations)[exchange_name] = std::unordered_map<std::string, double>();
+    exchange_correlations_ptr_.store(new_correlations);
+  }
 
   BTQ_LOG_INFO(std::format("Added exchange {} to aggregation pool", exchange_name));
 }
 
 void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  exchange_features_.erase(exchange_name);
-  exchange_validity_.erase(exchange_name);
-  exchange_last_update_.erase(exchange_name);
-  exchange_correlations_.erase(exchange_name);
+  // Update exchange features
+  {
+    auto current_features = exchange_features_ptr_.load();
+    auto new_features = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current_features);
+    new_features->erase(exchange_name);
+    exchange_features_ptr_.store(new_features);
+  }
+
+  // Update exchange validity
+  {
+    auto current_validity = exchange_validity_ptr_.load();
+    auto new_validity = std::make_shared<std::unordered_map<std::string, bool>>(*current_validity);
+    new_validity->erase(exchange_name);
+    exchange_validity_ptr_.store(new_validity);
+  }
+
+  // Update exchange last update
+  {
+    auto current_updates = exchange_last_update_ptr_.load();
+    auto new_updates = std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current_updates);
+    new_updates->erase(exchange_name);
+    exchange_last_update_ptr_.store(new_updates);
+  }
+
+  // Update exchange correlations
+  {
+    auto current_correlations = exchange_correlations_ptr_.load();
+    auto new_correlations = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(*current_correlations);
+    new_correlations->erase(exchange_name);
+    exchange_correlations_ptr_.store(new_correlations);
+  }
 
   // Remove exchange data from all symbols
-  for (auto& [symbol, exchange_data_map] : exchange_data_) {
-    exchange_data_map.erase(exchange_name);
+  {
+    auto current_data = exchange_data_ptr_.load();
+    auto new_data = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>(*current_data);
+    for (auto& [symbol, exchange_data_map] : *new_data) {
+      exchange_data_map.erase(exchange_name);
+    }
+    exchange_data_ptr_.store(new_data);
   }
 
   BTQ_LOG_INFO(std::format("Removed exchange {} from aggregation pool", exchange_name));
 }
 
 std::vector<std::string> ExchangeAggregator::getAvailableExchanges() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
+  auto current_features = exchange_features_ptr_.load();
   std::vector<std::string> exchanges;
-  for (const auto& [exchange, _] : exchange_features_) {
+  for (const auto& [exchange, _] : *current_features) {
     exchanges.push_back(exchange);
   }
   return exchanges;
 }
 
 void ExchangeAggregator::setTimeSyncStrategy(TimeSyncStrategy strategy) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  sync_strategy_ = strategy;
+  sync_strategy_.store(strategy);
 }
 
 std::optional<AggregatedMarketData> ExchangeAggregator::aggregateSymbolData(
     const std::string& symbol) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto current_data = exchange_data_ptr_.load();
+  auto symbol_it = current_data->find(symbol);
+  if (symbol_it == current_data->end()) {
     return std::nullopt;
   }
 
   AggregatedMarketData aggregated_data;
   aggregated_data.symbol = symbol;
-  aggregated_data.sync_strategy = sync_strategy_;
+  aggregated_data.sync_strategy = sync_strategy_.load();
 
   // Filter out invalid or stale exchange data
   std::unordered_map<std::string, RenderEngine::MarketDataUpdate> valid_exchange_data;

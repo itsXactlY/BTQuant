@@ -118,11 +118,10 @@ class UnifiedDataPipeline {
   std::shared_ptr<RenderEngine::SymbolManager> symbol_manager_;
   std::shared_ptr<UIDataManager> ui_data_manager_;
 
-  std::unordered_map<uint32_t, DataSubscription> subscriptions_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<uint32_t, DataSubscription>>> subscriptions_ptr_;
   std::atomic<uint32_t> next_subscription_id_{1};
 
   moodycamel::ConcurrentQueue<DataEvent> event_queue_;
-  mutable std::mutex subscriptions_mutex_;
 
   std::atomic<bool> running_{false};
   std::thread processing_thread_;

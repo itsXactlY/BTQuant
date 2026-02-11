@@ -15,20 +15,25 @@ GlobalAlertManager::GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridg
     : bridge_(bridge), processor_(processor), alerts_panel_(alerts_panel) {
   // Initialize with empty callback
   on_alert_triggered_ = [](const GlobalAlert&, double) {};
+  
+  // Initialize the atomic shared_ptr with an empty map
+  alerts_ptr_.store(std::make_shared<std::map<std::string, GlobalAlert>>());
 }
 
 std::string GlobalAlertManager::add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
                                                 double target_price, GlobalAlertType type,
                                                 const std::string& name) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
   std::string alert_id = generate_alert_id();
   std::string alert_name = name.empty() ? ("Price Alert: " + symbol_name) : name;
 
   GlobalAlert alert(alert_id, alert_name, symbol_id, symbol_name, type, target_price);
   alert.type = type;
 
-  alerts_[alert_id] = alert;
+  // Atomically update the alerts map
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  (*new_alerts)[alert_id] = alert;
+  alerts_ptr_.store(new_alerts);
 
   return alert_id;
 }
@@ -36,15 +41,17 @@ std::string GlobalAlertManager::add_price_alert(uint32_t symbol_id, const std::s
 std::string GlobalAlertManager::add_volume_alert(uint32_t symbol_id, const std::string& symbol_name,
                                                  double target_volume, GlobalAlertType type,
                                                  const std::string& name) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
   std::string alert_id = generate_alert_id();
   std::string alert_name = name.empty() ? ("Volume Alert: " + symbol_name) : name;
 
   GlobalAlert alert(alert_id, alert_name, symbol_id, symbol_name, type, target_volume);
   alert.type = type;
 
-  alerts_[alert_id] = alert;
+  // Atomically update the alerts map
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  (*new_alerts)[alert_id] = alert;
+  alerts_ptr_.store(new_alerts);
 
   return alert_id;
 }
@@ -52,8 +59,6 @@ std::string GlobalAlertManager::add_volume_alert(uint32_t symbol_id, const std::
 std::string GlobalAlertManager::add_custom_alert(uint32_t symbol_id, const std::string& symbol_name,
                                                  const std::string& expression,
                                                  const std::string& name) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
   std::string alert_id = generate_alert_id();
   std::string alert_name = name.empty() ? ("Custom Alert: " + symbol_name) : name;
 
@@ -61,44 +66,58 @@ std::string GlobalAlertManager::add_custom_alert(uint32_t symbol_id, const std::
                     GlobalAlertType::CUSTOM_EXPRESSION, 0.0);
   alert.type = GlobalAlertType::CUSTOM_EXPRESSION;
 
-  alerts_[alert_id] = alert;
+  // Atomically update the alerts map
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  (*new_alerts)[alert_id] = alert;
+  alerts_ptr_.store(new_alerts);
 
   return alert_id;
 }
 
 bool GlobalAlertManager::remove_alert(const std::string& alert_id) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
-  auto it = alerts_.find(alert_id);
-  if (it != alerts_.end()) {
-    alerts_.erase(it);
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  
+  auto it = new_alerts->find(alert_id);
+  if (it != new_alerts->end()) {
+    new_alerts->erase(it);
+    alerts_ptr_.store(new_alerts);
     return true;
   }
   return false;
 }
 
 bool GlobalAlertManager::remove_alerts_for_symbol(uint32_t symbol_id) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  
+  size_t initial_size = new_alerts->size();
 
-  size_t initial_size = alerts_.size();
-
-  for (auto it = alerts_.begin(); it != alerts_.end();) {
+  for (auto it = new_alerts->begin(); it != new_alerts->end();) {
     if (it->second.symbol_id == symbol_id) {
-      it = alerts_.erase(it);
+      it = new_alerts->erase(it);
     } else {
       ++it;
     }
   }
 
-  return initial_size != alerts_.size();
+  bool changed = initial_size != new_alerts->size();
+  if (changed) {
+    alerts_ptr_.store(new_alerts);
+  }
+  
+  return changed;
 }
 
 bool GlobalAlertManager::enable_alert(const std::string& alert_id, bool enable) {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
-  auto it = alerts_.find(alert_id);
-  if (it != alerts_.end()) {
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  
+  auto it = new_alerts->find(alert_id);
+  if (it != new_alerts->end()) {
     it->second.status = enable ? AlertStatus::ACTIVE : AlertStatus::DISABLED;
+    alerts_ptr_.store(new_alerts);
     return true;
   }
   return false;
@@ -109,16 +128,17 @@ void GlobalAlertManager::update_alerts() {
     return;
   }
 
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
   // Get all active symbols from the bridge
   auto active_symbols = bridge_->getActiveSymbols();
+  
+  // Load current alerts
+  auto current_alerts = alerts_ptr_.load();
 
   for (auto symbol_id : active_symbols) {
     auto [current_price, current_volume] = get_current_market_data(symbol_id);
 
     // Check all alerts for this symbol
-    for (auto& [alert_id, alert] : alerts_) {
+    for (const auto& [alert_id, alert] : *current_alerts) {
       if (alert.symbol_id == symbol_id && alert.status == AlertStatus::ACTIVE) {
         if (should_trigger_alert(alert, current_price, current_volume)) {
           trigger_alert(alert, alert.type == GlobalAlertType::PRICE_ABOVE ||
@@ -132,11 +152,10 @@ void GlobalAlertManager::update_alerts() {
 }
 
 std::vector<GlobalAlert> GlobalAlertManager::get_alerts_for_symbol(uint32_t symbol_id) const {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
+  auto current_alerts = alerts_ptr_.load();
   std::vector<GlobalAlert> result;
 
-  for (const auto& [alert_id, alert] : alerts_) {
+  for (const auto& [alert_id, alert] : *current_alerts) {
     if (alert.symbol_id == symbol_id) {
       result.push_back(alert);
     }
@@ -167,14 +186,15 @@ bool GlobalAlertManager::should_trigger_alert(const GlobalAlert& alert, double c
 
 void GlobalAlertManager::trigger_alert(const GlobalAlert& alert, double current_value) {
   // Update the alert's status and trigger time
-  {
-    std::lock_guard<std::mutex> lock(alerts_mutex_);
-    auto it = alerts_.find(alert.id);
-    if (it != alerts_.end()) {
-      it->second.current_value = current_value;
-      it->second.triggered_at = std::chrono::system_clock::now();
-      it->second.status = AlertStatus::TRIGGERED;
-    }
+  auto current_alerts = alerts_ptr_.load();
+  auto new_alerts = std::make_shared<std::map<std::string, GlobalAlert>>(*current_alerts);
+  
+  auto it = new_alerts->find(alert.id);
+  if (it != new_alerts->end()) {
+    it->second.current_value = current_value;
+    it->second.triggered_at = std::chrono::system_clock::now();
+    it->second.status = AlertStatus::TRIGGERED;
+    alerts_ptr_.store(new_alerts);
   }
 
   // Call the callback if set
@@ -222,10 +242,9 @@ std::pair<double, double> GlobalAlertManager::get_current_market_data(uint32_t s
 }
 
 size_t GlobalAlertManager::get_active_alerts_count() const {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
+  auto current_alerts = alerts_ptr_.load();
   size_t count = 0;
-  for (const auto& [id, alert] : alerts_) {
+  for (const auto& [id, alert] : *current_alerts) {
     if (alert.status == AlertStatus::ACTIVE) {
       count++;
     }
@@ -234,10 +253,9 @@ size_t GlobalAlertManager::get_active_alerts_count() const {
 }
 
 size_t GlobalAlertManager::get_triggered_alerts_count() const {
-  std::lock_guard<std::mutex> lock(alerts_mutex_);
-
+  auto current_alerts = alerts_ptr_.load();
   size_t count = 0;
-  for (const auto& [id, alert] : alerts_) {
+  for (const auto& [id, alert] : *current_alerts) {
     if (alert.status == AlertStatus::TRIGGERED) {
       count++;
     }

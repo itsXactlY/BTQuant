@@ -19,6 +19,9 @@ UnifiedDataPipeline::UnifiedDataPipeline(
   // Initialize UI data manager
   ui_data_manager_ = std::make_shared<UIDataManager>();
 
+  // Initialize subscriptions map
+  subscriptions_ptr_.store(std::make_shared<std::unordered_map<uint32_t, DataSubscription>>());
+
   // Get initial symbol from UI data manager
   current_symbol_ = ui_data_manager_->get_current_symbol();
   if (current_symbol_.empty()) {
@@ -47,15 +50,22 @@ bool UnifiedDataPipeline::initialize() {
 }
 
 uint32_t UnifiedDataPipeline::subscribe(const DataSubscription& subscription) {
-  std::lock_guard<std::mutex> lock(subscriptions_mutex_);
   uint32_t id = next_subscription_id_++;
-  subscriptions_[id] = subscription;
+  
+  // Atomically update the subscriptions map
+  auto current_subscriptions = subscriptions_ptr_.load();
+  auto new_subscriptions = std::make_shared<std::unordered_map<uint32_t, DataSubscription>>(*current_subscriptions);
+  (*new_subscriptions)[id] = subscription;
+  subscriptions_ptr_.store(new_subscriptions);
+  
   return id;
 }
 
 void UnifiedDataPipeline::unsubscribe(uint32_t subscription_id) {
-  std::lock_guard<std::mutex> lock(subscriptions_mutex_);
-  subscriptions_.erase(subscription_id);
+  auto current_subscriptions = subscriptions_ptr_.load();
+  auto new_subscriptions = std::make_shared<std::unordered_map<uint32_t, DataSubscription>>(*current_subscriptions);
+  new_subscriptions->erase(subscription_id);
+  subscriptions_ptr_.store(new_subscriptions);
 }
 
 void UnifiedDataPipeline::publish(DataType type, uint32_t symbol_id, const std::string& symbol_name,
@@ -142,9 +152,9 @@ void UnifiedDataPipeline::process_events() {
 }
 
 void UnifiedDataPipeline::dispatch_event(const DataEvent& event) {
-  std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+  auto current_subscriptions = subscriptions_ptr_.load();
 
-  for (const auto& [id, subscription] : subscriptions_) {
+  for (const auto& [id, subscription] : *current_subscriptions) {
     // Check if subscription matches the event
     if (subscription.symbol_id == 0 || subscription.symbol_id == event.symbol_id) {
       // Check if data type matches - compare with string representations of enum values

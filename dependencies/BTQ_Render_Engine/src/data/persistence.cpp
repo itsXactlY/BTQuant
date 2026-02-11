@@ -35,11 +35,15 @@ bool DataPersistence::saveAggregatedData(
     std::string output_filename = filename.empty() ? generateFilename("aggregated_data") : filename;
     std::string filepath = data_directory_ + "/" + output_filename;
 
-    std::lock_guard<std::mutex> lock(save_mutex_);
+    // Wait for any ongoing save operation to complete
+    while (save_in_progress_.test_and_set()) {
+        std::this_thread::yield();
+    }
 
     std::ofstream file(filepath, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "[DataPersistence] Error: Could not open file for writing: " << filepath << std::endl;
+        save_in_progress_.clear();
         return false;
     }
 
@@ -56,9 +60,11 @@ bool DataPersistence::saveAggregatedData(
     if (success && file.good()) {
         last_saved_filename_ = output_filename;
         std::cout << "[DataPersistence] Successfully saved aggregated data to: " << filepath << std::endl;
+        save_in_progress_.clear();
         return true;
     } else {
         std::cerr << "[DataPersistence] Error: Failed to save aggregated data to: " << filepath << std::endl;
+        save_in_progress_.clear();
         return false;
     }
 }
@@ -121,11 +127,15 @@ bool DataPersistence::saveMarketAnalytics(
     std::string output_filename = filename.empty() ? generateFilename("market_analytics") : filename;
     std::string filepath = data_directory_ + "/" + output_filename;
 
-    std::lock_guard<std::mutex> lock(save_mutex_);
-    
+    // Wait for any ongoing save operation to complete
+    while (save_in_progress_.test_and_set()) {
+        std::this_thread::yield();
+    }
+
     std::ofstream file(filepath, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "[DataPersistence] Error: Could not open file for writing: " << filepath << std::endl;
+        save_in_progress_.clear();
         return false;
     }
 
@@ -243,11 +253,13 @@ bool DataPersistence::saveMarketAnalytics(
     
     if (file.good()) {
         last_saved_filename_ = output_filename;
-        std::cout << "[DataPersistence] Successfully saved market analytics to: " << filepath 
+        std::cout << "[DataPersistence] Successfully saved market analytics to: " << filepath
                   << " for " << symbol_count << " symbols" << std::endl;
+        save_in_progress_.clear();
         return true;
     } else {
         std::cerr << "[DataPersistence] Error: Failed to write to file: " << filepath << std::endl;
+        save_in_progress_.clear();
         return false;
     }
 }

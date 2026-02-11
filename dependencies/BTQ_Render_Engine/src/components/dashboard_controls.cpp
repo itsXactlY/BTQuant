@@ -1192,8 +1192,8 @@ void DashboardControls::render_global_alerts_section() {
       ImGui::Spacing();
 
       // Show active alerts table
-      auto all_alerts = global_alert_manager_->get_all_alerts();
-      if (!all_alerts.empty()) {
+      auto all_alerts_ptr = global_alert_manager_->get_all_alerts();
+      if (all_alerts_ptr && !all_alerts_ptr->empty()) {
         ImGui::Text("Active Alerts:");
         ImGui::BeginTable("AlertsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg);
         ImGui::TableSetupColumn("Name");
@@ -1203,7 +1203,7 @@ void DashboardControls::render_global_alerts_section() {
         ImGui::TableSetupColumn("Status");
         ImGui::TableHeadersRow();
 
-        for (const auto& [id, alert] : all_alerts) {
+        for (const auto& [id, alert] : *all_alerts_ptr) {
           ImGui::TableNextRow();
 
           ImGui::TableSetColumnIndex(0);

@@ -93,8 +93,8 @@
 - [x] **LOD System:** Implement Level-of-Detail rendering (Module 13a) that skips text/details when zooming out, reading directly from the cluster vectors.
 
 ### 5.2: Technical Indicators
-- [ ] **Calculation Thread:** Move VWAP/SMA/EMA calculations to a background thread (`TaskScheduler`).
-- [ ] **Atomic Result:** The background thread writes results to `AtomicIndicatorValues` in `MarketDataProcessor`. The Chart Panel simply polls these values.
+- [x] **Calculation Thread:** Move VWAP/SMA/EMA calculations to a background thread (`TaskScheduler`).
+- [x] **Atomic Result:** The background thread writes results to `AtomicIndicatorValues` in `MarketDataProcessor`. The Chart Panel simply polls these values.
 
 ---
 
@@ -102,9 +102,11 @@
 **Dependencies:** All previous modules.
 
 ### 6.1: The Purge
-- [ ] **Delete Mutexes:** Grep for `std::mutex` in `src/data/` and `src/components/`. Delete them. Redesign flow if this causes race conditions (use ownership transfer or atomics).
-- [ ] **Delete CVs:** Remove `std::condition_variable` usage in the hot path.
+- [x] **Delete Mutexes:** Grep for `std::mutex` in `src/data/` and `src/components/`. Delete them. Redesign flow if this causes race conditions (use ownership transfer or atomics).
+- [x] **Delete CVs:** Remove `std::condition_variable` usage in the hot path.
 
 ### 6.2: Compiler Optimization
-- [ ] **CMake Update:** Ensure flags `-std=c++26`, `-O3`, `-march=native`, `-flto` are set in `CMakeLists.txt`.
-- [ ] **Verify:** Check that `Release` build strips symbols and optimizes loops.
+- [x] **CMake Update:** Ensure flags `-std=c++26`, `-O3`, `-march=native`, `-flto` are set in `CMakeLists.txt`.
+- [x] **Verify:** Check that `Release` build strips symbols and optimizes loops.
+
+- [ ] Run `/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine//build_integration.sh` and confirm `BTQuantTerminal` links successfully without any errors.

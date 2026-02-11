@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <atomic>
 
 #include "../market_data_processor.hpp"
 #include "../cache_manager.hpp"
@@ -104,7 +105,7 @@ private:
     std::string last_saved_filename_;
     std::thread periodic_save_thread_;
     std::atomic<bool> periodic_save_running_{false};
-    std::mutex save_mutex_;
+    std::atomic_flag save_in_progress_ = ATOMIC_FLAG_INIT;
 
     // References to data sources
     std::weak_ptr<RenderEngine::CacheManager> cache_manager_ref_;

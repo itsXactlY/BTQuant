@@ -408,6 +408,11 @@ class MarketDataProcessor {
    */
   void unsubscribe(uint64_t subscription_id);
 
+  // Public accessor for atomic snapshots (zero-lock access for UI/rendering)
+  const HotSpine::V3::AtomicSymbolInfo* get_atomic_snapshot(uint32_t id) const {
+    return atomic_registry_.get_atomic_snapshot(id);
+  }
+
  private:
   // Configuration parameters
   size_t vwap_window_size_;
@@ -528,10 +533,16 @@ class MarketDataProcessor {
   void pollingLoop();
   void pollSharedMemoryRingBuffer();
   
+  // Poll hotspine function that updates atomic storage directly
+  void poll_hotspine();
+  
   // Method to set the HotSpineDataBridge for direct SHM access
-  void setHotSpineBridge(std::shared_ptr<BTQuant::HotSpineDataBridge> bridge) { 
-    hotspine_bridge_ = bridge; 
+  void setHotSpineBridge(std::shared_ptr<BTQuant::HotSpineDataBridge> bridge) {
+    hotspine_bridge_ = bridge;
   }
+
+  // Atomic registry for zero-lock access to market data
+  mutable HotSpine::V3::AtomicRegistry atomic_registry_;
 
   // Helper to get shard for a symbol
   Shard& getShard(uint32_t symbol_id) const { return *shards_[symbol_id % NUM_SHARDS]; }

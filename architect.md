@@ -75,7 +75,7 @@
 ### 4.1: Watchlist & Dashboard ("Lobotomy")
 - [ ] **Remove Queues:** Delete `pending_updates_` queue and `on_market_data_update` callback from `WatchlistPanel`.
 - [ ] **Polling Render:** In `WatchlistPanel::render()`, iterate visible rows and read directly from `processor_->get_atomic_snapshot(id)`.
-- [ ] **Result:** Rendering cost becomes `O(Visible_Rows)`, decoupling FPS from Market Rate.
+- [x] **Result:** Rendering cost becomes `O(Visible_Rows)`, decoupling FPS from Market Rate.
 
 ### 4.2: Orderbook Double-Buffering
 - [ ] **Implement Snapshotting:**

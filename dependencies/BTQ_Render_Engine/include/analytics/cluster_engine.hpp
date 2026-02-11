@@ -10,7 +10,7 @@
 
 #include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
 #include "../data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
-#include "../hotspine_layout_v3.hpp"
+#include "../../../include/hotspine_layout_v3.hpp"
 
 namespace Analytics {
 

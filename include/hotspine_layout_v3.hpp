@@ -148,12 +148,15 @@ struct alignas(64) AtomicSymbolInfo {
   std::atomic<double> last_trade_price{0.0};
   std::atomic<double> vwap{0.0};
   std::atomic<uint64_t> timestamp{0};
+  std::atomic<uint64_t> last_update_time{0};  // Last update time for the symbol
+  std::atomic<double> high_price{0.0};       // 24-hour high price
+  std::atomic<double> low_price{0.0};        // 24-hour low price
   std::atomic<uint32_t> trade_count{0};
   std::atomic<double> buy_volume{0.0};
   std::atomic<double> sell_volume{0.0};
 
   // Padding to prevent false sharing (each atomic gets its own cache line if needed)
-  char padding[32]; // Additional padding to ensure cache line separation
+  char padding[16]; // Additional padding to ensure cache line separation
 };
 
 // =========================================================================================

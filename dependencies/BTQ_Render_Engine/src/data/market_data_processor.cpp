@@ -939,7 +939,7 @@ constexpr size_t MAX_BATCH_SIZE = 4096;
 // Main polling loop that reads from shared memory ring buffer
 void MarketDataProcessor::pollingLoop() {
   while (running_.load(std::memory_order_acquire)) {
-    pollSharedMemoryRingBuffer();
+    poll_hotspine();
 
     // Brief sleep to prevent 100% CPU usage when no data is available
     std::this_thread::sleep_for(std::chrono::microseconds(10));  // 10 microsecond delay
@@ -997,6 +997,82 @@ void MarketDataProcessor::pollSharedMemoryRingBuffer() {
 
     // Process the actual market data event
     processUpdate(update);
+  }
+
+  // Update our local read tail to reflect the processed events
+  local_read_tail_ += events_to_process;
+}
+
+// Implementation of the poll_hotspine() function as specified in architect.md
+void MarketDataProcessor::poll_hotspine() {
+  // Check if we have a valid HotSpineDataBridge
+  if (!hotspine_bridge_) {
+    return; // No bridge available, nothing to poll
+  }
+
+  // Get the current write head from the shared memory header via the bridge
+  uint64_t shared_write_head = hotspine_bridge_->getHeader()->write_head.load(std::memory_order_acquire);
+
+  // If no new data is available, return early
+  if (local_read_tail_ >= shared_write_head) {
+    return;
+  }
+
+  // Calculate how many events we need to process (max 50,000 per frame for UI responsiveness)
+  const uint64_t MAX_EVENTS_PER_FRAME = 50000;
+  uint64_t events_to_process = std::min(MAX_EVENTS_PER_FRAME, shared_write_head - local_read_tail_);
+
+  // Process events using atomic storage updates with relaxed memory ordering
+  for (uint64_t i = 0; i < events_to_process; ++i) {
+    // Use the indexing pattern: base_ptr[index & mask]
+    uint64_t current_index = (local_read_tail_ + i) & (HotSpine::V3::RING_BUFFER_MASK);
+
+    // Access the event directly using pointer arithmetic: base_ptr[index & mask]
+    const auto& event_ref = hotspine_bridge_->getBasePtr()[current_index];
+
+    // Check if this is a warmup event
+    if (event_ref.flags & HotSpine::V3::HotspineData::IS_WARMUP) {
+      // For warmup events, just touch memory to keep cache hot, but skip processing
+      continue;
+    }
+
+    // Update atomic storage using memory_order_relaxed for performance
+    // Get the atomic symbol info for this symbol_id
+    auto* atomic_info = atomic_registry_.get_mutable_atomic_snapshot(event_ref.symbol_id);
+    if (atomic_info) {
+      // Update the atomic values with relaxed memory ordering for performance
+      atomic_info->price.store(event_ref.price, std::memory_order_relaxed);
+      atomic_info->volume.store(event_ref.volume, std::memory_order_relaxed);
+      atomic_info->timestamp.store(event_ref.timestamp, std::memory_order_relaxed);
+      atomic_info->last_update_time.store(event_ref.timestamp, std::memory_order_relaxed);
+      
+      // Update last trade price specifically for trade events
+      if (event_ref.event_type == 0) { // Assuming 0 is TRADE
+        atomic_info->last_trade_price.store(event_ref.price, std::memory_order_relaxed);
+        
+        // Update high/low prices - this would normally be updated periodically, not per trade
+        // For now, we'll update them per trade for simplicity
+        double current_high = atomic_info->high_price.load(std::memory_order_relaxed);
+        double current_low = atomic_info->low_price.load(std::memory_order_relaxed);
+        
+        if (current_high == 0.0 || event_ref.price > current_high) {
+          atomic_info->high_price.store(event_ref.price, std::memory_order_relaxed);
+        }
+        if (current_low == 0.0 || event_ref.price < current_low) {
+          atomic_info->low_price.store(event_ref.price, std::memory_order_relaxed);
+        }
+        
+        // Update buy/sell volume based on flags
+        if (event_ref.flags & 0x04) { // Assuming bit 2 indicates buy
+          atomic_info->buy_volume.fetch_add(event_ref.volume, std::memory_order_relaxed);
+        } else {
+          atomic_info->sell_volume.fetch_add(event_ref.volume, std::memory_order_relaxed);
+        }
+      }
+      
+      // Increment trade count
+      atomic_info->trade_count.fetch_add(1, std::memory_order_relaxed);
+    }
   }
 
   // Update our local read tail to reflect the processed events

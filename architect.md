@@ -29,7 +29,7 @@
 
 ### 1.2: Shared Memory Manager (`include/hotspine_data_bridge.hpp`)**
 - [x] **Refactor Bridge:** Remove all `std::queue` and `std::mutex`.
-- [ ] **Pointer Arithmetic:** Map the SHM segment to a raw `HotspineData*` pointer. Indexing becomes `base_ptr[index & mask]`.
+- [x] **Pointer Arithmetic:** Map the SHM segment to a raw `HotspineData*` pointer. Indexing becomes `base_ptr[index & mask]`.
 
 ---
 
@@ -37,15 +37,15 @@
 **Dependencies:** Module 1. Converts Collector into a pure, dumb, fast feed handler.
 
 ### 2.1: Stripping the Fat
-- [ ] **Remove Analytics:** In `market_data_collector/src/data/market_data_processor.cpp`, delete `ClusterEngine`, `Database`, and `snapshot_to_viewport` logic. The Collector must *never* calculate clusters.
-- [ ] **Zero-Copy Ingestion:**
+- [x] **Remove Analytics:** In `market_data_collector/src/data/market_data_processor.cpp`, delete `ClusterEngine`, `Database`, and `snapshot_to_viewport` logic. The Collector must *never* calculate clusters.
+- [x] **Zero-Copy Ingestion:**
     - In `exchange_aggregator.cpp`, modify callbacks to construct `HotspineData` on the stack.
     - Call `HotSpineDataBridge::write_direct()` immediately.
     - **Constraint:** Zero heap allocations in the callback path.
 
 ### 2.2: Producer Flow Control
-- [ ] **Yield-on-Full:** Implement logic: `if (write_head - read_tail > SIZE) std::this_thread::yield();`.
-- [ ] **Affinity:** Ensure the Collector thread is pinned to a specific CPU core (e.g., Core 2) to avoid context switches.
+- [x] **Yield-on-Full:** Implement logic: `if (write_head - read_tail > SIZE) std::this_thread::yield();`.
+- [x] **Affinity:** Ensure the Collector thread is pinned to a specific CPU core (e.g., Core 2) to avoid context switches.
 
 ---
 
@@ -53,10 +53,10 @@
 **Dependencies:** Module 1. The "Heart" of the Render Engine.
 
 ### 3.1: Atomic Storage Infrastructure (`include/market_data_processor.hpp`)
-- [ ] **Create Atomic Registry:**
+- [x] **Create Atomic Registry:**
     - Replace `std::map` with `std::vector<AtomicSymbolInfo> atomic_storage_` (pre-allocated to 100,000 slots).
     - `struct AtomicSymbolInfo { std::atomic<double> price; std::atomic<double> volume; ... };`
-- [ ] **Zero-Lock Access:** Implement `get_atomic_snapshot(uint32_t id)` that returns a const pointer to the atomic struct.
+- [x] **Zero-Lock Access:** Implement `get_atomic_snapshot(uint32_t id)` that returns a const pointer to the atomic struct.
 
 ### 3.2: The Polling Loop (`src/data/market_data_processor.cpp`)
 - [ ] **Implement `poll_hotspine()`:**

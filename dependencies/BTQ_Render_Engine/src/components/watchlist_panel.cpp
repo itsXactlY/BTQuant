@@ -494,9 +494,9 @@ void WatchlistPanel::render() {
       for (uint32_t symbol_id : filtered_symbols) {
         auto it = get_current_watchlist().find(symbol_id);
         if (it != get_current_watchlist().end()) {
-          // Update the entry with fresh data from the processor
-          auto analytics = processor_->getSymbolAnalytics(symbol_id);
-          if (analytics.symbol_id != 0) {
+          // Polling Render: Read directly from atomic snapshot
+          const auto* atomic_snapshot = processor_->get_atomic_snapshot(symbol_id);
+          if (atomic_snapshot != nullptr) {
             // Update the entry with fresh data for rendering
             // Note: This temporarily modifies the entry for rendering purposes
             // Store previous values for animation
@@ -509,40 +509,27 @@ void WatchlistPanel::render() {
             double prev_low_24h = it->second.low_24h;
             double prev_open_24h = it->second.open_24h;
 
-            // Update with fresh data
-            it->second.price = analytics.last_trade_price;
-            it->second.vwap = analytics.vwap;
-            it->second.last_update_ts = analytics.last_trade_time;
+            // Update with fresh data from atomic snapshot
+            it->second.price = atomic_snapshot->price.load();
+            it->second.vwap = atomic_snapshot->vwap.load();
+            it->second.last_update_ts = atomic_snapshot->last_update_time.load();
+            
+            // Update other fields from atomic snapshot
+            it->second.high_24h = atomic_snapshot->high_price.load();
+            it->second.low_24h = atomic_snapshot->low_price.load();
+            it->second.volume_24h = atomic_snapshot->volume.load();
 
-            // Calculate 24h change using the longest available timeframe candles
-            auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-            if (!candles.empty()) {
-              const auto& oldest_candle = candles.front();
-              const auto& newest_candle = candles.back();
-
-              // Calculate percentage change
-              it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-              // Calculate dollar change
-              it->second.change_dollar = newest_candle.close - oldest_candle.close;
-
-              // Store open, high, low values from the oldest candle (representing 24h period)
-              it->second.open_24h = oldest_candle.open;
-              it->second.high_24h = oldest_candle.high;
-              it->second.low_24h = oldest_candle.low;
-
-              // Estimate 24h volume by summing available candles (best effort)
-              double total_vol = 0.0;
-              for (const auto& c : candles) total_vol += c.volume;
-              it->second.volume_24h = total_vol;
+            // Calculate change percentage based on previous price
+            if (prev_price != 0) {
+              it->second.change_pct = ((it->second.price - prev_price) / prev_price) * 100.0;
+              it->second.change_dollar = it->second.price - prev_price;
             } else {
               it->second.change_pct = 0.0;
               it->second.change_dollar = 0.0;
-              it->second.open_24h = 0.0;
-              it->second.high_24h = 0.0;
-              it->second.low_24h = 0.0;
-              it->second.volume_24h = analytics.volume_1m;  // Fallback
             }
+            
+            // Set open_24h to previous day's close or current price if no previous data
+            it->second.open_24h = prev_price != 0 ? prev_price : it->second.price;
 
             // Maintain animation state for visual feedback
             it->second.previous_price = prev_price;

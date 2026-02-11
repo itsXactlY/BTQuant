@@ -3,10 +3,16 @@
 #include <vector>
 #include <cstdint>
 #include <deque>
+#include <memory>
 
 // Forward declaration to avoid circular dependency
 // The actual OHLCVCandle struct is defined in market_data_processor.hpp
 #include "../market_data_processor.hpp"
+
+// Forward declaration for TaskScheduler to avoid circular includes
+namespace btq {
+    class TaskScheduler;
+}
 
 namespace btq {
 
@@ -53,6 +59,10 @@ public:
     // Calculate rolling VWAP for the last N bars using OHLCV bars
     void calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars);
 
+    // Async calculation using TaskScheduler
+    void calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars,
+                       std::shared_ptr<btq::TaskScheduler> taskScheduler);
+
 private:
     size_t windowSize_;
     std::vector<double> vwapValues_;
@@ -62,13 +72,14 @@ private:
     std::vector<double> sd2LowerBand_;
     std::vector<double> sd3UpperBand_;
     std::vector<double> sd3LowerBand_;
-    
+
+
     // Helper structure to store bar data for rolling window calculation
     struct BarData {
         double typicalPrice;
         double volume;
         double tpv; // Typical Price * Volume
-        
+
         BarData(double tp, double vol, double t) : typicalPrice(tp), volume(vol), tpv(t) {}
     };
 };

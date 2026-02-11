@@ -10,6 +10,7 @@
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "../market_data_processor.hpp"
+#include "../task_scheduler.hpp"
 #include "chart_manager.hpp"
 #include "chart_panel_settings.hpp"
 #include "drawing_tools.hpp"  // Include drawing tools header
@@ -266,6 +267,9 @@ class ChartPanel : public PanelBase {
 
   // Panel settings
   std::unique_ptr<class ChartPanelSettings> settings_;
+
+  // Task scheduler for background calculations
+  std::shared_ptr<btq::TaskScheduler> task_scheduler_;
 
   // Multi-timeframe indicators support
   struct MultiTimeframeIndicator {

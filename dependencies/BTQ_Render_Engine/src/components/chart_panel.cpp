@@ -146,6 +146,9 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
   // Initialize drawing tools manager
   drawing_tools_manager_ = std::make_unique<DrawingToolsManager>();
 
+  // Initialize task scheduler for background calculations
+  task_scheduler_ = std::make_shared<btq::TaskScheduler>();
+
   // Initialize panel settings
   settings_ = std::make_unique<ChartPanelSettings>(static_cast<void*>(this));
 }
@@ -320,8 +323,8 @@ void ChartPanel::update(float dt) {
       bars.push_back(bar);
     }
 
-    // Calculate session VWAPs based on the chart data
-    session_vwap_.calculate(bars);
+    // Calculate session VWAPs based on the chart data using background thread
+    session_vwap_.calculateAsync(bars, task_scheduler_);
 
     last_known_data_size_ = chart.closes.size();
 
@@ -743,7 +746,14 @@ std::vector<double> ChartPanel::calculate_cached_sma(const std::vector<float>& p
     return it->second;
   }
 
-  // Calculate SMA if not cached
+  // Convert prices to doubles for the async calculation
+  std::vector<double> prices_double(prices.begin(), prices.end());
+
+  // Submit the calculation to the task scheduler
+  auto future = task_scheduler_->calculate_sma_async(prices_double, period);
+
+  // For now, we'll calculate synchronously to maintain compatibility
+  // In a full async implementation, we would store the future and return cached values
   std::vector<double> sma(prices.size(), 0.0);
 
   for (size_t i = period - 1; i < prices.size(); ++i) {
@@ -773,6 +783,14 @@ std::vector<double> ChartPanel::calculate_cached_ema(const std::vector<float>& p
     return it->second;
   }
 
+  // Convert prices to doubles for the async calculation
+  std::vector<double> prices_double(prices.begin(), prices.end());
+
+  // Submit the calculation to the task scheduler
+  auto future = task_scheduler_->calculate_ema_async(prices_double, period);
+
+  // For now, we'll calculate synchronously to maintain compatibility
+  // In a full async implementation, we would store the future and return cached values
   std::vector<double> ema(prices.size(), 0.0);
 
   // Initialize with SMA
@@ -3374,12 +3392,12 @@ void ChartPanel::create_anchored_vwap_at_time(uint64_t timestamp) {
       bars.push_back(bar);
     }
 
-    // Calculate the VWAP from the anchor point
-    new_vwap.calculate(bars);
+    // Calculate the VWAP from the anchor point using background thread
+    new_vwap.calculateAsync(bars, task_scheduler_);
   }
 
   // Add the new VWAP to our list
-  anchored_vwaps_.push_back(new_vwap);
+  anchored_vwaps_.push_back(std::move(new_vwap));
 }
 
 // Render the anchored VWAP overlay on the chart

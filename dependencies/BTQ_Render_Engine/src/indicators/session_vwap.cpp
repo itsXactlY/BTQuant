@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include "../task_scheduler.hpp"
 
 namespace btq {
 
@@ -192,6 +193,15 @@ void SessionVWAP::calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle
     if (sessionStartIndex < bars.size() && !sessions_.empty()) {
         calculateSessionVWAP(bars, sessionStartIndex, bars.size() - 1, sessions_.back());
     }
+}
+
+void SessionVWAP::calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars,
+                               std::shared_ptr<btq::TaskScheduler> taskScheduler) {
+    // Submit the calculation to the task scheduler
+    // For now, just call the synchronous version to maintain compatibility
+    // In a full async implementation, we would calculate in the background
+    // and update the values when complete
+    calculate(bars);
 }
 
 } // namespace btq

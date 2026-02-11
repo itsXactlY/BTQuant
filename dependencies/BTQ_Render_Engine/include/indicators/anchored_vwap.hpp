@@ -2,10 +2,17 @@
 
 #include <vector>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 
 // Forward declaration to avoid circular dependency
 // The actual OHLCVCandle struct is defined in market_data_processor.hpp
 #include "../market_data_processor.hpp"
+
+// Forward declaration for TaskScheduler to avoid circular includes
+namespace btq {
+    class TaskScheduler;
+}
 
 namespace btq {
 
@@ -51,6 +58,10 @@ public:
 
     // Calculate VWAP from anchor point forward using OHLCV bars
     void calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars);
+
+    // Async calculation using TaskScheduler
+    void calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars, 
+                       std::shared_ptr<btq::TaskScheduler> taskScheduler);
 
 private:
     uint64_t anchorTimestamp_;

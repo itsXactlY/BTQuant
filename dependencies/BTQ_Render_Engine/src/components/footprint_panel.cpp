@@ -556,6 +556,18 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
                              diagonal_imbalances, stacked_imbalances, this);
 }
 
+void FootprintPanel::renderCellWithClusterVectorLOD(const FootprintCell& cell, ImDrawList* draw_list,
+                                                   double max_volume,
+                                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                                   double zoom_factor,
+                                                   int total_clusters_in_view) {
+  // Use the cluster vector LOD system to render the cell with appropriate level of detail
+  lod_system_.applyClusterVectorLODToCell(cell, draw_list, static_cast<float>(zoom_factor), max_volume,
+                                          diagonal_imbalances, stacked_imbalances, this,
+                                          total_clusters_in_view);
+}
+
 void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list,
                                         double /*max_volume*/, double zoom_factor) {
   // For filtered cells, we'll create a temporary version with reduced visibility
@@ -1904,9 +1916,9 @@ void FootprintPanel::render() {
         // Render greyed-out cell for values below threshold
         renderFilteredCell(cell, draw_list, max_volume, zoom_factor);
       } else {
-        // Render the cell normally with the calculated max volume for adaptive alpha
-        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances,
-                   zoom_factor);
+        // Use cluster vector LOD system for rendering that skips text/details when zoomed out
+        renderCellWithClusterVectorLOD(cell, draw_list, max_volume, diagonal_imbalances, 
+                                     stacked_imbalances, zoom_factor, static_cast<int>(clusters.size()));
       }
     }
 

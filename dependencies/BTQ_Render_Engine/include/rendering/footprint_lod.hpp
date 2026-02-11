@@ -686,6 +686,24 @@ public:
                                 const std::vector<FootprintCell>& stacked_imbalances,
                                 const FootprintPanel* panel) const;
 
+    // Calculate LOD based on cluster vectors directly for zoomed-out views
+    LODLevel calculateClusterVectorLOD(float cell_width_px, float cell_height_px,
+                                    float zoom_factor, int total_clusters_in_view) const;
+
+    // Get render settings optimized for cluster vector rendering at different zoom levels
+    LODRenderSettings getClusterVectorRenderSettings(LODLevel lod_level, float zoom_factor,
+                                                   int total_clusters_in_view) const;
+
+    // Apply LOD to cluster vector rendering that skips text/details when zoomed out
+    void applyClusterVectorLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel,
+                                   int total_clusters_in_view) const;
+
     // Get enhanced smooth transition render settings for transitioning between LOD levels
     LODRenderSettings getEnhancedSmoothTransitionRenderSettings(LODLevel from_lod, LODLevel to_lod,
                                                               float transition_progress, float zoom_factor) const;

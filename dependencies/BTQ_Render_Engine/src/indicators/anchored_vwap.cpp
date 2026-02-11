@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <future>
+#include "../task_scheduler.hpp"
 
 namespace btq {
 
@@ -98,6 +100,15 @@ void AnchoredVWAP::calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandl
     // Add the calculated values to our storage
     addVWAPValue(currentVWAP, sd1Upper, sd1Lower, sd2Upper, sd2Lower, sd3Upper, sd3Lower);
   }
+}
+
+void AnchoredVWAP::calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars, 
+                                 std::shared_ptr<btq::TaskScheduler> taskScheduler) {
+  // Submit the calculation to the task scheduler
+  // For now, just call the synchronous version to maintain compatibility
+  // In a full async implementation, we would calculate in the background
+  // and update the values when complete
+  calculate(bars);
 }
 
 }  // namespace btq

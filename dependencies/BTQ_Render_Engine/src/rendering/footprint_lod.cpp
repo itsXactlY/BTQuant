@@ -6557,6 +6557,200 @@ void FootprintLOD::applyMainLODToCell(const FootprintCell& cell,
         }
     }
 }
+
+LODLevel FootprintLOD::calculateClusterVectorLOD(float cell_width_px, float cell_height_px,
+                                              float zoom_factor, int total_clusters_in_view) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+    
+    // Calculate cluster density factor based on number of clusters in view
+    float cluster_density_factor = static_cast<float>(total_clusters_in_view) / 1000.0f; // Normalize to 1000 clusters
+    
+    // Adjust thresholds based on cluster density
+    float density_adjusted_zoom = zoom_factor;
+    if (cluster_density_factor > 2.0f) {
+        // High density - reduce effective zoom to trigger lower detail sooner
+        density_adjusted_zoom *= 0.7f;
+    } else if (cluster_density_factor > 1.0f) {
+        // Medium density - slightly reduce effective zoom
+        density_adjusted_zoom *= 0.85f;
+    } else if (cluster_density_factor < 0.5f) {
+        // Low density - allow more detail
+        density_adjusted_zoom *= 1.2f;
+    }
+    
+    // Calculate LOD based on adjusted zoom and cell dimensions
+    if (density_adjusted_zoom <= min_detail_zoom_ || min_dimension <= min_cell_size_px_) {
+        return LODLevel::LOW_DETAIL;  // Minimal detail, heatmap only
+    } else if (density_adjusted_zoom <= medium_detail_zoom_ || min_dimension <= medium_cell_size_px_) {
+        return LODLevel::MEDIUM_DETAIL;  // Basic detail with some labels
+    } else if (density_adjusted_zoom <= max_detail_zoom_ || min_dimension <= max_cell_size_px_) {
+        return LODLevel::HIGH_DETAIL;  // Full detail with all information
+    } else {
+        return LODLevel::MAX_DETAIL;  // Ultra detail with additional annotations
+    }
+}
+
+LODRenderSettings FootprintLOD::getClusterVectorRenderSettings(LODLevel lod_level, float zoom_factor,
+                                                            int total_clusters_in_view) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+    
+    // Additional optimizations based on cluster count and zoom level
+    float cluster_density_factor = static_cast<float>(total_clusters_in_view) / 1000.0f;
+    
+    if (cluster_density_factor > 2.0f) {
+        // High cluster density - aggressively reduce detail
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+    } else if (cluster_density_factor > 1.0f && zoom_factor < 0.5f) {
+        // Medium density with low zoom - reduce text rendering
+        settings.render_text = false;
+        if (zoom_factor < 0.3f) {
+            settings.render_labels = false;
+        }
+    }
+    
+    // Further adjust based on zoom level for cluster vector rendering
+    if (zoom_factor < 0.2f) {
+        // Very zoomed out - only show basic heatmap
+        settings.render_borders = false;
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier = 0.7f; // Slightly reduce alpha for better performance
+    } else if (zoom_factor < 0.5f) {
+        // Moderately zoomed out - show heatmap and basic borders
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+    }
+    
+    return settings;
+}
+
+void FootprintLOD::applyClusterVectorLODToCell(const FootprintCell& cell,
+                                          ImDrawList* draw_list,
+                                          float zoom_factor,
+                                          double max_volume,
+                                          const std::vector<FootprintCell>& diagonal_imbalances,
+                                          const std::vector<FootprintCell>& stacked_imbalances,
+                                          const FootprintPanel* panel,
+                                          int total_clusters_in_view) const {
+    // Calculate LOD level based on cluster vectors
+    float cell_width_px = 0.0f, cell_height_px = 0.0f;
+    
+    // Convert cell dimensions to pixels for LOD calculation
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+    
+    cell_width_px = std::abs(p2.x - p1.x);
+    cell_height_px = std::abs(p2.y - p1.y);
+    
+    LODLevel lod_level = calculateClusterVectorLOD(cell_width_px, cell_height_px, zoom_factor, 
+                                                 total_clusters_in_view);
+    
+    // Get optimized render settings for cluster vector rendering
+    LODRenderSettings settings = getClusterVectorRenderSettings(lod_level, zoom_factor, 
+                                                              total_clusters_in_view);
+    
+    // Calculate cell corners in plot coordinates
+    double base_padding = 0.48;
+    double adjusted_padding = adjustCellPadding(base_padding, zoom_factor);
+    
+    double x1 = cell.x - cell.width * adjusted_padding;
+    double x2 = cell.x + cell.width * adjusted_padding;
+    double y1 = cell.y - cell.height * adjusted_padding;
+    double y2 = cell.y + cell.height * adjusted_padding;
+    
+    // Convert to pixel coordinates
+    ImVec2 pixel_p1 = ImPlot::PlotToPixels(x1, y1);
+    ImVec2 pixel_p2 = ImPlot::PlotToPixels(x2, y2);
+    
+    // Calculate cell area in pixels for additional optimizations
+    float cell_area_px = cell_width_px * cell_height_px;
+    
+    // Apply heatmap rendering if enabled
+    if (settings.render_heatmap) {
+        ImU32 cell_color = panel->getCellColor(cell, max_volume);
+        
+        // Apply alpha multiplier
+        ImVec4 color_vec4 = ImGui::ColorConvertU32ToFloat4(cell_color);
+        color_vec4.w *= settings.alpha_multiplier;
+        ImU32 final_color = ImGui::ColorConvertFloat4ToU32(color_vec4);
+        
+        draw_list->AddRectFilled(pixel_p1, pixel_p2, final_color);
+    }
+    
+    // Apply border rendering if enabled
+    if (settings.render_borders) {
+        ImU32 border_color = IM_COL32(255, 255, 255, static_cast<int>(255 * settings.alpha_multiplier * 0.3f));
+        draw_list->AddRect(pixel_p1, pixel_p2, border_color, 0.0f, 0, settings.border_thickness);
+    }
+    
+    // Apply text rendering if enabled and cell is large enough
+    if (settings.render_text && cell_height_px >= text_render_threshold_) {
+        std::string label = panel->getCellLabel(cell);
+        ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+        
+        // Center text in cell
+        ImVec2 text_pos((pixel_p1.x + pixel_p2.x - text_size.x) * 0.5f, 
+                       (pixel_p1.y + pixel_p2.y - text_size.y) * 0.5f);
+        
+        // Ensure text is visible within cell bounds
+        if (text_size.x <= cell_width_px && text_size.y <= cell_height_px) {
+            draw_list->AddText(text_pos, IM_COL32(255, 255, 255, static_cast<int>(255 * settings.alpha_multiplier)), 
+                              label.c_str());
+        }
+    }
+    
+    // Apply label rendering if enabled
+    if (settings.render_labels && cell_height_px >= label_render_threshold_) {
+        // Additional label rendering logic could go here
+        // For now, we'll use the same approach as text rendering
+        std::string label = panel->getCellLabel(cell);
+        ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+        
+        // Position label at top-left corner of cell
+        ImVec2 label_pos(pixel_p1.x + 2, pixel_p1.y + 2);
+        
+        // Ensure label fits within cell bounds
+        if (label_pos.x + text_size.x <= pixel_p2.x && label_pos.y + text_size.y <= pixel_p2.y) {
+            draw_list->AddText(label_pos, IM_COL32(255, 255, 255, static_cast<int>(200 * settings.alpha_multiplier)), 
+                              label.c_str());
+        }
+    }
+    
+    // Apply detailed annotations if enabled
+    if (settings.render_detailed_annotations && cell_area_px >= (detail_render_threshold_ * detail_render_threshold_)) {
+        // Draw small indicator for detailed annotations (e.g., delta arrows)
+        if (std::abs(cell.delta) > 0.001) {  // Only if there's meaningful delta
+            ImVec2 center((pixel_p1.x + pixel_p2.x) * 0.5f, (pixel_p1.y + pixel_p2.y) * 0.5f);
+            
+            // Draw small arrow indicating delta direction
+            ImU32 arrow_color = cell.delta > 0 ? IM_COL32(0, 255, 0, 180) : IM_COL32(255, 0, 0, 180);
+            
+            // Draw a small triangle pointing up for positive delta, down for negative
+            if (cell.delta > 0) {
+                // Upward triangle
+                draw_list->AddTriangleFilled(
+                    ImVec2(center.x, center.y - 4),
+                    ImVec2(center.x - 3, center.y + 2),
+                    ImVec2(center.x + 3, center.y + 2),
+                    arrow_color
+                );
+            } else {
+                // Downward triangle
+                draw_list->AddTriangleFilled(
+                    ImVec2(center.x, center.y + 4),
+                    ImVec2(center.x - 3, center.y - 2),
+                    ImVec2(center.x + 3, center.y - 2),
+                    arrow_color
+                );
+            }
+        }
+    }
+}
+
 }
 
 

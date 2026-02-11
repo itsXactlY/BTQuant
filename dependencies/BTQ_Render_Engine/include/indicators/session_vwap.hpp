@@ -3,10 +3,16 @@
 #include <vector>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 // Forward declaration to avoid circular dependency
 // The actual OHLCVCandle struct is defined in market_data_processor.hpp
 #include "../market_data_processor.hpp"
+
+// Forward declaration for TaskScheduler to avoid circular includes
+namespace btq {
+    class TaskScheduler;
+}
 
 namespace btq {
 
@@ -61,6 +67,10 @@ public:
     // Calculate VWAP for each session using OHLCV bars
     void calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars);
 
+    // Async calculation using TaskScheduler
+    void calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars,
+                       std::shared_ptr<btq::TaskScheduler> taskScheduler);
+
     // Add individual VWAP value to current active session
     void addVWAPValueToCurrentSession(double vwap, double sd1Upper, double sd1Lower,
                                       double sd2Upper, double sd2Lower,
@@ -77,6 +87,7 @@ private:
     std::vector<uint64_t> sessionStartTimes_;
     std::vector<VWAPSession> sessions_;
 
+
     // Find the session that contains the given timestamp
     int getSessionIndexForTimestamp(uint64_t timestamp) const;
 
@@ -84,8 +95,8 @@ private:
     void createNewSession(uint64_t startTime);
 
     // Calculate VWAP for a specific session range
-    void calculateSessionVWAP(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars, 
-                             size_t startIndex, size_t endIndex, 
+    void calculateSessionVWAP(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars,
+                             size_t startIndex, size_t endIndex,
                              VWAPSession& session);
 };
 

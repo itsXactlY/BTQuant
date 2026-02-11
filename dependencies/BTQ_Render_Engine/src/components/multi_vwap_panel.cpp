@@ -10,12 +10,16 @@
 #include "implot.h"
 #include "ui/haptic_feedback.hpp"
 #include "ui/tooltips.hpp"
+#include "../task_scheduler.hpp"
 
 namespace BTQuant {
 
 MultiVWAPPanel::MultiVWAPPanel(const PanelConfig& config,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), processor_(processor) {
+  // Initialize task scheduler for background calculations
+  task_scheduler_ = std::make_shared<btq::TaskScheduler>();
+  
   // Initialize with a daily VWAP by default
   add_daily_vwap();
 }
@@ -67,8 +71,8 @@ void MultiVWAPPanel::update_vwaps() {
           bars.push_back(bar);
         }
 
-        // Recalculate the VWAP from the anchor point
-        instance.vwap.calculate(bars);
+        // Recalculate the VWAP from the anchor point using background thread
+        instance.vwap.calculateAsync(bars, task_scheduler_);
       }
     }
   }

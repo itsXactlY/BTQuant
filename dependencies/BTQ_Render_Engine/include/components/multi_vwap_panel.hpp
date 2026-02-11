@@ -10,6 +10,11 @@
 #include "panel_base.hpp"
 #include "../indicators/anchored_vwap.hpp"
 
+// Forward declaration for TaskScheduler to avoid circular includes
+namespace btq {
+    class TaskScheduler;
+}
+
 namespace BTQuant {
 
 struct VWAPInstance {
@@ -38,20 +43,23 @@ public:
 
 private:
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
-    
+
+    // Task scheduler for background calculations
+    std::shared_ptr<btq::TaskScheduler> task_scheduler_;
+
     // Store all VWAP instances
     std::vector<VWAPInstance> vwap_instances_;
-    
+
     // UI state
     std::string new_vwap_name_ = "Custom VWAP";
     ImVec4 new_vwap_color_ = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
     uint64_t new_vwap_anchor_time_ = 0;
-    
+
     // Control flags
     bool show_daily_vwap_ = true;
     bool show_weekly_vwap_ = false;
     bool show_monthly_vwap_ = false;
-    
+
     float update_timer_ = 0.0f;
     const float UPDATE_INTERVAL = 1.0f;  // Update every second
     

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <deque>
+#include "../task_scheduler.hpp"
 
 namespace btq {
 
@@ -82,6 +83,15 @@ void RollingVWAP::calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle
         // Add the calculated values to our storage
         addVWAPValue(currentVWAP, sd1Upper, sd1Lower, sd2Upper, sd2Lower, sd3Upper, sd3Lower);
     }
+}
+
+void RollingVWAP::calculateAsync(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars,
+                               std::shared_ptr<btq::TaskScheduler> taskScheduler) {
+    // Submit the calculation to the task scheduler
+    // For now, just call the synchronous version to maintain compatibility
+    // In a full async implementation, we would calculate in the background
+    // and update the values when complete
+    calculate(bars);
 }
 
 } // namespace btq

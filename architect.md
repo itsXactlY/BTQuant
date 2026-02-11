@@ -81,7 +81,7 @@
 - [x] **Implement Snapshotting:**
     - `MarketDataProcessor` maintains the live L2 book.
     - Once per frame (start of frame), `MarketDataProcessor` atomically swaps a "Reader Snapshot" pointer.
-- [ ] **Render:** `OrderbookPanel` reads strictly from the "Reader Snapshot". No mutexes required during render.
+- [x] **Render:** `OrderbookPanel` reads strictly from the "Reader Snapshot". No mutexes required during render.
 
 ---
 
@@ -89,8 +89,8 @@
 **Dependencies:** Module 3 & 4. Re-enabling features on the new architecture.
 
 ### 5.1: Footprint & TPO
-- [ ] **Direct Memory Access:** Modify `FootprintPanel` to read `ClusterEngine` data structures directly via `const` pointers.
-- [ ] **LOD System:** Implement Level-of-Detail rendering (Module 13a) that skips text/details when zooming out, reading directly from the cluster vectors.
+- [x] **Direct Memory Access:** Modify `FootprintPanel` to read `ClusterEngine` data structures directly via `const` pointers.
+- [x] **LOD System:** Implement Level-of-Detail rendering (Module 13a) that skips text/details when zooming out, reading directly from the cluster vectors.
 
 ### 5.2: Technical Indicators
 - [ ] **Calculation Thread:** Move VWAP/SMA/EMA calculations to a background thread (`TaskScheduler`).

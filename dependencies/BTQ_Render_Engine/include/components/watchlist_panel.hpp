@@ -208,7 +208,6 @@ class WatchlistPanel : public PanelBase {
   void refresh_all_subscriptions();
   void ensure_all_symbols_subscribed();
   void subscribe_to_all_watchlist_symbols();
-  void process_pending_subscriptions();
 
   // Alerts management UI
   void render_alerts_management();
@@ -227,54 +226,6 @@ class WatchlistPanel : public PanelBase {
   // Focus management
   bool should_focus_symbol_input_ = false;
 
-  // Pending subscriptions queue
-  struct PendingSubscription {
-    uint32_t symbol_id;
-    std::string symbol;
-    std::string exchange;
-  };
-  
-  // FIXED: Changed from std::queue to moodycamel::ConcurrentQueue
-  moodycamel::ConcurrentQueue<PendingSubscription> pending_subscriptions_;
-
-  // Structure to hold market data updates for queuing
-  struct QueuedMarketDataUpdate {
-    uint32_t symbol_id;
-    RenderEngine::NotificationType type;
-  };
-
-  // Structure to hold different types of watchlist updates
-  struct WatchlistUpdate {
-    enum Type {
-      ADD_SYMBOL,
-      REMOVE_SYMBOL,
-      CLEAR_WATCHLIST,
-      MARKET_DATA_UPDATE,
-      PRICE_ALERT,
-      SYMBOL_RENAME
-    };
-    
-    Type type;
-    uint32_t symbol_id;
-    std::string symbol;
-    std::string exchange;
-    double value;  // Used for prices, alert values, etc.
-    int alert_direction;  // Used for price alert direction
-    
-    // Default constructor
-    WatchlistUpdate() : type(ADD_SYMBOL), symbol_id(0), value(0.0), alert_direction(0) {}
-    
-    // Constructor for different update types
-    WatchlistUpdate(Type t, uint32_t id) : type(t), symbol_id(id), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym)
-        : type(t), symbol_id(id), symbol(sym), exchange(""), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, const std::string& exch)
-        : type(t), symbol_id(id), symbol(sym), exchange(exch), value(0.0), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val)
-        : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(0) {}
-    WatchlistUpdate(Type t, uint32_t id, const std::string& sym, double val, int dir)
-        : type(t), symbol_id(id), symbol(sym), exchange(""), value(val), alert_direction(dir) {}
-  };
 
   // Using recursive mutex to prevent deadlocks in rendering logic
   mutable std::recursive_mutex watchlist_mutex_;

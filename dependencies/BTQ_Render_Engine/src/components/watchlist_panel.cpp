@@ -256,9 +256,6 @@ void WatchlistPanel::update(float dt) {
     alert_manager_->update_alerts();
   }
 
-  // Process pending subscriptions to avoid calling ImGui functions during rendering
-  process_pending_subscriptions();
-
   // Ensure all symbols in the current watchlist group are subscribed to real-time price feed
   // updates This handles cases where subscriptions might have been lost or need to be refreshed
   ensure_all_symbols_subscribed();
@@ -685,14 +682,14 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   // otherwise, just add to the vector
   get_current_display_order().push_back(symbol_id);
 
-  // Queue subscription for later processing to avoid calling ImGui functions during rendering
-  pending_subscriptions_.enqueue({symbol_id, symbol, exchange});
+  // Subscribe to real-time updates for this symbol immediately
+  subscribe_to_symbol(symbol_id);
 
   // Save the updated order to config file
   save_watchlist_order_to_config(config_file_path_);
 
   std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id << ") to group '"
-            << current_group_name_ << "' and queued for subscription" << std::endl;
+            << current_group_name_ << "' and subscribed to real-time updates" << std::endl;
 }
 
 
@@ -2401,21 +2398,21 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
 
 void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
   if (processor_) {
-    // Check if already subscribed to avoid duplicate subscriptions
+    // Check if already tracked to avoid duplicate entries
     if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
-      std::cout << "[WatchlistPanel] Already subscribed to symbol ID: " << symbol_id << std::endl;
+      std::cout << "[WatchlistPanel] Already tracking symbol ID: " << symbol_id << std::endl;
       return;
     }
 
-    // Create a subscription for this specific symbol to receive real-time price updates
-    uint64_t sub_id =
-        processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE, nullptr);
+    // Simply track the symbol for polling - no actual subscription needed with new polling approach
+    // Generate a dummy subscription ID for compatibility with existing code
+    uint64_t dummy_sub_id = symbol_id; // Use symbol_id as dummy ID for tracking purposes
+    
+    // Store the tracking ID for this symbol
+    symbol_subscriptions_[symbol_id] = dummy_sub_id;
 
-    // Store the subscription ID for this symbol
-    symbol_subscriptions_[symbol_id] = sub_id;
-
-    std::cout << "[WatchlistPanel] Subscribed to symbol ID: " << symbol_id
-              << " with subscription ID: " << sub_id << std::endl;
+    std::cout << "[WatchlistPanel] Tracking symbol ID: " << symbol_id
+              << " for polling (no callback subscription)" << std::endl;
   }
 }
 
@@ -2423,12 +2420,12 @@ void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
   if (processor_) {
     auto it = symbol_subscriptions_.find(symbol_id);
     if (it != symbol_subscriptions_.end()) {
-      processor_->unsubscribe(it->second);
-      std::cout << "[WatchlistPanel] Unsubscribed from symbol ID: " << symbol_id
-                << " with subscription ID: " << it->second << std::endl;
+      // With polling approach, no actual unsubscription needed - just remove tracking
+      std::cout << "[WatchlistPanel] Stopped tracking symbol ID: " << symbol_id
+                << " (no callback unsubscription needed)" << std::endl;
       symbol_subscriptions_.erase(it);
     } else {
-      std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id
+      std::cout << "[WatchlistPanel] No active tracking found for symbol ID: " << symbol_id
                 << std::endl;
     }
   }
@@ -2998,17 +2995,6 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
   }
 }
 
-void WatchlistPanel::process_pending_subscriptions() {
-  // Process all pending subscriptions to avoid calling ImGui functions during rendering
-  BTQuant::WatchlistPanel::PendingSubscription pending;
-  while (pending_subscriptions_.try_dequeue(pending)) {
-    std::cout << "[WatchlistPanel] Processing pending subscription for symbol ID: "
-              << pending.symbol_id << " (" << pending.symbol << ")" << std::endl;
-
-    // Subscribe to real-time updates for this symbol
-    subscribe_to_symbol(pending.symbol_id);
-  }
-}
 
 void WatchlistPanel::create_group(const std::string& group_name) {
   std::lock_guard<std::recursive_mutex> lock(watchlist_mutex_);

@@ -487,70 +487,87 @@ void WatchlistPanel::render() {
     if (ImGui::BeginTable("WatchlistTable", visible_columns,
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
                               ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                              ImGuiTableFlags_SortMulti)) {
+                              ImGuiTableFlags_SortMulti | ImGuiTableFlags_ScrollY)) { // Enable vertical scrolling
       render_table_header();
 
       auto filtered_symbols = get_filtered_symbols();
-      for (uint32_t symbol_id : filtered_symbols) {
-        auto it = get_current_watchlist().find(symbol_id);
-        if (it != get_current_watchlist().end()) {
-          // Polling Render: Read directly from atomic snapshot
-          const auto* atomic_snapshot = processor_->get_atomic_snapshot(symbol_id);
-          if (atomic_snapshot != nullptr) {
-            // Update the entry with fresh data for rendering
-            // Note: This temporarily modifies the entry for rendering purposes
-            // Store previous values for animation
-            double prev_price = it->second.price;
-            double prev_vwap = it->second.vwap;
-            double prev_volume = it->second.volume_24h;
-            double prev_change_pct = it->second.change_pct;
-            double prev_change_dollar = it->second.change_dollar;
-            double prev_high_24h = it->second.high_24h;
-            double prev_low_24h = it->second.low_24h;
-            double prev_open_24h = it->second.open_24h;
+      
+      // Set scrolling constraints for the table
+      ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+      
+      // Virtualization: Only process visible rows to achieve O(Visible_Rows) complexity
+      // This decouples FPS from Market Rate by only updating and rendering visible items
+      ImGuiListClipper clipper;
+      clipper.Begin(static_cast<int>(filtered_symbols.size()));
+      
+      int row_index = 0;
+      while (clipper.Step())
+      {
+          for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+          {
+              uint32_t symbol_id = filtered_symbols[i];
+              auto it = get_current_watchlist().find(symbol_id);
+              if (it != get_current_watchlist().end()) {
+                // Polling Render: Read directly from atomic snapshot
+                const auto* atomic_snapshot = processor_->get_atomic_snapshot(symbol_id);
+                if (atomic_snapshot != nullptr) {
+                  // Update the entry with fresh data for rendering
+                  // Note: This temporarily modifies the entry for rendering purposes
+                  // Store previous values for animation
+                  double prev_price = it->second.price;
+                  double prev_vwap = it->second.vwap;
+                  double prev_volume = it->second.volume_24h;
+                  double prev_change_pct = it->second.change_pct;
+                  double prev_change_dollar = it->second.change_dollar;
+                  double prev_high_24h = it->second.high_24h;
+                  double prev_low_24h = it->second.low_24h;
+                  double prev_open_24h = it->second.open_24h;
 
-            // Update with fresh data from atomic snapshot
-            it->second.price = atomic_snapshot->price.load();
-            it->second.vwap = atomic_snapshot->vwap.load();
-            it->second.last_update_ts = atomic_snapshot->last_update_time.load();
-            
-            // Update other fields from atomic snapshot
-            it->second.high_24h = atomic_snapshot->high_price.load();
-            it->second.low_24h = atomic_snapshot->low_price.load();
-            it->second.volume_24h = atomic_snapshot->volume.load();
+                  // Update with fresh data from atomic snapshot
+                  it->second.price = atomic_snapshot->price.load();
+                  it->second.vwap = atomic_snapshot->vwap.load();
+                  it->second.last_update_ts = atomic_snapshot->last_update_time.load();
 
-            // Calculate change percentage based on previous price
-            if (prev_price != 0) {
-              it->second.change_pct = ((it->second.price - prev_price) / prev_price) * 100.0;
-              it->second.change_dollar = it->second.price - prev_price;
-            } else {
-              it->second.change_pct = 0.0;
-              it->second.change_dollar = 0.0;
-            }
-            
-            // Set open_24h to previous day's close or current price if no previous data
-            it->second.open_24h = prev_price != 0 ? prev_price : it->second.price;
+                  // Update other fields from atomic snapshot
+                  it->second.high_24h = atomic_snapshot->high_price.load();
+                  it->second.low_24h = atomic_snapshot->low_price.load();
+                  it->second.volume_24h = atomic_snapshot->volume.load();
 
-            // Maintain animation state for visual feedback
-            it->second.previous_price = prev_price;
-            it->second.previous_vwap = prev_vwap;
-            it->second.previous_volume = prev_volume;
+                  // Calculate change percentage based on previous price
+                  if (prev_price != 0) {
+                    it->second.change_pct = ((it->second.price - prev_price) / prev_price) * 100.0;
+                    it->second.change_dollar = it->second.price - prev_price;
+                  } else {
+                    it->second.change_pct = 0.0;
+                    it->second.change_dollar = 0.0;
+                  }
 
-            // Start animation for any significant value change
-            bool significant_change = false;
-            double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
-            if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) {
-              significant_change = true;
-            }
+                  // Set open_24h to previous day's close or current price if no previous data
+                  it->second.open_24h = prev_price != 0 ? prev_price : it->second.price;
 
-            if (significant_change) {
-              it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
-            }
+                  // Maintain animation state for visual feedback
+                  it->second.previous_price = prev_price;
+                  it->second.previous_vwap = prev_vwap;
+                  it->second.previous_volume = prev_volume;
+
+                  // Start animation for any significant value change
+                  bool significant_change = false;
+                  double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+                  if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) {
+                    significant_change = true;
+                  }
+
+                  if (significant_change) {
+                    it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+                  }
+                }
+
+                // Render the table row (only for visible rows)
+                render_table_row(it->second);
+              }
           }
-
-          render_table_row(it->second);
-        }
       }
+      clipper.End();
 
       ImGui::EndTable();
     }

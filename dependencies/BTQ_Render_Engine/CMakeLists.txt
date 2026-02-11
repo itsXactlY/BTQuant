@@ -264,8 +264,6 @@ target_include_directories(BTQuantTerminal PRIVATE
     ${json_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
 )
 
 find_package(TBB REQUIRED)

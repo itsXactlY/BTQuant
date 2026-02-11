@@ -64,6 +64,97 @@ struct TradeData {
 };
 
 
+// Atomic structure for indicator values that can be written by background threads
+// and read by the UI thread atomically
+struct AtomicIndicatorValues {
+  std::atomic<double> sma_9{0.0};
+  std::atomic<double> sma_10{0.0};
+  std::atomic<double> sma_20{0.0};
+  std::atomic<double> sma_50{0.0};
+  std::atomic<double> sma_200{0.0};
+  
+  std::atomic<double> ema_9{0.0};
+  std::atomic<double> ema_10{0.0};
+  std::atomic<double> ema_21{0.0};
+  std::atomic<double> ema_50{0.0};
+  std::atomic<double> ema_200{0.0};
+  
+  std::atomic<double> rsi{0.0};
+  std::atomic<double> macd_line{0.0};
+  std::atomic<double> macd_signal{0.0};
+  std::atomic<double> macd_histogram{0.0};
+  std::atomic<double> bollinger_upper{0.0};
+  std::atomic<double> bollinger_middle{0.0};
+  std::atomic<double> bollinger_lower{0.0};
+  std::atomic<double> stochastic_k{0.0};
+  std::atomic<double> stochastic_d{0.0};
+  std::atomic<double> atr{0.0};
+  
+  std::atomic<uint64_t> last_updated{0};  // Timestamp of last update
+  
+  // Constructor
+  AtomicIndicatorValues() = default;
+  
+  // Copy constructor (loads values atomically)
+  AtomicIndicatorValues(const AtomicIndicatorValues& other) {
+    sma_9.store(other.sma_9.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    sma_10.store(other.sma_10.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    sma_20.store(other.sma_20.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    sma_50.store(other.sma_50.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    sma_200.store(other.sma_200.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    
+    ema_9.store(other.ema_9.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    ema_10.store(other.ema_10.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    ema_21.store(other.ema_21.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    ema_50.store(other.ema_50.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    ema_200.store(other.ema_200.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    
+    rsi.store(other.rsi.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    macd_line.store(other.macd_line.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    macd_signal.store(other.macd_signal.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    macd_histogram.store(other.macd_histogram.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    bollinger_upper.store(other.bollinger_upper.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    bollinger_middle.store(other.bollinger_middle.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    bollinger_lower.store(other.bollinger_lower.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    stochastic_k.store(other.stochastic_k.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    stochastic_d.store(other.stochastic_d.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    atr.store(other.atr.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    
+    last_updated.store(other.last_updated.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  }
+  
+  // Assignment operator
+  AtomicIndicatorValues& operator=(const AtomicIndicatorValues& other) {
+    if (this != &other) {
+      sma_9.store(other.sma_9.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      sma_10.store(other.sma_10.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      sma_20.store(other.sma_20.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      sma_50.store(other.sma_50.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      sma_200.store(other.sma_200.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      
+      ema_9.store(other.ema_9.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      ema_10.store(other.ema_10.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      ema_21.store(other.ema_21.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      ema_50.store(other.ema_50.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      ema_200.store(other.ema_200.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      
+      rsi.store(other.rsi.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      macd_line.store(other.macd_line.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      macd_signal.store(other.macd_signal.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      macd_histogram.store(other.macd_histogram.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      bollinger_upper.store(other.bollinger_upper.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      bollinger_middle.store(other.bollinger_middle.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      bollinger_lower.store(other.bollinger_lower.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      stochastic_k.store(other.stochastic_k.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      stochastic_d.store(other.stochastic_d.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      atr.store(other.atr.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      
+      last_updated.store(other.last_updated.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+    return *this;
+  }
+};
+
 // Indicator cache entry
 struct IndicatorCacheEntry {
   uint64_t timestamp;
@@ -413,6 +504,24 @@ class MarketDataProcessor {
     return nullptr;
   }
 
+  // Public accessor for atomic indicator values (for fast UI polling)
+  const AtomicIndicatorValues* get_atomic_indicator_values(uint32_t symbol_id) const {
+    auto& shard = getShard(symbol_id);
+    std::shared_lock lock(shard.mutex);
+    auto it = shard.atomic_indicator_values.find(symbol_id);
+    if (it != shard.atomic_indicator_values.end()) {
+      return &(it->second);
+    }
+    return nullptr;
+  }
+
+  // Method to update atomic indicator values from background threads
+  void update_atomic_indicator_values(uint32_t symbol_id, const AtomicIndicatorValues& values) {
+    auto& shard = getShard(symbol_id);
+    std::unique_lock lock(shard.mutex);
+    shard.atomic_indicator_values[symbol_id] = values;
+  }
+
  private:
   // Configuration parameters
   size_t vwap_window_size_;
@@ -430,6 +539,8 @@ class MarketDataProcessor {
   struct Shard {
     mutable std::shared_mutex mutex;
     std::unordered_map<uint32_t, SymbolAnalytics> data;
+    // Per-symbol atomic indicator values for fast UI access
+    std::unordered_map<uint32_t, AtomicIndicatorValues> atomic_indicator_values;
     // Per-symbol lock-free snapshot buffers for render thread
     std::unordered_map<uint32_t, std::unique_ptr<TripleBuffer<RenderSnapshot>>> snapshot_buffers;
     // Per-symbol orderbook snapshots for atomic access by renderer
@@ -510,6 +621,23 @@ class MarketDataProcessor {
   void updateTradingMetrics(SymbolAnalytics& symbol_data, const TradeData& trade);
   void updateSpreadAnalysis(SymbolAnalytics& symbol_data);
   void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade);
+  
+  // Indicator calculation methods
+  std::vector<double> calculate_sma(const std::vector<double>& prices, int period) const;
+  std::vector<double> calculate_ema(const std::vector<double>& prices, int period) const;
+  std::vector<double> calculate_rsi(const std::vector<double>& prices, int period) const;
+  std::vector<double> calculate_macd_line(const std::vector<double>& prices, int fast_period, int slow_period) const;
+  std::vector<double> calculate_macd_signal(const std::vector<double>& macd_line, int signal_period) const;
+  std::vector<double> calculate_macd_histogram(const std::vector<double>& macd_line, const std::vector<double>& signal_line) const;
+  std::vector<double> calculate_bollinger_bands(const std::vector<double>& prices, int period, double std_dev, 
+                                               std::vector<double>& upper_band, std::vector<double>& middle_band, std::vector<double>& lower_band) const;
+  std::vector<double> calculate_stochastic_k(const std::vector<double>& highs, const std::vector<double>& lows, 
+                                            const std::vector<double>& closes, int k_period) const;
+  std::vector<double> calculate_atr(const std::vector<double>& highs, const std::vector<double>& lows, 
+                                   const std::vector<double>& closes, int period) const;
+  
+  // Method to update atomic indicator values based on current analytics
+  void update_atomic_indicators(uint32_t symbol_id, const SymbolAnalytics& analytics);
 
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade);

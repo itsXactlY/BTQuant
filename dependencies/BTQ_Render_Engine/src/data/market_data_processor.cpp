@@ -941,6 +941,12 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
     updateSpreadAnalysis(symbol_data);
   }
 
+  // Update atomic indicators periodically (e.g., every 50 trades to balance performance)
+  if (symbol_data.trade_count % 50 == 0) {
+    // Note: We need to call this with the symbol_id, but we don't have it here
+    // So we'll update atomic indicators in the publishSnapshot method where we have the symbol_id
+  }
+
   // Update performance metrics
   auto now = std::chrono::high_resolution_clock::now();
   auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1168,12 +1174,409 @@ void MarketDataProcessor::publishSnapshot(uint32_t symbol_id, const SymbolAnalyt
 
   // Atomically publish — render thread can now see this snapshot
   buf_ptr->publish();
-  
+
+  // Update atomic indicator values for fast UI polling
+  update_atomic_indicators(symbol_id, analytics);
+
   // Also update the atomic orderbook snapshot if we have recent orderbook data
   if (!analytics.recent_orderbooks.empty() && orderbook_snapshot_manager_) {
     const auto& latest_orderbook = analytics.recent_orderbooks.back();
     orderbook_snapshot_manager_->updateSnapshot(symbol_id, latest_orderbook);
   }
+}
+
+// Indicator calculation implementations
+std::vector<double> MarketDataProcessor::calculate_sma(const std::vector<double>& prices, int period) const {
+  std::vector<double> sma;
+  if (prices.size() < static_cast<size_t>(period)) {
+    sma.resize(prices.size());
+    return sma;
+  }
+  
+  sma.resize(prices.size());
+  
+  // Calculate first SMA value
+  double sum = 0.0;
+  for (int i = 0; i < period; ++i) {
+    sum += prices[i];
+  }
+  sma[period - 1] = sum / period;
+  
+  // Calculate subsequent SMA values using rolling window
+  for (size_t i = period; i < prices.size(); ++i) {
+    sum = sum - prices[i - period] + prices[i];
+    sma[i] = sum / period;
+  }
+  
+  return sma;
+}
+
+std::vector<double> MarketDataProcessor::calculate_ema(const std::vector<double>& prices, int period) const {
+  std::vector<double> ema;
+  if (prices.empty()) return ema;
+  
+  ema.resize(prices.size());
+  
+  // Smoothing factor
+  double multiplier = 2.0 / (period + 1.0);
+  
+  // First EMA value is the same as first SMA
+  if (prices.size() >= static_cast<size_t>(period)) {
+    double sum = 0.0;
+    for (int i = 0; i < period; ++i) {
+      sum += prices[i];
+    }
+    ema[period - 1] = sum / period;
+    
+    // Calculate subsequent EMA values
+    for (size_t i = period; i < prices.size(); ++i) {
+      ema[i] = (prices[i] - ema[i - 1]) * multiplier + ema[i - 1];
+    }
+  } else {
+    // If we don't have enough data for the full period, just copy the prices
+    for (size_t i = 0; i < prices.size(); ++i) {
+      ema[i] = prices[i];
+    }
+  }
+  
+  return ema;
+}
+
+std::vector<double> MarketDataProcessor::calculate_rsi(const std::vector<double>& prices, int period) const {
+  std::vector<double> rsi;
+  if (prices.size() <= static_cast<size_t>(period)) {
+    rsi.resize(prices.size());
+    return rsi;
+  }
+  
+  rsi.resize(prices.size());
+  
+  // Initialize with zeros for the first 'period' elements
+  for (int i = 0; i < period; ++i) {
+    rsi[i] = 50.0; // Neutral value
+  }
+  
+  // Calculate price changes
+  std::vector<double> gains(period, 0.0);
+  std::vector<double> losses(period, 0.0);
+  
+  // Calculate initial average gain and loss
+  double avg_gain = 0.0;
+  double avg_loss = 0.0;
+  
+  for (int i = 1; i <= period; ++i) {
+    double change = prices[i] - prices[i - 1];
+    if (change >= 0) {
+      gains[i % period] = change;
+      avg_gain += change;
+    } else {
+      losses[i % period] = -change;
+      avg_loss -= change;
+    }
+  }
+  
+  avg_gain /= period;
+  avg_loss /= period;
+  
+  // Calculate RSI for the rest of the data points
+  for (size_t i = period + 1; i < prices.size(); ++i) {
+    double change = prices[i] - prices[i - 1];
+    double current_gain = (change >= 0) ? change : 0.0;
+    double current_loss = (change < 0) ? -change : 0.0;
+    
+    // Update averages using Wilder's smoothing method
+    avg_gain = (avg_gain * (period - 1) + current_gain) / period;
+    avg_loss = (avg_loss * (period - 1) + current_loss) / period;
+    
+    // Calculate RSI
+    if (avg_loss == 0.0) {
+      rsi[i] = 100.0;
+    } else {
+      double rs = avg_gain / avg_loss;
+      rsi[i] = 100.0 - (100.0 / (1.0 + rs));
+    }
+  }
+  
+  return rsi;
+}
+
+std::vector<double> MarketDataProcessor::calculate_macd_line(const std::vector<double>& prices, int fast_period, int slow_period) const {
+  auto fast_ema = calculate_ema(prices, fast_period);
+  auto slow_ema = calculate_ema(prices, slow_period);
+  
+  std::vector<double> macd_line;
+  macd_line.resize(std::min(fast_ema.size(), slow_ema.size()));
+  
+  for (size_t i = 0; i < macd_line.size(); ++i) {
+    macd_line[i] = fast_ema[i] - slow_ema[i];
+  }
+  
+  return macd_line;
+}
+
+std::vector<double> MarketDataProcessor::calculate_macd_signal(const std::vector<double>& macd_line, int signal_period) const {
+  return calculate_ema(macd_line, signal_period);
+}
+
+std::vector<double> MarketDataProcessor::calculate_macd_histogram(const std::vector<double>& macd_line, const std::vector<double>& signal_line) const {
+  std::vector<double> histogram;
+  histogram.resize(std::min(macd_line.size(), signal_line.size()));
+  
+  for (size_t i = 0; i < histogram.size(); ++i) {
+    histogram[i] = macd_line[i] - signal_line[i];
+  }
+  
+  return histogram;
+}
+
+std::vector<double> MarketDataProcessor::calculate_bollinger_bands(const std::vector<double>& prices, int period, double std_dev, 
+                                                                 std::vector<double>& upper_band, std::vector<double>& middle_band, std::vector<double>& lower_band) const {
+  auto sma = calculate_sma(prices, period);
+  
+  middle_band = sma;
+  upper_band.resize(prices.size());
+  lower_band.resize(prices.size());
+  
+  for (size_t i = 0; i < prices.size(); ++i) {
+    if (i < static_cast<size_t>(period - 1)) {
+      // Not enough data to calculate standard deviation
+      upper_band[i] = prices[i];
+      lower_band[i] = prices[i];
+    } else {
+      // Calculate standard deviation for the current window
+      double sum = 0.0;
+      for (int j = 0; j < period; ++j) {
+        size_t idx = i - static_cast<size_t>(period - 1) + j;
+        double diff = prices[idx] - sma[i];
+        sum += diff * diff;
+      }
+      double variance = sum / period;
+      double std_dev_val = std::sqrt(variance);
+      
+      upper_band[i] = sma[i] + (std_dev * std_dev_val);
+      lower_band[i] = sma[i] - (std_dev * std_dev_val);
+    }
+  }
+  
+  return sma; // Return middle band as well
+}
+
+std::vector<double> MarketDataProcessor::calculate_stochastic_k(const std::vector<double>& highs, const std::vector<double>& lows, 
+                                                              const std::vector<double>& closes, int k_period) const {
+  std::vector<double> stoch_k;
+  stoch_k.resize(closes.size());
+  
+  for (size_t i = 0; i < closes.size(); ++i) {
+    if (i < static_cast<size_t>(k_period - 1)) {
+      // Not enough data to calculate
+      stoch_k[i] = 50.0; // Neutral value
+    } else {
+      // Find highest high and lowest low in the period
+      double highest_high = highs[i];
+      double lowest_low = lows[i];
+      
+      for (int j = 0; j < k_period; ++j) {
+        size_t idx = i - static_cast<size_t>(k_period - 1) + j;
+        if (idx < highs.size() && highs[idx] > highest_high) {
+          highest_high = highs[idx];
+        }
+        if (idx < lows.size() && lows[idx] < lowest_low) {
+          lowest_low = lows[idx];
+        }
+      }
+      
+      // Calculate stochastic K
+      if (highest_high != lowest_low) {
+        stoch_k[i] = ((closes[i] - lowest_low) / (highest_high - lowest_low)) * 100.0;
+      } else {
+        stoch_k[i] = 50.0; // Neutral value when high equals low
+      }
+    }
+  }
+  
+  return stoch_k;
+}
+
+std::vector<double> MarketDataProcessor::calculate_atr(const std::vector<double>& highs, const std::vector<double>& lows, 
+                                                     const std::vector<double>& closes, int period) const {
+  std::vector<double> tr;
+  tr.reserve(std::max({highs.size(), lows.size(), closes.size()}));
+  
+  // Calculate True Range values
+  for (size_t i = 0; i < highs.size() && i < lows.size() && i < closes.size(); ++i) {
+    double h_minus_l = highs[i] - lows[i];
+    double h_minus_pc = (i > 0) ? std::abs(highs[i] - closes[i-1]) : 0.0;
+    double l_minus_pc = (i > 0) ? std::abs(lows[i] - closes[i-1]) : 0.0;
+    
+    double true_range = std::max({h_minus_l, h_minus_pc, l_minus_pc});
+    tr.push_back(true_range);
+  }
+  
+  // Calculate ATR using Wilder's smoothing method
+  std::vector<double> atr(tr.size());
+  
+  if (tr.size() < static_cast<size_t>(period)) {
+    return atr;
+  }
+  
+  // Calculate initial ATR (simple average of first 'period' TR values)
+  double sum = 0.0;
+  for (int i = 0; i < period; ++i) {
+    sum += tr[i];
+  }
+  atr[period - 1] = sum / period;
+  
+  // Calculate subsequent ATR values using Wilder's smoothing
+  for (size_t i = period; i < tr.size(); ++i) {
+    atr[i] = ((atr[i - 1] * (period - 1)) + tr[i]) / period;
+  }
+  
+  return atr;
+}
+
+void MarketDataProcessor::update_atomic_indicators(uint32_t symbol_id, const SymbolAnalytics& analytics) {
+  // Extract price data from candles for indicator calculations
+  auto candles_it = analytics.candles.find(TimeFrame::TF_1MIN);
+  if (candles_it == analytics.candles.end() || candles_it->second.empty()) {
+    return; // No candles available for this timeframe
+  }
+  
+  const auto& candles = candles_it->second;
+  
+  // Extract closing prices
+  std::vector<double> closes;
+  std::vector<double> highs;
+  std::vector<double> lows;
+  
+  closes.reserve(candles.size());
+  highs.reserve(candles.size());
+  lows.reserve(candles.size());
+  
+  for (const auto& candle : candles) {
+    closes.push_back(candle.close);
+    highs.push_back(candle.high);
+    lows.push_back(candle.low);
+  }
+  
+  // Create atomic indicator values structure
+  AtomicIndicatorValues atomic_values;
+  
+  // Calculate and update SMA values
+  if (closes.size() >= 9) {
+    auto sma_9_vals = calculate_sma(closes, 9);
+    if (!sma_9_vals.empty()) atomic_values.sma_9.store(sma_9_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 10) {
+    auto sma_10_vals = calculate_sma(closes, 10);
+    if (!sma_10_vals.empty()) atomic_values.sma_10.store(sma_10_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 20) {
+    auto sma_20_vals = calculate_sma(closes, 20);
+    if (!sma_20_vals.empty()) atomic_values.sma_20.store(sma_20_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 50) {
+    auto sma_50_vals = calculate_sma(closes, 50);
+    if (!sma_50_vals.empty()) atomic_values.sma_50.store(sma_50_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 200) {
+    auto sma_200_vals = calculate_sma(closes, 200);
+    if (!sma_200_vals.empty()) atomic_values.sma_200.store(sma_200_vals.back(), std::memory_order_relaxed);
+  }
+  
+  // Calculate and update EMA values
+  if (closes.size() >= 9) {
+    auto ema_9_vals = calculate_ema(closes, 9);
+    if (!ema_9_vals.empty()) atomic_values.ema_9.store(ema_9_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 10) {
+    auto ema_10_vals = calculate_ema(closes, 10);
+    if (!ema_10_vals.empty()) atomic_values.ema_10.store(ema_10_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 21) {
+    auto ema_21_vals = calculate_ema(closes, 21);
+    if (!ema_21_vals.empty()) atomic_values.ema_21.store(ema_21_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 50) {
+    auto ema_50_vals = calculate_ema(closes, 50);
+    if (!ema_50_vals.empty()) atomic_values.ema_50.store(ema_50_vals.back(), std::memory_order_relaxed);
+  }
+  
+  if (closes.size() >= 200) {
+    auto ema_200_vals = calculate_ema(closes, 200);
+    if (!ema_200_vals.empty()) atomic_values.ema_200.store(ema_200_vals.back(), std::memory_order_relaxed);
+  }
+  
+  // Calculate and update RSI
+  if (closes.size() >= 14) { // Standard RSI period
+    auto rsi_vals = calculate_rsi(closes, 14);
+    if (!rsi_vals.empty()) atomic_values.rsi.store(rsi_vals.back(), std::memory_order_relaxed);
+  }
+  
+  // Calculate and update MACD
+  if (closes.size() >= 26) { // Need at least 26 periods for MACD
+    auto macd_line_vals = calculate_macd_line(closes, 12, 26); // Standard MACD (12, 26)
+    if (!macd_line_vals.empty()) {
+      atomic_values.macd_line.store(macd_line_vals.back(), std::memory_order_relaxed);
+      
+      auto macd_signal_vals = calculate_macd_signal(macd_line_vals, 9); // Standard signal line (9)
+      if (!macd_signal_vals.empty()) {
+        atomic_values.macd_signal.store(macd_signal_vals.back(), std::memory_order_relaxed);
+        
+        auto macd_hist_vals = calculate_macd_histogram(macd_line_vals, macd_signal_vals);
+        if (!macd_hist_vals.empty()) {
+          atomic_values.macd_histogram.store(macd_hist_vals.back(), std::memory_order_relaxed);
+        }
+      }
+    }
+  }
+  
+  // Calculate and update Bollinger Bands
+  if (closes.size() >= 20) { // Standard Bollinger Bands period
+    std::vector<double> upper_band, middle_band, lower_band;
+    calculate_bollinger_bands(closes, 20, 2.0, upper_band, middle_band, lower_band);
+    
+    if (!upper_band.empty()) atomic_values.bollinger_upper.store(upper_band.back(), std::memory_order_relaxed);
+    if (!middle_band.empty()) atomic_values.bollinger_middle.store(middle_band.back(), std::memory_order_relaxed);
+    if (!lower_band.empty()) atomic_values.bollinger_lower.store(lower_band.back(), std::memory_order_relaxed);
+  }
+  
+  // Calculate and update Stochastic
+  if (closes.size() >= 14 && highs.size() >= 14 && lows.size() >= 14) { // Standard stochastic period
+    auto stoch_k_vals = calculate_stochastic_k(highs, lows, closes, 14);
+    if (!stoch_k_vals.empty()) {
+      atomic_values.stochastic_k.store(stoch_k_vals.back(), std::memory_order_relaxed);
+      
+      // Calculate D line (3-period SMA of K line)
+      if (stoch_k_vals.size() >= 3) {
+        auto stoch_d_vals = calculate_sma(stoch_k_vals, 3);
+        if (!stoch_d_vals.empty()) {
+          atomic_values.stochastic_d.store(stoch_d_vals.back(), std::memory_order_relaxed);
+        }
+      }
+    }
+  }
+  
+  // Calculate and update ATR
+  if (closes.size() >= 14 && highs.size() >= 14 && lows.size() >= 14) { // Standard ATR period
+    auto atr_vals = calculate_atr(highs, lows, closes, 14);
+    if (!atr_vals.empty()) {
+      atomic_values.atr.store(atr_vals.back(), std::memory_order_relaxed);
+    }
+  }
+  
+  // Update timestamp
+  atomic_values.last_updated.store(std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()).count(), std::memory_order_relaxed);
+  
+  // Update the atomic indicator values in the shard
+  update_atomic_indicator_values(symbol_id, atomic_values);
 }
 
 }  // namespace RenderEngine

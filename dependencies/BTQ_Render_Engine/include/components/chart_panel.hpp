@@ -380,6 +380,9 @@ class ChartPanel : public PanelBase {
   // Method to sync active indicators with current configuration
   void sync_active_indicators_with_config();
 
+  // Method to poll atomic indicator values from MarketDataProcessor
+  void poll_atomic_indicators();
+
  public:
   // Method to get the count of active indicators
   size_t get_active_indicators_count() const { return active_indicators_.size(); }

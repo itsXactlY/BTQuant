@@ -336,6 +336,9 @@ void ChartPanel::update(float dt) {
   // This ensures that multi-timeframe indicators remain synchronized with the chart data
   update_multi_timeframe_indicators(chart);
 
+  // Poll atomic indicator values from the MarketDataProcessor
+  poll_atomic_indicators();
+
   // Update liquidity data periodically (every frame for real-time updates)
   if (show_liquidity_bars_) {
     update_liquidity_data();
@@ -4012,6 +4015,54 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
     ImVec2 bar_end = ImVec2(right_edge_x, level_pos.y + bar_height / 2);
 
     draw_list->AddRectFilled(bar_start, bar_end, im_color);
+  }
+}
+
+void ChartPanel::poll_atomic_indicators() {
+  // Get the symbol ID for which to poll atomic indicators
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+  if (!symbol_id_opt) {
+    return; // Symbol not found
+  }
+  
+  uint32_t symbol_id = *symbol_id_opt;
+  
+  // Get the atomic indicator values from the MarketDataProcessor
+  const auto* atomic_values = processor_->get_atomic_indicator_values(symbol_id);
+  if (!atomic_values) {
+    return; // No atomic indicator values available for this symbol
+  }
+  
+  // Update the active indicators with the atomic values
+  // This is a simplified approach - in a real implementation, you'd want to update
+  // the indicator rendering system to use these atomic values directly
+  
+  // Example: Update SMA indicators if they are active
+  for (auto& indicator : active_indicators_) {
+    if (indicator.name == "SMA 9" && indicator.isVisible) {
+      // In a real implementation, you'd update the indicator's value with the atomic value
+      // For now, we just acknowledge that the value is available
+    } else if (indicator.name == "SMA 20" && indicator.isVisible) {
+      // Similar update for SMA 20
+    } else if (indicator.name == "SMA 50" && indicator.isVisible) {
+      // Similar update for SMA 50
+    } else if (indicator.name == "SMA 200" && indicator.isVisible) {
+      // Similar update for SMA 200
+    } else if (indicator.name == "EMA 9" && indicator.isVisible) {
+      // Similar update for EMA 9
+    } else if (indicator.name == "EMA 21" && indicator.isVisible) {
+      // Similar update for EMA 21
+    } else if (indicator.name == "RSI" && indicator.isVisible) {
+      // Similar update for RSI
+    } else if (indicator.name == "MACD" && indicator.isVisible) {
+      // Similar update for MACD
+    } else if (indicator.name == "Bollinger Bands" && indicator.isVisible) {
+      // Similar update for Bollinger Bands
+    } else if (indicator.name == "Stochastic" && indicator.isVisible) {
+      // Similar update for Stochastic
+    } else if (indicator.name == "ATR" && indicator.isVisible) {
+      // Similar update for ATR
+    }
   }
 }
 

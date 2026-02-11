@@ -1051,57 +1051,6 @@ void MarketDataProcessor::publishSnapshot(uint32_t symbol_id, const SymbolAnalyt
                                   static_cast<float>(t.size), t.symbol_id, t.is_buy);
   }
 
-  // --- Pre-aggregate footprint clusters ---
-  if (analytics.last_update_time > 0 && !trades.empty()) {
-    const uint64_t now_us = analytics.last_update_time;
-    const uint64_t timeframe_us = 1'000'000;  // 1 second bins
-    const uint64_t window_us = 30'000'000;    // 30 seconds window
-    constexpr float tickSize = 0.5f;
-
-    struct ClusterKey {
-      uint64_t time;
-      int32_t price_bin;
-      auto operator<=>(const ClusterKey&) const = default;
-    };
-
-    struct ClusterValue {
-      uint32_t bidVol = 0, askVol = 0, count = 0;
-      uint32_t buyCount = 0, sellCount = 0;
-      float maxTradeVol = 0.0f, totalTradeSize = 0.0f;
-    };
-
-    std::map<ClusterKey, ClusterValue> aggregator;
-
-    for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
-      if (it->timestamp <= now_us - window_us) break;
-
-      const uint64_t timeBin = (it->timestamp / timeframe_us) * timeframe_us;
-      const int32_t priceBin = static_cast<int32_t>(std::round(it->price / tickSize));
-
-      auto& val = aggregator[ClusterKey{timeBin, priceBin}];
-      uint32_t sz = static_cast<uint32_t>(it->size);
-      if (it->is_buy) {
-        val.bidVol += sz;
-        val.buyCount++;
-      } else {
-        val.askVol += sz;
-        val.sellCount++;
-      }
-      if (it->size > val.maxTradeVol) val.maxTradeVol = static_cast<float>(it->size);
-      val.totalTradeSize += static_cast<float>(it->size);
-      val.count++;
-    }
-
-    snap.footprint_clusters.reserve(aggregator.size());
-    for (const auto& [key, val] : aggregator) {
-      const float rel_time_sec = static_cast<float>(key.time - (now_us - window_us)) / 1'000'000.0f;
-      snap.footprint_clusters.emplace_back(
-          rel_time_sec, static_cast<float>(key.price_bin) * tickSize,
-          static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f, tickSize * 0.9f, val.bidVol,
-          val.askVol, val.count, 0.0f, true, val.buyCount, val.sellCount, val.maxTradeVol,
-          (key.time - timeframe_us) * 1000, key.time * 1000);
-    }
-  }
 
   // Atomically publish — render thread can now see this snapshot
   buf_ptr->publish();

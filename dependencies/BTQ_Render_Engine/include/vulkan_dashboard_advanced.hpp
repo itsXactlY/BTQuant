@@ -179,46 +179,6 @@ class DataFilter {
   void add_filter(const FilterCriteria& c);
 };
 
-// ============================================================================
-// Legacy Component Declarations (Archived but declared for compatibility)
-// ============================================================================
-
-struct StrategyControlComponent : public UIComponent {
-  StrategyControlComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-struct RiskManagerComponent : public UIComponent {
-  RiskManagerComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-struct TradingInterfaceComponent : public UIComponent {
-  TradingInterfaceComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-// Forward declarations for other archived components
-struct TapeComponent;
-struct OrderManagementComponent;
-struct PositionPanelComponent;
-struct MarketOverviewPanel;
-struct WatchlistComponent;
-struct LogDisplayComponent;
-struct HeatmapComponent;
-struct MarketScreenerComponent;
-struct AlertComponent;
-struct DataGridComponent;
-struct MarketDepthChartComponent;
 
 // ============================================================================
 // Main Dashboard Class

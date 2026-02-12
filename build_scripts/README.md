@@ -72,3 +72,58 @@ The script applies several optimization techniques:
 3. **Additional Size Reduction**:
    - Strips debug symbols from binaries
    - Optional UPX compression if available
+
+## clean_build.sh
+
+This script performs a complete clean build by removing all build artifacts and rebuilding from scratch. It ensures a completely fresh build environment.
+
+### Usage
+
+```bash
+# Basic usage (creates a fresh 'build' directory)
+./clean_build.sh
+
+# With custom build directory
+./clean_build.sh -d my_clean_build
+
+# Build in debug mode
+./clean_build.sh --debug
+
+# Build in release mode
+./clean_build.sh --release
+
+# With custom number of parallel jobs
+./clean_build.sh -j 4
+
+# Build only the BTQ_Render_Engine
+./clean_build.sh -e
+
+# Show help
+./clean_build.sh -h
+```
+
+### Options
+
+- `-d, --directory DIR`: Build directory (default: build)
+- `-r, --release-directory DIR`: Release build directory (default: build_release)
+- `-s, --source-dir DIR`: Source directory (default: .)
+- `-v, --verbose`: Verbose output
+- `-j, --jobs N`: Number of parallel jobs (default: nproc)
+- `--debug`: Build in debug mode
+- `--release`: Build in release mode (default)
+- `-e, --engine-only`: Build only the BTQ_Render_Engine
+- `-h, --help`: Show help message
+
+### Features
+
+The clean build script ensures:
+
+1. **Complete Clean State**:
+   - Removes all existing build artifacts
+   - Creates a fresh build directory
+   - Ensures no cached configurations interfere with the build
+
+2. **Consistent Build Process**:
+   - Follows the same configuration patterns as other build scripts
+   - Maintains consistent output formatting and error handling
+   - Supports the same build options and parameters

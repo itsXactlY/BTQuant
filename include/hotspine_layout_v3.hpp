@@ -95,28 +95,12 @@ struct alignas(64) RingBufferHeader {
   std::atomic<uint64_t> dropped_count{0};  // Count of dropped events due to overflow
   uint8_t reserved[24];  // Padding to align to 64-byte boundary
 
-  // Inline helper methods
-  inline uint64_t get_next_write_slot() const {
-    return write_head.load(std::memory_order_acquire) & RING_BUFFER_MASK;
-  }
-
-  inline void commit_write() {
-    write_head.fetch_add(1, std::memory_order_release);
-  }
-
-  inline uint64_t get_available_count() const {
-    uint64_t write_idx = write_head.load(std::memory_order_acquire);
-    uint64_t read_idx = read_tail.load(std::memory_order_acquire);
-    return write_idx - read_idx;
-  }
-
-  inline bool is_full() const {
-    return get_available_count() >= RING_BUFFER_SIZE;
-  }
-
-  inline bool is_empty() const {
-    return get_available_count() == 0;
-  }
+  // Helper methods declarations (implementations in .cpp file)
+  uint64_t get_next_write_slot() const;
+  void commit_write();
+  uint64_t get_available_count() const;
+  bool is_full() const;
+  bool is_empty() const;
 };
 
 // =========================================================================================
@@ -217,14 +201,11 @@ static_assert(sizeof(HotspineData) == 64, "HotspineData must be exactly 64 bytes
 static_assert(alignof(HotspineData) == 64, "HotspineData must be 64-byte aligned");
 
 // Helper: calculate SHM size for HotTrade ring buffer (header + trades)
-static inline size_t calculateTradeSharedMemorySize() {
-  // Using HotspineData instead of HotTrade for the new zero-copy ingestion
-  return sizeof(RingBufferHeader) + (RING_BUFFER_SIZE * sizeof(HotspineData));
-}
+size_t calculateTradeSharedMemorySize();
 
 // Helper: calculate total shared memory size
-static inline constexpr size_t calculateSharedMemorySize(size_t ring_buffer_size) {
-  return sizeof(SharedMemoryLayoutV3) + (ring_buffer_size * 64);
+constexpr size_t calculateSharedMemorySize() {
+  return sizeof(SharedMemoryLayoutV3);
 }
 
 }  // namespace HotSpine::V3

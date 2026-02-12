@@ -187,8 +187,8 @@ static_assert(alignof(HotspineData) == 64,
 
 // Helper: calculate total shared memory size
 static inline constexpr size_t
-calculateSharedMemorySize(size_t ring_buffer_size) {
-  return sizeof(SharedMemoryLayoutV3) + (ring_buffer_size * 64);
+calculateSharedMemorySize() {
+  return sizeof(SharedMemoryLayoutV3);
 }
 
 // Helper functions

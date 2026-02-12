@@ -229,6 +229,9 @@ class VulkanDashboard {
   /// @brief Check if the dashboard window should be closed
   bool should_close() const;
 
+  /// @brief Get the GLFW window handle for external operations like closing
+  GLFWwindow* get_window() const { return window_; }
+
   /// @brief Set the currently active trading symbol
   void set_active_symbol(const std::string& s) { active_symbol_ = s; }
 
@@ -285,6 +288,21 @@ class VulkanDashboard {
 
   /// @brief Render the layout indicator showing active layout
   void render_layout_indicator();
+
+  /// @brief Prepare the frame for rendering (handles swapchain, etc.)
+  bool prepare_frame();
+
+  /// @brief Render the main menu bar
+  void render_main_menu_bar();
+
+  /// @brief Render overlays and UI elements
+  void render_overlays();
+
+  /// @brief Process updates and UI elements
+  void process_updates_and_ui(const std::chrono::high_resolution_clock::time_point& frame_start_time);
+
+  /// @brief Finalize and present the rendered frame
+  void finalize_and_present_frame(const std::chrono::high_resolution_clock::time_point& frame_start_time);
 
   uint32_t width_, height_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;

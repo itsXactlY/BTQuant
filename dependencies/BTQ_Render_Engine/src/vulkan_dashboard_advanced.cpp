@@ -293,20 +293,8 @@ void VulkanDashboard::render_frame() {
   // Start frame timing for budgeting
   auto frame_start_time = std::chrono::high_resolution_clock::now();
 
-  if (window_resized_) {
-    vulkan_core_->recreate_swapchain(width_, height_);
-    window_resized_ = false;
-  }
-
-  uint32_t imageIndex;
-  VkResult result = vulkan_core_->PrepareFrame(imageIndex);
-
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    vulkan_core_->recreate_swapchain(width_, height_);
-    return;
-  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    // Silently ignore or log - swapchain might be rebuilding
-    return;
+  if (!prepare_frame()) {
+    return;  // Frame preparation failed (e.g., due to resize)
   }
 
   // Start ImGui frame
@@ -317,6 +305,52 @@ void VulkanDashboard::render_frame() {
   // Update Interaction Manager
   InteractionManager::getInstance().update();
 
+  render_main_menu_bar();
+
+  // Render overlays and UI elements
+  render_overlays();
+
+  // Check frame budget before processing updates
+  auto elapsed_before_updates = std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::high_resolution_clock::now() - frame_start_time)
+                                    .count() /
+                                1000.0;  // Convert to ms
+
+  if (elapsed_before_updates >= frame_budget_ms_) {
+    // Skip updates if we've already exceeded the frame budget
+    finalize_and_present_frame(frame_start_time);
+    return;
+  }
+
+  // Process updates and UI
+  process_updates_and_ui(frame_start_time);
+
+  // Finalize and present frame
+  finalize_and_present_frame(frame_start_time);
+}
+
+bool VulkanDashboard::prepare_frame() {
+  if (window_resized_) {
+    vulkan_core_->recreate_swapchain(width_, height_);
+    window_resized_ = false;
+  }
+
+  uint32_t imageIndex;
+  VkResult result = vulkan_core_->PrepareFrame(imageIndex);
+
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    vulkan_core_->recreate_swapchain(width_, height_);
+    return false;
+  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    // Silently ignore or log - swapchain might be rebuilding
+    return false;
+  }
+
+  current_image_index_ = imageIndex;
+  return true;
+}
+
+void VulkanDashboard::render_main_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("Tools")) {
       if (ImGui::MenuItem("Clear Dashboard History")) {
@@ -331,7 +365,9 @@ void VulkanDashboard::render_frame() {
     }
     ImGui::EndMainMenuBar();
   }
+}
 
+void VulkanDashboard::render_overlays() {
   // Performance Overlay
   render_performance_overlay();
 
@@ -343,30 +379,9 @@ void VulkanDashboard::render_frame() {
 
   // Render tutorial if active (moved here to ensure it's within proper frame scope)
   BTQuant::UI::render_tutorial();
+}
 
-  // Check frame budget before processing updates
-  auto elapsed_before_updates = std::chrono::duration_cast<std::chrono::microseconds>(
-                                    std::chrono::high_resolution_clock::now() - frame_start_time)
-                                    .count() /
-                                1000.0;  // Convert to ms
-
-  if (elapsed_before_updates >= frame_budget_ms_) {
-    // Skip updates if we've already exceeded the frame budget
-    // Finalize ImGui and Record Graphics commands
-    ImGui::Render();
-
-    vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
-                                      [this](VkCommandBuffer cmd) {
-                                        if (micro_renderer_) {
-                                          micro_renderer_->executeGraphics(cmd);
-                                        }
-                                      });
-
-    vulkan_core_->PresentFrame(imageIndex);
-    return;
-  }
-
-  // Process updates and UI
+void VulkanDashboard::process_updates_and_ui(const std::chrono::high_resolution_clock::time_point& frame_start_time) {
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
@@ -471,7 +486,9 @@ void VulkanDashboard::render_frame() {
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                          0, 1, &barrier, 0, nullptr, 0, nullptr);
   }
+}
 
+void VulkanDashboard::finalize_and_present_frame(const std::chrono::high_resolution_clock::time_point& frame_start_time) {
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
@@ -480,13 +497,13 @@ void VulkanDashboard::render_frame() {
   // For now, let's assume we can call executeGraphics inside the render pass.
   // We'll modify RecordCommandBuffer to accept a callback or a renderer.
 
-  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
+  vulkan_core_->RecordCommandBuffer(current_image_index_, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
     if (micro_renderer_) {
       micro_renderer_->executeGraphics(cmd);
     }
   });
 
-  vulkan_core_->PresentFrame(imageIndex);
+  vulkan_core_->PresentFrame(current_image_index_);
 }
 
 void VulkanDashboard::handle_events() { glfwPollEvents(); }

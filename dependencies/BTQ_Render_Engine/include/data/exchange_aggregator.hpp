@@ -282,7 +282,9 @@ class ExchangeAggregator {
   struct AggregationStats {
     size_t total_symbols_aggregated = 0;
     size_t total_exchanges = 0;
-    size_t valid_exchanges = 0;  // Number of exchanges with valid data
+    size_t valid_exchanges = 0;        // Number of exchanges with valid data
+    size_t active_exchanges = 0;       // Number of actively reporting exchanges
+    double data_ingestion_rate = 0.0;  // Updates per second
     double avg_latency_difference_us = 0.0;
     std::chrono::high_resolution_clock::time_point last_update;
   };
@@ -670,15 +672,22 @@ class ExchangeAggregator {
   std::shared_ptr<RenderEngine::SymbolManager> symbol_manager_;
 
   // Atomic shared_ptr for lock-free access to data structures
+  mutable std::atomic<std::shared_ptr<std::unordered_map<
+      std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>>
+      exchange_data_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, ExchangeFeatures>>>
+      exchange_features_ptr_;
+  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, bool>>>
+      exchange_validity_ptr_;
   mutable std::atomic<std::shared_ptr<
-    std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>> exchange_data_ptr_;
-  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, ExchangeFeatures>>> exchange_features_ptr_;
-  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, bool>>> exchange_validity_ptr_;
-  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>> exchange_last_update_ptr_;
-  mutable std::atomic<std::shared_ptr<std::unordered_map<std::string, std::unordered_map<std::string, double>>>> exchange_correlations_ptr_;
+      std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>>
+      exchange_last_update_ptr_;
+  mutable std::atomic<
+      std::shared_ptr<std::unordered_map<std::string, std::unordered_map<std::string, double>>>>
+      exchange_correlations_ptr_;
 
   std::atomic<TimeSyncStrategy> sync_strategy_{TimeSyncStrategy::EARLIEST_TIMESTAMP};
-  AggregationStats stats_;
+  mutable std::atomic<std::shared_ptr<AggregationStats>> stats_ptr_;
 
   // Thread for continuous aggregation
   std::atomic<bool> running_{false};
@@ -830,7 +839,7 @@ class ExchangeAggregator {
 
   // Bypass internal queues to directly insert data without processing overhead
   void bypassInternalQueues(const std::string& exchange, const std::string& symbol,
-                           const RenderEngine::MarketDataUpdate& update);
+                            const RenderEngine::MarketDataUpdate& update);
 
  private:
   // Enhanced risk metrics calculation

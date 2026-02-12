@@ -91,11 +91,11 @@ class OrderbookPanel : public PanelBase {
   void reset_depth();
 
   // Helper method to detect order flow events by comparing snapshots
-  void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot,
-                             const HotOrderbookSnapshot& previous_snapshot);
+  void detectOrderFlowEvents(const RenderEngine::OrderbookData& current_snapshot,
+                             const RenderEngine::OrderbookData& previous_snapshot);
 
   // Helper method to track volume changes for delta calculation
-  void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
+  void trackVolumeChanges(const RenderEngine::OrderbookData& snapshot, uint64_t timestamp);
 
   struct PriceLevelVolume {
     double bought = 0.0;
@@ -121,7 +121,7 @@ class OrderbookPanel : public PanelBase {
   std::map<double, OrderFlowActivity> order_flow_activity_;
 
   // Store previous snapshots for comparison
-  std::map<uint32_t, HotOrderbookSnapshot> previous_snapshots_;
+  std::map<uint32_t, RenderEngine::OrderbookData> previous_snapshots_;
 
   // Batched geometry for heatmap backgrounds
   std::vector<HeatmapRect> heatmap_rects_;
@@ -249,16 +249,16 @@ class OrderbookPanel : public PanelBase {
 
   std::map<double, VolumeLevelHistory> volume_level_history_;
   uint64_t volume_delta_period_us_ = 5000000;  // 5 seconds in microseconds
-  
+
   // Orderbook polling functionality
   void poll_orderbook_data();
   void update_orderbook_statistics(const RenderEngine::OrderbookData& orderbook);
-  
+
   // Polling configuration
-  std::chrono::high_resolution_clock::time_point last_poll_time_ = 
+  std::chrono::high_resolution_clock::time_point last_poll_time_ =
       std::chrono::high_resolution_clock::now();
   int poll_interval_ms_ = 100;  // Poll every 100ms by default
-  
+
   // Orderbook statistics
   RenderEngine::OrderbookData current_orderbook_;
   double best_bid_price_ = 0.0;

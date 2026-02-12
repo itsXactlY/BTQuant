@@ -43,8 +43,8 @@ std::expected<void, std::string> HotSpineDataBridge::start() {
 
   running_.store(true, std::memory_order_release);
 
-  // Start real-time sync thread using std::jthread
-  sync_thread_ = std::jthread([this](std::stop_token /*stoken*/) { this->sync_loop(); });
+  // Start real-time sync thread
+  sync_thread_ = std::thread([this]() { this->sync_loop(); });
 
   BTQ_LOG_INFO("HotSpineDataBridge started successfully");
   return {};
@@ -123,7 +123,6 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
 
   // Map the SHM segment to a raw HotspineData* pointer for efficient indexing
   base_ptr_ = reinterpret_cast<HotSpine::V3::HotspineData*>(buffer_start);
-  books_ = nullptr;  // No orderbook data in SHM
 
   std::string success_msg = std::format(
       "[HotSpineDataBridge] Connected to SHM: {} (magic=0x{:X}, version={}, trade_capacity={})",
@@ -137,7 +136,6 @@ std::expected<void, std::string> HotSpineDataBridge::connect() {
 void HotSpineDataBridge::stop() {
   running_ = false;
   if (sync_thread_.joinable()) {
-    sync_thread_.request_stop();
     sync_thread_.join();
   }
 }
@@ -165,23 +163,10 @@ std::vector<uint32_t> HotSpineDataBridge::getActiveSymbols() const {
   return data_processor_ ? data_processor_->getActiveSymbols() : std::vector<uint32_t>{};
 }
 
-std::span<const HotTrade> HotSpineDataBridge::getTradeBuffer() const {
+std::span<const HotSpine::V3::HotspineData> HotSpineDataBridge::getTradeBuffer() const {
   if (!base_ptr_ || !header_) return {};
-  // Return a span based on the available data in the ring buffer
-  // Cast the base_ptr to HotTrade for compatibility with existing interfaces
-  const HotTrade* trades = reinterpret_cast<const HotTrade*>(base_ptr_);
-  uint64_t available_count = header_->get_available_count();
-  // Limit to a reasonable size to avoid returning huge spans
-  size_t count = std::min(static_cast<size_t>(available_count),
-                          static_cast<size_t>(HotSpine::V3::RING_BUFFER_SIZE));
-  return std::span<const HotTrade>(trades, count);
-}
-
-std::span<const HotOrderbookSnapshot> HotSpineDataBridge::getBookBuffer() const {
-  if (!books_ || !header_) return {};
-  // For now, return a span based on the ring buffer size
-  // In a real implementation, orderbooks would be stored separately or interleaved
-  return std::span<const HotOrderbookSnapshot>(books_, HotSpine::V3::RING_BUFFER_SIZE / 2);
+  // Return a span based on the RING_BUFFER_SIZE
+  return std::span<const HotSpine::V3::HotspineData>(base_ptr_, HotSpine::V3::RING_BUFFER_SIZE);
 }
 
 void HotSpineDataBridge::sync_loop() {
@@ -203,7 +188,7 @@ void HotSpineDataBridge::sync_loop() {
 
   BTQ_LOG_INFO("HotSpineDataBridge sync loop started");
 
-  while (!sync_thread_.get_stop_token().stop_requested() && running_) {
+  while (running_) {
     sync_shm();
 
     // Busy-wait with yield for precise timing
@@ -248,7 +233,7 @@ void HotSpineDataBridge::sync_shm() {
   // Batch processing - lock-free approach
   // Use a pre-allocated vector to avoid dynamic allocation during processing
   thread_local static std::vector<RenderEngine::MarketDataUpdate> trade_batch;
-  trade_batch.clear(); // Clear instead of creating new vector each time
+  trade_batch.clear();  // Clear instead of creating new vector each time
   const uint64_t BATCH_SIZE = 100000;
   trade_batch.reserve(BATCH_SIZE);
 
@@ -260,43 +245,14 @@ void HotSpineDataBridge::sync_shm() {
     // Indexing becomes base_ptr[index & mask] for efficient modulo-free access
     const auto& hotspine_data = base_ptr_[(last_read & HotSpine::V3::RING_BUFFER_MASK)];
 
-    // Convert HotspineData to HotTrade for compatibility
-    // Create a temporary HotTrade from the HotspineData fields
-    HotTrade trade;
-    trade.ts_exchange = hotspine_data.timestamp;  // Use timestamp from HotspineData
-    trade.ts_local = hotspine_data.timestamp;     // Same timestamp for local
-    trade.price = hotspine_data.price;
-    trade.size = hotspine_data.volume;
-    trade.symbol_id = hotspine_data.symbol_id;
-    // Determine side from flags or other field
-    trade.side = (hotspine_data.flags & HotSpine::V3::HotspineData::IS_WARMUP) ? 1 : 0;  // Default to sell if warmup flag is set
-    
-    // Initialize padding
-    trade.padding[0] = 0;
-    trade.padding[1] = 0;
-    trade.padding[2] = 0;
-
-    // SANITY CHECK: Skip uninitialized or corrupt trades
-    if (trade.ts_exchange < MIN_VALID_TS) {
-      last_read++;
-      continue;
-    }
-
-    // Validate trade data
-    if (trade.price <= 0 || trade.size <= 0) {
-      BTQ_LOG_WARNING(
-          std::format("Invalid trade data - price: {}, size: {}", trade.price, trade.size));
-      last_read++;
-      continue;
-    }
-
+    // Convert HotspineData to MarketDataUpdate and process
     RenderEngine::MarketDataUpdate update;
     update.type = RenderEngine::MarketDataType::TRADE;
-    update.symbol_id = trade.symbol_id;
-    update.timestamp = trade.ts_exchange;
-    update.price = trade.price;
-    update.size = trade.size;
-    update.side = (trade.side == 0) ? "buy" : "sell";
+    update.symbol_id = hotspine_data.symbol_id;
+    update.timestamp = hotspine_data.timestamp;
+    update.price = hotspine_data.price;
+    update.size = hotspine_data.volume;
+    update.side = (hotspine_data.flags & HotSpine::V3::HotspineData::IS_WARMUP) ? "sell" : "buy";
 
     trade_batch.push_back(std::move(update));
     last_read++;

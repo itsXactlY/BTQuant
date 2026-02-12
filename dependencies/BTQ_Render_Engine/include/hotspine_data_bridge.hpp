@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <expected>
+#include <format>
 #include <map>
 #include <memory>
 #include <span>
@@ -17,37 +18,6 @@ namespace BTQuant {
 namespace RenderEngine {
 class MarketDataProcessor;
 }  // namespace RenderEngine
-
-// ============================================================================
-// Zero-Copy Shared Memory Data Structures
-// Must match Python ctypes structure exactly
-// ============================================================================
-
-struct HotTrade {
-  uint64_t ts_exchange;
-  uint64_t ts_local;
-  double price;
-  double size;
-  uint32_t symbol_id;
-  uint8_t side;  // 0=Buy, 1=Sell
-  uint8_t padding[3];
-};
-
-struct HotOrderbookLevel {
-  double price;
-  double size;
-};
-
-struct HotOrderbookSnapshot {
-  uint64_t ts_exchange;
-  uint64_t ts_local;
-  uint32_t symbol_id;
-  uint8_t bids_count;
-  uint8_t asks_count;
-  uint8_t padding[2];
-  std::array<HotOrderbookLevel, 200> bids;
-  std::array<HotOrderbookLevel, 200> asks;
-};
 
 // Use the new layout from hotspine_layout_v3.hpp
 using SharedMemoryHeader = HotSpine::V3::RingBufferHeader;
@@ -69,15 +39,8 @@ struct InstrumentStore {
   // Volume Profile (Price -> Cumulative Volume) - Lock-free updates
   std::map<double, double> vol_profile_;
 
-  // Latest Snapshot for Heatmap/Orderbook - Atomic for thread-safety
-  std::atomic<HotOrderbookSnapshot*> latest_snapshot{nullptr};
-
   InstrumentStore() = default;
-  ~InstrumentStore() {
-    if (latest_snapshot.load()) {
-      delete latest_snapshot.load();
-    }
-  }
+  ~InstrumentStore() = default;
 
   // Copy constructor for lock-free duplication
   InstrumentStore(const InstrumentStore& other) {
@@ -91,10 +54,6 @@ struct InstrumentStore {
     closes = other.closes;
     volumes = other.volumes;
     vol_profile_ = other.vol_profile_;
-    HotOrderbookSnapshot* snap = other.latest_snapshot.load();
-    if (snap) {
-      latest_snapshot.store(new HotOrderbookSnapshot(*snap));
-    }
   }
 };
 
@@ -121,8 +80,7 @@ class HotSpineDataBridge {
   [[nodiscard]] std::vector<uint32_t> getActiveSymbols() const;
 
   // Get views into live data (C++26 optimized)
-  [[nodiscard]] std::span<const HotTrade> getTradeBuffer() const;
-  [[nodiscard]] std::span<const HotOrderbookSnapshot> getBookBuffer() const;
+  [[nodiscard]] std::span<const HotSpine::V3::HotspineData> getTradeBuffer() const;
 
   // Get symbol information from registry
   std::string getSymbolName(uint32_t symbol_id) const;
@@ -140,16 +98,14 @@ class HotSpineDataBridge {
   size_t shm_size_ = 0;
 
   std::atomic<bool> running_{false};
-  std::jthread sync_thread_;  // Real-time sync thread
+  std::thread sync_thread_;  // Real-time sync thread
 
   // Ring Buffer Pointers
   SharedMemoryHeader* header_ = nullptr;
   HotSpine::V3::HotspineData* base_ptr_ = nullptr;  // Raw pointer to HotspineData array
-  HotOrderbookSnapshot* books_ = nullptr;
 
   // Local tracking of read progress
   std::atomic<uint64_t> last_read_idx_{0};
-  std::atomic<uint64_t> last_book_read_idx_{0};
 
   void sync_shm();
   void sync_loop();  // Real-time sync loop with high priority

@@ -17,11 +17,18 @@ ExchangeAggregator::ExchangeAggregator(std::shared_ptr<HotSpineDataBridge> bridg
                                        std::shared_ptr<RenderEngine::SymbolManager> symbol_manager)
     : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager) {
   // Initialize atomic shared_ptr containers
-  exchange_data_ptr_.store(std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>());
-  exchange_features_ptr_.store(std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>());
+  exchange_data_ptr_.store(
+      std::make_shared<std::unordered_map<
+          std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>());
+  exchange_features_ptr_.store(
+      std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>());
   exchange_validity_ptr_.store(std::make_shared<std::unordered_map<std::string, bool>>());
-  exchange_last_update_ptr_.store(std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>());
-  exchange_correlations_ptr_.store(std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>());
+  exchange_last_update_ptr_.store(
+      std::make_shared<
+          std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>());
+  exchange_correlations_ptr_.store(
+      std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>());
+  stats_ptr_.store(std::make_shared<AggregationStats>());
 }
 
 ExchangeAggregator::~ExchangeAggregator() {
@@ -43,45 +50,52 @@ bool ExchangeAggregator::initialize() {
 
 void ExchangeAggregator::addExchange(const std::string& exchange_name,
                                      const ExchangeFeatures& features) {
+  // Use Copy-On-Write (COW) for all atomic containers to ensure lock-free operations
+
   // Update exchange features
   {
-    auto current_features = exchange_features_ptr_.load();
-    auto new_features = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current_features);
-    (*new_features)[exchange_name] = features;
-    exchange_features_ptr_.store(new_features);
+    auto current = exchange_features_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current);
+    (*updated)[exchange_name] = features;
+    exchange_features_ptr_.store(updated);
   }
 
-  // Initialize exchange-specific data structures
+  // Update exchange validity
   {
-    auto current_validity = exchange_validity_ptr_.load();
-    auto new_validity = std::make_shared<std::unordered_map<std::string, bool>>(*current_validity);
-    (*new_validity)[exchange_name] = true;
-    exchange_validity_ptr_.store(new_validity);
+    auto current = exchange_validity_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<std::string, bool>>(*current);
+    (*updated)[exchange_name] = true;
+    exchange_validity_ptr_.store(updated);
   }
 
+  // Update last update timestamp
   {
-    auto current_updates = exchange_last_update_ptr_.load();
-    auto new_updates = std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current_updates);
-    (*new_updates)[exchange_name] = std::chrono::high_resolution_clock::now();
-    exchange_last_update_ptr_.store(new_updates);
+    auto current = exchange_last_update_ptr_.load();
+    auto updated = std::make_shared<
+        std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current);
+    (*updated)[exchange_name] = std::chrono::high_resolution_clock::now();
+    exchange_last_update_ptr_.store(updated);
   }
 
-  // Initialize exchange correlation tracking
+  // Update exchange correlations
   {
-    auto current_correlations = exchange_correlations_ptr_.load();
-    auto new_correlations = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(*current_correlations);
-    (*new_correlations)[exchange_name] = std::unordered_map<std::string, double>();
-    exchange_correlations_ptr_.store(new_correlations);
+    auto current = exchange_correlations_ptr_.load();
+    auto updated =
+        std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(
+            *current);
+    (*updated)[exchange_name] = std::unordered_map<std::string, double>();
+    exchange_correlations_ptr_.store(updated);
   }
 
-  BTQ_LOG_INFO(std::format("Added exchange {} to aggregation pool", exchange_name));
+  BTQ_LOG_INFO(std::format("Added exchange {} to aggregation pool (lock-free)", exchange_name));
 }
 
 void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
   // Update exchange features
   {
     auto current_features = exchange_features_ptr_.load();
-    auto new_features = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current_features);
+    auto new_features =
+        std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current_features);
     new_features->erase(exchange_name);
     exchange_features_ptr_.store(new_features);
   }
@@ -97,7 +111,9 @@ void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
   // Update exchange last update
   {
     auto current_updates = exchange_last_update_ptr_.load();
-    auto new_updates = std::make_shared<std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current_updates);
+    auto new_updates = std::make_shared<
+        std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(
+        *current_updates);
     new_updates->erase(exchange_name);
     exchange_last_update_ptr_.store(new_updates);
   }
@@ -105,7 +121,9 @@ void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
   // Update exchange correlations
   {
     auto current_correlations = exchange_correlations_ptr_.load();
-    auto new_correlations = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(*current_correlations);
+    auto new_correlations =
+        std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, double>>>(
+            *current_correlations);
     new_correlations->erase(exchange_name);
     exchange_correlations_ptr_.store(new_correlations);
   }
@@ -113,7 +131,9 @@ void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
   // Remove exchange data from all symbols
   {
     auto current_data = exchange_data_ptr_.load();
-    auto new_data = std::make_shared<std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>(*current_data);
+    auto new_data = std::make_shared<std::unordered_map<
+        std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>(
+        *current_data);
     for (auto& [symbol, exchange_data_map] : *new_data) {
       exchange_data_map.erase(exchange_name);
     }
@@ -198,8 +218,6 @@ std::optional<AggregatedMarketData> ExchangeAggregator::aggregateSymbolData(
 
 void ExchangeAggregator::processDataUpdate(const std::string& exchange, const std::string& symbol,
                                            const RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Validate the incoming data before storing
   if (!isValidData(update)) {
     BTQ_LOG_WARNING(
@@ -215,10 +233,29 @@ void ExchangeAggregator::processDataUpdate(const std::string& exchange, const st
   applyExchangeSpecificAdjustments(adjusted_update, exchange);
   handleExchangeSpecificFeatures(exchange, symbol, adjusted_update);
 
-  // Store the processed data from the exchange
-  exchange_data_[symbol][exchange] = adjusted_update;
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  // Store the processed data from the exchange using Copy-On-Write (COW)
+  {
+    auto current = exchange_data_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<
+        std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>>>(*current);
+    (*updated)[symbol][exchange] = adjusted_update;
+    exchange_data_ptr_.store(updated);
+  }
+
+  {
+    auto current = exchange_last_update_ptr_.load();
+    auto updated = std::make_shared<
+        std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point>>(*current);
+    (*updated)[exchange] = std::chrono::high_resolution_clock::now();
+    exchange_last_update_ptr_.store(updated);
+  }
+
+  {
+    auto current = exchange_validity_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<std::string, bool>>(*current);
+    (*updated)[exchange] = true;
+    exchange_validity_ptr_.store(updated);
+  }
 
   // Update statistics
   updateStatistics();
@@ -226,10 +263,10 @@ void ExchangeAggregator::processDataUpdate(const std::string& exchange, const st
 
 std::optional<AggregatedMarketData> ExchangeAggregator::getAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  // Load snapshot once to ensure consistency throughout this method
+  auto current_data = exchange_data_ptr_.load();
+  auto symbol_it = current_data->find(symbol);
+  if (symbol_it == current_data->end()) {
     return std::nullopt;
   }
 
@@ -287,10 +324,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getAggregatedData(
 }
 
 double ExchangeAggregator::calculateWeightedAveragePrice(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0.0;
   }
 
@@ -299,9 +334,10 @@ double ExchangeAggregator::calculateWeightedAveragePrice(const std::string& symb
 
   for (const auto& [exchange, data] : symbol_it->second) {
     // Use exchange reliability score as weight
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     total_weighted_price += data.price * data.size * reliability;
     total_volume += data.size * reliability;
@@ -316,10 +352,8 @@ double ExchangeAggregator::calculateWeightedAveragePrice(const std::string& symb
 
 double ExchangeAggregator::calculateWeightedAveragePriceWithValidation(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0.0;
   }
 
@@ -333,9 +367,10 @@ double ExchangeAggregator::calculateWeightedAveragePriceWithValidation(
     }
 
     // Use exchange reliability score as weight
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Apply additional weight based on data freshness
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -352,10 +387,8 @@ double ExchangeAggregator::calculateWeightedAveragePriceWithValidation(
 }
 
 uint64_t ExchangeAggregator::calculateSynchronizedTimestamp(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0;
   }
 
@@ -402,9 +435,10 @@ uint64_t ExchangeAggregator::calculateSynchronizedTimestamp(const std::string& s
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double offset =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.latency_offset_us : 0.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double offset = (exchange_it != exchange_features_ptr_.load()->end())
+                            ? exchange_it->second.latency_offset_us
+                            : 0.0;
 
         // Convert offset from microseconds to appropriate unit for timestamp
         uint64_t corrected_ts = data.timestamp - static_cast<uint64_t>(offset);
@@ -467,10 +501,8 @@ uint64_t ExchangeAggregator::calculateSynchronizedTimestamp(const std::string& s
 
 std::optional<ExchangeFeatures> ExchangeAggregator::getExchangeFeatures(
     const std::string& exchange) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto it = exchange_features_.find(exchange);
-  if (it != exchange_features_.end()) {
+  auto it = exchange_features_ptr_.load()->find(exchange);
+  if (it != exchange_features_ptr_.load()->end()) {
     return it->second;
   }
 
@@ -479,20 +511,25 @@ std::optional<ExchangeFeatures> ExchangeAggregator::getExchangeFeatures(
 
 void ExchangeAggregator::updateExchangeFeatures(const std::string& exchange,
                                                 const ExchangeFeatures& features) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  exchange_features_[exchange] = features;
+  // COW Update for features
+  {
+    auto current = exchange_features_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<std::string, ExchangeFeatures>>(*current);
+    (*updated)[exchange] = features;
+    exchange_features_ptr_.store(updated);
+  }
 
-  // Update validity status based on new features
-  if (features.reliability_score > 0.0) {
-    exchange_validity_[exchange] = true;
-  } else {
-    exchange_validity_[exchange] = false;
+  // COW Update for validity status based on new features
+  {
+    auto current = exchange_validity_ptr_.load();
+    auto updated = std::make_shared<std::unordered_map<std::string, bool>>(*current);
+    (*updated)[exchange] = (features.reliability_score > 0.0);
+    exchange_validity_ptr_.store(updated);
   }
 }
 
 ExchangeAggregator::AggregationStats ExchangeAggregator::getStats() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  return stats_;
+  return *stats_ptr_.load();
 }
 
 void ExchangeAggregator::aggregationLoop() {
@@ -572,9 +609,10 @@ void ExchangeAggregator::synchronizeTimestamps(AggregatedMarketData& data) const
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double offset =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.latency_offset_us : 0.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double offset = (exchange_it != exchange_features_ptr_.load()->end())
+                            ? exchange_it->second.latency_offset_us
+                            : 0.0;
 
         // Convert offset from microseconds to appropriate unit for timestamp
         uint64_t corrected_ts = ts - static_cast<uint64_t>(offset);
@@ -651,9 +689,10 @@ void ExchangeAggregator::synchronizeTimestamps(AggregatedMarketData& data) const
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double reliability =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                                 ? exchange_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -689,9 +728,10 @@ void ExchangeAggregator::synchronizeTimestamps(AggregatedMarketData& data) const
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.latency_offset_us : 0.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (exchange_it != exchange_features_ptr_.load()->end())
+                                    ? exchange_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = ts + static_cast<uint64_t>(latency_offset);
@@ -755,9 +795,10 @@ double ExchangeAggregator::calculateVolumeWeightedPrice(
 
   for (const auto& [exchange, data] : exchange_data) {
     // Get exchange reliability score to weight the contribution
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Weight by both volume and reliability
     double weighted_volume = data.size * reliability;
@@ -773,47 +814,44 @@ double ExchangeAggregator::calculateVolumeWeightedPrice(
 }
 
 void ExchangeAggregator::updateStatistics() {
-  std::lock_guard<std::mutex> lock(data_mutex_);
+  auto current_data = exchange_data_ptr_.load();
+  auto current_features = exchange_features_ptr_.load();
+  auto current_validity = exchange_validity_ptr_.load();
 
-  stats_.total_symbols_aggregated = exchange_data_.size();
-  stats_.total_exchanges = exchange_features_.size();
-  stats_.last_update = std::chrono::high_resolution_clock::now();
+  auto new_stats = std::make_shared<AggregationStats>();
+  new_stats->total_symbols_aggregated = current_data->size();
+  new_stats->total_exchanges = current_features->size();
+  new_stats->last_update = std::chrono::high_resolution_clock::now();
 
-  // Calculate average latency difference if we have multiple exchanges
-  if (exchange_features_.size() > 1) {
-    std::vector<double> offsets;
-    for (const auto& [exchange, features] : exchange_features_) {
-      if (exchange_validity_.count(exchange) && exchange_validity_.at(exchange)) {
-        offsets.push_back(features.latency_offset_us);
-      }
-    }
-
-    if (!offsets.empty()) {
-      double sum = std::accumulate(offsets.begin(), offsets.end(), 0.0);
-      stats_.avg_latency_difference_us = sum / offsets.size();
+  int active_count = 0;
+  for (const auto& [exchange, is_valid] : *current_validity) {
+    if (is_valid) {
+      active_count++;
     }
   }
+  new_stats->active_exchanges = active_count;
 
-  // Update exchange-specific statistics
-  stats_.valid_exchanges = 0;
-  for (const auto& [exchange, valid] : exchange_validity_) {
-    if (valid) {
-      stats_.valid_exchanges++;
-    }
+  // Calculate overall data frequency
+  double total_frequency = 0.0;
+  for (const auto& [symbol, exchange_data_map] : *current_data) {
+    total_frequency += exchange_data_map.size();
   }
+  new_stats->data_ingestion_rate = total_frequency;
+
+  stats_ptr_.store(new_stats);
 }
 
 bool ExchangeAggregator::isExchangeDataValid(const std::string& exchange,
                                              const RenderEngine::MarketDataUpdate& data) const {
   // Check if exchange is marked as valid
-  auto validity_it = exchange_validity_.find(exchange);
-  if (validity_it != exchange_validity_.end() && !validity_it->second) {
+  auto validity_it = exchange_validity_ptr_.load()->find(exchange);
+  if (validity_it != exchange_validity_ptr_.load()->end() && !validity_it->second) {
     return false;
   }
 
   // Check if data is too old (stale data check)
-  auto last_update_it = exchange_last_update_.find(exchange);
-  if (last_update_it != exchange_last_update_.end()) {
+  auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+  if (last_update_it != exchange_last_update_ptr_.load()->end()) {
     auto now = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second).count();
@@ -829,8 +867,8 @@ bool ExchangeAggregator::isExchangeDataValid(const std::string& exchange,
 }
 
 bool ExchangeAggregator::isExchangeValid(const std::string& exchange) const {
-  auto validity_it = exchange_validity_.find(exchange);
-  if (validity_it != exchange_validity_.end()) {
+  auto validity_it = exchange_validity_ptr_.load()->find(exchange);
+  if (validity_it != exchange_validity_ptr_.load()->end()) {
     return validity_it->second;
   }
   return false;
@@ -857,8 +895,8 @@ bool ExchangeAggregator::isValidData(const RenderEngine::MarketDataUpdate& data)
 }
 
 double ExchangeAggregator::calculateFreshnessWeight(const std::string& exchange) const {
-  auto last_update_it = exchange_last_update_.find(exchange);
-  if (last_update_it == exchange_last_update_.end()) {
+  auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+  if (last_update_it == exchange_last_update_ptr_.load()->end()) {
     return 0.0;  // No data available
   }
 
@@ -876,20 +914,29 @@ double ExchangeAggregator::calculateFreshnessWeight(const std::string& exchange)
 }
 
 void ExchangeAggregator::checkStaleData() {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   auto now = std::chrono::high_resolution_clock::now();
+  auto last_updates = exchange_last_update_ptr_.load();
+  auto current_validity = exchange_validity_ptr_.load();
 
-  for (auto& [exchange, last_update] : exchange_last_update_) {
+  std::shared_ptr<std::unordered_map<std::string, bool>> new_validity = nullptr;
+
+  for (const auto& [exchange, last_update] : *last_updates) {
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update).count();
 
-    // Mark exchange as invalid if no data received in 5 seconds
-    if (duration > 5000) {
-      exchange_validity_[exchange] = false;
-    } else {
-      exchange_validity_[exchange] = true;
+    bool is_valid = (duration <= 5000);
+    auto it = current_validity->find(exchange);
+
+    if (it == current_validity->end() || it->second != is_valid) {
+      if (!new_validity) {
+        new_validity = std::make_shared<std::unordered_map<std::string, bool>>(*current_validity);
+      }
+      (*new_validity)[exchange] = is_valid;
     }
+  }
+
+  if (new_validity) {
+    exchange_validity_ptr_.store(new_validity);
   }
 }
 
@@ -1048,10 +1095,14 @@ void ExchangeAggregator::detectArbitrageOpportunities(
 }
 
 void ExchangeAggregator::updateExchangeCorrelations() {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Update correlations between exchanges based on recent data
-  for (auto& [symbol, exchange_data_map] : exchange_data_) {
+  auto current_data = exchange_data_ptr_.load();
+  auto current_correlations = exchange_correlations_ptr_.load();
+
+  std::shared_ptr<std::unordered_map<std::string, std::unordered_map<std::string, double>>>
+      new_correlations = nullptr;
+
+  for (auto& [symbol, exchange_data_map] : *current_data) {
     std::vector<std::pair<std::string, double>> exchange_prices;
 
     for (const auto& [exchange, data] : exchange_data_map) {
@@ -1061,6 +1112,12 @@ void ExchangeAggregator::updateExchangeCorrelations() {
     }
 
     if (exchange_prices.size() >= 2) {
+      if (!new_correlations) {
+        new_correlations = std::make_shared<
+            std::unordered_map<std::string, std::unordered_map<std::string, double>>>(
+            *current_correlations);
+      }
+
       // Calculate correlation coefficients between exchanges
       for (size_t i = 0; i < exchange_prices.size(); ++i) {
         for (size_t j = i + 1; j < exchange_prices.size(); ++j) {
@@ -1074,11 +1131,15 @@ void ExchangeAggregator::updateExchangeCorrelations() {
               1.0 - (price_diff / avg_price);  // Higher correlation when prices are similar
 
           // Store correlation in both directions
-          exchange_correlations_[ex1][ex2] = correlation;
-          exchange_correlations_[ex2][ex1] = correlation;
+          (*new_correlations)[ex1][ex2] = correlation;
+          (*new_correlations)[ex2][ex1] = correlation;
         }
       }
     }
+  }
+
+  if (new_correlations) {
+    exchange_correlations_ptr_.store(new_correlations);
   }
 }
 
@@ -1096,9 +1157,10 @@ double ExchangeAggregator::calculateTWAP(
     // Only include data within the time window
     if (data.timestamp >= window_start && data.timestamp <= window_end) {
       // Get exchange reliability score to weight the contribution
-      auto exchange_it = exchange_features_.find(exchange);
-      double reliability =
-          (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+      auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                               ? exchange_it->second.reliability_score
+                               : 1.0;
 
       double weighted_volume = data.size * reliability;
       total_value += data.price * weighted_volume;
@@ -1124,9 +1186,10 @@ double ExchangeAggregator::calculateVWAP(
 
   for (const auto& [exchange, data] : exchange_data) {
     // Get exchange reliability score to weight the contribution
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Weight by both volume and reliability
     double weighted_volume = data.size * reliability;
@@ -1150,9 +1213,10 @@ double ExchangeAggregator::calculateMedianPrice(
   std::vector<double> prices;
   for (const auto& [exchange, data] : exchange_data) {
     // Apply reliability weighting by including the price multiple times based on reliability
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Add the price multiple times based on reliability score (clamped to range 0.1-2.0)
     int copies = std::max(1, static_cast<int>(reliability * 10.0));
@@ -1184,9 +1248,10 @@ double ExchangeAggregator::calculateTrimmedMean(
   std::vector<double> prices;
   for (const auto& [exchange, data] : exchange_data) {
     // Apply reliability weighting by including the price multiple times based on reliability
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Add the price multiple times based on reliability score (clamped to range 0.1-2.0)
     int copies = std::max(1, static_cast<int>(reliability * 10.0));
@@ -1234,9 +1299,10 @@ double ExchangeAggregator::calculateHarmonicMean(
   for (const auto& [exchange, data] : exchange_data) {
     if (data.price > 0) {  // Harmonic mean requires positive values
       // Apply reliability weighting
-      auto exchange_it = exchange_features_.find(exchange);
-      double reliability =
-          (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+      auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                               ? exchange_it->second.reliability_score
+                               : 1.0;
 
       // Weight the reciprocal by reliability
       reciprocal_sum += reliability / data.price;
@@ -1253,10 +1319,8 @@ double ExchangeAggregator::calculateHarmonicMean(
 
 std::optional<MultiExchangeData> ExchangeAggregator::getMultiExchangeView(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -1269,8 +1333,8 @@ std::optional<MultiExchangeData> ExchangeAggregator::getMultiExchangeView(
       multi_exchange_data.exchange_data[exchange] = data;
 
       // Get exchange features for additional context
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         multi_exchange_data.exchange_features[exchange] = features_it->second;
       }
     }
@@ -1342,10 +1406,8 @@ std::optional<MultiExchangeData> ExchangeAggregator::getMultiExchangeView(
 
 void ExchangeAggregator::applyExchangeSpecificAdjustments(RenderEngine::MarketDataUpdate& data,
                                                           const std::string& exchange) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features found for this exchange
   }
 
@@ -1399,10 +1461,8 @@ void ExchangeAggregator::applyExchangeSpecificAdjustments(RenderEngine::MarketDa
 void ExchangeAggregator::validateExchangeSpecificConstraints(
     const std::string& exchange, const std::string& symbol,
     const RenderEngine::MarketDataUpdate& data) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features found for this exchange
   }
 
@@ -1441,10 +1501,8 @@ void ExchangeAggregator::validateExchangeSpecificConstraints(
 
 void ExchangeAggregator::updateExchangeSpecificFeatures(const std::string& exchange,
                                                         const ExchangeFeatures& new_features) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Update the exchange features
-  exchange_features_[exchange] = new_features;
+  (*exchange_features_ptr_.load())[exchange] = new_features;
 
   // Log the update
   BTQ_LOG_INFO(std::format("Updated features for exchange {}: latency_offset={}us, reliability={}",
@@ -1457,20 +1515,18 @@ void ExchangeAggregator::updateExchangeSpecificFeatures(const std::string& excha
 
 std::optional<ExchangeFeatures> ExchangeAggregator::getEnhancedExchangeFeatures(
     const std::string& exchange) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto it = exchange_features_.find(exchange);
-  if (it != exchange_features_.end()) {
+  auto it = exchange_features_ptr_.load()->find(exchange);
+  if (it != exchange_features_ptr_.load()->end()) {
     ExchangeFeatures enhanced_features = it->second;
 
     // Add dynamic features based on current state
-    auto validity_it = exchange_validity_.find(exchange);
-    if (validity_it != exchange_validity_.end()) {
+    auto validity_it = exchange_validity_ptr_.load()->find(exchange);
+    if (validity_it != exchange_validity_ptr_.load()->end()) {
       enhanced_features.is_active = validity_it->second;
     }
 
-    auto last_update_it = exchange_last_update_.find(exchange);
-    if (last_update_it != exchange_last_update_.end()) {
+    auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+    if (last_update_it != exchange_last_update_ptr_.load()->end()) {
       auto now = std::chrono::high_resolution_clock::now();
       auto latency_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -1492,17 +1548,16 @@ std::optional<ExchangeFeatures> ExchangeAggregator::getEnhancedExchangeFeatures(
 
 std::vector<ExchangeAggregator::ExchangeLatencyReport> ExchangeAggregator::generateLatencyReport()
     const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   std::vector<ExchangeLatencyReport> reports;
+  auto current_features = exchange_features_ptr_.load();
 
-  for (const auto& [exchange, _] : exchange_features_) {
+  for (const auto& [exchange, _] : *current_features) {
     ExchangeLatencyReport report;
     report.exchange_name = exchange;
 
     // Get the last update time for this exchange
-    auto last_update_it = exchange_last_update_.find(exchange);
-    if (last_update_it != exchange_last_update_.end()) {
+    auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+    if (last_update_it != exchange_last_update_ptr_.load()->end()) {
       auto now = std::chrono::high_resolution_clock::now();
       report.current_latency_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -1510,15 +1565,15 @@ std::vector<ExchangeAggregator::ExchangeLatencyReport> ExchangeAggregator::gener
     }
 
     // Get the configured latency offset
-    auto features_it = exchange_features_.find(exchange);
-    if (features_it != exchange_features_.end()) {
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    if (features_it != exchange_features_ptr_.load()->end()) {
       report.configured_latency_offset_us = features_it->second.latency_offset_us;
       report.reliability_score = features_it->second.reliability_score;
     }
 
     // Check validity status
-    auto validity_it = exchange_validity_.find(exchange);
-    if (validity_it != exchange_validity_.end()) {
+    auto validity_it = exchange_validity_ptr_.load()->find(exchange);
+    if (validity_it != exchange_validity_ptr_.load()->end()) {
       report.is_valid = validity_it->second;
     }
 
@@ -1530,10 +1585,8 @@ std::vector<ExchangeAggregator::ExchangeLatencyReport> ExchangeAggregator::gener
 
 std::optional<ExchangeAggregator::ExchangeDataQualityMetrics>
 ExchangeAggregator::calculateDataQualityMetrics(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -1553,8 +1606,8 @@ ExchangeAggregator::calculateDataQualityMetrics(const std::string& symbol) const
       exchange_quality.exchange_name = exchange;
 
       // Freshness metric (based on how recent the data is)
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         auto age_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -1621,11 +1674,10 @@ ExchangeAggregator::calculateDataQualityMetrics(const std::string& symbol) const
 }
 
 std::vector<ExchangeRanking> ExchangeAggregator::rankExchangesByReliability() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   std::vector<ExchangeRanking> rankings;
+  auto current_features = exchange_features_ptr_.load();
 
-  for (const auto& [exchange, features] : exchange_features_) {
+  for (const auto& [exchange, features] : *current_features) {
     ExchangeRanking ranking;
     ranking.exchange_name = exchange;
     ranking.reliability_score = features.reliability_score;
@@ -1633,8 +1685,8 @@ std::vector<ExchangeRanking> ExchangeAggregator::rankExchangesByReliability() co
     ranking.data_staleness_ms = 0;
 
     // Calculate how stale the data is for this exchange
-    auto last_update_it = exchange_last_update_.find(exchange);
-    if (last_update_it != exchange_last_update_.end()) {
+    auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+    if (last_update_it != exchange_last_update_ptr_.load()->end()) {
       auto now = std::chrono::high_resolution_clock::now();
       ranking.data_staleness_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -1642,8 +1694,9 @@ std::vector<ExchangeRanking> ExchangeAggregator::rankExchangesByReliability() co
     }
 
     // Calculate validity status
-    auto validity_it = exchange_validity_.find(exchange);
-    ranking.is_valid = (validity_it != exchange_validity_.end()) ? validity_it->second : false;
+    auto validity_it = exchange_validity_ptr_.load()->find(exchange);
+    ranking.is_valid =
+        (validity_it != exchange_validity_ptr_.load()->end()) ? validity_it->second : false;
 
     rankings.push_back(ranking);
   }
@@ -1659,10 +1712,8 @@ std::vector<ExchangeRanking> ExchangeAggregator::rankExchangesByReliability() co
 
 std::optional<ExchangeAggregator::MultiExchangeConsolidatedView>
 ExchangeAggregator::getMultiExchangeConsolidatedView(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -1676,8 +1727,8 @@ ExchangeAggregator::getMultiExchangeConsolidatedView(const std::string& symbol) 
       exchange_data.update = data;
 
       // Get exchange features for additional context
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data.features = features_it->second;
       }
 
@@ -1713,8 +1764,8 @@ ExchangeAggregator::getMultiExchangeConsolidatedView(const std::string& symbol) 
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -1837,11 +1888,10 @@ ExchangeAggregator::getMultiExchangeConsolidatedView(const std::string& symbol) 
 
 std::vector<ExchangeAggregator::MultiExchangeConsolidatedView>
 ExchangeAggregator::getAllSymbolsConsolidatedView() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   std::vector<MultiExchangeConsolidatedView> all_views;
+  auto current_data = exchange_data_ptr_.load();
 
-  for (const auto& [symbol, _] : exchange_data_) {
+  for (const auto& [symbol, _] : *current_data) {
     auto view = getMultiExchangeConsolidatedView(symbol);
     if (view.has_value()) {
       all_views.push_back(view.value());
@@ -1853,10 +1903,8 @@ ExchangeAggregator::getAllSymbolsConsolidatedView() const {
 
 std::optional<ExchangeAggregator::SymbolCrossExchangeAnalytics>
 ExchangeAggregator::getCrossExchangeAnalytics(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -1991,10 +2039,8 @@ ExchangeAggregator::getCrossExchangeAnalytics(const std::string& symbol) const {
 }
 
 double ExchangeAggregator::calculateConsensusPrice(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0.0;
   }
 
@@ -2004,9 +2050,10 @@ double ExchangeAggregator::calculateConsensusPrice(const std::string& symbol) co
 
   for (const auto& [exchange, data] : symbol_it->second) {
     if (isExchangeDataValid(exchange, data)) {
-      auto features_it = exchange_features_.find(exchange);
-      double reliability =
-          (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (features_it != exchange_features_ptr_.load()->end())
+                               ? features_it->second.reliability_score
+                               : 1.0;
 
       // Apply freshness weight as well
       double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2061,9 +2108,10 @@ double ExchangeAggregator::calculateGeometricMeanPrice(
   for (const auto& [exchange, data] : exchange_data) {
     if (data.price > 0) {  // Geometric mean requires positive values
       // Apply reliability weighting by raising to power of reliability
-      auto features_it = exchange_features_.find(exchange);
-      double reliability =
-          (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (features_it != exchange_features_ptr_.load()->end())
+                               ? features_it->second.reliability_score
+                               : 1.0;
 
       // Apply freshness weight as well
       double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2080,9 +2128,10 @@ double ExchangeAggregator::calculateGeometricMeanPrice(
     double total_weight = 0.0;
     for (const auto& [exchange, data] : exchange_data) {
       if (data.price > 0) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
         double freshness_weight = calculateFreshnessWeight(exchange);
         total_weight += reliability * freshness_weight;
       }
@@ -2105,9 +2154,10 @@ double ExchangeAggregator::calculateRobustMeanPrice(
   // Collect prices with their weights
   std::vector<std::pair<double, double>> price_weight_pairs;
   for (const auto& [exchange, data] : exchange_data) {
-    auto features_it = exchange_features_.find(exchange);
-    double reliability =
-        (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (features_it != exchange_features_ptr_.load()->end())
+                             ? features_it->second.reliability_score
+                             : 1.0;
 
     // Apply freshness weight as well
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2172,9 +2222,10 @@ double ExchangeAggregator::calculateWeightedPercentilePrice(
   // Collect prices with their weights
   std::vector<std::pair<double, double>> price_weight_pairs;
   for (const auto& [exchange, data] : exchange_data) {
-    auto features_it = exchange_features_.find(exchange);
-    double reliability =
-        (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (features_it != exchange_features_ptr_.load()->end())
+                             ? features_it->second.reliability_score
+                             : 1.0;
 
     // Apply freshness weight as well
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2230,10 +2281,8 @@ double ExchangeAggregator::calculateWeightedPercentilePrice(
 
 std::optional<ExchangeAggregator::AdvancedAggregationResult>
 ExchangeAggregator::performAdvancedAggregation(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -2356,10 +2405,8 @@ double ExchangeAggregator::calculateSimpleAveragePrice(
 void ExchangeAggregator::handleExchangeSpecificFeatures(
     const std::string& exchange, const std::string& symbol,
     const RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features defined for this exchange
   }
 
@@ -2384,16 +2431,14 @@ void ExchangeAggregator::handleExchangeSpecificFeatures(
   }
 
   // Update exchange-specific statistics
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 }
 
 std::optional<AggregatedMarketData> ExchangeAggregator::getExchangeSpecificAggregatedData(
     const std::string& symbol, const std::vector<std::string>& exchanges) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -2454,10 +2499,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getExchangeSpecificAggre
 
 double ExchangeAggregator::calculateWeightedAveragePriceWithValidationForExchanges(
     const std::string& symbol, const std::vector<std::string>& exchanges) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0.0;
   }
 
@@ -2478,9 +2521,10 @@ double ExchangeAggregator::calculateWeightedAveragePriceWithValidationForExchang
     }
 
     // Use exchange reliability score as weight
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Apply additional weight based on data freshness
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2498,10 +2542,8 @@ double ExchangeAggregator::calculateWeightedAveragePriceWithValidationForExchang
 
 double ExchangeAggregator::calculateConsensusPriceForExchanges(
     const std::string& symbol, const std::vector<std::string>& exchanges) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return 0.0;
   }
 
@@ -2518,9 +2560,10 @@ double ExchangeAggregator::calculateConsensusPriceForExchanges(
     const auto& data = exchange_data_it->second;
 
     if (isExchangeDataValid(exchange, data)) {
-      auto features_it = exchange_features_.find(exchange);
-      double reliability =
-          (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (features_it != exchange_features_ptr_.load()->end())
+                               ? features_it->second.reliability_score
+                               : 1.0;
 
       // Apply freshness weight as well
       double freshness_weight = calculateFreshnessWeight(exchange);
@@ -2570,12 +2613,12 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getUnifiedView(
   return getAggregatedData(symbol);
 }
 
-std::vector<MultiExchangeData> ExchangeAggregator::getAllSymbolsMultiExchangeView() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
+std::vector<BTQuant::Data::MultiExchangeData> ExchangeAggregator::getAllSymbolsMultiExchangeView()
+    const {
   std::vector<MultiExchangeData> all_views;
+  auto current_data = exchange_data_ptr_.load();
 
-  for (const auto& [symbol, _] : exchange_data_) {
+  for (const auto& [symbol, _] : *current_data) {
     auto view = getMultiExchangeView(symbol);
     if (view.has_value()) {
       all_views.push_back(view.value());
@@ -2587,10 +2630,8 @@ std::vector<MultiExchangeData> ExchangeAggregator::getAllSymbolsMultiExchangeVie
 
 std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedAggregatedData(
     const std::string& symbol, const std::vector<std::string>& exchanges) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -2657,10 +2698,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedAggregatedDat
 
 std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExchangeView(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -2674,8 +2713,8 @@ std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExc
       detailed_data.update = data;
 
       // Get exchange features for additional context
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         detailed_data.features = features_it->second;
       }
 
@@ -2711,8 +2750,8 @@ std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExc
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         detailed_data.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -2782,10 +2821,8 @@ std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExc
 std::optional<TimestampSynchronizationResult>
 ExchangeAggregator::synchronizeTimestampsAcrossExchanges(const std::string& symbol,
                                                          TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -2809,8 +2846,8 @@ ExchangeAggregator::synchronizeTimestampsAcrossExchanges(const std::string& symb
   // Apply latency compensation based on exchange features
   std::vector<std::pair<uint64_t, std::string>> compensated_pairs = timestamp_exchange_pairs;
   for (auto& [timestamp, exchange] : compensated_pairs) {
-    auto features_it = exchange_features_.find(exchange);
-    if (features_it != exchange_features_.end()) {
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    if (features_it != exchange_features_ptr_.load()->end()) {
       // Apply latency offset compensation
       double offset = features_it->second.latency_offset_us;
       if (offset != 0.0) {
@@ -2888,9 +2925,10 @@ ExchangeAggregator::synchronizeTimestampsAcrossExchanges(const std::string& symb
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -2913,9 +2951,10 @@ ExchangeAggregator::synchronizeTimestampsAcrossExchanges(const std::string& symb
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -2976,12 +3015,11 @@ ExchangeAggregator::synchronizeTimestampsAcrossExchanges(const std::string& symb
 
 std::vector<ExchangeCorrelationMatrix> ExchangeAggregator::calculateExchangeCorrelationsMatrix()
     const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   std::vector<ExchangeCorrelationMatrix> correlation_matrices;
+  auto current_data = exchange_data_ptr_.load();
 
   // For each symbol, calculate correlation matrix between exchanges
-  for (const auto& [symbol, exchange_data_map] : exchange_data_) {
+  for (const auto& [symbol, exchange_data_map] : *current_data) {
     ExchangeCorrelationMatrix matrix;
     matrix.symbol = symbol;
 
@@ -3035,9 +3073,10 @@ std::vector<ExchangeCorrelationMatrix> ExchangeAggregator::calculateExchangeCorr
     double weighted_correlation_sum = 0.0;
 
     for (const auto& [exchange, _] : exchange_updates) {
-      auto features_it = exchange_features_.find(exchange);
-      double reliability =
-          (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability = (features_it != exchange_features_ptr_.load()->end())
+                               ? features_it->second.reliability_score
+                               : 1.0;
 
       // Calculate average correlation for this exchange
       double ex_correlation_sum = 0.0;
@@ -3070,10 +3109,8 @@ std::vector<ExchangeCorrelationMatrix> ExchangeAggregator::calculateExchangeCorr
 
 std::optional<ExchangeRiskMetrics> ExchangeAggregator::calculateRiskMetrics(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -3089,8 +3126,8 @@ std::optional<ExchangeRiskMetrics> ExchangeAggregator::calculateRiskMetrics(
       volumes.push_back(data.size);
 
       // Get exchange-specific risk factors
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         ExchangeSpecificRisk exchange_risk;
         exchange_risk.exchange_name = exchange;
         exchange_risk.latency_risk =
@@ -3168,10 +3205,8 @@ std::optional<ExchangeRiskMetrics> ExchangeAggregator::calculateRiskMetrics(
 // New method to handle sophisticated time synchronization across exchanges
 std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performMultiExchangeTimeSync(
     const std::string& symbol, TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -3188,10 +3223,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performMultiExcha
       timestamp_exchange_pairs.emplace_back(data.timestamp, exchange);
 
       // Apply latency compensation based on exchange features
-      auto features_it = exchange_features_.find(exchange);
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
       uint64_t compensated_timestamp = data.timestamp;
 
-      if (features_it != exchange_features_.end()) {
+      if (features_it != exchange_features_ptr_.load()->end()) {
         // Apply latency offset compensation
         double offset = features_it->second.latency_offset_us;
         if (offset != 0.0) {
@@ -3278,9 +3313,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performMultiExcha
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -3303,9 +3339,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performMultiExcha
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -3382,10 +3419,8 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performMultiExcha
 // New method to get a comprehensive multi-exchange view with all analytics
 std::optional<ExchangeAggregator::ComprehensiveMultiExchangeView>
 ExchangeAggregator::getComprehensiveMultiExchangeView(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -3403,8 +3438,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeView(const std::string& symbol)
       exchange_data.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data.features = features_it->second;
       }
 
@@ -3440,8 +3475,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeView(const std::string& symbol)
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -3578,10 +3613,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeView(const std::string& symbol)
 // Enhanced multi-exchange aggregation with improved time synchronization
 std::optional<AggregatedMarketData> ExchangeAggregator::getEnhancedAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -3697,9 +3730,10 @@ void ExchangeAggregator::enhancedSynchronizeTimestamps(AggregatedMarketData& dat
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double offset =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.latency_offset_us : 0.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double offset = (exchange_it != exchange_features_ptr_.load()->end())
+                            ? exchange_it->second.latency_offset_us
+                            : 0.0;
 
         // Convert offset from microseconds to appropriate unit for timestamp
         uint64_t corrected_ts = ts - static_cast<uint64_t>(offset);
@@ -3776,9 +3810,10 @@ void ExchangeAggregator::enhancedSynchronizeTimestamps(AggregatedMarketData& dat
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double reliability =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                                 ? exchange_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -3814,9 +3849,10 @@ void ExchangeAggregator::enhancedSynchronizeTimestamps(AggregatedMarketData& dat
           continue;
         }
 
-        auto exchange_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (exchange_it != exchange_features_.end()) ? exchange_it->second.latency_offset_us : 0.0;
+        auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (exchange_it != exchange_features_ptr_.load()->end())
+                                    ? exchange_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = ts + static_cast<uint64_t>(latency_offset);
@@ -3876,10 +3912,8 @@ void ExchangeAggregator::enhancedSynchronizeTimestamps(AggregatedMarketData& dat
 // Advanced time synchronization using cross-correlation analysis
 std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTimeSync(
     const std::string& symbol, TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -3896,10 +3930,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTi
       timestamp_exchange_pairs.emplace_back(data.timestamp, exchange);
 
       // Apply latency compensation based on exchange features
-      auto features_it = exchange_features_.find(exchange);
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
       uint64_t compensated_timestamp = data.timestamp;
 
-      if (features_it != exchange_features_.end()) {
+      if (features_it != exchange_features_ptr_.load()->end()) {
         // Apply latency offset compensation
         double offset = features_it->second.latency_offset_us;
         if (offset != 0.0) {
@@ -3986,9 +4020,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTi
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -4011,9 +4046,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTi
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -4090,10 +4126,8 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTi
 // Enhanced time synchronization with historical data analysis
 std::optional<TimestampSynchronizationResult> ExchangeAggregator::analyzeHistoricalTimeSync(
     const std::string& symbol, TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -4117,8 +4151,8 @@ std::optional<TimestampSynchronizationResult> ExchangeAggregator::analyzeHistori
   // Apply latency compensation based on exchange features
   std::vector<std::pair<uint64_t, std::string>> compensated_pairs = timestamp_exchange_pairs;
   for (auto& [timestamp, exchange] : compensated_pairs) {
-    auto features_it = exchange_features_.find(exchange);
-    if (features_it != exchange_features_.end()) {
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    if (features_it != exchange_features_ptr_.load()->end()) {
       // Apply latency offset compensation
       double offset = features_it->second.latency_offset_us;
       if (offset != 0.0) {
@@ -4196,9 +4230,10 @@ std::optional<TimestampSynchronizationResult> ExchangeAggregator::analyzeHistori
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -4221,9 +4256,10 @@ std::optional<TimestampSynchronizationResult> ExchangeAggregator::analyzeHistori
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -4330,10 +4366,8 @@ void ExchangeAggregator::calculateEnhancedRiskMetrics(
 void ExchangeAggregator::handleEnhancedExchangeSpecificFeatures(
     const std::string& exchange, const std::string& symbol,
     RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features defined for this exchange
   }
 
@@ -4386,18 +4420,16 @@ void ExchangeAggregator::handleEnhancedExchangeSpecificFeatures(
   }
 
   // Update exchange-specific statistics
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 }
 
 // Method to handle exchange-specific data quality checks
 bool ExchangeAggregator::performExchangeSpecificQualityChecks(
     const std::string& exchange, const std::string& symbol,
     const RenderEngine::MarketDataUpdate& update) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return true;  // If no features defined, assume data is valid
   }
 
@@ -4449,18 +4481,16 @@ bool ExchangeAggregator::performExchangeSpecificQualityChecks(
 
 // Method to dynamically update exchange features based on observed behavior
 void ExchangeAggregator::updateExchangeFeaturesDynamically(const std::string& exchange) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // Exchange not found
   }
 
   auto& features = features_it->second;
 
   // Update reliability score based on data freshness and consistency
-  auto last_update_it = exchange_last_update_.find(exchange);
-  if (last_update_it != exchange_last_update_.end()) {
+  auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+  if (last_update_it != exchange_last_update_ptr_.load()->end()) {
     auto now = std::chrono::high_resolution_clock::now();
     auto latency_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second).count();
@@ -4479,15 +4509,13 @@ void ExchangeAggregator::updateExchangeFeaturesDynamically(const std::string& ex
   }
 
   // Update validity status based on reliability score
-  exchange_validity_[exchange] = features.reliability_score > 0.1;
+  (*exchange_validity_ptr_.load())[exchange] = features.reliability_score > 0.1;
 }
 
 // Process data update with enhanced exchange-specific handling
 void ExchangeAggregator::processEnhancedDataUpdate(const std::string& exchange,
                                                    const std::string& symbol,
                                                    const RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Validate the incoming data before storing
   if (!isValidData(update)) {
     BTQ_LOG_WARNING(
@@ -4514,9 +4542,9 @@ void ExchangeAggregator::processEnhancedDataUpdate(const std::string& exchange,
   handleEnhancedExchangeSpecificFeatures(exchange, symbol, processed_update);
 
   // Store the processed data from the exchange
-  exchange_data_[symbol][exchange] = processed_update;
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_data_ptr_.load())[symbol][exchange] = processed_update;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update statistics
   updateStatistics();
@@ -4528,10 +4556,8 @@ void ExchangeAggregator::processEnhancedDataUpdate(const std::string& exchange,
 // Advanced aggregation using Kalman filtering for optimal estimation
 std::optional<AggregatedMarketData> ExchangeAggregator::getKalmanFilteredAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -4567,9 +4593,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getKalmanFilteredAggrega
 
   for (const auto& [exchange, data] : valid_exchange_data) {
     // Get exchange reliability score to weight the contribution
-    auto exchange_it = exchange_features_.find(exchange);
-    double reliability =
-        (exchange_it != exchange_features_.end()) ? exchange_it->second.reliability_score : 1.0;
+    auto exchange_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (exchange_it != exchange_features_ptr_.load()->end())
+                             ? exchange_it->second.reliability_score
+                             : 1.0;
 
     // Apply freshness weight as well
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -4615,10 +4642,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getKalmanFilteredAggrega
 // Advanced aggregation using machine learning-inspired weighted averaging
 std::optional<AggregatedMarketData> ExchangeAggregator::getMLWeightedAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -4652,9 +4677,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getMLWeightedAggregatedD
 
   for (const auto& [exchange, data] : valid_exchange_data) {
     // Get exchange features
-    auto features_it = exchange_features_.find(exchange);
-    double base_reliability =
-        (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    double base_reliability = (features_it != exchange_features_ptr_.load()->end())
+                                  ? features_it->second.reliability_score
+                                  : 1.0;
 
     // Calculate freshness weight
     double freshness_weight = calculateFreshnessWeight(exchange);
@@ -4728,10 +4754,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getMLWeightedAggregatedD
 // Advanced aggregation using outlier-resistant methods
 std::optional<AggregatedMarketData> ExchangeAggregator::getOutlierResistantAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -4764,9 +4788,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getOutlierResistantAggre
   std::vector<std::pair<double, double>> price_weight_pairs;  // price, weight
 
   for (const auto& [exchange, data] : valid_exchange_data) {
-    auto features_it = exchange_features_.find(exchange);
-    double reliability =
-        (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (features_it != exchange_features_ptr_.load()->end())
+                             ? features_it->second.reliability_score
+                             : 1.0;
     double freshness_weight = calculateFreshnessWeight(exchange);
     double combined_weight = reliability * freshness_weight;
 
@@ -4855,10 +4880,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getOutlierResistantAggre
 std::optional<AggregatedMarketData> ExchangeAggregator::getCustomWeightedAggregatedData(
     const std::string& symbol,
     const std::unordered_map<std::string, double>& custom_weights) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -4900,9 +4923,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getCustomWeightedAggrega
     }
 
     // Also apply reliability and freshness weights
-    auto features_it = exchange_features_.find(exchange);
-    double reliability =
-        (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+    auto features_it = exchange_features_ptr_.load()->find(exchange);
+    double reliability = (features_it != exchange_features_ptr_.load()->end())
+                             ? features_it->second.reliability_score
+                             : 1.0;
     double freshness_weight = calculateFreshnessWeight(exchange);
 
     double combined_weight = custom_weight * reliability * freshness_weight;
@@ -4944,10 +4968,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getCustomWeightedAggrega
 // Get comprehensive multi-exchange analytics for a symbol
 std::optional<ExchangeAggregator::SymbolCrossExchangeAnalytics>
 ExchangeAggregator::getComprehensiveAnalytics(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -5084,10 +5106,8 @@ ExchangeAggregator::getComprehensiveAnalytics(const std::string& symbol) const {
 // Get data quality scores for each exchange
 std::unordered_map<std::string, double> ExchangeAggregator::getExchangeQualityScores(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return {};
   }
 
@@ -5098,9 +5118,10 @@ std::unordered_map<std::string, double> ExchangeAggregator::getExchangeQualitySc
       double quality_score = 0.0;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      double reliability_score =
-          (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      double reliability_score = (features_it != exchange_features_ptr_.load()->end())
+                                     ? features_it->second.reliability_score
+                                     : 1.0;
 
       // Calculate freshness weight
       double freshness_weight = calculateFreshnessWeight(exchange);
@@ -5137,10 +5158,8 @@ std::unordered_map<std::string, double> ExchangeAggregator::getExchangeQualitySc
 // Enhanced aggregation using quality-weighted approach
 std::optional<AggregatedMarketData> ExchangeAggregator::getQualityWeightedAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -5217,10 +5236,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getQualityWeightedAggreg
 // Enhanced method to get a unified view with all multi-exchange features
 std::optional<ExchangeAggregator::UnifiedMultiExchangeView>
 ExchangeAggregator::getUnifiedMultiExchangeView(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -5238,8 +5255,8 @@ ExchangeAggregator::getUnifiedMultiExchangeView(const std::string& symbol) const
       exchange_data_item.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data_item.features = features_it->second;
       }
 
@@ -5276,8 +5293,8 @@ ExchangeAggregator::getUnifiedMultiExchangeView(const std::string& symbol) const
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data_item.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -5414,10 +5431,8 @@ ExchangeAggregator::getUnifiedMultiExchangeView(const std::string& symbol) const
 // Method to perform comprehensive multi-exchange time synchronization
 std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehensiveTimeSync(
     const std::string& symbol, TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -5434,10 +5449,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehens
       timestamp_exchange_pairs.emplace_back(data.timestamp, exchange);
 
       // Apply latency compensation based on exchange features
-      auto features_it = exchange_features_.find(exchange);
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
       uint64_t compensated_timestamp = data.timestamp;
 
-      if (features_it != exchange_features_.end()) {
+      if (features_it != exchange_features_ptr_.load()->end()) {
         // Apply latency offset compensation
         double offset = features_it->second.latency_offset_us;
         if (offset != 0.0) {
@@ -5524,9 +5539,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehens
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -5549,9 +5565,10 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehens
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -5629,10 +5646,8 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehens
 void ExchangeAggregator::handleAdvancedExchangeSpecificFeatures(
     const std::string& exchange, const std::string& symbol,
     RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features defined for this exchange
   }
 
@@ -5688,8 +5703,8 @@ void ExchangeAggregator::handleAdvancedExchangeSpecificFeatures(
   }
 
   // Update exchange-specific statistics
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update the exchange features with dynamic adjustments
   updateExchangeFeaturesDynamically(exchange);
@@ -5699,10 +5714,8 @@ void ExchangeAggregator::handleAdvancedExchangeSpecificFeatures(
 std::optional<MultiExchangeTimeSyncResult>
 ExchangeAggregator::performAdvancedTimeSyncWithPrediction(const std::string& symbol,
                                                           TimeSyncStrategy strategy) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -5719,10 +5732,10 @@ ExchangeAggregator::performAdvancedTimeSyncWithPrediction(const std::string& sym
       timestamp_exchange_pairs.emplace_back(data.timestamp, exchange);
 
       // Apply latency compensation based on exchange features
-      auto features_it = exchange_features_.find(exchange);
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
       uint64_t compensated_timestamp = data.timestamp;
 
-      if (features_it != exchange_features_.end()) {
+      if (features_it != exchange_features_ptr_.load()->end()) {
         // Apply latency offset compensation
         double offset = features_it->second.latency_offset_us;
         if (offset != 0.0) {
@@ -5809,9 +5822,10 @@ ExchangeAggregator::performAdvancedTimeSyncWithPrediction(const std::string& sym
       double total_weight = 0.0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double reliability =
-            (features_it != exchange_features_.end()) ? features_it->second.reliability_score : 1.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double reliability = (features_it != exchange_features_ptr_.load()->end())
+                                 ? features_it->second.reliability_score
+                                 : 1.0;
 
         double freshness_weight = calculateFreshnessWeight(exchange);
         double combined_weight = reliability * freshness_weight;
@@ -5834,9 +5848,10 @@ ExchangeAggregator::performAdvancedTimeSyncWithPrediction(const std::string& sym
       size_t valid_count = 0;
 
       for (const auto& [timestamp, exchange] : compensated_pairs) {
-        auto features_it = exchange_features_.find(exchange);
-        double latency_offset =
-            (features_it != exchange_features_.end()) ? features_it->second.latency_offset_us : 0.0;
+        auto features_it = exchange_features_ptr_.load()->find(exchange);
+        double latency_offset = (features_it != exchange_features_ptr_.load()->end())
+                                    ? features_it->second.latency_offset_us
+                                    : 0.0;
 
         // Predict the "true" timestamp by compensating for known latency
         uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
@@ -5939,10 +5954,8 @@ ExchangeAggregator::performAdvancedTimeSyncWithPrediction(const std::string& sym
 std::optional<AggregatedMarketData>
 ExchangeAggregator::getExchangeSpecificAggregatedDataWithFeatures(
     const std::string& symbol, const std::vector<std::string>& exchanges) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6005,10 +6018,8 @@ ExchangeAggregator::getExchangeSpecificAggregatedDataWithFeatures(
 void ExchangeAggregator::handleComprehensiveExchangeSpecificFeatures(
     const std::string& exchange, const std::string& symbol,
     RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features defined for this exchange
   }
 
@@ -6091,8 +6102,8 @@ void ExchangeAggregator::handleComprehensiveExchangeSpecificFeatures(
   }
 
   // Update exchange-specific statistics
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update the exchange features with dynamic adjustments
   updateExchangeFeaturesDynamically(exchange);
@@ -6102,8 +6113,6 @@ void ExchangeAggregator::handleComprehensiveExchangeSpecificFeatures(
 void ExchangeAggregator::processDataUpdateWithComprehensiveFeatures(
     const std::string& exchange, const std::string& symbol,
     const RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Validate the incoming data before storing
   if (!isValidData(update)) {
     BTQ_LOG_WARNING(
@@ -6129,9 +6138,9 @@ void ExchangeAggregator::processDataUpdateWithComprehensiveFeatures(
   handleComprehensiveExchangeSpecificFeatures(exchange, symbol, processed_update);
 
   // Store the processed data from the exchange
-  exchange_data_[symbol][exchange] = processed_update;
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_data_ptr_.load())[symbol][exchange] = processed_update;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update statistics
   updateStatistics();
@@ -6143,10 +6152,8 @@ void ExchangeAggregator::processDataUpdateWithComprehensiveFeatures(
 // Method to get a comprehensive view with all exchange-specific features considered
 std::optional<ExchangeAggregator::ComprehensiveMultiExchangeView>
 ExchangeAggregator::getComprehensiveViewWithFeatures(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6164,8 +6171,8 @@ ExchangeAggregator::getComprehensiveViewWithFeatures(const std::string& symbol) 
       exchange_data_item.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data_item.features = features_it->second;
       }
 
@@ -6202,8 +6209,8 @@ ExchangeAggregator::getComprehensiveViewWithFeatures(const std::string& symbol) 
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data_item.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -6340,10 +6347,8 @@ ExchangeAggregator::getComprehensiveViewWithFeatures(const std::string& symbol) 
 // Final method to get the ultimate unified view combining all multi-exchange features
 std::optional<AggregatedMarketData> ExchangeAggregator::getUltimateAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6417,10 +6422,8 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getUltimateAggregatedDat
 // Enhanced method to get a comprehensive unified view with advanced multi-exchange aggregation
 std::optional<ExchangeAggregator::UnifiedMultiExchangeView>
 ExchangeAggregator::getAdvancedUnifiedMultiExchangeView(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6438,8 +6441,8 @@ ExchangeAggregator::getAdvancedUnifiedMultiExchangeView(const std::string& symbo
       exchange_data_item.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data_item.features = features_it->second;
       }
 
@@ -6479,8 +6482,8 @@ ExchangeAggregator::getAdvancedUnifiedMultiExchangeView(const std::string& symbo
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data_item.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -6642,8 +6645,6 @@ ExchangeAggregator::getAdvancedUnifiedMultiExchangeView(const std::string& symbo
 void ExchangeAggregator::processDataUpdateWithAdvancedFeatures(
     const std::string& exchange, const std::string& symbol,
     const RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   // Validate the incoming data before storing
   if (!isValidData(update)) {
     BTQ_LOG_WARNING(
@@ -6669,9 +6670,9 @@ void ExchangeAggregator::processDataUpdateWithAdvancedFeatures(
   handleAdvancedExchangeSpecificFeatures(exchange, symbol, processed_update);
 
   // Store the processed data from the exchange
-  exchange_data_[symbol][exchange] = processed_update;
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_data_ptr_.load())[symbol][exchange] = processed_update;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update statistics
   updateStatistics();
@@ -6683,11 +6684,10 @@ void ExchangeAggregator::processDataUpdateWithAdvancedFeatures(
 // Method to get a consolidated view of all symbols across all exchanges
 std::vector<ExchangeAggregator::UnifiedMultiExchangeView>
 ExchangeAggregator::getAllSymbolsUnifiedView() const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
   std::vector<UnifiedMultiExchangeView> all_views;
+  auto current_data = exchange_data_ptr_.load();
 
-  for (const auto& [symbol, _] : exchange_data_) {
+  for (const auto& [symbol, _] : *current_data) {
     auto view = getUnifiedMultiExchangeView(symbol);
     if (view.has_value()) {
       all_views.push_back(view.value());
@@ -6701,10 +6701,8 @@ ExchangeAggregator::getAllSymbolsUnifiedView() const {
 std::optional<ExchangeAggregator::ComprehensiveMultiExchangeView>
 ExchangeAggregator::getComprehensiveMultiExchangeViewWithAllAnalytics(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6722,8 +6720,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeViewWithAllAnalytics(
       exchange_data_item.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data_item.features = features_it->second;
       }
 
@@ -6760,8 +6758,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeViewWithAllAnalytics(
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data_item.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -6885,10 +6883,8 @@ ExchangeAggregator::getComprehensiveMultiExchangeViewWithAllAnalytics(
 // Enhanced method to get a comprehensive multi-exchange view with additional analytics
 std::optional<ExchangeAggregator::EnhancedMultiExchangeView>
 ExchangeAggregator::getEnhancedMultiExchangeView(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -6906,8 +6902,8 @@ ExchangeAggregator::getEnhancedMultiExchangeView(const std::string& symbol) cons
       exchange_data_item.update = data;
 
       // Get exchange features
-      auto features_it = exchange_features_.find(exchange);
-      if (features_it != exchange_features_.end()) {
+      auto features_it = exchange_features_ptr_.load()->find(exchange);
+      if (features_it != exchange_features_ptr_.load()->end()) {
         exchange_data_item.features = features_it->second;
       }
 
@@ -6947,8 +6943,8 @@ ExchangeAggregator::getEnhancedMultiExchangeView(const std::string& symbol) cons
       }
 
       // Calculate latency relative to other exchanges
-      auto last_update_it = exchange_last_update_.find(exchange);
-      if (last_update_it != exchange_last_update_.end()) {
+      auto last_update_it = exchange_last_update_ptr_.load()->find(exchange);
+      if (last_update_it != exchange_last_update_ptr_.load()->end()) {
         auto now = std::chrono::high_resolution_clock::now();
         exchange_data_item.stats.latency_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_it->second)
@@ -6956,8 +6952,8 @@ ExchangeAggregator::getEnhancedMultiExchangeView(const std::string& symbol) cons
       }
 
       // Calculate exchange-specific risk metrics
-      auto features_it2 = exchange_features_.find(exchange);
-      if (features_it2 != exchange_features_.end()) {
+      auto features_it2 = exchange_features_ptr_.load()->find(exchange);
+      if (features_it2 != exchange_features_ptr_.load()->end()) {
         exchange_data_item.risk_metrics.latency_risk =
             features_it2->second.latency_offset_us / 1000.0;
         exchange_data_item.risk_metrics.fee_cost = features_it2->second.trading_fee_rate;
@@ -7120,10 +7116,8 @@ ExchangeAggregator::getEnhancedMultiExchangeView(const std::string& symbol) cons
 // Method to get enhanced aggregated data with additional multi-exchange analytics
 std::optional<ExchangeAggregator::EnhancedAggregatedMarketData>
 ExchangeAggregator::getEnhancedAggregatedDataWithAnalytics(const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -7241,10 +7235,8 @@ ExchangeAggregator::getEnhancedAggregatedDataWithAnalytics(const std::string& sy
 void ExchangeAggregator::handleSophisticatedExchangeSpecificFeatures(
     const std::string& exchange, const std::string& symbol,
     RenderEngine::MarketDataUpdate& update) {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto features_it = exchange_features_.find(exchange);
-  if (features_it == exchange_features_.end()) {
+  auto features_it = exchange_features_ptr_.load()->find(exchange);
+  if (features_it == exchange_features_ptr_.load()->end()) {
     return;  // No features defined for this exchange
   }
 
@@ -7336,8 +7328,8 @@ void ExchangeAggregator::handleSophisticatedExchangeSpecificFeatures(
   }
 
   // Update exchange-specific statistics
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  exchange_validity_[exchange] = true;
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+  (*exchange_validity_ptr_.load())[exchange] = true;
 
   // Update the exchange features with dynamic adjustments
   updateExchangeFeaturesDynamically(exchange);
@@ -7346,10 +7338,8 @@ void ExchangeAggregator::handleSophisticatedExchangeSpecificFeatures(
 // Enhanced method to get a comprehensive multi-exchange view with advanced analytics
 std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedMultiExchangeAggregatedData(
     const std::string& symbol) const {
-  std::lock_guard<std::mutex> lock(data_mutex_);
-
-  auto symbol_it = exchange_data_.find(symbol);
-  if (symbol_it == exchange_data_.end()) {
+  auto symbol_it = exchange_data_ptr_.load()->find(symbol);
+  if (symbol_it == exchange_data_ptr_.load()->end()) {
     return std::nullopt;
   }
 
@@ -7397,24 +7387,23 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedMultiExchange
 
 // Bypass internal queues to directly insert data without processing overhead
 void ExchangeAggregator::bypassInternalQueues(const std::string& exchange,
-                                            const std::string& symbol,
-                                            const RenderEngine::MarketDataUpdate& update) {
+                                              const std::string& symbol,
+                                              const RenderEngine::MarketDataUpdate& update) {
   // Directly insert data into the internal storage without going through
   // the normal processing pipeline, validation, or feature adjustments
   // This bypasses all internal queues and processing overhead
-  
+
   // Acquire lock to ensure thread safety during direct insertion
-  std::lock_guard<std::mutex> lock(data_mutex_);
-  
+
   // Directly store the data without any validation or processing
-  exchange_data_[symbol][exchange] = update;
-  
+  (*exchange_data_ptr_.load())[symbol][exchange] = update;
+
   // Update the last update time for this exchange
-  exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
-  
+  (*exchange_last_update_ptr_.load())[exchange] = std::chrono::high_resolution_clock::now();
+
   // Mark the exchange as valid
-  exchange_validity_[exchange] = true;
-  
+  (*exchange_validity_ptr_.load())[exchange] = true;
+
   // Update statistics
   updateStatistics();
 }

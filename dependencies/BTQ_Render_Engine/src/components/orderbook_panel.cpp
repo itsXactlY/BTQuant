@@ -112,10 +112,10 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_na
 
 void OrderbookPanel::update(float /*dt*/) {
   std::lock_guard<std::mutex> lock(data_mutex_);
-  
+
   // Poll for orderbook data updates
   poll_orderbook_data();
-  
+
   // Request data update from data bridge
   bridge_->sync();
 
@@ -125,50 +125,33 @@ void OrderbookPanel::update(float /*dt*/) {
     // Simple linear scan. In production, use monotonic index or similar.
     for (const auto& trade : trades) {
       // Skip potential empty slots
-      if (trade.ts_local == 0) continue;
+      if (trade.timestamp == 0) continue;
 
-      if (trade.ts_local > last_processed_trade_ts_ && trade.symbol_id == symbol_id_) {
+      if (trade.timestamp > last_processed_trade_ts_ && trade.symbol_id == symbol_id_) {
         auto& vol = volume_profile_[trade.price];
-        if (trade.side == 0)
-          vol.bought += trade.size;  // Buy
+        if (!(trade.flags & HotSpine::V3::HotspineData::IS_WARMUP))
+          vol.bought += trade.volume;  // Buy (if IS_WARMUP is NOT set)
         else
-          vol.sold += trade.size;  // Sell
+          vol.sold += trade.volume;  // Sell (if IS_WARMUP is set)
 
         // Track execution event for order flow
         auto& activity = order_flow_activity_[trade.price];
         activity.executions++;
-        activity.last_activity_ts = trade.ts_local;
+        activity.last_activity_ts = trade.timestamp;
 
-        if (trade.ts_local > last_processed_trade_ts_) {
-          last_processed_trade_ts_ = trade.ts_local;
+        if (trade.timestamp > last_processed_trade_ts_) {
+          last_processed_trade_ts_ = trade.timestamp;
         }
       }
     }
 
-    // Process orderbook snapshots to track additions and cancellations
+    // Process orderbook snapshots - Disabled in V3 for now as writer only supports trades
+    /*
     auto books = bridge_->getBookBuffer();
     for (const auto& book : books) {
-      if (book.ts_local == 0) continue;
-
-      if (book.ts_local > last_order_flow_update_ts_ && book.symbol_id == symbol_id_) {
-        // Get previous snapshot for comparison
-        auto prev_it = previous_snapshots_.find(book.symbol_id);
-        if (prev_it != previous_snapshots_.end()) {
-          // Compare current snapshot with previous to detect order flow events
-          detectOrderFlowEvents(book, prev_it->second);
-        }
-
-        // Store current snapshot as previous for next comparison
-        previous_snapshots_[book.symbol_id] = book;
-
-        // Track volume changes for delta calculation
-        trackVolumeChanges(book, book.ts_local);
-
-        if (book.ts_local > last_order_flow_update_ts_) {
-          last_order_flow_update_ts_ = book.ts_local;
-        }
-      }
+      // ... (legacy processing)
     }
+    */
 
     // Clean up old order flow activity data periodically
     uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -192,45 +175,45 @@ void OrderbookPanel::update(float /*dt*/) {
   }
 }
 
-void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot,
-                                           const HotOrderbookSnapshot& previous_snapshot) {
+void OrderbookPanel::detectOrderFlowEvents(const RenderEngine::OrderbookData& current_snapshot,
+                                           const RenderEngine::OrderbookData& previous_snapshot) {
   // Map previous prices to sizes for quick lookup
   std::map<double, double> prev_bid_prices;
   std::map<double, double> prev_ask_prices;
 
   // Populate previous snapshot maps
-  for (int i = 0; i < previous_snapshot.bids_count && i < 200; ++i) {
-    if (previous_snapshot.bids[i].size > 0) {
-      prev_bid_prices[previous_snapshot.bids[i].price] = previous_snapshot.bids[i].size;
+  for (const auto& bid : previous_snapshot.bids) {
+    if (bid.size > 0) {
+      prev_bid_prices[bid.price] = bid.size;
     }
   }
 
-  for (int i = 0; i < previous_snapshot.asks_count && i < 200; ++i) {
-    if (previous_snapshot.asks[i].size > 0) {
-      prev_ask_prices[previous_snapshot.asks[i].price] = previous_snapshot.asks[i].size;
+  for (const auto& ask : previous_snapshot.asks) {
+    if (ask.size > 0) {
+      prev_ask_prices[ask.price] = ask.size;
     }
   }
 
   // Process current bids to detect additions and cancellations
-  for (int i = 0; i < current_snapshot.bids_count && i < 200; ++i) {
-    if (current_snapshot.bids[i].size > 0) {
-      auto prev_it = prev_bid_prices.find(current_snapshot.bids[i].price);
+  for (const auto& bid : current_snapshot.bids) {
+    if (bid.size > 0) {
+      auto prev_it = prev_bid_prices.find(bid.price);
 
       if (prev_it == prev_bid_prices.end()) {
         // New price level - this is an addition
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
+        auto& activity = order_flow_activity_[bid.price];
         activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.bids[i].size > prev_it->second) {
+        activity.last_activity_ts = current_snapshot.timestamp;
+      } else if (bid.size > prev_it->second) {
         // Size increased - this indicates new orders added at this level
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
+        auto& activity = order_flow_activity_[bid.price];
         activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.bids[i].size < prev_it->second) {
+        activity.last_activity_ts = current_snapshot.timestamp;
+      } else if (bid.size < prev_it->second) {
         // Size decreased - this indicates orders cancelled at this level
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
+        auto& activity = order_flow_activity_[bid.price];
         activity.cancellations++;
-        activity.last_activity_ts = current_snapshot.ts_local;
+        activity.last_activity_ts = current_snapshot.timestamp;
       }
     }
   }
@@ -238,8 +221,8 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
   // Process previous bids to detect cancellations (prices that disappeared)
   for (const auto& [price, size] : prev_bid_prices) {
     bool found_in_current = false;
-    for (int i = 0; i < current_snapshot.bids_count && i < 200; ++i) {
-      if (current_snapshot.bids[i].price == price) {
+    for (const auto& bid : current_snapshot.bids) {
+      if (bid.price == price) {
         found_in_current = true;
         break;
       }
@@ -249,30 +232,30 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
       // Price level disappeared - this is a cancellation
       auto& activity = order_flow_activity_[price];
       activity.cancellations++;
-      activity.last_activity_ts = current_snapshot.ts_local;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 
   // Process current asks to detect additions and cancellations
-  for (int i = 0; i < current_snapshot.asks_count && i < 200; ++i) {
-    if (current_snapshot.asks[i].size > 0) {
-      auto prev_it = prev_ask_prices.find(current_snapshot.asks[i].price);
+  for (const auto& ask : current_snapshot.asks) {
+    if (ask.size > 0) {
+      auto prev_it = prev_ask_prices.find(ask.price);
 
       if (prev_it == prev_ask_prices.end()) {
         // New price level - this is an addition
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
+        auto& activity = order_flow_activity_[ask.price];
         activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.asks[i].size > prev_it->second) {
+        activity.last_activity_ts = current_snapshot.timestamp;
+      } else if (ask.size > prev_it->second) {
         // Size increased - this indicates new orders added at this level
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
+        auto& activity = order_flow_activity_[ask.price];
         activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.asks[i].size < prev_it->second) {
+        activity.last_activity_ts = current_snapshot.timestamp;
+      } else if (ask.size < prev_it->second) {
         // Size decreased - this indicates orders cancelled at this level
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
+        auto& activity = order_flow_activity_[ask.price];
         activity.cancellations++;
-        activity.last_activity_ts = current_snapshot.ts_local;
+        activity.last_activity_ts = current_snapshot.timestamp;
       }
     }
   }
@@ -280,8 +263,8 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
   // Process previous asks to detect cancellations (prices that disappeared)
   for (const auto& [price, size] : prev_ask_prices) {
     bool found_in_current = false;
-    for (int i = 0; i < current_snapshot.asks_count && i < 200; ++i) {
-      if (current_snapshot.asks[i].price == price) {
+    for (const auto& ask : current_snapshot.asks) {
+      if (ask.price == price) {
         found_in_current = true;
         break;
       }
@@ -291,23 +274,24 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
       // Price level disappeared - this is a cancellation
       auto& activity = order_flow_activity_[price];
       activity.cancellations++;
-      activity.last_activity_ts = current_snapshot.ts_local;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 }
 
-void OrderbookPanel::trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp) {
+void OrderbookPanel::trackVolumeChanges(const RenderEngine::OrderbookData& snapshot,
+                                        uint64_t timestamp) {
   // Process bids
-  for (int i = 0; i < snapshot.bids_count && i < 200; ++i) {
-    if (snapshot.bids[i].size > 0) {
-      volume_level_history_[snapshot.bids[i].price].addBidPoint(timestamp, snapshot.bids[i].size);
+  for (const auto& bid : snapshot.bids) {
+    if (bid.size > 0) {
+      volume_level_history_[bid.price].addBidPoint(timestamp, bid.size);
     }
   }
 
   // Process asks
-  for (int i = 0; i < snapshot.asks_count && i < 200; ++i) {
-    if (snapshot.asks[i].size > 0) {
-      volume_level_history_[snapshot.asks[i].price].addAskPoint(timestamp, snapshot.asks[i].size);
+  for (const auto& ask : snapshot.asks) {
+    if (ask.size > 0) {
+      volume_level_history_[ask.price].addAskPoint(timestamp, ask.size);
     }
   }
 }
@@ -1398,8 +1382,8 @@ void OrderbookPanel::render_panel_header() {
 void OrderbookPanel::poll_orderbook_data() {
   // Poll for new orderbook data at regular intervals
   auto current_time = std::chrono::high_resolution_clock::now();
-  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                   current_time - last_poll_time_).count();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(current_time - last_poll_time_).count();
 
   // Poll every 100ms by default, but this could be configurable
   if (elapsed >= poll_interval_ms_) {
@@ -1424,18 +1408,18 @@ void OrderbookPanel::update_orderbook_statistics(const RenderEngine::OrderbookDa
     best_bid_price_ = orderbook.bids[0].price;
     best_ask_price_ = orderbook.asks[0].price;
     spread_ = best_ask_price_ - best_bid_price_;
-    
+
     // Calculate bid/ask ratio
     double total_bid_volume = 0.0;
     double total_ask_volume = 0.0;
-    
+
     for (const auto& bid : orderbook.bids) {
       total_bid_volume += bid.size;
     }
     for (const auto& ask : orderbook.asks) {
       total_ask_volume += ask.size;
     }
-    
+
     bid_ask_ratio_ = (total_ask_volume > 0) ? total_bid_volume / total_ask_volume : 0.0;
   }
 }

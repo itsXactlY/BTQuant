@@ -61,7 +61,7 @@ private:
   std::unordered_map<uint32_t, SymbolInfo> id_to_info_;
   std::unordered_map<std::string, uint32_t>
       key_to_id_; // "exchange:symbol" -> id
-  uint32_t next_auto_id_ = 10000;
+  uint32_t next_auto_id_ = 1;
 
   std::string make_key(const std::string &exchange,
                        const std::string &symbol) const;

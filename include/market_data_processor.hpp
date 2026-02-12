@@ -18,25 +18,13 @@ class MarketDataProcessor {
 public:
     static constexpr size_t MAX_SYMBOLS = 100000; // Pre-allocated to 100,000 slots
 
-    MarketDataProcessor() : atomic_store_(MAX_SYMBOLS) {}
+    MarketDataProcessor();
 
     // Zero-lock access method to get atomic snapshot
-    const AtomicSymbolInfo* get_atomic_snapshot(uint32_t symbol_id) const {
-        if (symbol_id >= MAX_SYMBOLS) {
-            return nullptr; // Out of bounds check
-        }
-        // Return a pointer to the atomic struct which can be accessed lock-free
-        // The atomic operations themselves provide thread safety
-        return &(atomic_store_[symbol_id]);
-    }
+    const AtomicSymbolInfo* get_atomic_snapshot(uint32_t symbol_id) const;
 
     // Method to update atomic data (for writers)
-    AtomicSymbolInfo* get_mutable_atomic_snapshot(uint32_t symbol_id) {
-        if (symbol_id >= MAX_SYMBOLS) {
-            return nullptr; // Out of bounds check
-        }
-        return &(atomic_store_[symbol_id]);
-    }
+    AtomicSymbolInfo* get_mutable_atomic_snapshot(uint32_t symbol_id);
 
 private:
     std::vector<AtomicSymbolInfo> atomic_store_;

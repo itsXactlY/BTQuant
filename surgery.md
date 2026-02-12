@@ -13,14 +13,14 @@
     - **Delete File:** `include/components/realtime_dashboard_component.hpp`
     - **Update CMake:** Open `CMakeLists.txt` and remove lines referencing `realtime_dashboard_component`.
 
-- [ ] **1.2: Cleanse `VulkanDashboard`**
+- [x] **1.2: Cleanse `VulkanDashboard`**
     - **File:** `src/vulkan_dashboard_advanced.cpp`
     - **Action:** Delete `std::shared_ptr<RealtimeDashboardComponent> realtime_dashboard_;` from the class/header.
     - **Action:** In `init_components()`, delete `realtime_dashboard_ = std::make_shared...`.
     - **Action:** In `render_frame()`, delete `realtime_dashboard_->render()`.
     - **Verify:** Only `workspace_->render_gui()` and `panel_manager_->render_panels()` should remain in the render loop.
 
-- [ ] **1.3: Fix Main Entry Point**
+- [x] **1.3: Fix Main Entry Point**
     - **File:** `src/main_trading_terminal.cpp`
     - **Action:** Remove any `panel_mgr->add_panel(...)` calls inside `main()`.
     - **Action:** Ensure instantiation order: 
@@ -35,7 +35,7 @@
 ## Phase 2: The Atomic Core (Data Storage)
 **Goal:** Create a lock-free memory bank that the UI can read from instantly.
 
-- [ ] **2.1: Define Atomic Structures**
+- [x] **2.1: Define Atomic Structures**
     - **File:** `include/market_data_processor.hpp`
     - **Add Struct:**
       ```cpp
@@ -51,7 +51,7 @@
     - **Add Storage:** `std::vector<AtomicSymbolInfo> atomic_store_;` (Resize to `MAX_SYMBOLS` in constructor).
     - **Add Accessor:** `const AtomicSymbolInfo* get_atomic_snapshot(uint32_t symbol_id) const;`
 
-- [ ] **2.2: Implement Polling Loop**
+- [x] **2.2: Implement Polling Loop**
     - **File:** `src/data/market_data_processor.cpp`
     - **Create Function:** `void poll_hotspine_updates();`
     - **Logic:**
@@ -68,13 +68,13 @@
 ## Phase 3: The UI Lobotomy (Watchlist)
 **Goal:** Stop the Watchlist from processing data. It should only *display* data.
 
-- [ ] **3.1: Strip Logic from Header**
+- [x] **3.1: Strip Logic from Header**
     - **File:** `include/components/watchlist_panel.hpp`
     - **Remove:** `std::mutex watchlist_mutex_`.
     - **Remove:** `std::queue pending_updates_` (and `ConcurrentQueue`).
     - **Remove:** `on_market_data_update(...)` callback declaration.
 
-- [ ] **3.2: Refactor Render Implementation**
+- [x] **3.2: Refactor Render Implementation**
     - **File:** `src/components/watchlist_panel.cpp`
     - **Action:** Delete `update(float dt)` body (or leave empty).
     - **Action:** Rewrite `render()` to use `ImGuiListClipper`:
@@ -95,12 +95,12 @@
 ## Phase 4: Producer Alignment (Collector)
 **Goal:** Ensure the data source writes to the ring buffer correctly without blocking.
 
-- [ ] **4.1: Fix Shared Layout**
+- [x] **4.1: Fix Shared Layout**
     - **File:** `include/hotspine_layout_v3.hpp`
     - **Define:** `constexpr size_t RING_BUFFER_SIZE = 1048576;` (Power of 2).
     - **Struct:** Ensure `RingBufferHeader` uses `std::atomic<uint64_t>` for `write_head` and `read_tail`.
 
-- [ ] **4.2: Dumb Writer Implementation**
+- [x] **4.2: Dumb Writer Implementation**
     - **File:** `market_data_collector/src/data/market_data_processor.cpp`
     - **Modify:** `handleTradeMessage`.
     - **Logic:**
@@ -113,10 +113,10 @@
 ## Phase 5: Build & Verification
 **Goal:** Compile a clean release build.
 
-- [ ] **5.1: Clean Build**
+- [x] **5.1: Clean Build**
     - **Command:** `rm -rf build && ./build_integration.sh`
     - **Check:** Verify no linker errors regarding `RealtimeDashboardComponent`.
 
-- [ ] **5.2: Sanity Check**
+- [x] **5.2: Sanity Check**
     - Run the terminal.
     - Confirm the UI is responsive (buttons click instantly) even when connected to the data feed.

@@ -119,17 +119,9 @@ int main(int argc, char** argv) {
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit")) {
-        // forcing close by calling glfwSetWindowShouldClose internally or just
-        // break loop Check if we can signal closing. VulkanDashboard checks
-        // glfwWindowShouldClose. We might need an accessor or just rely on the
-        // user closing the window for now, OR add a close() method. For now,
-        // let's assume standard window close. However, we can use
-        // glfwSetWindowShouldClose if we had the window handle exposed. But
-        // since we are inside a callback, and VulkanDashboard abstracts it...
-        // We can just rely on the window 'X' button or add a request_close
-        // method to Dashboard. Actually, we can just print for now.
         std::cout << "Exit requested via menu" << std::endl;
-        exit(0);  // Rough, but works for main loop exit
+        // Properly signal the window to close using GLFW
+        glfwSetWindowShouldClose(dashboard->get_window(), true);  // Need to expose the window handle
       }
       ImGui::EndMenu();
     }

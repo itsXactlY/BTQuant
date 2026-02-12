@@ -1,4 +1,4 @@
-#include "hotspine_market_data_processor.hpp"
+#include "market_data_processor.hpp"
 #include "hotspine_layout_v3.hpp"
 #include <thread>
 #include <chrono>
@@ -94,6 +94,27 @@ void HotSpine::V3::MarketDataProcessor::stop_polling_loop() {
     }
 }
 
+// Implementations for MarketDataProcessor from market_data_processor.hpp
+MarketDataProcessor::MarketDataProcessor() : atomic_store_(MAX_SYMBOLS) {
+}
+
+const AtomicSymbolInfo* MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
+    if (symbol_id >= MAX_SYMBOLS) {
+        return nullptr; // Out of bounds check
+    }
+    // Return a pointer to the atomic struct which can be accessed lock-free
+    // The atomic operations themselves provide thread safety
+    return &(atomic_store_[symbol_id]);
+}
+
+AtomicSymbolInfo* MarketDataProcessor::get_mutable_atomic_snapshot(uint32_t symbol_id) {
+    if (symbol_id >= MAX_SYMBOLS) {
+        return nullptr; // Out of bounds check
+    }
+    return &(atomic_store_[symbol_id]);
+}
+
+// Implementations for HotSpine::V3::MarketDataProcessor from hotspine_market_data_processor.hpp
 HotSpine::V3::MarketDataProcessor::MarketDataProcessor() : running_(false), local_read_tail_(0) {
     // Initialize the atomic registry
     atomic_registry_ = std::make_unique<HotSpine::V3::AtomicRegistry>();

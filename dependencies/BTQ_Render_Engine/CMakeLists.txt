@@ -225,6 +225,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/incremental_updater.cpp
     src/data/exchange_aggregator.cpp
     src/data/quality_monitor.cpp
+    /home/alca/projects/PubBTQuant/src/hotspine_layout_v3_impl.cpp
     src/components/atomic_orderbook_panel.cpp
     src/monitoring/performance_monitor.cpp
     src/performance/debug_overlay.cpp
@@ -251,6 +252,7 @@ target_include_directories(BTQuantTerminal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
+    /home/alca/projects/PubBTQuant/include
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}

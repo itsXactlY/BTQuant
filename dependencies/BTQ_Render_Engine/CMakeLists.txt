@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.15)
 project(BTQuant_Render_Engine LANGUAGES CXX)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# Option to build tests
+option(BUILD_TESTS "Build test executables" OFF)
+
 # C++26 Standard - Cutting Edge (GCC 15+ / Clang 18+) for main application
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -126,7 +129,6 @@ set(DASHBOARD_SOURCES
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
     src/components/risk_analyzer_panel.cpp
-    src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
@@ -150,7 +152,6 @@ set(DASHBOARD_SOURCES
     src/trading/risk_assessment.cpp
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
-    src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
@@ -267,7 +268,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
     src/components/risk_analyzer_panel.cpp
-    src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
@@ -291,7 +291,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/trading/risk_assessment.cpp
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
-    src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
@@ -376,3 +375,16 @@ target_link_libraries(BTQuantTerminal PRIVATE
     pthread
     TBB::tbb
 )
+
+# Conditionally build tests if BUILD_TESTS is enabled
+if(BUILD_TESTS)
+    message(STATUS "Building with tests enabled")
+    
+    # Find test framework if needed
+    enable_testing()
+    
+    # Example test executable - in a real scenario, you'd define actual test executables here
+    # For now, we'll just ensure that test files are not accidentally included in the main build
+else()
+    message(STATUS "Building with tests disabled - test files will be excluded from build tree")
+endif()

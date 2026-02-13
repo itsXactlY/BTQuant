@@ -1,12 +1,66 @@
 {
     "grid": {
-        "columns": 6,
-        "rows": 10
+        "columns": 3,
+        "rows": 5
     },
     "panels": [
         {
             "grid_height": 1,
-            "grid_width": 6,
+            "grid_width": 2,
+            "grid_x": 1,
+            "grid_y": 1,
+            "position": [
+                640.0,
+                240.0
+            ],
+            "size": [
+                1280.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Footprint",
+            "type": 18,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 1,
+            "position": [
+                0.0,
+                240.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "BTC-USDT Orderbook",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 0,
+            "position": [
+                1280.0,
+                30.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
             "grid_x": 0,
             "grid_y": 0,
             "position": [
@@ -14,21 +68,138 @@
                 30.0
             ],
             "size": [
-                1920.0,
-                105.0
+                1280.0,
+                210.0
             ],
             "symbol": "",
-            "title": "Strategy Builder Footer",
-            "type": 27,
+            "title": "BTC-USDT Chart [1s]",
+            "type": 0,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 4,
+            "position": [
+                1280.0,
+                870.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 0,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "settings": {
+                "auto_scale_price": true,
+                "enable_fade_out": false,
+                "heatmap_intensity": 1.0,
+                "large_order_threshold": 10.0,
+                "price_bins": 100,
+                "price_range": 0.02,
+                "symbol_id": 10014
+            },
+            "size": [
+                400.0,
+                300.0
+            ],
+            "symbol": "",
+            "title": "DOM Surface",
+            "type": 2,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 3,
+            "position": [
+                1280.0,
+                660.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Time & Sales",
+            "type": 13,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 3,
+            "position": [
+                0.0,
+                660.0
+            ],
+            "size": [
+                1280.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "BTC-USDT Orderbook",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 1,
+            "position": [
+                1280.0,
+                240.0
+            ],
+            "size": [
+                640.0,
+                420.0
+            ],
+            "symbol": "",
+            "title": "Depth Chart",
+            "type": 15,
             "visible": true
         },
         {
             "grid_height": 2,
             "grid_width": 2,
-            "grid_x": 1,
+            "grid_x": 0,
+            "grid_y": 1,
+            "position": [
+                0.0,
+                240.0
+            ],
+            "size": [
+                1280.0,
+                420.0
+            ],
+            "symbol": "",
+            "title": "BTC-USDT Chart [1s]",
+            "type": 0,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
             "grid_y": 0,
             "position": [
-                320.0,
+                1280.0,
                 30.0
             ],
             "size": [
@@ -41,213 +212,21 @@
             "visible": true
         },
         {
-            "grid_height": 2,
-            "grid_width": 6,
-            "grid_x": 2,
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 0,
             "grid_y": 0,
             "position": [
-                640.0,
-                30.0
+                0.0,
+                0.0
             ],
             "size": [
                 1920.0,
-                210.0
-            ],
-            "symbol": "",
-            "title": "Performance Monitor",
-            "type": 20,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 3,
-            "grid_x": 3,
-            "grid_y": 0,
-            "position": [
-                960.0,
                 30.0
             ],
-            "settings": {
-                "symbol_id": 0
-            },
-            "size": [
-                960.0,
-                210.0
-            ],
             "symbol": "",
-            "title": "TPO Profile",
-            "type": 19,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 3,
-            "grid_x": 4,
-            "grid_y": 0,
-            "position": [
-                1280.0,
-                30.0
-            ],
-            "size": [
-                960.0,
-                210.0
-            ],
-            "symbol": "",
-            "title": "Footprint Chart",
-            "type": 18,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 5,
-            "grid_y": 0,
-            "position": [
-                1600.0,
-                30.0
-            ],
-            "size": [
-                640.0,
-                105.0
-            ],
-            "symbol": "",
-            "title": "Watchlist",
-            "type": 11,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 0,
-            "grid_y": 1,
-            "position": [
-                0.0,
-                135.0
-            ],
-            "size": [
-                640.0,
-                105.0
-            ],
-            "symbol": "",
-            "title": "Volume Profile",
-            "type": 14,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 1,
-            "grid_y": 1,
-            "position": [
-                320.0,
-                135.0
-            ],
-            "size": [
-                640.0,
-                105.0
-            ],
-            "symbol": "",
-            "title": "Positions",
-            "type": 7,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 2,
-            "grid_y": 1,
-            "position": [
-                640.0,
-                135.0
-            ],
-            "size": [
-                640.0,
-                105.0
-            ],
-            "symbol": "",
-            "title": "Active Orders",
-            "type": 6,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 3,
-            "grid_y": 1,
-            "position": [
-                960.0,
-                135.0
-            ],
-            "size": [
-                640.0,
-                105.0
-            ],
-            "symbol": "",
-            "title": "Time & Sales",
-            "type": 13,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 2,
-            "grid_x": 4,
-            "grid_y": 1,
-            "position": [
-                1280.0,
-                135.0
-            ],
-            "size": [
-                640.0,
-                210.0
-            ],
-            "symbol": "",
-            "title": "Orderbook",
-            "type": 10,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 5,
-            "grid_y": 1,
-            "position": [
-                1600.0,
-                135.0
-            ],
-            "settings": {
-                "auto_scale_price": true,
-                "enable_fade_out": false,
-                "heatmap_intensity": 1.0,
-                "large_order_threshold": 10.0,
-                "price_bins": 100,
-                "price_range": 0.02,
-                "symbol_id": 0
-            },
-            "size": [
-                400.0,
-                300.0
-            ],
-            "symbol": "",
-            "title": "DOM Surface",
-            "type": 2,
-            "visible": true
-        },
-        {
-            "grid_height": 3,
-            "grid_width": 4,
-            "grid_x": 0,
-            "grid_y": 2,
-            "position": [
-                0.0,
-                240.0
-            ],
-            "size": [
-                1280.0,
-                315.0
-            ],
-            "symbol": "",
-            "title": "BTC/USDT Chart",
-            "type": 0,
+            "title": "Status Bar",
+            "type": 16,
             "visible": true
         }
     ]

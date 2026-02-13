@@ -12,7 +12,6 @@
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
-#include "MarketMicrostructureRenderer.h"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 #include "strategy_builder.hpp"
@@ -41,8 +40,7 @@ class PanelManager {
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                std::shared_ptr<OrderManager> order_manager,
                std::shared_ptr<PositionManager> position_manager,
-               std::shared_ptr<RiskAssessment> risk_assessment,
-               RenderEngine::MarketMicrostructureRenderer* micro_renderer = nullptr);
+               std::shared_ptr<RiskAssessment> risk_assessment);
 
   ~PanelManager();
 
@@ -112,7 +110,6 @@ class PanelManager {
   std::shared_ptr<OrderManager> order_manager_;
   std::shared_ptr<PositionManager> position_manager_;
   std::shared_ptr<RiskAssessment> risk_assessment_;
-  RenderEngine::MarketMicrostructureRenderer* micro_renderer_;
 
   std::unique_ptr<ChartManager> chart_manager_;
   std::unique_ptr<ContextMenuManager> context_menu_manager_;

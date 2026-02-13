@@ -7,7 +7,6 @@
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
 #include "../data/unified_data_pipeline.hpp"  // For DataType enum
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
-#include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 
 namespace BTQuant {
@@ -59,7 +58,7 @@ enum class NumberFormat {
 
 class FootprintPanel : public PanelBase {
  public:
-  FootprintPanel(const PanelConfig& config, RenderEngine::MarketMicrostructureRenderer* renderer);
+  FootprintPanel(const PanelConfig& config);
 
   void update(float dt) override;
   void render() override;
@@ -133,7 +132,6 @@ class FootprintPanel : public PanelBase {
   double getZoomSensitivity() const { return zoom_sensitivity_; }
 
  private:
-  RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
 
   // Data Type Selection

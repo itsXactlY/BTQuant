@@ -5,12 +5,12 @@
 using namespace BTQuant;
 
 // Mock renderer for testing
-class MockRenderer : public RenderEngine::MarketMicrostructureRenderer {
+class MockRenderer {
 public:
-  MockRenderer() : RenderEngine::MarketMicrostructureRenderer(nullptr) {}
+  MockRenderer() {}
 
   std::vector<RenderEngine::CandleCluster>
-  getFootprintClusters() const override {
+  getFootprintClusters() const {
     std::vector<RenderEngine::CandleCluster> clusters;
 
     // Create a sample cluster for testing
@@ -25,7 +25,7 @@ public:
     cluster.vwap = 100.25;
     cluster.buyTradeCount = 7;
     cluster.sellTradeCount = 3;
-    cluster.maxSingleTradeVolume = 25;
+    cluster.maxSingleTradeCount = 25;
     cluster.startTimeNs = 1000000000ULL;
     cluster.endTimeNs = 1000000001ULL;
 
@@ -34,7 +34,7 @@ public:
   }
 
   std::vector<std::vector<RenderEngine::ClusterCell>>
-  getClusterCells() const override {
+  getClusterCells() const {
     std::vector<std::vector<RenderEngine::ClusterCell>> cells;
     std::vector<RenderEngine::ClusterCell> row;
 
@@ -54,19 +54,19 @@ public:
     return cells;
   }
 
-  RenderEngine::Statistics getStats() const override {
+  Statistics getStats() const {
     RenderEngine::Statistics stats;
     stats.lastUpdateTimeNs = 1000000000ULL;
     return stats;
   }
 
-  void setTimeAggregationType(Data::TimeAggregationType type) override {}
-  void setVolumeBasedNContracts(int n) override {}
-  void setTickBasedNTicks(int n) override {}
-  void setPriceAggregationType(Data::PriceAggregationType type) override {}
-  void setCustomPriceAggregationValue(double value) override {}
-  void notifyPriceAggregationChanged() override {}
-  void setSymbol(uint32_t id) override {}
+  void setTimeAggregationType(Data::TimeAggregationType type) {}
+  void setVolumeBasedNContracts(int n) {}
+  void setTickBasedNTicks(int n) {}
+  void setPriceAggregationType(Data::PriceAggregationType type) {}
+  void setCustomPriceAggregationValue(double value) {}
+  void notifyPriceAggregationChanged() {}
+  void setSymbol(uint32_t id) {}
 };
 
 class TestFootprintPanelWithZoom : public ::testing::Test {
@@ -77,12 +77,10 @@ protected:
     config.position = ImVec2(0, 0);
     config.size = ImVec2(800, 600);
 
-    renderer_ = std::make_unique<MockRenderer>();
-    panel_ = std::make_unique<FootprintPanel>(config, renderer_.get());
+    panel_ = std::make_unique<FootprintPanel>(config);
   }
 
   std::unique_ptr<FootprintPanel> panel_;
-  std::unique_ptr<MockRenderer> renderer_;
 };
 
 TEST_F(TestFootprintPanelWithZoom, ZoomSensitivitySetterGetter) {

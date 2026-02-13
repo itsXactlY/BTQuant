@@ -2,14 +2,13 @@
 
 #include <memory>
 
-#include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 
 namespace BTQuant {
 
 class TpoPanel : public PanelBase {
  public:
-  TpoPanel(const PanelConfig& config, RenderEngine::MarketMicrostructureRenderer* renderer);
+  TpoPanel(const PanelConfig& config);
 
   void update(float dt) override;
   void render() override;
@@ -22,7 +21,6 @@ class TpoPanel : public PanelBase {
   }
 
  private:
-  RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
 };
 

@@ -35,14 +35,12 @@ int main(int argc, char** argv) {
   std::cout << "  BTQuant Trading Terminal v1.0.0" << std::endl;
   std::cout << "========================================" << std::endl;
 
-  // 1. System Optimization
+  // 1. System Optimization & Logger
   auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
   system_optimizer->optimize();
 
-  // 2. Data Layer Initialization
+  // 2. Initialize MarketDataProcessor (The Data Core)
   std::cout << "Initializing Data Layer..." << std::endl;
-
-  // Market Processor
   auto market_processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
 
   // Data Bridge
@@ -55,12 +53,22 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Data Pipeline active" << std::endl;
 
-  // 3. Initialize Dashboard (Vulkan + ImGui)
+  // 3. Initialize Trading Systems
+  auto order_manager = std::make_shared<BTQuant::OrderManager>();
+  auto position_manager = std::make_shared<BTQuant::PositionManager>();
+  auto risk_assessment = std::make_shared<BTQuant::RiskAssessment>();
+
+  // 4. Initialize PanelManager (Pass all required dependencies)
+  auto panel_manager = std::make_shared<BTQuant::PanelManager>(data_bridge, market_processor, order_manager, position_manager, risk_assessment);
+
+  // 5. Initialize QuantWorkspaceComponent (Pass required dependencies)
+  auto workspace = std::make_unique<BTQuant::QuantWorkspaceComponent>(data_bridge, market_processor);
+
+  // 6. Initialize Dashboard (Vulkan + ImGui) - Pass required parameters
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, data_bridge,
-                                                              market_processor, dashboard_config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, data_bridge, market_processor, dashboard_config);
 
   if (auto res = dashboard->initialize(); !res) {
     std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error() << std::endl;
@@ -68,70 +76,26 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Vulkan Dashboard initialized" << std::endl;
 
-  // 4. Configure Theme
+  // 6. Configure Theme
   ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
 
-  // 5. Configure Layout (via Workspace Component)
-  // We access the internal components to set up the default trading layout
+  // 7. Add default panels to workspace
+  // Add some default panels to the workspace
   if (auto* workspace = dashboard->get_workspace_component()) {
-    if (auto* panel_mgr = workspace->getPanelManager()) {
-      std::cout << "Configuring Default Layout..." << std::endl;
-
-      // Clear existing default if any
-      // 0. Reset any default panels (avoid duplication)
-      panel_mgr->clear_panels();
-
-      // Construct the PRO Trading Layout
-      // Grid: 6x10 (Wider Aspect Ratio, extra rows for all components including footer)
-      panel_mgr->set_grid_layout(6, 10);
-
-      // 1. Main Chart (Top Left, large)
-      panel_mgr->add_panel(BTQuant::PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
-
-      // 2. Orderbook / DOM (Right side)
-      // DOM Surface (Heatmap)
-      panel_mgr->add_panel(BTQuant::PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
-      // Classic Orderbook
-      panel_mgr->add_panel(BTQuant::PanelType::ORDERBOOK, "Orderbook", 4, 2, 2, 2);
-
-      // 3. Bottom Row 1 (Tape / Orders)
-      panel_mgr->add_panel(BTQuant::PanelType::TAPE, "Time & Sales", 0, 3, 2, 1);
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_ORDERS, "Active Orders", 2, 3, 2, 1);
-
-      // 4. Bottom Row 2 (Positions / Risk)
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_POSITIONS, "Positions", 0, 4, 2, 1);
-
-      // 5. Add remaining components for complete integration
-      // Volume Profile (Bottom Right)
-      panel_mgr->add_panel(BTQuant::PanelType::VOLUME_PROFILE, "Volume Profile", 2, 4, 2, 1);
-
-      // Watchlist (Far Right Bottom)
-      panel_mgr->add_panel(BTQuant::PanelType::WATCHLIST, "Watchlist", 4, 4, 2, 1);
-
-      // Add Footprint Chart and TPO Profile if needed
-      // These could be added as additional panels or accessible via menu
-      // For now, we'll add them to the layout as well
-      panel_mgr->add_panel(BTQuant::PanelType::FOOTPRINT_CHART, "Footprint Chart", 0, 5, 3, 2);
-      panel_mgr->add_panel(BTQuant::PanelType::TPO_PROFILE, "TPO Profile", 3, 5, 3, 2);
-
-      // Add Performance Monitor panel
-      panel_mgr->add_panel(BTQuant::PanelType::PERFORMANCE_MONITOR, "Performance Monitor", 0, 7, 6,
-                           2);
-
-      // Add Alerts panel
-      panel_mgr->add_panel(BTQuant::PanelType::ALERTS, "Alerts", 4, 5, 2, 2);
-
-      // Add Strategy Builder as footer panel
-      panel_mgr->add_panel(BTQuant::PanelType::STRATEGY_BUILDER, "Strategy Builder Footer", 0, 8, 6, 1);
-
-      panel_mgr->auto_arrange_panels();
-
-      // Load saved layout if available to override
-      // panel_mgr->load_layout("default_layout.json");
+    auto* panel_manager = workspace->getPanelManager();
+    if (panel_manager) {
+      // Add a default chart panel
+      panel_manager->add_panel(PanelType::CHART, "Default Chart", 0, 0, 2, 1);
+      // Add a default watchlist panel
+      panel_manager->add_panel(PanelType::WATCHLIST, "Watchlist", 2, 0, 1, 1);
+      // Add a default orderbook panel
+      panel_manager->add_panel(PanelType::ORDERBOOK, "Orderbook", 0, 1, 1, 1);
+      // Add a default footprint panel
+      panel_manager->add_panel(PanelType::FOOTPRINT_CHART, "Footprint", 1, 1, 2, 1);
     }
   }
 
-  // 6. Setup Custom Menu Bar
+  // 8. Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
       auto* workspace = dashboard->get_workspace_component();

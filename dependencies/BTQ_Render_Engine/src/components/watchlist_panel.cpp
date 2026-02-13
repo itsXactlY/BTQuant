@@ -617,6 +617,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
                 entry.low_24h);
     ImGui::EndTooltip();
   }
+  
+  ImGui::PopID(); // Pop the ID we pushed earlier for the symbol column
 
   // Column 1: Exchange
   ImGui::TableSetColumnIndex(1);

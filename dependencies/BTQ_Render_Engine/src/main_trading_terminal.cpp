@@ -79,23 +79,7 @@ int main(int argc, char** argv) {
   // 6. Configure Theme
   ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
 
-  // 7. Add default panels to workspace
-  // Add some default panels to the workspace
-  if (auto* workspace = dashboard->get_workspace_component()) {
-    auto* panel_manager = workspace->getPanelManager();
-    if (panel_manager) {
-      // Add a default chart panel
-      panel_manager->add_panel(PanelType::CHART, "Default Chart", 0, 0, 2, 1);
-      // Add a default watchlist panel
-      panel_manager->add_panel(PanelType::WATCHLIST, "Watchlist", 2, 0, 1, 1);
-      // Add a default orderbook panel
-      panel_manager->add_panel(PanelType::ORDERBOOK, "Orderbook", 0, 1, 1, 1);
-      // Add a default footprint panel
-      panel_manager->add_panel(PanelType::FOOTPRINT_CHART, "Footprint", 1, 1, 2, 1);
-    }
-  }
-
-  // 8. Setup Custom Menu Bar
+  // 7. Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
       auto* workspace = dashboard->get_workspace_component();

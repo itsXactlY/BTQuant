@@ -68,45 +68,8 @@ void PanelManager::initialize() {
   // Set grid layout (3 columns, 5 rows to fit 2x2 chart properly)
   set_grid_layout(3, 5);
 
-  // Create default panels
-  // Row 0: Status Bar
-  // Row 0: Status Bar and Alerts
-  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 2, 1);
-  add_panel(PanelType::ALERTS, "Alerts", 2, 0, 1, 1);
-
-  // Row 1-2: Main Chart (2x2) and Depth Chart (1x2)
-  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
-  add_panel(PanelType::DEPTH_CHART, "Depth Chart", 2, 1, 1, 2);
-
-  // Row 3: Orderbook Ladder (2x1) and Tape (1x1)
-  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 3, 2, 1);
-  add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
-
-  // Row 4: Volume Profile (2x1) and Watchlist (1x1)
-  add_panel(PanelType::HEATMAP, "DOM Surface", 0, 4, 2, 1);
-  add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
-
-  // Initialize orderbook with first active symbol
-  auto active_symbols = bridge_->getActiveSymbols();
-  if (!active_symbols.empty()) {
-    uint32_t symbol_id = active_symbols[0];
-    std::string symbol_name = bridge_->getSymbolName(symbol_id);
-    if (!symbol_name.empty()) {
-      set_active_symbol(symbol_id, symbol_name);
-
-      // Add initial symbol to watchlist (find watchlist panel dynamically)
-      for (auto& [id, panel] : panels_) {
-        if (panel->get_config().type == PanelType::WATCHLIST) {
-          auto watchlist_panel = dynamic_cast<WatchlistPanel*>(panel.get());
-          if (watchlist_panel) {
-            watchlist_panel->add_symbol(symbol_id, symbol_name,
-                                        bridge_->getExchangeName(symbol_id));
-          }
-          break;
-        }
-      }
-    }
-  }
+  // Initialize with no default panels - let the layout system dictate what gets created
+  // The layout system should completely control panel instantiation
 }
 
 void PanelManager::update(float dt) {

@@ -260,16 +260,11 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // Process updates and UI - ONLY workspace_->render_gui() and panel_manager_->render()
+  // Process updates and UI - ONLY workspace_->render_gui() (panel_manager is handled internally)
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
     workspace_->render_gui();
-    
-    // Also render panels directly if panel manager is available
-    if (auto* panel_manager = workspace_->getPanelManager()) {
-      panel_manager->render();
-    }
   }
 
   // Finalize ImGui and Record Graphics commands

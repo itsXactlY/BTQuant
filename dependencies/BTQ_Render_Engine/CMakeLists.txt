@@ -128,7 +128,6 @@ set(DASHBOARD_SOURCES
     src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
-    src/components/realtime_dashboard_component.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
     src/components/trading_orders_panel.cpp
@@ -176,7 +175,6 @@ set(DASHBOARD_SOURCES
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
     src/ui/quick_actions.cpp
-    src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
     src/components/chart_panel_settings.cpp
     src/data/market_data_processor.cpp
@@ -271,7 +269,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
-    src/components/realtime_dashboard_component.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
     src/components/trading_orders_panel.cpp
@@ -320,7 +317,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/ui/empty_states.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
-    src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
     src/components/chart_panel_settings.cpp
     src/data/market_data_processor.cpp

@@ -8,7 +8,6 @@
 #include "components/footprint_panel.hpp"
 #include "components/interaction_manager.hpp"
 #include "components/quant_workspace_component.hpp"
-#include "components/realtime_dashboard_component.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -78,10 +77,6 @@ void VulkanDashboard::init_components() {
 
   workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
                                                         micro_renderer_.get());
-
-  modern_dashboard_ = std::make_unique<RealtimeDashboardComponent>(
-      hotspine_bridge_, market_data_processor_, micro_renderer_.get());
-  modern_dashboard_->initialize_vulkan_resources(vulkan_core_.get());
 
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
@@ -278,12 +273,6 @@ void VulkanDashboard::render_frame() {
   InteractionManager::getInstance().update();
 
   if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("Dashboard")) {
-      if (ImGui::MenuItem("Modern Dashboard", nullptr, &use_modern_dashboard_)) {
-        // Toggle flag
-      }
-      ImGui::EndMenu();
-    }
     if (ImGui::BeginMenu("Tools")) {
       if (ImGui::MenuItem("Clear Dashboard History")) {
         if (market_data_processor_) {
@@ -309,10 +298,7 @@ void VulkanDashboard::render_frame() {
 
   // Process updates and UI
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
-  if (use_modern_dashboard_ && modern_dashboard_) {
-    modern_dashboard_->update(dt);
-    modern_dashboard_->render_gui();
-  } else if (workspace_) {
+  if (workspace_) {
     workspace_->update(dt);
     workspace_->render_gui();
   }

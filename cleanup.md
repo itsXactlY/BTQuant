@@ -57,7 +57,7 @@
     - `rm src/components/MarketMicrostructureRenderer.cpp`
     - `rm include/components/MarketMicrostructureRenderer.h`
 
-- [ ] **2.5: Kill the Zombie Dashboard**
+- [x] **2.5: Kill the Zombie Dashboard**
     - `rm src/components/realtime_dashboard_component.cpp`
     - `rm include/components/realtime_dashboard_component.hpp`
 

@@ -111,10 +111,6 @@ class MarketMicrostructureRenderer {
   // Check if renderer is initialized
   bool isInitialized() const { return initialized_; }
 
-  // Set the active symbol for visualization
-  // This will subscribe to market data for the given symbol
-  void setSymbol(uint32_t symbol_id);
-
   // Set price aggregation type for footprint charts
   void setPriceAggregationType(Data::PriceAggregationType type) { price_aggregation_type_ = type; }
 
@@ -157,12 +153,7 @@ class MarketMicrostructureRenderer {
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
  private:
-  // Data Update Callback
-  void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
-
-  uint32_t current_symbol_id_ = 0;
-  uint64_t subscription_id_ = 0;
-  uint64_t subscription_id_lob_ = 0;  // Separate subscription for LOB if needed
+  uint32_t current_symbol_id_ = 0;  // Only keep the symbol ID for reference, no subscription management
 
   // Vulkan resource creation
   // Vulkan resource creation

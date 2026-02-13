@@ -38,13 +38,13 @@
 ## Phase 2: The Hydra Purge (Architecture Violations)
 **Rule:** The Render Engine ONLY reads shared memory. It does not manage exchange APIs, legacy layouts, or conflicting OS optimizers.
 
-- [ ] **2.1: Kill the Data/Exchange Hydras**
+- [x] **2.1: Kill the Data/Exchange Hydras**
     - `rm src/data/exchange_aggregator.*` (including `.bak`, `.bak2`)
     - `rm include/data/exchange_aggregator.hpp`
     - `rm src/data/unified_data_pipeline.cpp`
     - `rm include/data/unified_data_pipeline.hpp`
 
-- [ ] **2.2: Kill the Legacy Layout Hydra**
+- [x] **2.2: Kill the Legacy Layout Hydra**
     - `rm -rf src/layout/` (Deletes `dashboard_layout_manager.cpp` & `layout_presets.cpp`)
     - `rm -rf include/layout/`
     - *(Action: KEEP `src/ui/layout_manager.cpp` and `src/ui/workspace_manager.cpp`)*

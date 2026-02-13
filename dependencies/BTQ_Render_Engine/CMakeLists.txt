@@ -198,7 +198,6 @@ set(DASHBOARD_SOURCES
     src/indicators/indicator_alerts.cpp
     src/data/ui_data_manager.cpp
     src/performance/panel_profiler.cpp
-    src/layout/layout_presets.cpp
     src/ui/performance_settings.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
@@ -338,7 +337,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/indicators/indicator_alerts.cpp
     src/data/ui_data_manager.cpp
     src/performance/panel_profiler.cpp
-    src/layout/layout_presets.cpp
     src/ui/performance_settings.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )

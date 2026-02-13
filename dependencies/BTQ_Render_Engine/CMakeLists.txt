@@ -90,7 +90,6 @@ set(LIB_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
-    src/data/unified_data_pipeline.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
     src/error_handling/crash_reporter.cpp
@@ -230,7 +229,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
-    src/data/unified_data_pipeline.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
     src/error_handling/crash_reporter.cpp
@@ -322,7 +320,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/cache_manager.cpp
     src/data/persistence.cpp
     src/data/incremental_updater.cpp
-    src/data/exchange_aggregator.cpp
     src/data/quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
     src/performance/debug_overlay.cpp

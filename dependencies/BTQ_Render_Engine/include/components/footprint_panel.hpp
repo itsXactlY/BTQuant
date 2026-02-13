@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
-#include "../data/unified_data_pipeline.hpp"  // For DataType enum
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "panel_base.hpp"
 
@@ -89,9 +88,6 @@ class FootprintPanel : public PanelBase {
   void setCustomDecimalPlaces(int places) { custom_decimal_places_ = places; }
   int getCustomDecimalPlaces() const { return custom_decimal_places_; }
 
-  // Data type selection
-  void setDataType(Data::UnifiedDataPipeline::DataType type) { data_type_ = type; }
-  Data::UnifiedDataPipeline::DataType getDataType() const { return data_type_; }
 
   // Volume data type selection for footprint visualization
   void setVolumeDataType(Data::VolumeDataType vol_type) { volume_data_type_ = vol_type; }
@@ -133,9 +129,6 @@ class FootprintPanel : public PanelBase {
 
  private:
   uint32_t symbol_id_ = 0;
-
-  // Data Type Selection
-  Data::UnifiedDataPipeline::DataType data_type_ = Data::UnifiedDataPipeline::DataType::FOOTPRINT;
 
   // Volume Data Type for Footprint Visualization
   Data::VolumeDataType volume_data_type_ = Data::VolumeDataType::Delta;

@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "layout/layout_presets.hpp"
 
 namespace BTQuant {
 
@@ -46,10 +45,10 @@ public:
     bool delete_preset(const std::string& preset_name);
 
     // Get all available presets
-    std::vector<Layout::LayoutPreset> get_all_presets() const;
+    std::vector<std::string> get_all_presets() const;
 
     // Get presets by category
-    std::vector<Layout::LayoutPreset> get_presets_by_category(const std::string& category) const;
+    std::vector<std::string> get_presets_by_category(const std::string& category) const;
 
     // Check if a preset exists
     bool preset_exists(const std::string& preset_name) const;
@@ -68,13 +67,12 @@ public:
     int get_active_quick_slot() const;
 
 private:
-    std::unique_ptr<Layout::LayoutPresetManager> preset_manager_;
     std::string presets_directory_;
     int active_quick_slot_ = 0;  // 0 means no quick save slot is active, 1-4 for slots
 
     void initialize_presets_directory();
     std::string get_current_layout_json();
-    bool apply_layout_from_preset(const Layout::LayoutPreset& preset);
+    bool apply_layout_from_preset(const std::string& preset_name);
     std::string get_preset_file_path(const std::string& preset_name) const;
 
     // Helper methods for quick-save functionality

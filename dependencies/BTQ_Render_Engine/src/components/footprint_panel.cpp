@@ -103,7 +103,6 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
 
 FootprintPanel::FootprintPanel(const PanelConfig& config)
     : PanelBase(config),
-      data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT),
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
       volume_based_n_contracts_(1000),

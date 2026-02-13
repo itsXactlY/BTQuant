@@ -49,7 +49,7 @@
     - `rm -rf include/layout/`
     - *(Action: KEEP `src/ui/layout_manager.cpp` and `src/ui/workspace_manager.cpp`)*
 
-- [ ] **2.3: Kill the Conflicting Optimization Hydra**
+- [x] **2.3: Kill the Conflicting Optimization Hydra**
     - `rm -rf src/optimization/` (Deletes `performance_optimizer.cpp`)
     - *(Action: KEEP `src/system/system_optimizer.cpp`)*
 

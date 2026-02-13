@@ -99,9 +99,32 @@ int main(int argc, char** argv) {
       }
 
       auto* workspace = dashboard->get_workspace_component();
+      auto* panel_mgr = workspace ? workspace->getPanelManager() : nullptr;
+
       if (ImGui::MenuItem("Auto Arrange Panels")) {
-        if (workspace && workspace->getPanelManager())
-          workspace->getPanelManager()->auto_arrange_panels();
+        if (panel_mgr) panel_mgr->auto_arrange_panels();
+      }
+
+      ImGui::Separator();
+
+      // Layout Presets submenu
+      if (ImGui::BeginMenu("Layout Presets")) {
+        if (ImGui::MenuItem("Default", "Ctrl+1")) {
+          if (panel_mgr) panel_mgr->apply_layout_preset(LayoutPreset::DEFAULT);
+        }
+        if (ImGui::MenuItem("Modern Trading", "Ctrl+2")) {
+          if (panel_mgr) panel_mgr->apply_layout_preset(LayoutPreset::MODERN_TRADING);
+        }
+        if (ImGui::MenuItem("Dashboard Only", "Ctrl+3")) {
+          if (panel_mgr) panel_mgr->apply_layout_preset(LayoutPreset::DASHBOARD_ONLY);
+        }
+        if (ImGui::MenuItem("Chart Focus", "Ctrl+4")) {
+          if (panel_mgr) panel_mgr->apply_layout_preset(LayoutPreset::CHART_FOCUS);
+        }
+        if (ImGui::MenuItem("Risk Monitoring", "Ctrl+5")) {
+          if (panel_mgr) panel_mgr->apply_layout_preset(LayoutPreset::RISK_MONITORING);
+        }
+        ImGui::EndMenu();
       }
 
       ImGui::EndMenu();

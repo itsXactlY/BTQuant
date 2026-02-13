@@ -292,6 +292,33 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
+    case PanelType::CORRELATION_HEATMAP:
+      // TODO: Implement CorrelationHeatmapComponent wrapper as PanelBase
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::DOM_SURFACE:
+      panel = std::make_unique<DomSurfacePanel>(processor_);
+      break;
+    case PanelType::MULTI_VWAP:
+      // TODO: Implement MultiVWAP panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::TECHNICAL_INDICATORS:
+      // TODO: Implement TechnicalIndicators panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::THEME_CUSTOMIZATION:
+      // TODO: Implement ThemeCustomization panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::KEYBOARD_SHORTCUTS:
+      // TODO: Implement KeyboardShortcuts panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::DRAWING_TOOLS:
+      // TODO: Implement DrawingTools panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
     default:
       return 0;
   }
@@ -451,6 +478,33 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
+      break;
+    case PanelType::CORRELATION_HEATMAP:
+      // TODO: Implement CorrelationHeatmapComponent wrapper as PanelBase
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::DOM_SURFACE:
+      panel = std::make_unique<DomSurfacePanel>(processor_);
+      break;
+    case PanelType::MULTI_VWAP:
+      // TODO: Implement MultiVWAP panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::TECHNICAL_INDICATORS:
+      // TODO: Implement TechnicalIndicators panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::THEME_CUSTOMIZATION:
+      // TODO: Implement ThemeCustomization panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::KEYBOARD_SHORTCUTS:
+      // TODO: Implement KeyboardShortcuts panel
+      panel = nullptr;  // Placeholder - needs implementation
+      break;
+    case PanelType::DRAWING_TOOLS:
+      // TODO: Implement DrawingTools panel
+      panel = nullptr;  // Placeholder - needs implementation
       break;
     default:
       return 0;
@@ -920,6 +974,20 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Strategy Builder";
     case PanelType::OPTION_ANALYTICS:
       return "Option Analytics";
+    case PanelType::CORRELATION_HEATMAP:
+      return "Correlation Heatmap";
+    case PanelType::DOM_SURFACE:
+      return "DOM Surface";
+    case PanelType::MULTI_VWAP:
+      return "Multi VWAP";
+    case PanelType::TECHNICAL_INDICATORS:
+      return "Technical Indicators";
+    case PanelType::THEME_CUSTOMIZATION:
+      return "Theme";
+    case PanelType::KEYBOARD_SHORTCUTS:
+      return "Shortcuts";
+    case PanelType::DRAWING_TOOLS:
+      return "Drawing Tools";
     default:
       return "Panel";
   }

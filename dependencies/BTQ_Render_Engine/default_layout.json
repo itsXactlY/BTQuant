@@ -5,20 +5,350 @@
     },
     "panels": [
         {
-            "grid_height": 2,
-            "grid_width": 2,
-            "grid_x": 1,
-            "grid_y": 1,
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
             "position": [
-                640.0,
-                292.5
+                0.0,
+                0.0
             ],
             "size": [
-                1280.0,
-                720.0
+                1920.0,
+                30.0
             ],
             "symbol": "",
-            "title": "DOGE-USDT Chart [1s]",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Performance Monitor",
+            "type": 20,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Log",
+            "type": 17,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 0,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "settings": {
+                "active_tab": 0
+            },
+            "size": [
+                400.0,
+                300.0
+            ],
+            "symbol": "",
+            "title": "Option Analytics",
+            "type": 12,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Strategy Builder",
+            "type": 27,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "ETH-USDT Orderbook",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Panel",
+            "type": 23,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Chart Replay",
+            "type": 25,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Depth Chart",
+            "type": 15,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Volume Profile",
+            "type": 14,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "settings": {
+                "symbol_id": 10014
+            },
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "TPO Profile",
+            "type": 19,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Footprint Chart",
+            "type": 18,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "ETH-USDT Chart [1s]",
             "type": 0,
             "visible": true
         },
@@ -26,27 +356,9 @@
             "grid_height": 2,
             "grid_width": 1,
             "grid_x": 0,
-            "grid_y": 1,
-            "position": [
-                0.0,
-                292.5
-            ],
-            "size": [
-                640.0,
-                720.0
-            ],
-            "symbol": "",
-            "title": "BNBUSDT Orderbook",
-            "type": 10,
-            "visible": false
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 1,
-            "grid_x": 2,
             "grid_y": 0,
             "position": [
-                1280.0,
+                0.0,
                 30.0
             ],
             "size": [
@@ -54,9 +366,9 @@
                 330.0
             ],
             "symbol": "",
-            "title": "Watchlist",
-            "type": 6,
-            "visible": false
+            "title": "Metrics",
+            "type": 1,
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -79,10 +391,10 @@
         {
             "grid_height": 2,
             "grid_width": 1,
-            "grid_x": 0,
+            "grid_x": 2,
             "grid_y": 0,
             "position": [
-                0.0,
+                1280.0,
                 30.0
             ],
             "size": [
@@ -90,8 +402,341 @@
                 330.0
             ],
             "symbol": "",
+            "title": "Watchlist",
+            "type": 6,
+            "visible": false
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 1,
+            "position": [
+                0.0,
+                292.5
+            ],
+            "size": [
+                640.0,
+                720.0
+            ],
+            "symbol": "",
+            "title": "ETH-USDT Orderbook",
+            "type": 10,
+            "visible": false
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 1,
+            "grid_y": 1,
+            "position": [
+                640.0,
+                292.5
+            ],
+            "size": [
+                1280.0,
+                720.0
+            ],
+            "symbol": "",
+            "title": "ETH-USDT Chart [1s]",
+            "type": 0,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Screener",
+            "type": 12,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 0,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "settings": {
+                "auto_scale_price": true,
+                "enable_fade_out": false,
+                "heatmap_intensity": 1.0,
+                "large_order_threshold": 10.0,
+                "price_bins": 100,
+                "price_range": 0.02,
+                "symbol_id": 10014
+            },
+            "size": [
+                400.0,
+                300.0
+            ],
+            "symbol": "",
+            "title": "DOM Surface",
+            "type": 2,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Time & Sales",
+            "type": 13,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Panel",
+            "type": 24,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Orders",
+            "type": 6,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Positions",
+            "type": 7,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Alerts",
+            "type": 9,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
             "title": "Metrics",
             "type": 1,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Risk",
+            "type": 8,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Risk Analyzer - BTC-USDT",
+            "type": 26,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Panel",
+            "type": 4,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Panel",
+            "type": 5,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Time Histogram",
+            "type": 22,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Time Statistics",
+            "type": 21,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "position": [
+                -640.0,
+                -232.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Panel",
+            "type": 3,
             "visible": true
         }
     ]

@@ -66,29 +66,134 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 
-    // Panel management
-    if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
-      if (ImGui::Button("Add Chart Panel")) {
+    // Panel management - Charts
+    if (ImGui::CollapsingHeader("Charts", ImGuiTreeNodeFlags_DefaultOpen)) {
+      if (ImGui::Button("Chart")) {
         panel_manager_->add_panel(PanelType::CHART);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Add Metrics Panel")) {
-        panel_manager_->add_panel(PanelType::METRICS);
-      }
-
-      if (ImGui::Button("Add Heatmap Panel")) {
-        panel_manager_->add_panel(PanelType::HEATMAP);
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Add Orderbook")) {
-        panel_manager_->add_panel(PanelType::ORDERBOOK);
-      }
-      if (ImGui::Button("Add Footprint")) {
+      if (ImGui::Button("Footprint")) {
         panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Add TPO Profile")) {
+      if (ImGui::Button("TPO Profile")) {
         panel_manager_->add_panel(PanelType::TPO_PROFILE);
+      }
+      
+      if (ImGui::Button("Volume Profile")) {
+        panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Depth Chart")) {
+        panel_manager_->add_panel(PanelType::DEPTH_CHART);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Chart Replay")) {
+        panel_manager_->add_panel(PanelType::CHART_REPLAY);
+      }
+    }
+
+    // Panel management - Market Data
+    if (ImGui::CollapsingHeader("Market Data")) {
+      if (ImGui::Button("Order Book")) {
+        panel_manager_->add_panel(PanelType::ORDERBOOK);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Time & Sales")) {
+        panel_manager_->add_panel(PanelType::TIME_AND_SALES);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Tape")) {
+        panel_manager_->add_panel(PanelType::TAPE);
+      }
+      
+      if (ImGui::Button("Watchlist")) {
+        panel_manager_->add_panel(PanelType::WATCHLIST);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Screener")) {
+        panel_manager_->add_panel(PanelType::SCREENER);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Heatmap")) {
+        panel_manager_->add_panel(PanelType::HEATMAP);
+      }
+      
+      if (ImGui::Button("Hist. T&S")) {
+        panel_manager_->add_panel(PanelType::HISTORICAL_TIME_SALES);
+      }
+    }
+
+    // Panel management - Trading
+    if (ImGui::CollapsingHeader("Trading")) {
+      if (ImGui::Button("Orders")) {
+        panel_manager_->add_panel(PanelType::TRADING_ORDERS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Positions")) {
+        panel_manager_->add_panel(PanelType::TRADING_POSITIONS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Alerts")) {
+        panel_manager_->add_panel(PanelType::ALERTS);
+      }
+    }
+
+    // Panel management - Analysis
+    if (ImGui::CollapsingHeader("Analysis")) {
+      if (ImGui::Button("Metrics")) {
+        panel_manager_->add_panel(PanelType::METRICS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Risk Metrics")) {
+        panel_manager_->add_panel(PanelType::RISK_METRICS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Risk Analyzer")) {
+        panel_manager_->add_panel(PanelType::RISK_ANALYZER);
+      }
+      
+      if (ImGui::Button("Histogram")) {
+        panel_manager_->add_panel(PanelType::HISTOGRAM);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Scatter Plot")) {
+        panel_manager_->add_panel(PanelType::SCATTER_PLOT);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Time Series")) {
+        panel_manager_->add_panel(PanelType::TIME_SERIES);
+      }
+      
+      if (ImGui::Button("Time Stats")) {
+        panel_manager_->add_panel(PanelType::TIME_STATISTICS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Time Histogram")) {
+        panel_manager_->add_panel(PanelType::TIME_HISTOGRAM);
+      }
+      
+      if (ImGui::Button("Strategy Builder")) {
+        panel_manager_->add_panel(PanelType::STRATEGY_BUILDER);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Option Analytics")) {
+        panel_manager_->add_panel(PanelType::OPTION_ANALYTICS);
+      }
+    }
+
+    // Panel management - System
+    if (ImGui::CollapsingHeader("System")) {
+      if (ImGui::Button("Log Panel")) {
+        panel_manager_->add_panel(PanelType::LOG_PANEL);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Perf Monitor")) {
+        panel_manager_->add_panel(PanelType::PERFORMANCE_MONITOR);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Status Bar")) {
+        panel_manager_->add_panel(PanelType::STATUS_BAR);
       }
     }
 

@@ -150,8 +150,34 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Performance Monitor";
     case PanelType::TIME_STATISTICS:
       return "Time Statistics";
+    case PanelType::TIME_HISTOGRAM:
+      return "Time Histogram";
     case PanelType::TIME_AND_SALES:
       return "Time & Sales";
+    case PanelType::HISTORICAL_TIME_SALES:
+      return "Historical T&S";
+    case PanelType::CHART_REPLAY:
+      return "Chart Replay";
+    case PanelType::RISK_ANALYZER:
+      return "Risk Analyzer";
+    case PanelType::STRATEGY_BUILDER:
+      return "Strategy Builder";
+    case PanelType::OPTION_ANALYTICS:
+      return "Option Analytics";
+    case PanelType::CORRELATION_HEATMAP:
+      return "Correlation Heatmap";
+    case PanelType::DOM_SURFACE:
+      return "DOM Surface";
+    case PanelType::MULTI_VWAP:
+      return "Multi VWAP";
+    case PanelType::TECHNICAL_INDICATORS:
+      return "Technical Indicators";
+    case PanelType::THEME_CUSTOMIZATION:
+      return "Theme Customization";
+    case PanelType::KEYBOARD_SHORTCUTS:
+      return "Keyboard Shortcuts";
+    case PanelType::DRAWING_TOOLS:
+      return "Drawing Tools";
     default:
       return "Unknown";
   }

@@ -35,15 +35,20 @@ int main(int argc, char** argv) {
   std::cout << "  BTQuant Trading Terminal v1.0.0" << std::endl;
   std::cout << "========================================" << std::endl;
 
-  // 1. System Optimization & Logger
-  auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
-  system_optimizer->optimize();
-
-  // 2. Initialize MarketDataProcessor (The Data Core)
+  // 1. Initialize MarketDataProcessor (The Data Core) - Created ABSOLUTELY FIRST to be destroyed LAST
   std::cout << "Initializing Data Layer..." << std::endl;
   auto market_processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
 
-  // Data Bridge
+  // 2. System Optimization & Logger
+  auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
+  system_optimizer->optimize();
+
+  // 3. Initialize Trading Systems
+  auto order_manager = std::make_shared<BTQuant::OrderManager>();
+  auto position_manager = std::make_shared<BTQuant::PositionManager>();
+  auto risk_assessment = std::make_shared<BTQuant::RiskAssessment>();
+
+  // 4. Data Bridge
   auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   data_bridge->setMarketDataProcessor(market_processor);
 
@@ -53,18 +58,13 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Data Pipeline active" << std::endl;
 
-  // 3. Initialize Trading Systems
-  auto order_manager = std::make_shared<BTQuant::OrderManager>();
-  auto position_manager = std::make_shared<BTQuant::PositionManager>();
-  auto risk_assessment = std::make_shared<BTQuant::RiskAssessment>();
-
-  // 4. Initialize PanelManager (Pass all required dependencies)
+  // 5. Initialize PanelManager (Pass all required dependencies)
   auto panel_manager = std::make_shared<BTQuant::PanelManager>(data_bridge, market_processor, order_manager, position_manager, risk_assessment);
 
-  // 5. Initialize QuantWorkspaceComponent (Pass required dependencies)
+  // 6. Initialize QuantWorkspaceComponent (Pass required dependencies)
   auto workspace = std::make_unique<BTQuant::QuantWorkspaceComponent>(data_bridge, market_processor);
 
-  // 6. Initialize Dashboard (Vulkan + ImGui) - Pass required parameters
+  // 7. Initialize Dashboard (Vulkan + ImGui) - Pass required parameters
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 

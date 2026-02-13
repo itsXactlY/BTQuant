@@ -53,7 +53,7 @@
     - `rm -rf src/optimization/` (Deletes `performance_optimizer.cpp`)
     - *(Action: KEEP `src/system/system_optimizer.cpp`)*
 
-- [ ] **2.4: Kill the Legacy Monolith Renderer**
+- [x] **2.4: Kill the Legacy Monolith Renderer**
     - `rm src/components/MarketMicrostructureRenderer.cpp`
     - `rm include/components/MarketMicrostructureRenderer.h`
 

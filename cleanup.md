@@ -18,17 +18,17 @@
     - `rm include/components/domsurfacepanel.h`
     - *(Action: KEEP `dom_surface_panel.cpp` and `dom_surface_panel.hpp`)*
 
-- [ ] **1.3: Purge Options Panel Clones**
+- [x] **1.3: Purge Options Panel Clones**
     - `rm src/components/optionanalyticspanel.cpp`
     - `rm include/components/optionanalyticspanel.hpp`
     - *(Action: KEEP `option_analytics_panel.cpp` and `option_analytics_panel.hpp`)*
 
-- [ ] **1.4: Purge Orderbook History Clones**
+- [x] **1.4: Purge Orderbook History Clones**
     - `rm src/data/orderbookhistory.cpp`
     - `rm src/data/orderbookhistory.h`
     - *(Action: KEEP `src/components/orderbook_history.cpp` and `include/components/orderbook_history.hpp`)*
 
-- [ ] **1.5: Purge Price Statistic Clones (Qt Poison)**
+- [x] **1.5: Purge Price Statistic Clones (Qt Poison)**
     - `rm src/components/pricestatisticpanel.cpp`
     - `rm include/components/pricestatisticpanel.h`
     - `rm include/components/moc_pricestatisticpanel.cpp*`

@@ -75,9 +75,38 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device, VkBuff
 }
 
 MemoryPool::~MemoryPool() {
-  if (mapped_ptr_) vkUnmapMemory(device_, pool_memory_);
-  vkDestroyBuffer(device_, pool_buffer_, nullptr);
-  vkFreeMemory(device_, pool_memory_, nullptr);
+  // Wait for device to be idle before destroying resources
+  vkDeviceWaitIdle(device_);
+  
+  if (mapped_ptr_) {
+    vkUnmapMemory(device_, pool_memory_);
+    mapped_ptr_ = nullptr;
+  }
+  
+  // Clean up any additional buffers that were created when the pool was exhausted
+  for (auto buffer : cleanup_buffers_) {
+    if (buffer != VK_NULL_HANDLE) {
+      vkDestroyBuffer(device_, buffer, nullptr);
+    }
+  }
+  cleanup_buffers_.clear();
+  
+  for (auto memory : cleanup_memories_) {
+    if (memory != VK_NULL_HANDLE) {
+      vkFreeMemory(device_, memory, nullptr);
+    }
+  }
+  cleanup_memories_.clear();
+  
+  // Clean up the main pool buffer and memory
+  if (pool_buffer_ != VK_NULL_HANDLE) {
+    vkDestroyBuffer(device_, pool_buffer_, nullptr);
+    pool_buffer_ = VK_NULL_HANDLE;
+  }
+  if (pool_memory_ != VK_NULL_HANDLE) {
+    vkFreeMemory(device_, pool_memory_, nullptr);
+    pool_memory_ = VK_NULL_HANDLE;
+  }
 }
 
 BufferAllocation MemoryPool::allocate(VkDeviceSize size, VkDeviceSize alignment) {
@@ -200,6 +229,8 @@ GPUMemoryManager::GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_de
 
 GPUMemoryManager::~GPUMemoryManager() {
   // Smart pointers will handle cleanup of pools
+  // The destructors of the unique_ptr objects will be called automatically
+  // which will clean up the individual memory pools
 }
 
 BufferAllocation GPUMemoryManager::allocate_vertex_buffer(VkDeviceSize size) {

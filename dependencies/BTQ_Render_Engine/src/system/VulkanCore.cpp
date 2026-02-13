@@ -42,11 +42,11 @@ void VulkanCore::initialize(GLFWwindow* window, uint32_t width, uint32_t height)
 
 void VulkanCore::cleanup() {
   cleanup_swapchain();
-  cleanup_imgui();
+  cleanup_imgui(); // This now properly cleans up the imgui descriptor pool
 
   vkDestroySampler(device_, default_sampler_, nullptr);
   vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
-  vkDestroyDescriptorPool(device_, imgui_descriptor_pool_, nullptr);
+  // imgui_descriptor_pool_ is already cleaned up in cleanup_imgui()
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
@@ -893,6 +893,12 @@ void VulkanCore::init_imgui() {
 void VulkanCore::cleanup_imgui() {
   // Do not call ImGui_ImplVulkan_Shutdown() here - it's called from
   // VulkanDashboard::shutdown() to ensure correct shutdown order
+  
+  // Clean up the ImGui descriptor pool if it exists
+  if (imgui_descriptor_pool_ != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(device_, imgui_descriptor_pool_, nullptr);
+    imgui_descriptor_pool_ = VK_NULL_HANDLE;
+  }
 }
 
 void VulkanCore::create_default_sampler() {

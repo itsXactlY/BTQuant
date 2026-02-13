@@ -155,7 +155,9 @@ FenceManager::FenceManager(VkDevice device, uint32_t maxFrames)
 FenceManager::~FenceManager() {
   waitAll();
   for (auto& fence : fences_) {
-    vkDestroyFence(device_, fence, nullptr);
+    if (fence != VK_NULL_HANDLE) {
+      vkDestroyFence(device_, fence, nullptr);
+    }
   }
 }
 
@@ -194,11 +196,14 @@ CommandBufferPool::CommandBufferPool(VkDevice device, VkCommandPool pool)
     : device_(device), pool_(pool) {}
 
 CommandBufferPool::~CommandBufferPool() {
-  for (auto cmdBuffer : freeBuffers_) {
-    vkFreeCommandBuffers(device_, pool_, 1, &cmdBuffer);
+  // Wait for the command pool to be idle before freeing command buffers
+  vkDeviceWaitIdle(device_);
+  
+  if (!freeBuffers_.empty()) {
+    vkFreeCommandBuffers(device_, pool_, static_cast<uint32_t>(freeBuffers_.size()), freeBuffers_.data());
   }
-  for (auto cmdBuffer : activeBuffers_) {
-    vkFreeCommandBuffers(device_, pool_, 1, &cmdBuffer);
+  if (!activeBuffers_.empty()) {
+    vkFreeCommandBuffers(device_, pool_, static_cast<uint32_t>(activeBuffers_.size()), activeBuffers_.data());
   }
 }
 
@@ -264,10 +269,23 @@ VulkanSyncContext::VulkanSyncContext(VkDevice device, VkCommandPool cmdPool) : d
 }
 
 VulkanSyncContext::~VulkanSyncContext() {
+  // Wait for all in-flight operations to complete before destroying resources
   for (const auto& state : frameStates_) {
-    vkDestroySemaphore(device_, state.imageAvailableSemaphore, nullptr);
-    vkDestroySemaphore(device_, state.renderFinishedSemaphore, nullptr);
-    vkDestroyFence(device_, state.inFlightFence, nullptr);
+    if (state.inFlightFence != VK_NULL_HANDLE) {
+      vkWaitForFences(device_, 1, &state.inFlightFence, VK_TRUE, UINT64_MAX);
+    }
+  }
+  
+  for (const auto& state : frameStates_) {
+    if (state.imageAvailableSemaphore != VK_NULL_HANDLE) {
+      vkDestroySemaphore(device_, state.imageAvailableSemaphore, nullptr);
+    }
+    if (state.renderFinishedSemaphore != VK_NULL_HANDLE) {
+      vkDestroySemaphore(device_, state.renderFinishedSemaphore, nullptr);
+    }
+    if (state.inFlightFence != VK_NULL_HANDLE) {
+      vkDestroyFence(device_, state.inFlightFence, nullptr);
+    }
   }
 }
 
@@ -486,11 +504,18 @@ RingBufferManager::RingBufferManager(VkDevice device, uint32_t slotCount, VkDevi
 }
 
 RingBufferManager::~RingBufferManager() {
+  // Wait for device to be idle before destroying resources
+  if (device_ != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(device_);
+  }
+  
   if (bufferAllocation_.buffer != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
     vkDestroyBuffer(device_, bufferAllocation_.buffer, nullptr);
+    bufferAllocation_.buffer = VK_NULL_HANDLE;
   }
   if (bufferAllocation_.memory != VK_NULL_HANDLE && device_ != VK_NULL_HANDLE) {
     vkFreeMemory(device_, bufferAllocation_.memory, nullptr);
+    bufferAllocation_.memory = VK_NULL_HANDLE;
   }
 }
 

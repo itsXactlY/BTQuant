@@ -205,13 +205,11 @@ download_and_build() {
     
     # Copy built binaries and resources
     if [ "$SYSTEM_WIDE_INSTALL" = true ]; then
-        $SUDO_CMD cp -r dependencies/BTQ_Render_Engine/build/realtime_dashboard "$INSTALL_DIR/"
-        $SUDO_CMD cp -r dependencies/BTQ_Render_Engine/build/dashboard_advanced "$INSTALL_DIR/"
+        $SUDO_CMD cp -r dependencies/BTQ_Render_Engine/build/BTQuantTerminal "$INSTALL_DIR/"
         $SUDO_CMD cp -r dependencies/BTQ_Render_Engine/shaders "$INSTALL_DIR/"
         $SUDO_CMD cp -r dependencies/BTQ_Render_Engine/default_layout.json "$INSTALL_DIR/"
     else
-        cp -r dependencies/BTQ_Render_Engine/build/realtime_dashboard "$INSTALL_DIR/"
-        cp -r dependencies/BTQ_Render_Engine/build/dashboard_advanced "$INSTALL_DIR/"
+        cp -r dependencies/BTQ_Render_Engine/build/BTQuantTerminal "$INSTALL_DIR/"
         cp -r dependencies/BTQ_Render_Engine/shaders "$INSTALL_DIR/"
         cp -r dependencies/BTQ_Render_Engine/default_layout.json "$INSTALL_DIR/"
     fi
@@ -235,7 +233,7 @@ create_desktop_entry() {
 [Desktop Entry]
 Name=PubBTQuant Trading Terminal
 Comment=Advanced trading terminal with real-time analytics
-Exec=$INSTALL_DIR/realtime_dashboard
+Exec=$INSTALL_DIR/BTQuantTerminal
 Icon=$INSTALL_DIR/pubbtquant.png
 Terminal=false
 Type=Application
@@ -301,7 +299,7 @@ main() {
     echo -e "${GREEN}Installation completed successfully!${NC}"
     echo ""
     echo -e "${BLUE}To start PubBTQuant, run:${NC}"
-    echo "  $INSTALL_DIR/realtime_dashboard"
+    echo "  $INSTALL_DIR/BTQuantTerminal"
     echo ""
     echo -e "${BLUE}Or use the desktop shortcut if available.${NC}"
     echo ""

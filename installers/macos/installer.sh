@@ -131,9 +131,8 @@ download_and_build() {
     APP_BUNDLE="$INSTALL_DIR"
     mkdir -p "$APP_BUNDLE"/Contents/{MacOS,Resources,Frameworks}
     
-    # Copy built binaries
-    cp dependencies/BTQ_Render_Engine/build/realtime_dashboard "$APP_BUNDLE/Contents/MacOS/realtime_dashboard"
-    cp dependencies/BTQ_Render_Engine/build/dashboard_advanced "$APP_BUNDLE/Contents/MacOS/dashboard_advanced"
+    # Copy built binary
+    cp dependencies/BTQ_Render_Engine/build/BTQuantTerminal "$APP_BUNDLE/Contents/MacOS/BTQuantTerminal"
     
     # Copy resources
     cp -r dependencies/BTQ_Render_Engine/shaders "$APP_BUNDLE/Contents/Resources/"
@@ -146,12 +145,11 @@ download_and_build() {
     cat > "$APP_BUNDLE/Contents/MacOS/PubBTQuant" << EOF
 #!/bin/bash
 DIR="\$( cd "\$( dirname "\${BASH_SOURCE[0]}" )" && pwd )"
-exec "\$DIR/realtime_dashboard" "\$@"
+exec "\$DIR/BTQuantTerminal" "\$@"
 EOF
-    
+
     chmod +x "$APP_BUNDLE/Contents/MacOS/PubBTQuant"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/realtime_dashboard"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/dashboard_advanced"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/BTQuantTerminal"
     
     # Clean up
     cd /

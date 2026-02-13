@@ -69,7 +69,7 @@ Section "PubBTQuant Core" SecMain
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\realtime_dashboard.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" "$INSTDIR\BTQuantTerminal.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "${COMPANYNAME}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONPATCH}"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "VersionMajor" ${VERSIONMAJOR}
@@ -81,12 +81,12 @@ SectionEnd
 Section "Start Menu Shortcuts" SecShortcuts
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
   CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
-  CreateShortCut "$SMPROGRAMS\${APPNAME}\PubBTQuant.lnk" "$INSTDIR\realtime_dashboard.exe" "" "$INSTDIR\realtime_dashboard.exe" 0
+  CreateShortCut "$SMPROGRAMS\${APPNAME}\PubBTQuant.lnk" "$INSTDIR\BTQuantTerminal.exe" "" "$INSTDIR\BTQuantTerminal.exe" 0
   CreateShortCut "$SMPROGRAMS\${APPNAME}\Dashboard Advanced.lnk" "$INSTDIR\dashboard_advanced.exe" "" "$INSTDIR\dashboard_advanced.exe" 0
 SectionEnd
 
 Section "Desktop Shortcut" SecDesktop
-  CreateShortCut "$DESKTOP\PubBTQuant.lnk" "$INSTDIR\realtime_dashboard.exe" "" "$INSTDIR\realtime_dashboard.exe" 0
+  CreateShortCut "$DESKTOP\PubBTQuant.lnk" "$INSTDIR\BTQuantTerminal.exe" "" "$INSTDIR\BTQuantTerminal.exe" 0
 SectionEnd
 
 ; Dependencies section
@@ -131,8 +131,7 @@ SectionEnd
 ; Uninstaller
 Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
-  Delete "$INSTDIR\realtime_dashboard.exe"
-  Delete "$INSTDIR\dashboard_advanced.exe"
+  Delete "$INSTDIR\BTQuantTerminal.exe"
   RMDir /r "$INSTDIR\shaders"
   Delete "$INSTDIR\default_layout.json"
   RMDir /r "$INSTDIR\*.*"

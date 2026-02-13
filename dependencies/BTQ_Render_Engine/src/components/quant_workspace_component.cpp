@@ -40,10 +40,8 @@ void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore* core) {
 }
 
 void QuantWorkspaceComponent::update(float dt) {
-  // Sync data from shared memory on every frame
-  if (bridge_) {
-    bridge_->sync();
-  }
+  // NOTE: Data sync is handled in main loop (main_trading_terminal.cpp)
+  // to avoid double-sync per frame
   panel_manager_->update(dt);
 }
 

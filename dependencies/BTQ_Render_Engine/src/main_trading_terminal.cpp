@@ -43,12 +43,7 @@ int main(int argc, char** argv) {
   auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
   system_optimizer->optimize();
 
-  // 3. Initialize Trading Systems
-  auto order_manager = std::make_shared<BTQuant::OrderManager>();
-  auto position_manager = std::make_shared<BTQuant::PositionManager>();
-  auto risk_assessment = std::make_shared<BTQuant::RiskAssessment>();
-
-  // 4. Data Bridge
+  // 3. Data Bridge
   auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   data_bridge->setMarketDataProcessor(market_processor);
 
@@ -58,13 +53,7 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Data Pipeline active" << std::endl;
 
-  // 5. Initialize PanelManager (Pass all required dependencies)
-  auto panel_manager = std::make_shared<BTQuant::PanelManager>(data_bridge, market_processor, order_manager, position_manager, risk_assessment);
-
-  // 6. Initialize QuantWorkspaceComponent (Pass required dependencies)
-  auto workspace = std::make_unique<BTQuant::QuantWorkspaceComponent>(data_bridge, market_processor);
-
-  // 7. Initialize Dashboard (Vulkan + ImGui) - Pass required parameters
+  // 4. Initialize Dashboard (Vulkan + ImGui) - Creates Workspace + PanelManager + Trading Systems internally
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
@@ -76,10 +65,10 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Vulkan Dashboard initialized" << std::endl;
 
-  // 6. Configure Theme
+  // 5. Configure Theme
   ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
 
-  // 7. Setup Custom Menu Bar
+  // 6. Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
       auto* workspace = dashboard->get_workspace_component();
@@ -93,17 +82,8 @@ int main(int argc, char** argv) {
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit")) {
-        // forcing close by calling glfwSetWindowShouldClose internally or just
-        // break loop Check if we can signal closing. VulkanDashboard checks
-        // glfwWindowShouldClose. We might need an accessor or just rely on the
-        // user closing the window for now, OR add a close() method. For now,
-        // let's assume standard window close. However, we can use
-        // glfwSetWindowShouldClose if we had the window handle exposed. But
-        // since we are inside a callback, and VulkanDashboard abstracts it...
-        // We can just rely on the window 'X' button or add a request_close
-        // method to Dashboard. Actually, we can just print for now.
         std::cout << "Exit requested via menu" << std::endl;
-        exit(0);  // Rough, but works for main loop exit
+        exit(0);
       }
       ImGui::EndMenu();
     }
@@ -136,7 +116,6 @@ int main(int argc, char** argv) {
 
     if (ImGui::BeginMenu("Help")) {
       if (ImGui::MenuItem("About")) {
-        // Open modal logic would go here, or simple log
         std::cout << "BTQuant Version 1.0.0" << std::endl;
       }
       ImGui::EndMenu();
@@ -157,7 +136,7 @@ int main(int argc, char** argv) {
     (void)dt;  // Suppress unused variable warning
     last_frame_time = frame_begin;
 
-    // Data Sync
+    // Data Sync - Single sync point in main loop
     data_bridge->sync();
 
     // Event Handling

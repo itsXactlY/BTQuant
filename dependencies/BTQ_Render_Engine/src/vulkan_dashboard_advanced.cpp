@@ -69,6 +69,19 @@ void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
   workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
 
+  // LAYOUT BOOTSTRAP - Load saved layout or apply default preset
+  if (auto* pm = workspace_->getPanelManager()) {
+    std::println("[VulkanDashboard] Loading layout...");
+    // Try to load saved layout first (load_layout returns void, so we just call it)
+    pm->load_layout("default_layout.json");
+    
+    // If no panels were loaded, apply default preset
+    if (pm->get_panel_count() == 0) {
+      std::println("[VulkanDashboard] No saved layout found, applying default preset...");
+      pm->apply_layout_preset(LayoutPreset::MODERN_TRADING);
+    }
+  }
+
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
 

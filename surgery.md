@@ -111,3 +111,77 @@
 - [x] **5.2: Sanity Check**
     - Launch the terminal. It should immediately open into the `MODERN_TRADING` layout.
     - Verify FPS is locked to the monitor's refresh rate (e.g., 60/144Hz) with absolutely zero stutter, as the UI is no longer waiting on data locks.
+
+---
+
+## Phase 6: Double/Triple Rendering Fix (2026-02-13)
+**Goal:** Fix the issue where everything was rendering 2-3 times, causing duplicate UI elements.
+
+### Root Causes Identified
+
+| # | Problem | Location | Why it causes duplicate rendering |
+|---|---------|----------|-----------------------------------|
+| 1 | **Orphaned Variable Instantiation** | [`main_trading_terminal.cpp`](dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp) | Variables (Trading Systems, PanelManager, Workspace) were created in `main()` AND internally by `VulkanDashboard`, resulting in 2 sets of everything |
+| 2 | **Double Data Sync** | [`quant_workspace_component.cpp`](dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp) | `data_bridge->sync()` was called twice per frame - once in main loop, once in `QuantWorkspaceComponent::update()` |
+| 3 | **Missing Layout Bootstrap** | [`vulkan_dashboard_advanced.cpp`](dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp) | `PanelManager::initialize()` creates no panels; layout must be loaded explicitly via `load_layout()` or `apply_layout_preset()` |
+| 4 | **Malformed Layout JSON** | [`default_layout.json`](dependencies/BTQ_Render_Engine/default_layout.json) | Layout file had incorrect panel type IDs and positions |
+
+### Fixes Applied
+
+- [x] **6.1: Clean up orphaned instantiations in `main_trading_terminal.cpp`**
+    - **Before:** Trading Systems, PanelManager, Workspace created in `main()` AND by `VulkanDashboard`
+    - **After:** Only `VulkanDashboard` creates these internally
+    - **Code Change:**
+      ```cpp
+      // REMOVED orphaned instantiations:
+      // auto trading_systems = ...;  // Now created by VulkanDashboard
+      // auto panel_manager = ...;    // Now created by VulkanDashboard
+      // auto workspace = ...;        // Now created by VulkanDashboard
+      ```
+
+- [x] **6.2: Remove duplicate `sync()` call in `quant_workspace_component.cpp`**
+    - **Before:** `sync()` called in main loop AND in `QuantWorkspaceComponent::update()`
+    - **After:** Single sync point in main loop only
+    - **Code Change:**
+      ```cpp
+      void QuantWorkspaceComponent::update(float dt) {
+        // NOTE: Data sync is handled in main loop (main_trading_terminal.cpp)
+        panel_manager_->update(dt);
+      }
+      ```
+
+- [x] **6.3: Add layout bootstrap in `vulkan_dashboard_advanced.cpp`**
+    - **Before:** No layout loaded after initialization → empty terminal
+    - **After:** Load `default_layout.json` or fallback to `LayoutPreset::MODERN_TRADING`
+    - **Code Change:**
+      ```cpp
+      void VulkanDashboard::init_components() {
+        workspace_ = std::make_unique<QuantWorkspaceComponent>(...);
+        
+        // LAYOUT BOOTSTRAP
+        if (auto* pm = workspace_->getPanelManager()) {
+          pm->load_layout("default_layout.json");
+          if (pm->get_panel_count() == 0) {
+            pm->apply_layout_preset(LayoutPreset::MODERN_TRADING);
+          }
+        }
+      }
+      ```
+
+- [x] **6.4: Fix `default_layout.json` with correct panel definitions**
+    - **Panel Type IDs:** CHART=0, METRICS=1, HEATMAP=2, WATCHLIST=6, ORDERBOOK=10, TAPE=14, TPO_PROFILE=19
+    - **Fixed Layout:** 5 panels at correct positions (Chart, Order Book, Watchlist, Time & Sales, Metrics)
+
+### Verification
+
+- [x] **6.5: Build & Test**
+    - Build: `./build_integration.sh` → SUCCESS
+    - Executable: `build/BTQuantTerminal` created
+    - Expected: Single render pass, no duplicate UI elements
+
+### Key Learnings
+
+1. **Single Responsibility:** Each component should be created by exactly one owner
+2. **Single Sync Point:** Data synchronization should happen at one place in the frame loop
+3. **Explicit Initialization:** `initialize()` methods should not assume layout; caller must explicitly load layout
+4. **API Contracts:** `load_layout()` returns `void`, not `bool` - use `get_panel_count()` to verify success

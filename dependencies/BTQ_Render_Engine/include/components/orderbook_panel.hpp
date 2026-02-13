@@ -33,6 +33,9 @@ class OrderbookPanel : public PanelBase {
  public:
   OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+                 
+  // Destructor to clean up the lock-free cache
+  ~OrderbookPanel();
 
   void update(float dt) override;
   void render() override;
@@ -85,6 +88,9 @@ class OrderbookPanel : public PanelBase {
 
   // Helper method to track volume changes for delta calculation
   void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
+
+  // Helper method to update the lock-free orderbook cache
+  void updateOrderbookCache();
 
   struct PriceLevelVolume {
     double bought = 0.0;
@@ -234,6 +240,24 @@ class OrderbookPanel : public PanelBase {
     }
   };
 
+  // Lock-free read cache for orderbook data
+  struct OrderbookCache {
+    std::vector<PriceLevel> bids;
+    std::vector<PriceLevel> asks;
+    double spread = 0.0;
+    double imbalance = 0.0;
+    uint64_t timestamp = 0;
+    
+    // Copy constructor for thread safety
+    OrderbookCache(const RenderEngine::OrderbookData& data) 
+      : bids(data.bids), asks(data.asks), spread(data.spread), imbalance(data.imbalance), timestamp(data.timestamp) {}
+      
+    OrderbookCache() = default;
+  };
+  
+  // Atomic pointer to the latest orderbook data for lock-free reads
+  mutable std::atomic<OrderbookCache*> latest_orderbook_cache_{nullptr};
+  
   std::map<double, VolumeLevelHistory> volume_level_history_;
   uint64_t volume_delta_period_us_ = 5000000; // 5 seconds in microseconds
 };

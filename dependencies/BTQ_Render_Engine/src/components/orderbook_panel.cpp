@@ -11,6 +11,14 @@
 
 namespace BTQuant {
 
+// Destructor to clean up the lock-free cache
+OrderbookPanel::~OrderbookPanel() {
+    OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
+    if (cache) {
+        delete cache;
+    }
+}
+
 // Helper function to round to nearest multiple
 double roundToNearest(double value, double multiple) {
     if (multiple == 0.0) return value;
@@ -22,7 +30,11 @@ OrderbookPanel::OrderbookPanel(const PanelConfig& config,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor), selected_levels_count_(20),
       aggregation_mode_(OrderbookAggregationMode::NONE), custom_aggregation_value_(1.0),
-      volume_delta_period_us_(5000000) {} // Initialize to 5 seconds (5,000,000 microseconds)
+      volume_delta_period_us_(5000000) { // Initialize to 5 seconds (5,000,000 microseconds)
+      
+    // Initialize the lock-free cache with a default empty object
+    latest_orderbook_cache_.store(new OrderbookCache(), std::memory_order_relaxed);
+}
 
 double OrderbookPanel::getAggregationValue(double price) const {
     switch (aggregation_mode_) {
@@ -168,6 +180,28 @@ void OrderbookPanel::update(float /*dt*/) {
           activity.executions = static_cast<int>(activity.executions * order_flow_decay_factor_);
         }
       }
+    }
+  }
+  
+  // Update the lock-free cache with the latest orderbook data
+  updateOrderbookCache();
+}
+
+void OrderbookPanel::updateOrderbookCache() {
+  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+  
+  if (orderbook_opt.has_value()) {
+    const auto& orderbook = orderbook_opt.value();
+    
+    // Create a new cache object with the latest data
+    OrderbookCache* new_cache = new OrderbookCache(orderbook);
+    
+    // Atomically swap the old cache with the new one
+    OrderbookCache* old_cache = latest_orderbook_cache_.exchange(new_cache, std::memory_order_acq_rel);
+    
+    // Clean up the old cache
+    if (old_cache) {
+      delete old_cache;
     }
   }
 }
@@ -428,10 +462,10 @@ void OrderbookPanel::render() {
   }
   ImGui::Separator();
 
-  // Get orderbook data
-  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
-
-  if (!orderbook_opt.has_value()) {
+  // Get orderbook data from the lock-free cache
+  OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
+  
+  if (!cache || cache->bids.empty() || cache->asks.empty()) {
     ImGui::Text("Waiting for Orderbook: %s", symbol_name_.c_str());
     ImGui::Text("ID: %u", symbol_id_);
     ImGui::ProgressBar(((frame_count % 100) / 100.0f), ImVec2(-1, 0), "Polling Data Processor...");
@@ -439,7 +473,15 @@ void OrderbookPanel::render() {
     return;
   }
 
-  const auto& orderbook = orderbook_opt.value();
+  // Use the cached data for rendering
+  RenderEngine::OrderbookData orderbook;
+  orderbook.bids = cache->bids;
+  orderbook.asks = cache->asks;
+  orderbook.spread = cache->spread;
+  orderbook.imbalance = cache->imbalance;
+  orderbook.timestamp = cache->timestamp;
+  orderbook.symbol_id = symbol_id_;
+  orderbook.symbol = symbol_name_;
 
   // Calculate bid/ask ratio
   double total_bid_volume = 0.0;
@@ -1316,19 +1358,15 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
 void OrderbookPanel::center_price() {
   // This method would center the view on the current mid-price
   // For now, we'll just log that the action was triggered
-  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+  OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
 
-  if (orderbook_opt.has_value()) {
-    const auto& orderbook = orderbook_opt.value();
-
+  if (cache && !cache->bids.empty() && !cache->asks.empty()) {
     // Calculate mid price (average of best bid and best ask)
-    if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
-      double mid_price = (orderbook.bids[0].price + orderbook.asks[0].price) / 2.0;
+    double mid_price = (cache->bids[0].price + cache->asks[0].price) / 2.0;
 
-      // In a real implementation, this would adjust the viewport to center on mid_price
-      // For now, we'll just log the action
-      std::cout << "[OrderbookPanel] Centering view on mid-price: " << mid_price << std::endl;
-    }
+    // In a real implementation, this would adjust the viewport to center on mid_price
+    // For now, we'll just log the action
+    std::cout << "[OrderbookPanel] Centering view on mid-price: " << mid_price << std::endl;
   }
 }
 

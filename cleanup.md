@@ -7,13 +7,13 @@
 ## Phase 1: The Clone Wars (Delete Duplicates)
 **Rule:** Keep `snake_case.cpp/.hpp`. Delete flat lowercase and `.h`.
 
-- [ ] **1.1: Purge TPO Clones & Qt Poison**
+- [x] **1.1: Purge TPO Clones & Qt Poison**
     - `rm src/components/tpoprofilepanel.cpp`
     - `rm include/components/tpoprofilepanel.h`
     - `rm include/components/moc_tpoprofilepanel.cpp*` (Kill the Qt garbage)
     - *(Action: KEEP `tpo_panel.cpp` and `tpo_panel.hpp`)*
 
-- [ ] **1.2: Purge DOM Surface Clones**
+- [x] **1.2: Purge DOM Surface Clones**
     - `rm src/components/domsurfacepanel.cpp`
     - `rm include/components/domsurfacepanel.h`
     - *(Action: KEEP `dom_surface_panel.cpp` and `dom_surface_panel.hpp`)*

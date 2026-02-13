@@ -67,16 +67,7 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
-  micro_renderer_ = std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
-      vulkan_core_.get(), hotspine_bridge_, market_data_processor_);
-
-  if (auto result = micro_renderer_->initialize(); !result) [[unlikely]] {
-    std::println("[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: {}",
-                 RenderEngine::to_string(result.error()));
-  }
-
-  workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
-                                                        micro_renderer_.get());
+  workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
 
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
@@ -269,73 +260,23 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // Update Interaction Manager
-  InteractionManager::getInstance().update();
-
-  if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("Tools")) {
-      if (ImGui::MenuItem("Clear Dashboard History")) {
-        if (market_data_processor_) {
-          market_data_processor_->clearHistory();
-        }
-      }
-      ImGui::EndMenu();
-    }
-    if (custom_menubar_callback_) {
-      custom_menubar_callback_();
-    }
-    ImGui::EndMainMenuBar();
-  }
-
-  // Performance Overlay
-  render_performance_overlay();
-
-  // Debug Overlay
-  g_debug_overlay.render();
-
-  // Visual indicator for active layout
-  render_layout_indicator();
-
-  // Process updates and UI
+  // Process updates and UI - ONLY workspace_->render_gui() and panel_manager_->render()
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
     workspace_->render_gui();
-  }
-
-  // Handle high-performance microstructure rendering (Compute Phase)
-  if (micro_renderer_) {
-    auto result = micro_renderer_->prepare();
-    if (!result) {
-        // Log error if preparation failed
-        std::cout << "[VulkanDashboard] Micro renderer prepare failed: " <<
-                     RenderEngine::to_string(result.error()) << std::endl;
+    
+    // Also render panels directly if panel manager is available
+    if (auto* panel_manager = workspace_->getPanelManager()) {
+      panel_manager->render();
     }
-    micro_renderer_->executeCompute(vulkan_core_->get_current_command_buffer());
-
-    // Add pipeline barrier to ensure compute writes are visible to graphics
-    VkMemoryBarrier barrier{
-        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-        .pNext = nullptr,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT};
-    vkCmdPipelineBarrier(vulkan_core_->get_current_command_buffer(),
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-                         0, 1, &barrier, 0, nullptr, 0, nullptr);
   }
 
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
-  // Custom hook for microstructure graphics inside the render pass.
-  // We need to pass the renderer to RecordCommandBuffer or similar.
-  // For now, let's assume we can call executeGraphics inside the render pass.
-  // We'll modify RecordCommandBuffer to accept a callback or a renderer.
-
-  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
-    if (micro_renderer_) {
-      micro_renderer_->executeGraphics(cmd);
-    }
+  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [](VkCommandBuffer cmd) {
+    // No microstructure renderer - panels handle their own rendering
   });
   vulkan_core_->PresentFrame(imageIndex);
 }
@@ -430,13 +371,6 @@ void VulkanDashboard::render_performance_overlay() {
   if (workspace_ && workspace_->getPanelManager()) {
     size_t active_panels = workspace_->getPanelManager()->get_panel_count();
     g_debug_overlay.set_active_panels_count(active_panels);
-  }
-
-  // Update renderer stats if available
-  if (micro_renderer_) {
-    auto stats = micro_renderer_->getStats();
-    g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates,
-                                      stats.tradeUpdates, stats.footprintCellsRendered);
   }
 
   // TODO: Update active indicators and alerts counts when available

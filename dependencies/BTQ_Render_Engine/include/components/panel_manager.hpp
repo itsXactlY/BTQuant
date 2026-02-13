@@ -24,6 +24,14 @@ namespace BTQuant {
 
 namespace BTQuant {
 
+enum class LayoutPreset {
+  DEFAULT,
+  MODERN_TRADING,
+  DASHBOARD_ONLY,
+  CHART_FOCUS,
+  RISK_MONITORING
+};
+
 struct GridLayout {
   int columns = 3;
   int rows = 2;
@@ -68,6 +76,7 @@ class PanelManager {
   ImVec2 get_panel_size(uint32_t panel_id) const;
   void save_layout(const std::string& filename);
   void load_layout(const std::string& filename);
+  void apply_layout_preset(LayoutPreset preset);
 
   // Symbol propagation
   void set_active_symbol(uint32_t symbol_id, const std::string& symbol_name);

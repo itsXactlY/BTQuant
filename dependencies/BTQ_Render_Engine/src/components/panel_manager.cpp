@@ -53,6 +53,9 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
       order_manager_(order_manager),
       position_manager_(position_manager),
       risk_assessment_(risk_assessment) {
+  // NOTE: Do NOT call apply_layout_preset() or add default panels in constructor.
+  // Panel instantiation should be controlled by the layout system externally.
+  // See: main_trading_terminal.cpp where workspace->set_layout() is called.
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
   strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
@@ -70,6 +73,7 @@ void PanelManager::initialize() {
 
   // Initialize with no default panels - let the layout system dictate what gets created
   // The layout system should completely control panel instantiation
+  // DO NOT add default panels here - this is handled by external layout system
 }
 
 void PanelManager::update(float dt) {
@@ -1273,6 +1277,58 @@ void PanelManager::load_all_panel_configs(const std::string& config_file) {
     if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
       watchlist->load_watchlist_order_from_config(config_file);
     }
+  }
+}
+
+void PanelManager::apply_layout_preset(LayoutPreset preset) {
+  // CRITICAL: Clear all existing panels first to prevent duplication
+  clear_panels();
+
+  // Apply the specific layout based on the preset
+  switch (preset) {
+    case LayoutPreset::DEFAULT:
+      // Add default panels for the default layout
+      add_panel(PanelType::CHART, "Chart", 0, 0, 2, 3);
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 2, 0, 1, 2);
+      add_panel(PanelType::METRICS, "Metrics", 2, 2, 1, 1);
+      break;
+      
+    case LayoutPreset::MODERN_TRADING:
+      // Modern trading layout with multiple panels
+      add_panel(PanelType::CHART, "Price Chart", 0, 0, 2, 2);
+      add_panel(PanelType::ORDERBOOK, "Order Book", 2, 0, 1, 2);
+      add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 1, 1);
+      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 1, 2, 1, 1);
+      add_panel(PanelType::TRADING_ORDERS, "Orders", 2, 2, 1, 1);
+      add_panel(PanelType::TRADING_POSITIONS, "Positions", 0, 3, 1, 1);
+      add_panel(PanelType::RISK_METRICS, "Risk", 1, 3, 1, 1);
+      add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
+      break;
+      
+    case LayoutPreset::DASHBOARD_ONLY:
+      // Layout with only dashboard elements, no trading panels
+      add_panel(PanelType::CHART, "Chart", 0, 0, 2, 2);
+      add_panel(PanelType::METRICS, "Metrics", 2, 0, 1, 1);
+      add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 2, 1, 1, 1);
+      add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 3, 1);
+      break;
+      
+    case LayoutPreset::CHART_FOCUS:
+      // Layout focused on charting with minimal other panels
+      add_panel(PanelType::CHART, "Main Chart", 0, 0, 3, 3);
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 0, 3, 1, 1);
+      add_panel(PanelType::TIME_AND_SALES, "T&S", 1, 3, 1, 1);
+      add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
+      break;
+      
+    case LayoutPreset::RISK_MONITORING:
+      // Layout focused on risk monitoring
+      add_panel(PanelType::RISK_METRICS, "Risk Metrics", 0, 0, 1, 2);
+      add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 0, 1, 2);
+      add_panel(PanelType::CHART, "Chart", 2, 0, 1, 2);
+      add_panel(PanelType::RISK_ANALYZER, "Risk Analyzer", 0, 2, 3, 1);
+      add_panel(PanelType::STATUS_BAR, "Status", 0, 3, 3, 1);
+      break;
   }
 }
 

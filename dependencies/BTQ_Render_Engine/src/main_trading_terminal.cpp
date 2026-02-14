@@ -68,6 +68,14 @@ int main(int argc, char** argv) {
   // 5. Configure Theme
   ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
 
+  // 5.1 Apply default layout preset (MODERN_TRADING)
+  if (auto* workspace = dashboard->get_workspace_component()) {
+    if (auto* panel_mgr = workspace->getPanelManager()) {
+      panel_mgr->apply_layout_preset(LayoutPreset::MODERN_TRADING);
+      std::cout << "✓ Applied MODERN_TRADING layout preset" << std::endl;
+    }
+  }
+
   // 6. Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {

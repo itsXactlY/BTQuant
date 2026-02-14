@@ -202,6 +202,52 @@ std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symb
   return std::nullopt;
 }
 
+std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
+  auto& shard = getShard(symbol_id);
+  std::shared_lock lock(shard.mutex);
+
+  auto it = shard.data.find(symbol_id);
+  if (it == shard.data.end()) {
+    return std::nullopt;
+  }
+
+  const auto& symbol_data = it->second;
+
+  // Build atomic snapshot from latest orderbook and trade data
+  AtomicL2Snapshot snapshot;
+  snapshot.symbol_id = symbol_id;
+  snapshot.timestamp = symbol_data.last_update_time;
+
+  // Get best bid/ask from latest orderbook
+  if (!symbol_data.recent_orderbooks.empty()) {
+    const auto& latest_ob = symbol_data.recent_orderbooks.back();
+    if (!latest_ob.bids.empty()) {
+      snapshot.best_bid = latest_ob.bids.front().price;
+      snapshot.best_bid_size = latest_ob.bids.front().size;
+    }
+    if (!latest_ob.asks.empty()) {
+      snapshot.best_ask = latest_ob.asks.front().price;
+      snapshot.best_ask_size = latest_ob.asks.front().size;
+    }
+    snapshot.spread = latest_ob.spread;
+    snapshot.spread_percent = latest_ob.spread_percent;
+  }
+
+  // Get last trade info
+  snapshot.last_trade_price = symbol_data.last_trade_price;
+  snapshot.last_trade_size = symbol_data.last_trade_size;
+  snapshot.last_trade_time = symbol_data.last_trade_time;
+
+  // Calculate mid-price
+  if (snapshot.best_bid > 0.0 && snapshot.best_ask > 0.0) {
+    snapshot.mid_price = (snapshot.best_bid + snapshot.best_ask) / 2.0;
+  } else if (snapshot.last_trade_price > 0.0) {
+    snapshot.mid_price = snapshot.last_trade_price;
+  }
+
+  return snapshot;
+}
+
 std::vector<OrderbookData> MarketDataProcessor::getHistoricalOrderbooks(uint32_t symbol_id,
                                                                         size_t count) const {
   auto& shard = getShard(symbol_id);

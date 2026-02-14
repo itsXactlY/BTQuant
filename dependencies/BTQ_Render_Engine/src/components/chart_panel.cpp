@@ -11,6 +11,7 @@
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/interaction_manager.hpp"
 #include "../../include/components/historical_time_sales.hpp"
+#include "../../include/trading/trade_command_queue.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include "implot_internal.h"
@@ -326,31 +327,60 @@ void ChartPanel::render() {
 
   const ChartInstance& chart = it->second;
 
-
-  // Render chart controls in a collapsible header
-  if (ImGui::CollapsingHeader("Chart Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-    render_chart_controls();
-  }
-
-  // Render liquidity bars controls in a collapsible header
-  if (ImGui::CollapsingHeader("Liquidity Bars", ImGuiTreeNodeFlags_DefaultOpen)) {
-    render_liquidity_bars_controls();
-  }
-
-  // Render indicator selector
-  if (ImGui::CollapsingHeader("Indicators", ImGuiTreeNodeFlags_DefaultOpen)) {
-    render_indicator_selector();
-  }
-
-  // Render drawing tools controls
-  if (ImGui::CollapsingHeader("Drawing Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
-    if (drawing_tools_manager_) {
-      drawing_tools_manager_->render_ui_controls();
+  // ========================================================================
+  // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
+  // ========================================================================
+  
+  // 3.1 Top Toolbar (Main Controls)
+  render_top_toolbar();
+  
+  // Create a horizontal layout: Left Sidebar | Main Chart Area | Right Sidebar
+  ImGui::BeginChild("MainChartArea", ImVec2(0, -30));  // Reserve space for bottom toolbar
+  
+  // 3.2 Left Sidebar (Tools & Objects)
+  render_left_sidebar();
+  
+  ImGui::SameLine();
+  
+  // Main Chart Content Area
+  ImGui::BeginChild("ChartContent", ImVec2(-120, 0));  // Reserve space for right sidebar
+    
+    // Render chart controls in a collapsible header (legacy - can be hidden in Quantower mode)
+    if (ImGui::CollapsingHeader("Chart Controls")) {
+      render_chart_controls();
     }
-  }
 
-  // Render chart with indicators
-  render_instrument_chart(chart);
+    // Render liquidity bars controls in a collapsible header
+    if (ImGui::CollapsingHeader("Liquidity Bars")) {
+      render_liquidity_bars_controls();
+    }
+
+    // Render indicator selector
+    if (ImGui::CollapsingHeader("Indicators")) {
+      render_indicator_selector();
+    }
+
+    // Render drawing tools controls
+    if (ImGui::CollapsingHeader("Drawing Tools")) {
+      if (drawing_tools_manager_) {
+        drawing_tools_manager_->render_ui_controls();
+      }
+    }
+
+    // Render chart with indicators
+    render_instrument_chart(chart);
+    
+  ImGui::EndChild();
+  
+  ImGui::SameLine();
+  
+  // 3.4 Right Sidebar Order Entry
+  render_right_sidebar_order_entry();
+  
+  ImGui::EndChild();  // End MainChartArea
+  
+  // 3.5 Bottom Toolbar (Volume Analysis)
+  render_bottom_toolbar();
 
   end_panel_window();
 
@@ -3804,5 +3834,631 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
     draw_list->AddRectFilled(bar_start, bar_end, im_color);
   }
 }
+
+// ============================================================================
+// QUANTOWER-STYLE 5-PART LAYOUT IMPLEMENTATION (Phase 3)
+// ============================================================================
+
+// 3.1 Top Toolbar (Main Controls)
+void ChartPanel::render_top_toolbar() {
+  // Render a horizontal ImGui bar at the top
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
+  ImGui::BeginChild("TopBar", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar);
+  
+  // Symbol Lookup (InputText)
+  ImGui::PushItemWidth(100);
+  if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_), 
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
+    set_symbol(symbol_input_buffer_, exchange_);
+  }
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    set_symbol(symbol_input_buffer_, exchange_);
+  }
+  ImGui::PopItemWidth();
+  
+  // Tooltip for symbol input
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Enter symbol (e.g., BTC-USDT)");
+  }
+  
+  ImGui::SameLine();
+  
+  // Timeframe Selector (Dropdown: 1m, 5m, 1H, 1D - simplified for toolbar)
+  const char* toolbar_timeframes[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
+  int tf_index = 0;
+  // Map current timeframe to index
+  switch (timeframe_) {
+    case RenderEngine::TimeFrame::TF_1MIN: tf_index = 0; break;
+    case RenderEngine::TimeFrame::TF_5MIN: tf_index = 1; break;
+    case RenderEngine::TimeFrame::TF_15MIN: tf_index = 2; break;
+    case RenderEngine::TimeFrame::TF_1HOUR: tf_index = 3; break;
+    case RenderEngine::TimeFrame::TF_4HOUR: tf_index = 4; break;
+    case RenderEngine::TimeFrame::TF_1DAY: tf_index = 5; break;
+    default: tf_index = 0; break;
+  }
+  
+  ImGui::PushItemWidth(60);
+  if (ImGui::Combo("##TF", &tf_index, toolbar_timeframes, IM_ARRAYSIZE(toolbar_timeframes))) {
+    RenderEngine::TimeFrame new_tf = RenderEngine::TimeFrame::TF_1MIN;
+    switch (tf_index) {
+      case 0: new_tf = RenderEngine::TimeFrame::TF_1MIN; break;
+      case 1: new_tf = RenderEngine::TimeFrame::TF_5MIN; break;
+      case 2: new_tf = RenderEngine::TimeFrame::TF_15MIN; break;
+      case 3: new_tf = RenderEngine::TimeFrame::TF_1HOUR; break;
+      case 4: new_tf = RenderEngine::TimeFrame::TF_4HOUR; break;
+      case 5: new_tf = RenderEngine::TimeFrame::TF_1DAY; break;
+    }
+    set_timeframe(new_tf);
+  }
+  ImGui::PopItemWidth();
+  
+  ImGui::SameLine();
+  
+  // Chart Style (Dropdown: Candle, Bar, Line, Area, Quantower)
+  const char* chart_styles[] = {"Candle", "Bar", "Line", "Area", "Quantower"};
+  int style_index = static_cast<int>(chart_style_);
+  ImGui::PushItemWidth(80);
+  if (ImGui::Combo("##Style", &style_index, chart_styles, IM_ARRAYSIZE(chart_styles))) {
+    chart_style_ = static_cast<ChartStyle>(style_index);
+  }
+  ImGui::PopItemWidth();
+  
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+  
+  // Mouse Trading vs. Keyboard Trading toggle button
+  const char* trading_mode_label = (trading_mode_ == TradingMode::MOUSE_TRADING) ? "Mouse" : "Keyboard";
+  ImVec4 button_color = (trading_mode_ == TradingMode::MOUSE_TRADING) 
+                        ? ImVec4(0.2f, 0.6f, 0.2f, 1.0f)  // Green for mouse
+                        : ImVec4(0.6f, 0.4f, 0.2f, 1.0f); // Orange for keyboard
+  
+  ImGui::PushStyleColor(ImGuiCol_Button, button_color);
+  if (ImGui::Button(trading_mode_label, ImVec2(70, 0))) {
+    trading_mode_ = (trading_mode_ == TradingMode::MOUSE_TRADING) 
+                    ? TradingMode::KEYBOARD_TRADING 
+                    : TradingMode::MOUSE_TRADING;
+  }
+  ImGui::PopStyleColor();
+  
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Toggle between Mouse Trading and Keyboard Trading modes");
+  }
+  
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+  
+  // Auto-follow checkbox
+  ImGui::Checkbox("Auto-follow", &follow_latest_);
+  
+  ImGui::SameLine();
+  
+  // Price Centering Mode indicator
+  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
+  ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
+  
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+}
+
+// 3.2 Left Sidebar (Tools & Objects)
+void ChartPanel::render_left_sidebar() {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
+  ImGui::BeginChild("Sidebar", ImVec2(40, 0), true);
+  
+  // Crosshair button
+  ImVec4 crosshair_color = show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
+  if (ImGui::Button("+", ImVec2(32, 32))) {
+    show_crosshair_ = !show_crosshair_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
+  
+  // Drawing Tools button
+  ImGui::Spacing();
+  ImVec4 drawing_color = show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
+  if (ImGui::Button("D", ImVec2(32, 32))) {
+    show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
+    if (show_drawing_tools_sidebar_) {
+      ImGui::OpenPopup("DrawingToolsPopup");
+    }
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
+  
+  // Overlays button
+  ImGui::Spacing();
+  ImVec4 overlays_color = show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
+  if (ImGui::Button("O", ImVec2(32, 32))) {
+    show_overlays_menu_ = !show_overlays_menu_;
+    if (show_overlays_menu_) {
+      ImGui::OpenPopup("OverlaysPopup");
+    }
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
+  
+  // Indicators button
+  ImGui::Spacing();
+  ImVec4 indicators_color = show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
+  if (ImGui::Button("I", ImVec2(32, 32))) {
+    show_indicators_menu_ = !show_indicators_menu_;
+    if (show_indicators_menu_) {
+      ImGui::OpenPopup("IndicatorsPopup");
+    }
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
+  
+  // Separator
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  
+  // Favorite tools section
+  ImGui::Text("Fav");
+  ImGui::Spacing();
+  
+  // Initialize favorite tools if empty
+  if (favorite_tools_.empty()) {
+    favorite_tools_.emplace_back("Horizontal Line", "H", false);
+    favorite_tools_.emplace_back("Trend Line", "T", false);
+    favorite_tools_.emplace_back("Fibonacci", "F", true);
+    favorite_tools_.emplace_back("Rectangle", "R", false);
+  }
+  
+  // Render favorite tools
+  for (size_t i = 0; i < favorite_tools_.size(); ++i) {
+    const auto& tool = favorite_tools_[i];
+    ImVec4 fav_color = tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
+      selected_drawing_tool_ = static_cast<int>(i);
+    }
+    ImGui::PopID();
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());
+    ImGui::Spacing();
+  }
+  
+  // Render popups
+  render_drawing_tools_popup();
+  render_overlays_popup();
+  render_indicators_popup();
+  
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+}
+
+void ChartPanel::render_drawing_tools_popup() {
+  if (ImGui::BeginPopup("DrawingToolsPopup")) {
+    ImGui::Text("Drawing Tools");
+    ImGui::Separator();
+    
+    const char* tools[] = {"Horizontal Line", "Vertical Line", "Trend Line", 
+                           "Fibonacci", "Rectangle", "Text", "Arrow"};
+    
+    for (int i = 0; i < IM_ARRAYSIZE(tools); ++i) {
+      bool is_selected = (selected_drawing_tool_ == i);
+      if (ImGui::Selectable(tools[i], is_selected)) {
+        selected_drawing_tool_ = i;
+      }
+      
+      // Context menu for favorites
+      if (ImGui::BeginPopupContextItem()) {
+        bool is_fav = false;
+        for (const auto& fav : favorite_tools_) {
+          if (fav.name == tools[i]) {
+            is_fav = fav.is_favorite;
+            break;
+          }
+        }
+        if (ImGui::Checkbox("Add to Favorites", &is_fav)) {
+          toggle_favorite_tool(tools[i]);
+        }
+        ImGui::EndPopup();
+      }
+    }
+    
+    ImGui::EndPopup();
+  }
+}
+
+void ChartPanel::render_overlays_popup() {
+  if (ImGui::BeginPopup("OverlaysPopup")) {
+    ImGui::Text("Overlays");
+    ImGui::Separator();
+    
+    ImGui::Checkbox("Volume Profile", &indicator_config_.show_volume_profile);
+    ImGui::Checkbox("Bollinger Bands", &indicator_config_.show_bollinger);
+    ImGui::Checkbox("Fibonacci Levels", &indicator_config_.show_fibonacci);
+    ImGui::Checkbox("Session VWAP", &show_session_vwap_);
+    
+    // Anchored VWAP section
+    ImGui::Separator();
+    ImGui::Text("Anchored VWAPs: %zu", anchored_vwaps_.size());
+    
+    ImGui::EndPopup();
+  }
+}
+
+void ChartPanel::render_indicators_popup() {
+  if (ImGui::BeginPopup("IndicatorsPopup")) {
+    ImGui::Text("Indicators");
+    ImGui::Separator();
+    
+    // Moving Averages
+    ImGui::Text("Moving Averages");
+    if (ImGui::Checkbox("SMA 9", &indicator_config_.show_sma_9)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("SMA 20", &indicator_config_.show_sma_20)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("SMA 50", &indicator_config_.show_sma_50)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("SMA 200", &indicator_config_.show_sma_200)) {
+      sync_active_indicators_with_config();
+    }
+    
+    ImGui::Separator();
+    
+    if (ImGui::Checkbox("EMA 9", &indicator_config_.show_ema_9)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("EMA 21", &indicator_config_.show_ema_21)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("EMA 50", &indicator_config_.show_ema_50)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("EMA 200", &indicator_config_.show_ema_200)) {
+      sync_active_indicators_with_config();
+    }
+    
+    ImGui::Separator();
+    
+    // Oscillators
+    ImGui::Text("Oscillators");
+    if (ImGui::Checkbox("RSI", &indicator_config_.show_rsi)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("MACD", &indicator_config_.show_macd)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("Stochastic", &indicator_config_.show_stochastic)) {
+      sync_active_indicators_with_config();
+    }
+    if (ImGui::Checkbox("ATR", &indicator_config_.show_atr)) {
+      sync_active_indicators_with_config();
+    }
+    
+    ImGui::EndPopup();
+  }
+}
+
+void ChartPanel::toggle_favorite_tool(const std::string& tool_name) {
+  // Find if tool exists in favorites
+  auto it = std::find_if(favorite_tools_.begin(), favorite_tools_.end(),
+                         [&tool_name](const FavoriteTool& t) { return t.name == tool_name; });
+  
+  if (it != favorite_tools_.end()) {
+    // Toggle favorite status
+    it->is_favorite = !it->is_favorite;
+    
+    // Remove if no longer favorite
+    if (!it->is_favorite) {
+      favorite_tools_.erase(it);
+    }
+  } else {
+    // Add to favorites with first letter as icon
+    std::string icon = tool_name.substr(0, 1);
+    favorite_tools_.emplace_back(tool_name, icon, true);
+  }
+}
+
+// 3.3 Price Centering Implementation
+void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double last_price) {
+  if (chart.closes.empty() || last_price <= 0) return;
+  
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+  
+  switch (price_centering_mode_) {
+    case PriceCenteringMode::AUTO:
+      // Standard ImPlot AutoFit - let ImPlot handle it
+      // This is the default behavior, no manual intervention needed
+      break;
+      
+    case PriceCenteringMode::AUTO_CENTERED: {
+      // Center on last price: (Y_max + Y_min)/2 == last_price
+      double y_range = limits.Y.Max - limits.Y.Min;
+      double half_range = y_range / 2.0;
+      
+      double new_y_min = last_price - half_range;
+      double new_y_max = last_price + half_range;
+      
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
+      break;
+    }
+    
+    case PriceCenteringMode::KEEP_IN_VIEW: {
+      // Only adjust Y limits if last_price exceeds current bounds
+      double y_min = limits.Y.Min;
+      double y_max = limits.Y.Max;
+      double margin = (y_max - y_min) * 0.1;  // 10% margin
+      
+      bool needs_adjustment = false;
+      
+      if (last_price < y_min + margin) {
+        // Price is too low, shift down
+        y_min = last_price - margin * 2;
+        y_max = y_min + (limits.Y.Max - limits.Y.Min);
+        needs_adjustment = true;
+      } else if (last_price > y_max - margin) {
+        // Price is too high, shift up
+        y_max = last_price + margin * 2;
+        y_min = y_max - (limits.Y.Max - limits.Y.Min);
+        needs_adjustment = true;
+      }
+      
+      if (needs_adjustment) {
+        ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
+      }
+      break;
+    }
+    
+    case PriceCenteringMode::MANUAL:
+      // Disable all auto-fitting - use stored manual limits
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, manual_y_min_, manual_y_max_, ImGuiCond_Always);
+      break;
+  }
+}
+
+void ChartPanel::handle_y_axis_context_menu() {
+  // Right-click on Y-Axis for mode selection
+  if (ImGui::BeginPopup("YAxisContextMenu")) {
+    ImGui::Text("Price Centering Mode");
+    ImGui::Separator();
+    
+    int mode = static_cast<int>(price_centering_mode_);
+    if (ImGui::RadioButton("Auto", mode == 0)) {
+      price_centering_mode_ = PriceCenteringMode::AUTO;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Standard ImPlot AutoFit");
+    
+    if (ImGui::RadioButton("Auto Centered", mode == 1)) {
+      price_centering_mode_ = PriceCenteringMode::AUTO_CENTERED;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Center on last price");
+    
+    if (ImGui::RadioButton("Keep in View", mode == 2)) {
+      price_centering_mode_ = PriceCenteringMode::KEEP_IN_VIEW;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Only adjust if price exceeds bounds");
+    
+    if (ImGui::RadioButton("Manual", mode == 3)) {
+      price_centering_mode_ = PriceCenteringMode::MANUAL;
+      // Store current limits as manual limits
+      ImPlotRect limits = ImPlot::GetPlotLimits();
+      manual_y_min_ = limits.Y.Min;
+      manual_y_max_ = limits.Y.Max;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Disable auto-fitting");
+    
+    ImGui::EndPopup();
+  }
+}
+
+void ChartPanel::render_snap_to_last_button() {
+  // Only visible if X-axis max < current time
+  if (!show_snap_to_last_) return;
+  
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+  if (ImGui::Button("Snap to Last", ImVec2(80, 0))) {
+    // Reset X-axis to follow live data
+    follow_latest_ = true;
+    show_snap_to_last_ = false;
+  }
+  ImGui::PopStyleColor();
+  
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Reset X-axis to follow live data");
+  }
+}
+
+// 3.4 Right Sidebar Order Entry
+void ChartPanel::render_right_sidebar_order_entry() {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+  ImGui::BeginChild("OrderEntry", ImVec2(120, 0), true);
+  
+  ImGui::Text("Quick Order");
+  ImGui::Separator();
+  
+  // Update cached quotes from atomic snapshot
+  update_cached_quotes();
+  
+  // Market Buy button with Best Ask
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+  std::string buy_label = "BUY\n" + std::to_string(cached_best_ask_);
+  if (ImGui::Button(buy_label.c_str(), ImVec2(100, 40))) {
+    execute_market_order(true);  // Buy
+  }
+  ImGui::PopStyleColor();
+  
+  ImGui::Spacing();
+  
+  // Market Sell button with Best Bid
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+  std::string sell_label = "SELL\n" + std::to_string(cached_best_bid_);
+  if (ImGui::Button(sell_label.c_str(), ImVec2(100, 40))) {
+    execute_market_order(false);  // Sell
+  }
+  ImGui::PopStyleColor();
+  
+  ImGui::Separator();
+  
+  // Order Quantity input
+  ImGui::Text("Quantity:");
+  ImGui::PushItemWidth(90);
+  ImGui::InputDouble("##Qty", &order_quantity_, 0.1, 1.0, "%.4f");
+  ImGui::PopItemWidth();
+  
+  ImGui::Spacing();
+  
+  // Time In Force selector
+  ImGui::Text("TIF:");
+  const char* tif_options[] = {"GTC", "IOC", "FOK", "DAY"};
+  int tif_index = static_cast<int>(selected_tif_);
+  ImGui::PushItemWidth(90);
+  if (ImGui::Combo("##TIF", &tif_index, tif_options, IM_ARRAYSIZE(tif_options))) {
+    selected_tif_ = static_cast<TimeInForce>(tif_index);
+  }
+  ImGui::PopItemWidth();
+  
+  ImGui::Separator();
+  
+  // Display current quotes
+  ImGui::Text("Best Bid: %.2f", cached_best_bid_);
+  ImGui::Text("Best Ask: %.2f", cached_best_ask_);
+  ImGui::Text("Spread: %.4f", cached_best_ask_ - cached_best_bid_);
+  
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+}
+
+void ChartPanel::update_cached_quotes() {
+  if (!processor_ || symbol_.empty()) return;
+  
+  // Get symbol ID
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+  if (!symbol_id_opt) return;
+  
+  uint32_t symbol_id = *symbol_id_opt;
+  
+  // Read from atomic snapshot (Phase 4.1 requirement)
+  // This is a non-blocking call that reads from atomic data
+  auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id);
+  if (snapshot_opt) {
+    const auto& snapshot = *snapshot_opt;
+    cached_best_bid_ = snapshot.best_bid;
+    cached_best_ask_ = snapshot.best_ask;
+    last_quote_update_ = snapshot.timestamp;
+  }
+}
+
+void ChartPanel::execute_market_order(bool is_buy) {
+  // Phase 4.2: Push to SPSC queue for async execution
+  // The UI thread never waits for the HTTP/WebSocket response
+  
+  // Get symbol ID
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+  uint32_t sym_id = symbol_id_opt.value_or(0);
+  
+  // Create the trade command
+  RenderEngine::TradeCommand cmd(
+    sym_id,
+    symbol_,
+    exchange_,
+    is_buy ? RenderEngine::OrderSide::BUY : RenderEngine::OrderSide::SELL,
+    RenderEngine::OrderType::MARKET,
+    order_quantity_,
+    static_cast<RenderEngine::TimeInForce>(selected_tif_)
+  );
+  
+  // Set additional fields
+  cmd.price = is_buy ? cached_best_ask_ : cached_best_bid_;
+  
+  // Push to the global SPSC queue (non-blocking)
+  bool pushed = RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
+  
+  if (pushed) {
+    std::cout << "[ChartPanel] Market Order QUEUED: "
+              << (is_buy ? "BUY" : "SELL") << " "
+              << order_quantity_ << " " << symbol_
+              << " @ " << (is_buy ? cached_best_ask_ : cached_best_bid_)
+              << " TIF: " << static_cast<int>(selected_tif_)
+              << std::endl;
+  } else {
+    std::cerr << "[ChartPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
+  }
+}
+
+// 3.5 Bottom Toolbar (Volume Analysis)
+void ChartPanel::render_bottom_toolbar() {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
+  ImGui::BeginChild("BottomBar", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar);
+  
+  // Volume Profile toggle
+  ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, vp_color);
+  if (ImGui::Button("Vol Profile", ImVec2(80, 0))) {
+    show_volume_profile_overlay_ = !show_volume_profile_overlay_;
+    indicator_config_.show_volume_profile = show_volume_profile_overlay_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Volume Profile overlay");
+  
+  ImGui::SameLine();
+  
+  // Delta toggle
+  ImVec4 delta_color = show_delta_overlay_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, delta_color);
+  if (ImGui::Button("Delta", ImVec2(60, 0))) {
+    show_delta_overlay_ = !show_delta_overlay_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Delta overlay");
+  
+  ImGui::SameLine();
+  
+  // Cumulative Delta toggle
+  ImVec4 cum_delta_color = show_cumulative_delta_overlay_ ? ImVec4(0.6f, 0.8f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, cum_delta_color);
+  if (ImGui::Button("Cum Delta", ImVec2(80, 0))) {
+    show_cumulative_delta_overlay_ = !show_cumulative_delta_overlay_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Cumulative Delta overlay");
+  
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+  
+  // Liquidity bars toggle
+  ImVec4 liq_color = show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, liq_color);
+  if (ImGui::Button("Liquidity", ImVec2(70, 0))) {
+    show_liquidity_bars_ = !show_liquidity_bars_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Liquidity Bars on price axis");
+  
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+  
+  // Current volume info (if chart data available)
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    const ChartInstance& chart = it->second;
+    if (!chart.volumes.empty()) {
+      float last_volume = chart.volumes.back();
+      ImGui::Text("Vol: %.0f", last_volume);
+    }
+  }
+  
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+}
+
 
 }  // namespace BTQuant

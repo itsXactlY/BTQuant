@@ -60,13 +60,36 @@ void QuantWorkspaceComponent::render_gui() {
 
 void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(300, 250), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(320, 400), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_)) {
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 
-    // Panel management - Charts
+    // Layout Presets Menu
+    if (ImGui::CollapsingHeader("Layout Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+      if (ImGui::Button("Default")) {
+        panel_manager_->apply_layout_preset(LayoutPreset::DEFAULT);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Modern Trading")) {
+        panel_manager_->apply_layout_preset(LayoutPreset::MODERN_TRADING);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Dashboard")) {
+        panel_manager_->apply_layout_preset(LayoutPreset::DASHBOARD_ONLY);
+      }
+      
+      if (ImGui::Button("Chart Focus")) {
+        panel_manager_->apply_layout_preset(LayoutPreset::CHART_FOCUS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Risk Monitoring")) {
+        panel_manager_->apply_layout_preset(LayoutPreset::RISK_MONITORING);
+      }
+    }
+
+    // Panel management - Charts (reorganized per requirements)
     if (ImGui::CollapsingHeader("Charts", ImGuiTreeNodeFlags_DefaultOpen)) {
       if (ImGui::Button("Chart")) {
         panel_manager_->add_panel(PanelType::CHART);
@@ -87,13 +110,9 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Depth Chart")) {
         panel_manager_->add_panel(PanelType::DEPTH_CHART);
       }
-      ImGui::SameLine();
-      if (ImGui::Button("Chart Replay")) {
-        panel_manager_->add_panel(PanelType::CHART_REPLAY);
-      }
     }
 
-    // Panel management - Market Data
+    // Panel management - Market Data (reorganized per requirements)
     if (ImGui::CollapsingHeader("Market Data")) {
       if (ImGui::Button("Order Book")) {
         panel_manager_->add_panel(PanelType::ORDERBOOK);
@@ -111,20 +130,24 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
         panel_manager_->add_panel(PanelType::WATCHLIST);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Screener")) {
-        panel_manager_->add_panel(PanelType::SCREENER);
-      }
-      ImGui::SameLine();
       if (ImGui::Button("Heatmap")) {
         panel_manager_->add_panel(PanelType::HEATMAP);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("DOM Surface")) {
+        panel_manager_->add_panel(PanelType::DOM_SURFACE);
       }
       
       if (ImGui::Button("Hist. T&S")) {
         panel_manager_->add_panel(PanelType::HISTORICAL_TIME_SALES);
       }
+      ImGui::SameLine();
+      if (ImGui::Button("Screener")) {
+        panel_manager_->add_panel(PanelType::SCREENER);
+      }
     }
 
-    // Panel management - Trading
+    // Panel management - Trading (reorganized per requirements)
     if (ImGui::CollapsingHeader("Trading")) {
       if (ImGui::Button("Orders")) {
         panel_manager_->add_panel(PanelType::TRADING_ORDERS);
@@ -137,9 +160,13 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Alerts")) {
         panel_manager_->add_panel(PanelType::ALERTS);
       }
+      
+      if (ImGui::Button("Strategy Builder")) {
+        panel_manager_->add_panel(PanelType::STRATEGY_BUILDER);
+      }
     }
 
-    // Panel management - Analysis
+    // Panel management - Analysis (reorganized per requirements)
     if (ImGui::CollapsingHeader("Analysis")) {
       if (ImGui::Button("Metrics")) {
         panel_manager_->add_panel(PanelType::METRICS);
@@ -153,6 +180,30 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
         panel_manager_->add_panel(PanelType::RISK_ANALYZER);
       }
       
+      if (ImGui::Button("Option Analytics")) {
+        panel_manager_->add_panel(PanelType::OPTION_ANALYTICS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Multi VWAP")) {
+        panel_manager_->add_panel(PanelType::MULTI_VWAP);
+      }
+      
+      if (ImGui::Button("Correlation")) {
+        panel_manager_->add_panel(PanelType::CORRELATION_HEATMAP);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Tech Indicators")) {
+        panel_manager_->add_panel(PanelType::TECHNICAL_INDICATORS);
+      }
+      
+      if (ImGui::Button("Time Stats")) {
+        panel_manager_->add_panel(PanelType::TIME_STATISTICS);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Time Histogram")) {
+        panel_manager_->add_panel(PanelType::TIME_HISTOGRAM);
+      }
+      
       if (ImGui::Button("Histogram")) {
         panel_manager_->add_panel(PanelType::HISTOGRAM);
       }
@@ -164,21 +215,16 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Time Series")) {
         panel_manager_->add_panel(PanelType::TIME_SERIES);
       }
-      
-      if (ImGui::Button("Time Stats")) {
-        panel_manager_->add_panel(PanelType::TIME_STATISTICS);
+    }
+
+    // Panel management - Tools (new category)
+    if (ImGui::CollapsingHeader("Tools")) {
+      if (ImGui::Button("Drawing Tools")) {
+        panel_manager_->add_panel(PanelType::DRAWING_TOOLS);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Time Histogram")) {
-        panel_manager_->add_panel(PanelType::TIME_HISTOGRAM);
-      }
-      
-      if (ImGui::Button("Strategy Builder")) {
-        panel_manager_->add_panel(PanelType::STRATEGY_BUILDER);
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Option Analytics")) {
-        panel_manager_->add_panel(PanelType::OPTION_ANALYTICS);
+      if (ImGui::Button("Chart Replay")) {
+        panel_manager_->add_panel(PanelType::CHART_REPLAY);
       }
     }
 
@@ -194,6 +240,14 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       ImGui::SameLine();
       if (ImGui::Button("Status Bar")) {
         panel_manager_->add_panel(PanelType::STATUS_BAR);
+      }
+      
+      if (ImGui::Button("Theme")) {
+        panel_manager_->add_panel(PanelType::THEME_CUSTOMIZATION);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Shortcuts")) {
+        panel_manager_->add_panel(PanelType::KEYBOARD_SHORTCUTS);
       }
     }
 

@@ -28,6 +28,7 @@ include(FetchContent)
 FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
 FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git GIT_TAG v3.11.2)
 FetchContent_Declare(concurrentqueue GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git GIT_TAG v1.0.4)
+FetchContent_Declare(readerwriterqueue GIT_REPOSITORY https://github.com/cameron314/readerwriterqueue.git GIT_TAG v1.0.6)
 
 # ImGui Docking Branch
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git GIT_TAG docking)
@@ -35,7 +36,7 @@ FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git G
 # ImPlot
 FetchContent_Declare(implot GIT_REPOSITORY https://github.com/epezent/implot.git GIT_TAG master)
 
-FetchContent_MakeAvailable(glm json concurrentqueue imgui implot)
+FetchContent_MakeAvailable(glm json concurrentqueue readerwriterqueue imgui implot)
 
 # Path Configuration
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
@@ -145,7 +146,13 @@ set(DASHBOARD_SOURCES
     src/components/performance_monitor_panel.cpp
     src/components/time_and_sales.cpp
     src/components/historical_time_sales.cpp
+    src/components/correlation_heatmap_panel.cpp
+    src/components/technical_indicators_panel.cpp
+    src/components/theme_customization_panel.cpp
+    src/components/keyboard_shortcuts_panel.cpp
+    src/components/drawing_tools_panel.cpp
     src/trading/trading_interface.cpp
+    src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
     src/trading/position_manager.cpp
     src/trading/risk_assessment.cpp
@@ -282,7 +289,13 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/performance_monitor_panel.cpp
     src/components/time_and_sales.cpp
     src/components/historical_time_sales.cpp
+    src/components/correlation_heatmap_panel.cpp
+    src/components/technical_indicators_panel.cpp
+    src/components/theme_customization_panel.cpp
+    src/components/keyboard_shortcuts_panel.cpp
+    src/components/drawing_tools_panel.cpp
     src/trading/trading_interface.cpp
+    src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
     src/trading/position_manager.cpp
     src/trading/risk_assessment.cpp
@@ -359,6 +372,8 @@ target_include_directories(BTQuantTerminal PRIVATE
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
+    ${readerwriterqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/readerwriterqueue-src
 )
 
 find_package(TBB REQUIRED)

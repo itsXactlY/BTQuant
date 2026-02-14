@@ -36,6 +36,12 @@
 #include "../../include/components/risk_analyzer_panel.hpp"
 #include "../../include/components/strategy_builder.hpp"
 #include "../../include/components/option_analytics_panel.hpp"
+#include "../../include/components/correlation_heatmap_panel.hpp"
+#include "../../include/components/multi_vwap_panel.hpp"
+#include "../../include/components/technical_indicators_panel.hpp"
+#include "../../include/components/theme_customization_panel.hpp"
+#include "../../include/components/keyboard_shortcuts_panel.hpp"
+#include "../../include/components/drawing_tools_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
 
@@ -293,31 +299,25 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
     case PanelType::CORRELATION_HEATMAP:
-      // TODO: Implement CorrelationHeatmapComponent wrapper as PanelBase
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<CorrelationHeatmapPanel>(config);
       break;
     case PanelType::DOM_SURFACE:
       panel = std::make_unique<DomSurfacePanel>(processor_);
       break;
     case PanelType::MULTI_VWAP:
-      // TODO: Implement MultiVWAP panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<MultiVWAPPanel>(config);
       break;
     case PanelType::TECHNICAL_INDICATORS:
-      // TODO: Implement TechnicalIndicators panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<TechnicalIndicatorsPanel>(config);
       break;
     case PanelType::THEME_CUSTOMIZATION:
-      // TODO: Implement ThemeCustomization panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<ThemeCustomizationPanel>(config);
       break;
     case PanelType::KEYBOARD_SHORTCUTS:
-      // TODO: Implement KeyboardShortcuts panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<KeyboardShortcutsPanel>(config);
       break;
     case PanelType::DRAWING_TOOLS:
-      // TODO: Implement DrawingTools panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<DrawingToolsPanel>(config);
       break;
     default:
       return 0;
@@ -480,31 +480,25 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
     case PanelType::CORRELATION_HEATMAP:
-      // TODO: Implement CorrelationHeatmapComponent wrapper as PanelBase
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<CorrelationHeatmapPanel>(config);
       break;
     case PanelType::DOM_SURFACE:
       panel = std::make_unique<DomSurfacePanel>(processor_);
       break;
     case PanelType::MULTI_VWAP:
-      // TODO: Implement MultiVWAP panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<MultiVWAPPanel>(config);
       break;
     case PanelType::TECHNICAL_INDICATORS:
-      // TODO: Implement TechnicalIndicators panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<TechnicalIndicatorsPanel>(config);
       break;
     case PanelType::THEME_CUSTOMIZATION:
-      // TODO: Implement ThemeCustomization panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<ThemeCustomizationPanel>(config);
       break;
     case PanelType::KEYBOARD_SHORTCUTS:
-      // TODO: Implement KeyboardShortcuts panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<KeyboardShortcutsPanel>(config);
       break;
     case PanelType::DRAWING_TOOLS:
-      // TODO: Implement DrawingTools panel
-      panel = nullptr;  // Placeholder - needs implementation
+      panel = std::make_unique<DrawingToolsPanel>(config);
       break;
     default:
       return 0;

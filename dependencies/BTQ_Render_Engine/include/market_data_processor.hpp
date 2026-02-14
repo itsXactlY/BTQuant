@@ -73,6 +73,31 @@ struct OrderbookData {
   double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
+// Atomic L2 Snapshot for lock-free UI reads (Phase 4.1)
+// This structure is designed for single-read atomic access from UI threads
+struct AtomicL2Snapshot {
+  uint32_t symbol_id = 0;
+  uint64_t timestamp = 0;
+  
+  // Best bid/ask (top of book)
+  double best_bid = 0.0;
+  double best_ask = 0.0;
+  double best_bid_size = 0.0;
+  double best_ask_size = 0.0;
+  
+  // Spread info
+  double spread = 0.0;
+  double spread_percent = 0.0;
+  
+  // Last trade info
+  double last_trade_price = 0.0;
+  double last_trade_size = 0.0;
+  uint64_t last_trade_time = 0;
+  
+  // Mid price for convenience
+  double mid_price = 0.0;
+};
+
 
 // Indicator cache entry
 struct IndicatorCacheEntry {
@@ -314,6 +339,15 @@ class MarketDataProcessor {
 
   std::vector<OrderbookData> getHistoricalOrderbooks(uint32_t symbol_id, size_t count) const;
   std::vector<VolumeProfileLevel> getVolumeProfile(uint32_t symbol_id, TimeFrame timeframe) const;
+
+  /**
+   * Get atomic L2 snapshot for lock-free UI reads (Phase 4.1)
+   * This method provides a consistent snapshot of the top of book without blocking.
+   * Designed for UI threads that need fast, non-blocking access to best bid/ask.
+   * @param symbol_id Symbol ID to get snapshot for
+   * @return AtomicL2Snapshot with best bid/ask and last trade info
+   */
+  std::optional<AtomicL2Snapshot> get_atomic_snapshot(uint32_t symbol_id) const;
 
   // Methods required by multi_vwap_panel
   bool hasData() const {

@@ -86,6 +86,47 @@ struct IndicatorConfig {
   int atr_period = 14;
 };
 
+// Price centering modes for Y-axis
+enum class PriceCenteringMode {
+  AUTO,           // Standard ImPlot AutoFit
+  AUTO_CENTERED,  // Center on last price: (Y_max + Y_min)/2 == last_price
+  KEEP_IN_VIEW,   // Only adjust if last_price exceeds bounds
+  MANUAL          // Disable auto-fitting, triggered on drag
+};
+
+// Chart style options
+enum class ChartStyle {
+  CANDLE,
+  BAR,
+  LINE,
+  AREA,
+  QUANTOWER  // Quantower-specific style
+};
+
+// Trading mode for chart interaction
+enum class TradingMode {
+  MOUSE_TRADING,
+  KEYBOARD_TRADING
+};
+
+// Time in Force for orders
+enum class TimeInForce {
+  GTC,  // Good Till Cancel
+  IOC,  // Immediate Or Cancel
+  FOK,  // Fill Or Kill
+  DAY   // Day Order
+};
+
+// Favorite tool for sidebar
+struct FavoriteTool {
+  std::string name;
+  std::string icon;
+  bool is_favorite;
+  
+  FavoriteTool(const std::string& n, const std::string& i, bool fav = false)
+      : name(n), icon(i), is_favorite(fav) {}
+};
+
 // Fibonacci Retracement Level
 struct FibonacciLevel {
   double price;
@@ -429,6 +470,69 @@ class ChartPanel : public PanelBase {
   float liquidity_bar_opacity_ = 0.7f; // Opacity of liquidity bars
   ImVec4 liquidity_bids_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.7f);  // Green for bids
   ImVec4 liquidity_asks_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.7f);  // Red for asks
+
+  // ========================================================================
+  // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
+  // ========================================================================
+  
+  // --- 3.1 Top Toolbar State ---
+  char symbol_input_buffer_[32] = "BTC-USDT";  // Symbol lookup input buffer
+  int selected_timeframe_index_ = 9;  // Default: 1m (index in timeframe array)
+  ChartStyle chart_style_ = ChartStyle::CANDLE;
+  TradingMode trading_mode_ = TradingMode::MOUSE_TRADING;
+  
+  // --- 3.2 Left Sidebar State ---
+  bool show_crosshair_ = true;
+  bool show_drawing_tools_sidebar_ = false;
+  bool show_overlays_menu_ = false;
+  bool show_indicators_menu_ = false;
+  std::vector<FavoriteTool> favorite_tools_;
+  int selected_drawing_tool_ = -1;  // -1 = no tool selected
+  
+  // --- 3.3 Price Centering Modes ---
+  PriceCenteringMode price_centering_mode_ = PriceCenteringMode::AUTO;
+  double manual_y_min_ = 0.0;
+  double manual_y_max_ = 0.0;
+  bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
+  bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
+  
+  // --- 3.4 Right Sidebar Order Entry State ---
+  double order_quantity_ = 1.0;
+  TimeInForce selected_tif_ = TimeInForce::GTC;
+  double cached_best_bid_ = 0.0;   // Updated from atomic snapshot
+  double cached_best_ask_ = 0.0;   // Updated from atomic snapshot
+  uint64_t last_quote_update_ = 0; // Timestamp of last quote update
+  
+  // --- 3.5 Bottom Toolbar State ---
+  bool show_volume_profile_overlay_ = true;
+  bool show_delta_overlay_ = false;
+  bool show_cumulative_delta_overlay_ = false;
+  bool show_session_vwap_ = true;  // Session VWAP overlay toggle
+  
+  // --- Quantower Layout Rendering Methods ---
+  
+  // 3.1 Top Toolbar (Main Controls)
+  void render_top_toolbar();
+  
+  // 3.2 Left Sidebar (Tools & Objects)
+  void render_left_sidebar();
+  void render_drawing_tools_popup();
+  void render_overlays_popup();
+  void render_indicators_popup();
+  void toggle_favorite_tool(const std::string& tool_name);
+  
+  // 3.3 Price Centering Implementation
+  void apply_price_centering_mode(const ChartInstance& chart, double last_price);
+  void handle_y_axis_context_menu();  // Right-click on Y-axis for mode selection
+  void render_snap_to_last_button();  // Only visible when X-axis max < current time
+  
+  // 3.4 Right Sidebar Order Entry
+  void render_right_sidebar_order_entry();
+  void update_cached_quotes();  // Read from atomic snapshot
+  void execute_market_order(bool is_buy);  // Push to SPSC queue (Phase 4)
+  
+  // 3.5 Bottom Toolbar (Volume Analysis)
+  void render_bottom_toolbar();
 };
 
 }  // namespace BTQuant

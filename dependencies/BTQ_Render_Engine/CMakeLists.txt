@@ -91,6 +91,7 @@ set(LIB_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
+    src/ui/font_manager.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
     src/error_handling/crash_reporter.cpp
@@ -203,6 +204,7 @@ set(DASHBOARD_SOURCES
     src/indicators/vwap_alerts.cpp
     src/indicators/indicator_alerts.cpp
     src/data/ui_data_manager.cpp
+    src/data/orderbook_snapshot_manager.cpp
     src/performance/panel_profiler.cpp
     src/ui/performance_settings.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
@@ -236,6 +238,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
+    src/ui/font_manager.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
     src/error_handling/crash_reporter.cpp
@@ -346,6 +349,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/indicators/vwap_alerts.cpp
     src/indicators/indicator_alerts.cpp
     src/data/ui_data_manager.cpp
+    src/data/orderbook_snapshot_manager.cpp
     src/performance/panel_profiler.cpp
     src/ui/performance_settings.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp

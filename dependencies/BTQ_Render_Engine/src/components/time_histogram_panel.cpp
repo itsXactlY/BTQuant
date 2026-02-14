@@ -66,51 +66,312 @@ void TimeHistogramPanel::render() {
     y_axis_flags |= ImPlotAxisFlags_Lock;
   }
 
-  if (ImPlot::BeginPlot("Time Histogram", ImVec2(-1, -1))) {
-    // Generate sample time-based histogram data for demonstration
-    static double x_data[100], buy_data[100], sell_data[100];
-    static bool first_run = true;
+  // Generate sample time-based histogram data for demonstration
+  // NOTE: Data must be generated BEFORE BeginPlot() to calculate Y-axis limits
+  static double x_data[100], buy_data[100], sell_data[100];
+  static bool first_run = true;
 
-    if (first_run) {
-      // Initialize time values (x-axis) and corresponding buy/sell volumes (y-axis)
-      for (int i = 0; i < 100; ++i) {
-        x_data[i] = static_cast<double>(i);  // Time slots
+  if (first_run) {
+    // Initialize time values (x-axis) and corresponding buy/sell volumes (y-axis)
+    for (int i = 0; i < 100; ++i) {
+      x_data[i] = static_cast<double>(i);  // Time slots
 
-        // Create sample buy and sell volumes with some pattern
-        // Using sine wave with random noise to simulate time-based volume data
-        double base_volume = 100.0;
-        double buy_sine = base_volume + 50.0 * sin(i * 0.2) + 20.0 * sin(i * 0.5);
-        double sell_sine = base_volume + 50.0 * cos(i * 0.2) + 20.0 * cos(i * 0.5);
+      // Create sample buy and sell volumes with some pattern
+      // Using sine wave with random noise to simulate time-based volume data
+      double base_volume = 100.0;
+      double buy_sine = base_volume + 50.0 * sin(i * 0.2) + 20.0 * sin(i * 0.5);
+      double sell_sine = base_volume + 50.0 * cos(i * 0.2) + 20.0 * cos(i * 0.5);
 
-        double noise_buy = (static_cast<double>(rand()) / RAND_MAX) * 20.0 - 10.0;
-        double noise_sell = (static_cast<double>(rand()) / RAND_MAX) * 20.0 - 10.0;
+      double noise_buy = (static_cast<double>(rand()) / RAND_MAX) * 20.0 - 10.0;
+      double noise_sell = (static_cast<double>(rand()) / RAND_MAX) * 20.0 - 10.0;
 
-        buy_data[i] = buy_sine + noise_buy;
-        sell_data[i] = sell_sine + noise_sell;
-      }
-      first_run = false;
+      buy_data[i] = buy_sine + noise_buy;
+      sell_data[i] = sell_sine + noise_sell;
     }
+    first_run = false;
+  }
 
+  // Variables to track min/max values for auto-scaling
+  double min_y_value = 0.0;
+  double max_y_value = 100.0;
+  bool has_valid_data = false;
+
+  // Pre-calculate min/max for auto-scaling BEFORE BeginPlot()
+  if (auto_scale_y_axis_ && !lock_y_axis_scale_) {
+    // Calculate min/max based on current volume data type
+    switch (static_cast<Data::VolumeAnalysisType>(volume_data_type_)) {
+      case Data::VolumeAnalysisType::Trades: {
+        static double trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          trades_data[i] = 10.0 + 5.0 * sin(i * 0.1) + 2.0 * cos(i * 0.3);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = trades_data[i];
+            has_valid_data = true;
+          } else {
+            if (trades_data[i] < min_y_value) min_y_value = trades_data[i];
+            if (trades_data[i] > max_y_value) max_y_value = trades_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyTrades: {
+        static double buy_trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          buy_trades_data[i] = 5.0 + 3.0 * sin(i * 0.15) + 1.5 * cos(i * 0.25);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = buy_trades_data[i];
+            has_valid_data = true;
+          } else {
+            if (buy_trades_data[i] < min_y_value) min_y_value = buy_trades_data[i];
+            if (buy_trades_data[i] > max_y_value) max_y_value = buy_trades_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::SellTrades: {
+        static double sell_trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          sell_trades_data[i] = 5.0 + 3.0 * cos(i * 0.15) + 1.5 * sin(i * 0.25);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = sell_trades_data[i];
+            has_valid_data = true;
+          } else {
+            if (sell_trades_data[i] < min_y_value) min_y_value = sell_trades_data[i];
+            if (sell_trades_data[i] > max_y_value) max_y_value = sell_trades_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::Volume: {
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          if (!has_valid_data) {
+            min_y_value = max_y_value = total;
+            has_valid_data = true;
+          } else {
+            if (total < min_y_value) min_y_value = total;
+            if (total > max_y_value) max_y_value = total;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyVolume: {
+        for (int i = 0; i < 100; ++i) {
+          if (!has_valid_data) {
+            min_y_value = max_y_value = buy_data[i];
+            has_valid_data = true;
+          } else {
+            if (buy_data[i] < min_y_value) min_y_value = buy_data[i];
+            if (buy_data[i] > max_y_value) max_y_value = buy_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::SellVolume: {
+        for (int i = 0; i < 100; ++i) {
+          if (!has_valid_data) {
+            min_y_value = max_y_value = sell_data[i];
+            has_valid_data = true;
+          } else {
+            if (sell_data[i] < min_y_value) min_y_value = sell_data[i];
+            if (sell_data[i] > max_y_value) max_y_value = sell_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyVolumePercent: {
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          double pct = total > 0 ? (buy_data[i] / total) * 100.0 : 0.0;
+          if (!has_valid_data) {
+            min_y_value = max_y_value = pct;
+            has_valid_data = true;
+          } else {
+            if (pct < min_y_value) min_y_value = pct;
+            if (pct > max_y_value) max_y_value = pct;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::SellVolumePercent: {
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          double pct = total > 0 ? (sell_data[i] / total) * 100.0 : 0.0;
+          if (!has_valid_data) {
+            min_y_value = max_y_value = pct;
+            has_valid_data = true;
+          } else {
+            if (pct < min_y_value) min_y_value = pct;
+            if (pct > max_y_value) max_y_value = pct;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::BuySellVolume:
+      case Data::VolumeAnalysisType::Delta: {
+        for (int i = 0; i < 100; ++i) {
+          double delta = buy_data[i] - sell_data[i];
+          if (!has_valid_data) {
+            min_y_value = max_y_value = delta;
+            has_valid_data = true;
+          } else {
+            if (delta < min_y_value) min_y_value = delta;
+            if (delta > max_y_value) max_y_value = delta;
+          }
+          // Also check negative sell for BuySellVolume
+          if (static_cast<Data::VolumeAnalysisType>(volume_data_type_) == Data::VolumeAnalysisType::BuySellVolume) {
+            if (-sell_data[i] < min_y_value) min_y_value = -sell_data[i];
+            if (-sell_data[i] > max_y_value) max_y_value = -sell_data[i];
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::DeltaPercent: {
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          double delta_pct = total > 0 ? ((buy_data[i] - sell_data[i]) / total) * 100.0 : 0.0;
+          if (!has_valid_data) {
+            min_y_value = max_y_value = delta_pct;
+            has_valid_data = true;
+          } else {
+            if (delta_pct < min_y_value) min_y_value = delta_pct;
+            if (delta_pct > max_y_value) max_y_value = delta_pct;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::CumulativeDelta: {
+        double running_sum = 0.0;
+        for (int i = 0; i < 100; ++i) {
+          running_sum += buy_data[i] - sell_data[i];
+          if (!has_valid_data) {
+            min_y_value = max_y_value = running_sum;
+            has_valid_data = true;
+          } else {
+            if (running_sum < min_y_value) min_y_value = running_sum;
+            if (running_sum > max_y_value) max_y_value = running_sum;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageSize: {
+        for (int i = 0; i < 100; ++i) {
+          double avg = 50.0 + 20.0 * sin(i * 0.05) + 10.0 * cos(i * 0.1);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = avg;
+            has_valid_data = true;
+          } else {
+            if (avg < min_y_value) min_y_value = avg;
+            if (avg > max_y_value) max_y_value = avg;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageBuySize: {
+        for (int i = 0; i < 100; ++i) {
+          double avg = 45.0 + 15.0 * sin(i * 0.06) + 8.0 * cos(i * 0.12);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = avg;
+            has_valid_data = true;
+          } else {
+            if (avg < min_y_value) min_y_value = avg;
+            if (avg > max_y_value) max_y_value = avg;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageSellSize: {
+        for (int i = 0; i < 100; ++i) {
+          double avg = 48.0 + 18.0 * cos(i * 0.06) + 9.0 * sin(i * 0.12);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = avg;
+            has_valid_data = true;
+          } else {
+            if (avg < min_y_value) min_y_value = avg;
+            if (avg > max_y_value) max_y_value = avg;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::MaxOneTradeVolume: {
+        for (int i = 0; i < 100; ++i) {
+          double max_vol = 100.0 + 40.0 * sin(i * 0.04) + 20.0 * cos(i * 0.08);
+          if (!has_valid_data) {
+            min_y_value = max_y_value = max_vol;
+            has_valid_data = true;
+          } else {
+            if (max_vol < min_y_value) min_y_value = max_vol;
+            if (max_vol > max_y_value) max_y_value = max_vol;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::FilteredVolume: {
+        for (int i = 0; i < 100; ++i) {
+          double filtered = 0.6 * buy_data[i] + 0.4 * sell_data[i];
+          if (!has_valid_data) {
+            min_y_value = max_y_value = filtered;
+            has_valid_data = true;
+          } else {
+            if (filtered < min_y_value) min_y_value = filtered;
+            if (filtered > max_y_value) max_y_value = filtered;
+          }
+        }
+        break;
+      }
+      case Data::VolumeAnalysisType::SplitVolume: {
+        for (int i = 0; i < 100; ++i) {
+          double buy_half = buy_data[i] / 2.0;
+          double sell_half = sell_data[i] / 2.0;
+          if (!has_valid_data) {
+            min_y_value = max_y_value = buy_half;
+            has_valid_data = true;
+          } else {
+            if (buy_half < min_y_value) min_y_value = buy_half;
+            if (buy_half > max_y_value) max_y_value = buy_half;
+            if (sell_half < min_y_value) min_y_value = sell_half;
+            if (sell_half > max_y_value) max_y_value = sell_half;
+          }
+        }
+        break;
+      }
+      default: {
+        for (int i = 0; i < 100; ++i) {
+          double val = buy_data[i] - sell_data[i];
+          if (!has_valid_data) {
+            min_y_value = max_y_value = val;
+            has_valid_data = true;
+          } else {
+            if (val < min_y_value) min_y_value = val;
+            if (val > max_y_value) max_y_value = val;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Set Y-axis limits BEFORE BeginPlot()
+  if (lock_y_axis_scale_) {
+    // If scale is locked, set the fixed Y-axis range
+    ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_Always);
+  } else if (auto_scale_y_axis_ && has_valid_data) {
+    // If auto-scaling is enabled, set limits based on calculated min/max
+    double range = max_y_value - min_y_value;
+    if (range == 0) range = 1.0;
+    double padding = range * 0.05;
+    ImPlot::SetNextAxisLimits(ImAxis_Y1, min_y_value - padding, max_y_value + padding, ImGuiCond_Always);
+    locked_min_y_ = min_y_value - padding;
+    locked_max_y_ = max_y_value + padding;
+  } else {
+    // If auto-scaling is disabled but not locked, use manual range
+    ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_FirstUseEver);
+  }
+
+  if (ImPlot::BeginPlot("Time Histogram", ImVec2(-1, -1))) {
     // Configure the plot axes using individual axis setup for modern API
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
     ImPlot::SetupAxis(ImAxis_Y1, "Volume", y_axis_flags);
-
-    // Variables to track min/max values for auto-scaling
-    double min_y_value = 0.0;
-    double max_y_value = 100.0;
-    bool has_valid_data = false;
-
-    // Handle Y-axis scaling based on auto-scale and lock settings
-    if (lock_y_axis_scale_) {
-      // If scale is locked, set the fixed Y-axis range
-      ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_Always);
-    } else if (auto_scale_y_axis_) {
-      // If auto-scaling is enabled, calculate min/max from the data to be plotted
-      // This will be handled by setting appropriate limits after processing all data
-    } else {
-      // If auto-scaling is disabled but not locked, use manual range
-      ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_FirstUseEver);
-    }
 
     // Helper function to add tooltip to bars
     auto addBarTooltip = [](const char* label_id, const double* xs, const double* ys, int count, double bar_size) {
@@ -695,23 +956,6 @@ void TimeHistogramPanel::render() {
         addBarTooltip("Time Histogram", x_data, y_data, 100, 0.8);
         break;
       }
-    }
-
-
-    // Apply auto-scaling if enabled and we have valid data
-    if (auto_scale_y_axis_ && has_valid_data && !lock_y_axis_scale_) {
-      // Add some padding to the calculated range
-      double range = max_y_value - min_y_value;
-      if (range == 0) {
-        range = 1.0; // Prevent division by zero if all values are the same
-      }
-      double padding = range * 0.05; // 5% padding
-
-      ImPlot::SetNextAxisLimits(ImAxis_Y1, min_y_value - padding, max_y_value + padding, ImGuiCond_Always);
-
-      // Update the locked values to reflect the current auto-scaled range
-      locked_min_y_ = min_y_value - padding;
-      locked_max_y_ = max_y_value + padding;
     }
 
     ImPlot::EndPlot();

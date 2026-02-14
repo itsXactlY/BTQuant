@@ -203,12 +203,12 @@ if (ImGui::BeginMenu("Layout Presets")) {
 
 ## Implementierungs-Checkliste
 
-### Phase 1: Menü-Erweiterung (HOHE PRIORITÄT) ✅ ERLEDIGT
-- [x] `quant_workspace_component.cpp` - "Add Panel" Menü erweitert (5 Kategorien: Charts, Market Data, Trading, Analysis, System)
-- [x] `main_trading_terminal.cpp` - "Layout Presets" Menü hinzugefügt (5 Presets: Default, Modern Trading, Dashboard Only, Chart Focus, Risk Monitoring)
-- [x] Fehlende Panel-Typen in Menü aufgenommen
+### Phase 1: Menü-Erweiterung (HOHE PRIORITÄT)
+- [ ] `quant_workspace_component.cpp` - "Add Panel" Menü erweitern
+- [ ] `main_trading_terminal.cpp` - "Layout Presets" Menü hinzufügen
+- [ ] Fehlende Panel-Typen in Menü aufnehmen
 
-### Phase 2: Panel-Implementierung (ALLE VORHANDEN!) ✅ ERLEDIGT
+### Phase 2: Panel-Implementierung (ALLE VORHANDEN!)
 ✅ Alle 14 "versteckten" Panel-Typen sind bereits implementiert:
 - `histogram_panel.hpp`
 - `scatter_plot_panel.hpp`
@@ -225,19 +225,107 @@ if (ImGui::BeginMenu("Layout Presets")) {
 - `strategy_builder.hpp`
 - `option_analytics_panel.hpp`
 
-### Phase 3: Zusätzliche Panels ins Enum aufnehmen ✅ ERLEDIGT
-- [x] `PanelType::CORRELATION_HEATMAP` - zum Enum hinzugefügt
-- [x] `PanelType::DOM_SURFACE` - zum Enum hinzugefügt
-- [x] `PanelType::MULTI_VWAP` - zum Enum hinzugefügt
-- [x] `PanelType::TECHNICAL_INDICATORS` - zum Enum hinzugefügt
-- [x] `PanelType::THEME_CUSTOMIZATION` - zum Enum hinzugefügt
-- [x] `PanelType::KEYBOARD_SHORTCUTS` - zum Enum hinzugefügt
-- [x] `PanelType::DRAWING_TOOLS` - zum Enum hinzugefügt
+### Phase 3: Zusätzliche Panels ins Enum aufnehmen
+- [ ] `correlation_heatmap_component.hpp` → `PanelType::CORRELATION_HEATMAP`
+- [ ] `dom_surface_panel.hpp` → `PanelType::DOM_SURFACE`
+- [ ] `multi_vwap_panel.hpp` → `PanelType::MULTI_VWAP`
+- [ ] `technical_indicators_component.hpp` → `PanelType::TECHNICAL_INDICATORS`
+- [ ] `theme_customization_component.hpp` → `PanelType::THEME_CUSTOMIZATION`
+- [ ] `keyboard_shortcuts_component.hpp` → `PanelType::KEYBOARD_SHORTCUTS`
+- [ ] `drawing_tools.hpp` → `PanelType::DRAWING_TOOLS`
 
-### Phase 4: PanelManager::add_panel() erweitern ✅ ERLEDIGT
-- [x] Case für alle neuen PanelTypes in [`panel_manager.cpp`](dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp) hinzugefügt
-- [x] `get_panel_type_name()` in [`panel_base.cpp`](dependencies/BTQ_Render_Engine/src/components/panel_base.cpp) erweitert
-- [x] `get_default_panel_title()` in [`panel_manager.cpp`](dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp) erweitert
+### Phase 4: PanelManager::add_panel() erweitern
+- [ ] Case für alle fehlenden PanelTypes in [`panel_manager.cpp`](dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp) hinzufügen
 
-### Build-Status
-✅ Build erfolgreich: `dependencies/BTQ_Render_Engine/build/BTQuantTerminal`
+
+# TASK_QUANTOWER_UI_ARCHITECTURE.md
+
+**Objective:** Wire up all 30+ hidden C++ panels into a unified, lock-free ImGui interface that perfectly mimics the Quantower layout (Top Toolbar, Sidebar, Chart Area, Order Entry, Bottom Toolbar).
+
+---
+
+## Phase 1: The Enum & Factory Expansion (Awakening the Ghosts)
+**Goal:** Your codebase has 15+ panels fully implemented in C++ but completely invisible to the UI. We must register them in the central factory.
+
+- [ ] **1.1: Expand `PanelType` Enum**
+    - **File:** `include/components/panel_manager.hpp`
+    - **Action:** Add the missing panel types to the `enum class PanelType`:
+      `HISTOGRAM`, `SCATTER_PLOT`, `TIME_SERIES`, `SCREENER`, `TAPE`, `DEPTH_CHART`, `LOG_PANEL`, `PERFORMANCE_MONITOR`, `TIME_STATISTICS`, `TIME_HISTOGRAM`, `HISTORICAL_TIME_SALES`, `CHART_REPLAY`, `STRATEGY_BUILDER`, `OPTION_ANALYTICS`, `CORRELATION_HEATMAP`, `DOM_SURFACE`, `MULTI_VWAP`, `TECHNICAL_INDICATORS`, `THEME_CUSTOMIZATION`, `KEYBOARD_SHORTCUTS`, `DRAWING_TOOLS`.
+
+- [ ] **1.2: Wire the `add_panel` Factory**
+    - **File:** `src/components/panel_manager.cpp`
+    - **Action:** In the `PanelManager::add_panel(PanelType type)` switch statement, add `case` blocks for EVERY enum added in step 1.1.
+    - **Implementation:** e.g., `case PanelType::DOM_SURFACE: panel = std::make_shared<DomSurfacePanel>(config, processor_); break;`
+    - *(Note: Ensure all respective headers like `dom_surface_panel.hpp` are included at the top).*
+
+---
+
+## Phase 2: The Main Menu & Workspace Wiring
+**Goal:** Expose the awakened panels and layout presets to the user via the top menu bar.
+
+- [ ] **2.1: Rebuild "Add Panel" Menu Categories**
+    - **File:** `src/components/quant_workspace_component.cpp` (Inside `render_gui()` -> Menu Bar)
+    - **Action:** Categorize the `Add Panel` menu exactly as requested:
+        - **Charts:** Chart, Footprint, TPO Profile, Volume Profile, Depth Chart.
+        - **Market Data:** Order Book, Time & Sales, Tape, Watchlist, Heatmap, DOM Surface.
+        - **Trading:** Orders, Positions, Alerts, Strategy Builder.
+        - **Analysis:** Metrics, Risk Metrics, Risk Analyzer, Option Analytics, Multi VWAP.
+
+- [ ] **2.2: Expose Layout Presets**
+    - **File:** `src/components/quant_workspace_component.cpp`
+    - **Action:** Add a `Layout Presets` menu next to `Add Panel`.
+    - **Implementation:** Call `panel_manager_->apply_layout_preset(...)` for `DEFAULT`, `MODERN_TRADING`, `DASHBOARD_ONLY`, `CHART_FOCUS`, `RISK_MONITORING`.
+    - **Action:** Ensure `MODERN_TRADING` is set as the default on application startup in `main_trading_terminal.cpp`.
+
+---
+
+## Phase 3: The Quantower Chart Panel Anatomy
+**Goal:** Transform the basic `ChartPanel` into the 5-part Quantower layout.
+
+- [ ] **3.1: Chart Top Toolbar (Main Controls)**
+    - **File:** `src/components/chart_panel.cpp` (Inside `render()`)
+    - **Action:** Render a horizontal ImGui bar at the top (`ImGui::BeginChild("TopBar", ImVec2(0, 30))`).
+    - **Elements:**
+        - Symbol Lookup (InputText).
+        - Timeframe Selector (Dropdown: 1m, 5m, 1H, 1D).
+        - Chart Style (Dropdown: Candle, Bar, Line, Area, Quantower).
+        - Mouse Trading vs. Keyboard Trading toggle button.
+
+- [ ] **3.2: Sidebar Menu (Tools & Objects)**
+    - **File:** `src/components/chart_panel.cpp`
+    - **Action:** Render a vertical toolbar on the left (`ImGui::BeginChild("Sidebar", ImVec2(40, 0))`).
+    - **Elements:**
+        - Icons/Buttons for: Crosshair, Drawing Tools (Lines, Fibs), Overlays, and Indicators.
+        - **Favorites:** Add a "Star" toggle next to drawing tools in the context menu to pin them to this sidebar.
+
+- [ ] **3.3: The Chart Area (Price Scale Modes)**
+    - **File:** `src/components/chart_panel.cpp` (Inside the main ImPlot/Canvas area)
+    - **Action:** Implement the 4 Price Centering Modes via right-click on the Y-Axis:
+        - *Auto:* standard ImPlot `ImPlotAxisFlags_AutoFit`.
+        - *Auto Centered:* Manually set Y limits so `(Y_max + Y_min)/2 == last_price`.
+        - *Keep in View:* Only adjust Y limits if `last_price` exceeds current bounds.
+        - *Manual:* Disable all auto-fitting. Triggered instantly if the user drags the chart.
+    - **Action:** Implement "Snap to Last" button. Only visible if X-axis max < current time. Clicking it resets X-axis to follow live data.
+
+- [ ] **3.4: Sidebar Order Entry (Right Side)**
+    - **File:** `src/components/chart_panel.cpp`
+    - **Action:** Render a vertical pane on the right side.
+    - **Elements:**
+        - Market Buy/Sell hot buttons displaying live Best Bid & Ask (Pulled from Atomic L2 Snapshot).
+        - Input fields for Order Quantity and TIF (Time In Force).
+
+- [ ] **3.5: Bottom Toolbar (Volume Analysis)**
+    - **File:** `src/components/chart_panel.cpp`
+    - **Action:** Render a horizontal bar at the bottom (`ImGui::BeginChild("BottomBar", ImVec2(0, 30))`).
+    - **Elements:** Toggles for Volume Profile, Delta, and Cumulative Delta overlays.
+
+---
+
+## Phase 4: Lock-Free State Integration
+**Goal:** Ensure the complex UI described above does not destroy performance.
+
+- [ ] **4.1: UI Reads from Atomics**
+    - **Rule:** The Quick Order Entry's Best Bid/Ask buttons MUST read from `MarketDataProcessor::get_atomic_snapshot(sym_id)`. They must NOT execute blocking calls to the exchange.
+- [ ] **4.2: Trading Actions are Asynchronous**
+    - **Rule:** When a user clicks "Buy Market" on the chart, the UI pushes a `TradeCommand` struct into a lock-free Single-Producer-Single-Consumer (SPSC) queue.
+    - **Rule:** A background Execution Thread reads this queue and sends it to the exchange. The UI thread never waits for the HTTP/WebSocket response.

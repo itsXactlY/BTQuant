@@ -608,15 +608,12 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.Colors[ImGuiCol_HeaderActive] =
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.8f);
-  style.Colors[ImGuiCol_Separator] =
-      ImVec4(theme.colors.border_color[0], theme.colors.border_color[1],
-             theme.colors.border_color[2], theme.colors.border_color[3]);
-  style.Colors[ImGuiCol_SeparatorHovered] =
-      ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
-             theme.colors.accent_primary[2], theme.colors.accent_primary[3]);
-  style.Colors[ImGuiCol_SeparatorActive] =
-      ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
-             theme.colors.accent_primary[2], theme.colors.accent_primary[3]);
+  // Set separator color to rgba(94, 82, 64, 0.2) for seamless visual blending
+  // Convert RGB values from 0-255 to 0-1 range: 94/255 ≈ 0.369, 82/255 ≈ 0.321, 64/255 ≈ 0.251
+  style.Colors[ImGuiCol_Separator] = ImVec4(0.369f, 0.321f, 0.251f, 0.2f);
+  // Maintain consistent separator colors for hover and active states
+  style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.369f, 0.321f, 0.251f, 0.4f);  // Slightly more opaque when hovered
+  style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.369f, 0.321f, 0.251f, 0.6f);   // More opaque when active
   style.Colors[ImGuiCol_ResizeGrip] =
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.4f);

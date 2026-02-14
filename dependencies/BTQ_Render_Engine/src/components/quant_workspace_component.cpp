@@ -70,6 +70,9 @@ void QuantWorkspaceComponent::render_gui() {
   // Docking not supported in this branch of ImGui.
   // We'll just render the panels normally.
 
+  // Apply seamless visual blending: remove window padding for seamless look
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
   // Render dashboard controls
   if (show_dashboard_controls_) {
     render_dashboard_controls();
@@ -77,11 +80,14 @@ void QuantWorkspaceComponent::render_gui() {
 
   // Render all panels through the panel manager
   panel_manager_->render();
-  
+
   // Handle global crosshair synchronization after all panels are rendered
   if (global_crosshair_enabled_) {
     handle_global_crosshair_sync();
   }
+
+  // Restore the original style
+  ImGui::PopStyleVar();
 }
 
 void QuantWorkspaceComponent::handle_global_crosshair_sync() {

@@ -8,7 +8,7 @@
 ## Phase 1: The Docking Matrix (Workspace Composition)
 **Target:** `src/ui/layout_manager.cpp` & `src/components/quant_workspace_component.cpp`
 
-- [ ] **1.1: MMT programmatic Grid Construction**
+- [x] **1.1: MMT programmatic Grid Construction**
     - Inside `LayoutManager::apply_layout_preset(MODERN_TRADING)`:
     - [ ] Create central `ChartSuperNode`.
     - [ ] Split Left (3%) -> `drawing_tools_panel`.

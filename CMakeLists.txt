@@ -23,8 +23,26 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,un
 option(BUILD_TESTS "Build test executables" OFF)
 option(BUILD_DOCS "Build documentation" OFF)
 
+# Define source files for the main project
+set(PUBBTQUANT_SOURCES
+    src/main.cpp
+    src/analytics/tpoengine.cpp
+    src/analytics/liquiditysweepdetector.cpp
+)
+
 # Add subdirectories
 add_subdirectory(dependencies/BTQ_Render_Engine)
+
+# Create main executable if there are sources
+if(PUBBTQUANT_SOURCES)
+    add_executable(pubbtquant ${PUBBTQUANT_SOURCES})
+    
+    # Include directories
+    target_include_directories(pubbtquant PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/include
+    )
+endif()
 
 # Documentation target
 if(BUILD_DOCS)

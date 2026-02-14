@@ -1322,7 +1322,7 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
     }
 
     const auto& colors = ThemeManager::getInstance().getColors();
-    ImPlot::SetNextFillStyle(colors.accent_green);
+    // ImPlot::SetNextFillStyle(colors.accent_green);
     ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
 
     // Handle Asks - Cumulative depth from best ask up
@@ -1348,7 +1348,7 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
       ay.insert(ay.begin(), 0.0);
     }
 
-    ImPlot::SetNextFillStyle(colors.accent_red);
+    // ImPlot::SetNextFillStyle(colors.accent_red);
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
 
     ImPlot::EndPlot();

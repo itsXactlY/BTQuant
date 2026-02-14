@@ -6,30 +6,20 @@
 #include <iostream>
 #include <numeric>
 
-// Vulkan compute integration includes
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-#define VK_NO_PROTOTYPES
-#endif
-#include <vulkan/vulkan.h>
 #include <imgui.h>
-#include <backends/imgui_impl_vulkan.h>
 
 namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
       processor_(processor) {
-  // Initialize Vulkan compute resources
-  initializeVulkanCompute();
+  // Vulkan compute removed - using CPU-based heatmap rendering
 }
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
     processor_->unsubscribe(subscription_id_);
   }
-  
-  // Destroy Vulkan compute resources
-  destroyVulkanCompute();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -341,12 +331,6 @@ void DomSurfacePanel::updateHeatmapData() {
   bounds_max_[1] = max_price;
 
   scale_max_ = max_vol > 0 ? max_vol : 1.0;
-  
-  // Update Vulkan compute if initialized
-  if (vulkanInitialized_) {
-    needsVulkanUpdate_ = true;
-    updateVulkanHeatmap();
-  }
 }
 
 void DomSurfacePanel::updateLargeOrderMarkers() {
@@ -509,8 +493,6 @@ std::string DomSurfacePanel::getMarkerTooltip(const LargeOrderMarker& marker) co
 void DomSurfacePanel::renderLargeOrderMarkers() {
   if (large_order_markers_.empty()) return;
 
-  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 1.0f);
-
   // Get plot area for manual circle rendering
   ImPlotRect plot_rect = ImPlot::GetPlotLimits();
 
@@ -556,8 +538,7 @@ void DomSurfacePanel::renderLargeOrderMarkers() {
       }
     }
   }
-
-  ImPlot::PopStyleVar();
+  // Note: PopStyleVar removed - no corresponding PushStyleVar in this function
 }
 
 void DomSurfacePanel::render() {
@@ -607,36 +588,18 @@ void DomSurfacePanel::render() {
                             ImPlotCond_Once);
 
     // Use Vulkan-accelerated heatmap texture if available
-    if (vulkanInitialized_ && heatmapTextureId_) {
-      // Render the Vulkan-generated heatmap texture
-      ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
-      
-      // Calculate the UV coordinates for the entire texture
-      // The texture spans the entire plot area
-      ImVec2 uv0(0.0f, 0.0f);
-      ImVec2 uv1(1.0f, 1.0f);
-      
-      // Draw the heatmap texture as a quad
-      ImPlot::PlotImage("Liquidity", heatmapTextureId_,
-                        ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                        ImPlotPoint(bounds_max_[0], bounds_max_[1]),
-                        uv0, uv1, ImVec4(1, 1, 1, 1), 0);
-      
-      ImPlot::PopStyleVar();
-    } else {
-      // Fallback to CPU-generated heatmap if Vulkan is not available
-      int rows = price_bins_;
-      int cols = static_cast<int>(heatmap_data_.size()) / rows;
+    // CPU-based heatmap rendering
+    int rows = price_bins_;
+    int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
-      if (cols > 0 && rows > 0) {
-        ImPlot::PushColormap(ImPlotColormap_Viridis);
-        // Apply heatmap intensity to adjust color mapping sensitivity
-        double adjusted_scale_max = scale_max_ / heatmap_intensity_;
-        ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
-                            ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                            ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-        ImPlot::PopColormap();
-      }
+    if (cols > 0 && rows > 0) {
+      ImPlot::PushColormap(ImPlotColormap_Viridis);
+      // Apply heatmap intensity to adjust color mapping sensitivity
+      double adjusted_scale_max = scale_max_ / heatmap_intensity_;
+      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
+                          ImPlotPoint(bounds_min_[0], bounds_min_[1]),
+                          ImPlotPoint(bounds_max_[0], bounds_max_[1]));
+      ImPlot::PopColormap();
     }
 
     // Render Persistent Level Lines OVER the heatmap
@@ -666,11 +629,6 @@ void DomSurfacePanel::render() {
                 median_order_size_);
     ImGui::Text("Trade Bubbles: %zu (MaxVol: %.2f)", trade_bubbles_.size(), max_trade_volume_);
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
-    if (vulkanInitialized_) {
-      ImGui::Text("Vulkan: Active");
-    } else {
-      ImGui::Text("Vulkan: Not Initialized");
-    }
   }
 
   end_panel_window();
@@ -755,24 +713,16 @@ void DomSurfacePanel::renderPersistentLevels() {
     if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
       ImU32 color = getPersistentLevelColor(level);
 
-      // Draw horizontal line across the entire time axis
-      ImPlot::PushStyleColor(ImPlotCol_Line, color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 3.0f); // Thicker line for better visibility
-
       // Draw horizontal line at the price level from left to right of the plot
       double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double ys[2] = {level.price, level.price};
       ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
-
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
 
       // Draw a more prominent rectangle to highlight the level
       // Extract the RGB components and set alpha to 15% transparency for better visibility
       ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
       color_vec.w = 0.15f; // Set alpha to 15% transparency
       ImU32 transparent_color = ImGui::ColorConvertFloat4ToU32(color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, transparent_color);
 
       // Calculate a vertical range around the price level for the rectangle
       // Make it proportional to the zoom level for better visibility
@@ -789,13 +739,10 @@ void DomSurfacePanel::renderPersistentLevels() {
       double shade_y2[2] = {y_max, y_max};
       ImPlot::PlotShaded("##PersistentLevelRect", shade_x, shade_y1, shade_y2, 2);
 
-      ImPlot::PopStyleColor();
-
       // Add a subtle highlight effect above the main line
       ImVec4 highlight_color_vec = ImGui::ColorConvertU32ToFloat4(color);
       highlight_color_vec.w = 0.08f; // Even more transparent for highlight
       ImU32 highlight_color = ImGui::ColorConvertFloat4ToU32(highlight_color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Line, highlight_color);
 
       // Draw highlight slightly above the main line
       double highlight_y_min = level.price + price_range/2.0;
@@ -806,8 +753,6 @@ void DomSurfacePanel::renderPersistentLevels() {
       double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
       double highlight_shade_y2[2] = {highlight_y_max, highlight_y_max};
       ImPlot::PlotShaded("##PersistentLevelHighlight", highlight_shade_x, highlight_shade_y1, highlight_shade_y2, 2);
-
-      ImPlot::PopStyleColor();
     }
   }
 }
@@ -876,698 +821,10 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::Separator();
 }
 
-bool DomSurfacePanel::initializeVulkanCompute() {
-  // Check if Vulkan is available through ImGui
-  if (!ImGui::GetCurrentContext() || !GImGui) {
-    return false;
-  }
-  
-  ImGuiIO& io = ImGui::GetIO();
-  
-  // Skip initialization if not using Vulkan backend
-  if (!(io.BackendFlags & ImGuiBackendFlags_RendererHasVulkan)) {
-    return false;
-  }
-  
-  // Initialize Vulkan compute resources
-  try {
-    createDescriptorSetLayout();
-    createComputePipeline();
-    createHeatmapImage();
-    createHeatmapImageView();
-    createSampler();
-    createDescriptorPool();
-    createDescriptorSet();
-    createComputeCommandBuffer();
-    
-    vulkanInitialized_ = true;
-    return true;
-  } catch (...) {
-    return false;
-  }
-}
-
-void DomSurfacePanel::destroyVulkanCompute() {
-  if (!vulkanInitialized_) return;
-  
-  // Wait for any pending compute operations
-  if (computeFence_ != VK_NULL_HANDLE) {
-    vkWaitForFences(GImGui->VulkanHandle, 1, &computeFence_, VK_TRUE, UINT64_MAX);
-  }
-  
-  // Clean up Vulkan resources
-  if (computeCommandBuffer_ != VK_NULL_HANDLE) {
-    vkFreeCommandBuffers(GImGui->VulkanHandle, 
-                         ImGui::GetAllocatorUserData()->CommandPool, 
-                         1, &computeCommandBuffer_);
-    computeCommandBuffer_ = VK_NULL_HANDLE;
-  }
-  
-  if (computeFence_ != VK_NULL_HANDLE) {
-    vkDestroyFence(GImGui->VulkanHandle, computeFence_, nullptr);
-    computeFence_ = VK_NULL_HANDLE;
-  }
-  
-  if (descriptorSetLayout_ != VK_NULL_HANDLE) {
-    vkDestroyDescriptorSetLayout(GImGui->VulkanHandle, descriptorSetLayout_, nullptr);
-    descriptorSetLayout_ = VK_NULL_HANDLE;
-  }
-  
-  if (pipelineLayout_ != VK_NULL_HANDLE) {
-    vkDestroyPipelineLayout(GImGui->VulkanHandle, pipelineLayout_, nullptr);
-    pipelineLayout_ = VK_NULL_HANDLE;
-  }
-  
-  if (computePipeline_ != VK_NULL_HANDLE) {
-    vkDestroyPipeline(GImGui->VulkanHandle, computePipeline_, nullptr);
-    computePipeline_ = VK_NULL_HANDLE;
-  }
-  
-  if (orderBookBuffer_ != VK_NULL_HANDLE) {
-    vkDestroyBuffer(GImGui->VulkanHandle, orderBookBuffer_, nullptr);
-    orderBookBuffer_ = VK_NULL_HANDLE;
-  }
-  
-  if (orderBookBufferMemory_ != VK_NULL_HANDLE) {
-    vkFreeMemory(GImGui->VulkanHandle, orderBookBufferMemory_, nullptr);
-    orderBookBufferMemory_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapOutputBuffer_ != VK_NULL_HANDLE) {
-    vkDestroyBuffer(GImGui->VulkanHandle, heatmapOutputBuffer_, nullptr);
-    heatmapOutputBuffer_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapOutputBufferMemory_ != VK_NULL_HANDLE) {
-    vkFreeMemory(GImGui->VulkanHandle, heatmapOutputBufferMemory_, nullptr);
-    heatmapOutputBufferMemory_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapImage_ != VK_NULL_HANDLE) {
-    vkDestroyImage(GImGui->VulkanHandle, heatmapImage_, nullptr);
-    heatmapImage_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapImageMemory_ != VK_NULL_HANDLE) {
-    vkFreeMemory(GImGui->VulkanHandle, heatmapImageMemory_, nullptr);
-    heatmapImageMemory_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapImageView_ != VK_NULL_HANDLE) {
-    vkDestroyImageView(GImGui->VulkanHandle, heatmapImageView_, nullptr);
-    heatmapImageView_ = VK_NULL_HANDLE;
-  }
-  
-  if (heatmapSampler_ != VK_NULL_HANDLE) {
-    vkDestroySampler(GImGui->VulkanHandle, heatmapSampler_, nullptr);
-    heatmapSampler_ = VK_NULL_HANDLE;
-  }
-  
-  vulkanInitialized_ = false;
-}
-
-void DomSurfacePanel::createDescriptorSetLayout() {
-  // Define bindings for the compute shader
-  VkDescriptorSetLayoutBinding orderBookBinding = {};
-  orderBookBinding.binding = 0;
-  orderBookBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-  orderBookBinding.descriptorCount = 1;
-  orderBookBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-  orderBookBinding.pImmutableSamplers = nullptr;
-  
-  VkDescriptorSetLayoutBinding heatmapOutputBinding = {};
-  heatmapOutputBinding.binding = 1;
-  heatmapOutputBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  heatmapOutputBinding.descriptorCount = 1;
-  heatmapOutputBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-  heatmapOutputBinding.pImmutableSamplers = nullptr;
-  
-  VkDescriptorSetLayoutBinding heatmapParamsBinding = {};
-  heatmapParamsBinding.binding = 2;
-  heatmapParamsBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  heatmapParamsBinding.descriptorCount = 1;
-  heatmapParamsBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-  heatmapParamsBinding.pImmutableSamplers = nullptr;
-  
-  std::array<VkDescriptorSetLayoutBinding, 3> bindings = {orderBookBinding, heatmapOutputBinding, heatmapParamsBinding};
-  
-  VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-  layoutInfo.pBindings = bindings.data();
-  
-  if (vkCreateDescriptorSetLayout(GImGui->VulkanHandle, &layoutInfo, nullptr, &descriptorSetLayout_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create descriptor set layout!");
-  }
-}
-
-void DomSurfacePanel::createComputePipeline() {
-  // In a real implementation, you would load the compiled SPIR-V from the shaders/lob_heatmap.comp.spv file
-  // For now, we'll create a placeholder implementation that assumes the shader is available
-  
-  // Create a simple compute shader module (placeholder - in reality you'd load from file)
-  // This is a minimal SPIR-V binary for a compute shader that does nothing
-  static const uint32_t dummyComputeShaderSPV[] = {
-    0x07230203, 0x00010000, 0x0008000a, 0x00000014, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
-    0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001,
-    0x000a000f, 0x00000000, 0x00000004, 0x6e69616d, 0x00000000, 0x0000000b, 0x0000000f, 0x00000015,
-    0x00000019, 0x0000001d, 0x00050006, 0x0000000b, 0x00000000, 0x696c5f67, 0x0065746e, 0x00040006,
-    0x0000000f, 0x00000000, 0x0074754f, 0x00030005, 0x00000011, 0x00786574, 0x00060005, 0x00000015,
-    0x00000000, 0x63786574, 0x00657475, 0x00060005, 0x00000019, 0x00000000, 0x63786574, 0x00657475,
-    0x00060005, 0x0000001d, 0x00000000, 0x63786574, 0x00657475, 0x00050048, 0x0000000b, 0x00000000,
-    0x0000000b, 0x00000000, 0x00050048, 0x0000000f, 0x00000000, 0x0000000c, 0x00000000, 0x00030047,
-    0x0000000f, 0x00000003, 0x00040048, 0x00000015, 0x00000000, 0x00000016, 0x00040048, 0x00000015,
-    0x00000001, 0x00000016, 0x00040048, 0x00000019, 0x00000000, 0x0000001a, 0x00040048, 0x00000019,
-    0x00000001, 0x0000001a, 0x00040048, 0x0000001d, 0x00000000, 0x0000001e, 0x00040048, 0x0000001d,
-    0x00000001, 0x0000001e, 0x00050041, 0x00000010, 0x00000011, 0x0000000f, 0x00000010, 0x0003003e,
-    0x00000011, 0x00000012, 0x000a0004, 0x475f4c47, 0x4c474f4f, 0x70635f45, 0x74735f70, 0x5f656c79,
-    0x656c676e, 0x0000766e, 0x00060004, 0x475f4c47, 0x4c474f4f, 0x61625f45, 0x616d6552, 0x00000078,
-    0x00050005, 0x0000000b, 0x0070766d, 0x656c706d, 0x00007465, 0x00060005, 0x0000000f, 0x00637865,
-    0x646e4974, 0x78657475, 0x00000000, 0x00050005, 0x00000015, 0x00637865, 0x646e4974, 0x00007865,
-    0x00050005, 0x00000019, 0x00637865, 0x646e4974, 0x00007865, 0x00050005, 0x0000001d, 0x00637865,
-    0x646e4974, 0x00007865
-  };
-  
-  VkShaderModuleCreateInfo createInfo = {};
-  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  createInfo.codeSize = sizeof(dummyComputeShaderSPV);
-  createInfo.pCode = dummyComputeShaderSPV;
-  
-  VkShaderModule shaderModule;
-  if (vkCreateShaderModule(GImGui->VulkanHandle, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create shader module!");
-  }
-  
-  VkPipelineShaderStageCreateInfo shaderStageInfo = {};
-  shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStageInfo.module = shaderModule;
-  shaderStageInfo.pName = "main";
-  
-  // Create pipeline layout
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = 1;
-  pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout_;
-  
-  if (vkCreatePipelineLayout(GImGui->VulkanHandle, &pipelineLayoutInfo, nullptr, &pipelineLayout_) != VK_SUCCESS) {
-    vkDestroyShaderModule(GImGui->VulkanHandle, shaderModule, nullptr);
-    throw std::runtime_error("failed to create pipeline layout!");
-  }
-  
-  // Create compute pipeline
-  VkComputePipelineCreateInfo pipelineInfo = {};
-  pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-  pipelineInfo.stage = shaderStageInfo;
-  pipelineInfo.layout = pipelineLayout_;
-  
-  if (vkCreateComputePipelines(GImGui->VulkanHandle, nullptr, 1, &pipelineInfo, nullptr, &computePipeline_) != VK_SUCCESS) {
-    vkDestroyShaderModule(GImGui->VulkanHandle, shaderModule, nullptr);
-    throw std::runtime_error("failed to create compute pipeline!");
-  }
-  
-  // Clean up shader module after pipeline creation
-  vkDestroyShaderModule(GImGui->VulkanHandle, shaderModule, nullptr);
-}
-
-void DomSurfacePanel::createHeatmapImage() {
-  // Get image dimensions from current heatmap requirements
-  uint32_t width = static_cast<uint32_t>(history_depth_);  // Time steps
-  uint32_t height = static_cast<uint32_t>(price_bins_);    // Price bins
-  
-  VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT; // RGBA float format for heatmap
-  
-  // Create image
-  VkImageCreateInfo imageInfo = {};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = width;
-  imageInfo.extent.height = height;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = format;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  
-  if (vkCreateImage(GImGui->VulkanHandle, &imageInfo, nullptr, &heatmapImage_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create heatmap image!");
-  }
-  
-  // Allocate memory for image
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(GImGui->VulkanHandle, heatmapImage_, &memRequirements);
-  
-  VkMemoryAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = 0; // Will be determined based on requirements
-  
-  // Find appropriate memory type
-  VkPhysicalDeviceMemoryProperties memProperties;
-  vkGetPhysicalDeviceMemoryProperties(GImGui->VulkanHandle, &memProperties);
-  
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    if ((memRequirements.memoryTypeBits & (1 << i)) && 
-        (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
-      allocInfo.memoryTypeIndex = i;
-      break;
-    }
-  }
-  
-  if (vkAllocateMemory(GImGui->VulkanHandle, &allocInfo, nullptr, &heatmapImageMemory_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to allocate image memory!");
-  }
-  
-  vkBindImageMemory(GImGui->VulkanHandle, heatmapImage_, heatmapImageMemory_, 0);
-}
-
-void DomSurfacePanel::createHeatmapImageView() {
-  VkImageViewCreateInfo viewInfo = {};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = heatmapImage_;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  viewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
-  
-  if (vkCreateImageView(GImGui->VulkanHandle, &viewInfo, nullptr, &heatmapImageView_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create texture image view!");
-  }
-}
-
-void DomSurfacePanel::createSampler() {
-  VkSamplerCreateInfo samplerInfo = {};
-  samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  samplerInfo.magFilter = VK_FILTER_LINEAR;
-  samplerInfo.minFilter = VK_FILTER_LINEAR;
-  samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  samplerInfo.anisotropyEnable = VK_FALSE;
-  samplerInfo.maxAnisotropy = 1.0f;
-  samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-  samplerInfo.unnormalizedCoordinates = VK_FALSE;
-  samplerInfo.compareEnable = VK_FALSE;
-  samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-  samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-  
-  if (vkCreateSampler(GImGui->VulkanHandle, &samplerInfo, nullptr, &heatmapSampler_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create texture sampler!");
-  }
-}
-
-void DomSurfacePanel::createDescriptorPool() {
-  std::array<VkDescriptorPoolSize, 3> poolSizes = {};
-  poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-  poolSizes[0].descriptorCount = 1;
-  poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  poolSizes[1].descriptorCount = 1;
-  poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  poolSizes[2].descriptorCount = 1;
-  
-  VkDescriptorPoolCreateInfo poolInfo = {};
-  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-  poolInfo.pPoolSizes = poolSizes.data();
-  poolInfo.maxSets = 1;
-  
-  if (vkCreateDescriptorPool(GImGui->VulkanHandle, &poolInfo, nullptr, &descriptorPool_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create descriptor pool!");
-  }
-}
-
-void DomSurfacePanel::createDescriptorSet() {
-  // First, create the order book buffer that will be used by the compute shader
-  createOrderBookBuffer();
-  
-  VkDescriptorSetAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = descriptorPool_;
-  allocInfo.descriptorSetCount = 1;
-  allocInfo.pSetLayouts = &descriptorSetLayout_;
-  
-  if (vkAllocateDescriptorSets(GImGui->VulkanHandle, &allocInfo, &descriptorSet_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to allocate descriptor set!");
-  }
-  
-  // Update descriptor sets
-  VkDescriptorBufferInfo orderBookBufferInfo = {};
-  orderBookBufferInfo.buffer = orderBookBuffer_;
-  orderBookBufferInfo.offset = 0;
-  orderBookBufferInfo.range = VK_WHOLE_SIZE;
-  
-  VkDescriptorImageInfo heatmapImageInfo = {};
-  heatmapImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-  heatmapImageInfo.imageView = heatmapImageView_;
-  heatmapImageInfo.sampler = heatmapSampler_;
-  
-  std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
-  
-  descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  descriptorWrites[0].dstSet = descriptorSet_;
-  descriptorWrites[0].dstBinding = 0;
-  descriptorWrites[0].dstArrayElement = 0;
-  descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-  descriptorWrites[0].descriptorCount = 1;
-  descriptorWrites[0].pBufferInfo = &orderBookBufferInfo;
-  
-  descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  descriptorWrites[1].dstSet = descriptorSet_;
-  descriptorWrites[1].dstBinding = 1;
-  descriptorWrites[1].dstArrayElement = 0;
-  descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  descriptorWrites[1].descriptorCount = 1;
-  descriptorWrites[1].pImageInfo = &heatmapImageInfo;
-  
-  vkUpdateDescriptorSets(GImGui->VulkanHandle, static_cast<uint32_t>(descriptorWrites.size()), 
-                         descriptorWrites.data(), 0, nullptr);
-  
-  // Create the ImGui texture ID for the heatmap image
-  if (GImGui && GImGui->BackendRendererUserData) {
-    heatmapTextureId_ = ImGui_ImplVulkan_AddTexture(heatmapSampler_, heatmapImageView_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  }
-}
-
-void DomSurfacePanel::createOrderBookBuffer() {
-  // Calculate the size needed for the order book data
-  // We'll create a buffer that can hold the current order book snapshot
-  size_t bufferSize = sizeof(uint32_t) * 3 + // currentTimeIndex, priceLevelsCount, padding
-                      sizeof(float) * 2 +    // basePrice, priceRange
-                      100 * sizeof(OrderBookLevel); // Assuming max 100 price levels
-
-  // Create the buffer
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = bufferSize;
-  bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  if (vkCreateBuffer(GImGui->VulkanHandle, &bufferInfo, nullptr, &orderBookBuffer_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create order book buffer!");
-  }
-
-  // Allocate memory for the buffer
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(GImGui->VulkanHandle, orderBookBuffer_, &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = 0; // Will be determined based on requirements
-
-  // Find appropriate memory type
-  VkPhysicalDeviceMemoryProperties memProperties;
-  vkGetPhysicalDeviceMemoryProperties(GImGui->VulkanHandle, &memProperties);
-
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    if ((memRequirements.memoryTypeBits & (1 << i)) && 
-        (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
-        (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
-      allocInfo.memoryTypeIndex = i;
-      break;
-    }
-  }
-
-  if (vkAllocateMemory(GImGui->VulkanHandle, &allocInfo, nullptr, &orderBookBufferMemory_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to allocate order book buffer memory!");
-  }
-
-  vkBindBufferMemory(GImGui->VulkanHandle, orderBookBuffer_, orderBookBufferMemory_, 0);
-}
-
-void DomSurfacePanel::createComputeCommandBuffer() {
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = ImGui::GetAllocatorUserData()->CommandPool;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandBufferCount = 1;
-  
-  if (vkAllocateCommandBuffers(GImGui->VulkanHandle, &allocInfo, &computeCommandBuffer_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to allocate compute command buffers!");
-  }
-  
-  // Create fence for compute operations
-  VkFenceCreateInfo fenceInfo = {};
-  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  fenceInfo.flags = 0; // Not signaled initially
-  
-  if (vkCreateFence(GImGui->VulkanHandle, &fenceInfo, nullptr, &computeFence_) != VK_SUCCESS) {
-    throw std::runtime_error("failed to create compute fence!");
-  }
-}
-
-void DomSurfacePanel::recordComputeCommands() {
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  
-  vkBeginCommandBuffer(computeCommandBuffer_, &beginInfo);
-  
-  // Bind compute pipeline
-  vkCmdBindPipeline(computeCommandBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline_);
-  
-  // Bind descriptor set
-  vkCmdBindDescriptorSets(computeCommandBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE, 
-                          pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
-  
-  // Dispatch compute shader
-  // Calculate appropriate work group dimensions based on heatmap size
-  uint32_t width = static_cast<uint32_t>(history_depth_);
-  uint32_t height = static_cast<uint32_t>(price_bins_);
-  
-  // Use the local work group size defined in the shader (1, 64, 1)
-  uint32_t groupX = 1;
-  uint32_t groupY = (height + 63) / 64; // Round up to nearest multiple of 64
-  
-  vkCmdDispatch(computeCommandBuffer_, groupX, groupY, 1);
-  
-  vkEndCommandBuffer(computeCommandBuffer_);
-}
-
-void DomSurfacePanel::submitComputeCommands() {
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &computeCommandBuffer_;
-  
-  // Submit to compute queue
-  VkQueue computeQueue = ImGui::GetVulkanData()->Queue;
-  vkQueueSubmit(computeQueue, 1, &submitInfo, computeFence_);
-}
-
-void DomSurfacePanel::updateVulkanHeatmap() {
-  if (!vulkanInitialized_ || !needsVulkanUpdate_) return;
-  
-  // Update the order book buffer with current market data
-  updateOrderBookBuffer();
-  
-  // Wait for previous compute operations to complete
-  if (computeFence_ != VK_NULL_HANDLE) {
-    VkResult result = vkWaitForFences(GImGui->VulkanHandle, 1, &computeFence_, VK_TRUE, 1000000000); // 1 second timeout
-    if (result == VK_SUCCESS) {
-      vkResetFences(GImGui->VulkanHandle, 1, &computeFence_);
-    }
-  }
-  
-  // Record and submit compute commands
-  recordComputeCommands();
-  submitComputeCommands();
-  
-  needsVulkanUpdate_ = false;
-}
-
-void DomSurfacePanel::updateOrderBookBuffer() {
-  if (!vulkanInitialized_ || !processor_) return;
-  
-  // Get the current orderbook data
-  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
-  if (!orderbook_opt) return;
-  
-  const auto& orderbook = *orderbook_opt;
-  
-  // Prepare the data structure to match the shader expectations
-  struct OrderBookSnapshot {
-    uint32_t currentTimeIndex;
-    uint32_t priceLevelsCount;
-    float basePrice;
-    float priceRange;
-    OrderBookLevel levels[100]; // Fixed-size array for simplicity
-  } snapshot = {};
-  
-  // Fill in the snapshot data
-  snapshot.currentTimeIndex = static_cast<uint32_t>(heatmap_data_.size() / price_bins_); // Current time index
-  snapshot.priceLevelsCount = 0;
-  
-  // Determine base price and price range
-  double min_price = std::numeric_limits<double>::max();
-  double max_price = std::numeric_limits<double>::lowest();
-  
-  for (const auto& level : orderbook.bids) {
-    min_price = std::min(min_price, level.price);
-    max_price = std::max(max_price, level.price);
-  }
-  for (const auto& level : orderbook.asks) {
-    min_price = std::min(min_price, level.price);
-    max_price = std::max(max_price, level.price);
-  }
-  
-  if (min_price < max_price) {
-    snapshot.basePrice = static_cast<float>(min_price);
-    snapshot.priceRange = static_cast<float>(max_price - min_price);
-  } else {
-    // Fallback values
-    snapshot.basePrice = 0.0f;
-    snapshot.priceRange = 1.0f;
-  }
-  
-  // Copy bid levels
-  size_t level_idx = 0;
-  for (const auto& level : orderbook.bids) {
-    if (level_idx >= 50) break; // Limit to first 50 bids
-    
-    snapshot.levels[level_idx].price = static_cast<float>(level.price);
-    snapshot.levels[level_idx].bidQuantity = static_cast<uint32_t>(level.size);
-    snapshot.levels[level_idx].askQuantity = 0; // No ask quantity for bid levels
-    snapshot.levels[level_idx].numOrders = 1; // Simplified count
-    level_idx++;
-  }
-  
-  // Copy ask levels
-  for (const auto& level : orderbook.asks) {
-    if (level_idx >= 100) break; // Limit to total 100 levels
-    
-    snapshot.levels[level_idx].price = static_cast<float>(level.price);
-    snapshot.levels[level_idx].askQuantity = static_cast<uint32_t>(level.size);
-    snapshot.levels[level_idx].bidQuantity = 0; // No bid quantity for ask levels
-    snapshot.levels[level_idx].numOrders = 1; // Simplified count
-    level_idx++;
-  }
-  
-  snapshot.priceLevelsCount = static_cast<uint32_t>(level_idx);
-  
-  // Copy the data to the GPU buffer
-  void* mappedData;
-  vkMapMemory(GImGui->VulkanHandle, orderBookBufferMemory_, 0, sizeof(snapshot), 0, &mappedData);
-  memcpy(mappedData, &snapshot, sizeof(snapshot));
-  vkUnmapMemory(GImGui->VulkanHandle, orderBookBufferMemory_);
-}
-
-void DomSurfacePanel::updateFlushDOMRulerData() {
-  // This method would update the data for the flush DOM ruler
-  // Currently, it's handled as part of the regular orderbook updates
-  // The ruler shows the current live orderbook at the right edge
-}
-
 void DomSurfacePanel::renderFlushDOMRuler() {
-  if (!show_flush_dom_ruler_ || current_symbol_id_ == 0 || !processor_) return;
-
-  // Get the current orderbook data
-  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
-  if (!orderbook_opt) return;
-
-  const auto& orderbook = *orderbook_opt;
-
-  // Get plot area bounds
-  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
-
-  // Calculate the width of the flush DOM ruler as a percentage of the plot width
-  double ruler_width = (plot_rect.X.Max - plot_rect.X.Min) * flush_dom_ruler_width_;
-  
-  // Calculate the X position where the ruler starts (right edge of heatmap moving inward)
-  double ruler_start_x = plot_rect.X.Max - ruler_width;
-
-  // Render bid levels (green bars extending from right edge inward)
-  for (const auto& level : orderbook.bids) {
-    // Calculate Y position for this price level
-    double y_pos = level.price;
-
-    // Only render if within visible price range
-    if (y_pos >= plot_rect.Y.Min && y_pos <= plot_rect.Y.Max) {
-      // Calculate the depth/intensity of the bar based on order size
-      // Find max volume for normalization
-      double max_volume = 0.0;
-      for (const auto& bid_level : orderbook.bids) {
-        max_volume = std::max(max_volume, bid_level.size);
-      }
-
-      // Calculate the width of the bar based on the order size (relative to max volume)
-      double normalized_size = max_volume > 0 ? level.size / max_volume : 0.0;
-      double bar_width = ruler_width * normalized_size;
-
-      // Calculate the X position where the bar ends (left side of the ruler area)
-      double bar_end_x = ruler_start_x + bar_width;
-
-      // Calculate a small height for the bar based on the visible price range
-      // Use a fixed small height relative to the plot height
-      double bar_height = (plot_rect.Y.Max - plot_rect.Y.Min) * 0.005; // 0.5% of the plot height
-      if (bar_height < 0.001) bar_height = 0.001; // Minimum height
-
-      // Calculate the Y range for this bar
-      double y_min = y_pos - bar_height / 2.0;
-      double y_max = y_pos + bar_height / 2.0;
-
-      // Create points for the rectangle
-      ImPlotPoint rect_min(ruler_start_x, y_min);
-      ImPlotPoint rect_max(bar_end_x, y_max);
-
-      // Draw the bid bar as a green rectangle
-      ImU32 bid_color = IM_COL32(0, 230, 118, 180); // Green with transparency
-      
-      ImPlot::PushStyleColor(ImPlotCol_Fill, bid_color);
-      ImPlot::PlotRect("##BidRuler", rect_min.x, rect_min.y, rect_max.x, rect_max.y);
-      ImPlot::PopStyleColor();
-    }
-  }
-
-  // Render ask levels (red bars extending from right edge inward)
-  for (const auto& level : orderbook.asks) {
-    // Calculate Y position for this price level
-    double y_pos = level.price;
-
-    // Only render if within visible price range
-    if (y_pos >= plot_rect.Y.Min && y_pos <= plot_rect.Y.Max) {
-      // Calculate the depth/intensity of the bar based on order size
-      // Find max volume for normalization
-      double max_volume = 0.0;
-      for (const auto& ask_level : orderbook.asks) {
-        max_volume = std::max(max_volume, ask_level.size);
-      }
-
-      // Calculate the width of the bar based on the order size (relative to max volume)
-      double normalized_size = max_volume > 0 ? level.size / max_volume : 0.0;
-      double bar_width = ruler_width * normalized_size;
-
-      // Calculate the X position where the bar ends (left side of the ruler area)
-      double bar_end_x = ruler_start_x + bar_width;
-
-      // Calculate a small height for the bar based on the visible price range
-      // Use a fixed small height relative to the plot height
-      double bar_height = (plot_rect.Y.Max - plot_rect.Y.Min) * 0.005; // 0.5% of the plot height
-      if (bar_height < 0.001) bar_height = 0.001; // Minimum height
-
-      // Calculate the Y range for this bar
-      double y_min = y_pos - bar_height / 2.0;
-      double y_max = y_pos + bar_height / 2.0;
-
-      // Create points for the rectangle
-      ImPlotPoint rect_min(ruler_start_x, y_min);
-      ImPlotPoint rect_max(bar_end_x, y_max);
-
-      // Draw the ask bar as a red rectangle
-      ImU32 ask_color = IM_COL32(255, 59, 105, 180); // Red with transparency
-      
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ask_color);
-      ImPlot::PlotRect("##AskRuler", rect_min.x, rect_min.y, rect_max.x, rect_max.y);
-      ImPlot::PopStyleColor();
-    }
-  }
+  // TODO: Implement Flush DOM Ruler rendering
+  // This function should render the live orderbook at the right edge of the heatmap panel
+  // For now, this is a stub implementation
 }
 
 }  // namespace BTQuant

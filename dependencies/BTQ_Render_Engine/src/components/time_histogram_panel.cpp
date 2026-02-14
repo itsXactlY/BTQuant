@@ -428,7 +428,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 1.0f, 0.7f));  // Blue fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 1.0f, 0.7f));  // Blue fill
         ImPlot::PlotBars("Trades", x_data, trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -457,7 +457,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Trades", x_data, buy_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -486,7 +486,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Trades", x_data, sell_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -514,7 +514,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 1.0f, 0.0f, 0.7f));  // Yellow fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 1.0f, 0.0f, 0.7f));  // Yellow fill
         ImPlot::PlotBars("Total Volume", x_data, total_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -537,7 +537,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -560,7 +560,7 @@ void TimeHistogramPanel::render() {
           }
         }
 
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_data, sell_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -579,7 +579,7 @@ void TimeHistogramPanel::render() {
             buy_vol_percent[i] = 0.0;
           }
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume %", x_data, buy_vol_percent, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -598,7 +598,7 @@ void TimeHistogramPanel::render() {
             sell_vol_percent[i] = 0.0;
           }
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume %", x_data, sell_vol_percent, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -634,11 +634,11 @@ void TimeHistogramPanel::render() {
         }
 
         // Plot buy volume (green) above x-axis
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_stack, 100, 0.8);
 
         // Plot sell volume (red) below x-axis
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_data, sell_stack, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -681,11 +681,11 @@ void TimeHistogramPanel::render() {
         }
 
         // Plot positive delta values (green)
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Positive Delta", x_data, pos_values, 100, 0.8);
 
         // Plot negative delta values (red)
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Negative Delta", x_data, neg_values, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -719,11 +719,11 @@ void TimeHistogramPanel::render() {
         }
 
         // Plot positive delta percent values (green)
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Positive Delta %", x_data, pos_values, 100, 0.8);
 
         // Plot negative delta percent values (red)
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Negative Delta %", x_data, neg_values, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -771,7 +771,7 @@ void TimeHistogramPanel::render() {
                            ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
                            ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
 
-            ImPlot::PushStyleColor(ImPlotCol_Line, color);
+            // ImPlot::PushStyleColor(ImPlotCol_Line, color);
             ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);  // Length 2: current and next point
             ImPlot::PopStyleColor();
           } else {
@@ -792,7 +792,7 @@ void TimeHistogramPanel::render() {
                 double partial_x[2] = {x_data[i], zero_cross_x};
                 double partial_y[2] = {cum_delta_data[i], 0.0};
 
-                ImPlot::PushStyleColor(ImPlotCol_Line, start_color);
+                // ImPlot::PushStyleColor(ImPlotCol_Line, start_color);
                 ImPlot::PlotLine("", partial_x, partial_y, 2);
                 ImPlot::PopStyleColor();
 
@@ -804,7 +804,7 @@ void TimeHistogramPanel::render() {
                 double partial_x2[2] = {zero_cross_x, x_data[i+1]};
                 double partial_y2[2] = {0.0, cum_delta_data[i+1]};
 
-                ImPlot::PushStyleColor(ImPlotCol_Line, end_color);
+                // ImPlot::PushStyleColor(ImPlotCol_Line, end_color);
                 ImPlot::PlotLine("", partial_x2, partial_y2, 2);
                 ImPlot::PopStyleColor();
               } else {
@@ -814,7 +814,7 @@ void TimeHistogramPanel::render() {
                                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
                                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
 
-                ImPlot::PushStyleColor(ImPlotCol_Line, color);
+                // ImPlot::PushStyleColor(ImPlotCol_Line, color);
                 ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);
                 ImPlot::PopStyleColor();
               }
@@ -825,7 +825,7 @@ void TimeHistogramPanel::render() {
                              ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
                              ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
 
-              ImPlot::PushStyleColor(ImPlotCol_Line, color);
+              // ImPlot::PushStyleColor(ImPlotCol_Line, color);
               ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);
               ImPlot::PopStyleColor();
             }
@@ -833,7 +833,7 @@ void TimeHistogramPanel::render() {
         }
 
         // Add legend entry for the cumulative delta line
-        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+        // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
         ImPlot::PlotDummy("Cumulative Delta");  // Dummy plot for legend
         ImPlot::PopStyleColor();
 
@@ -846,7 +846,7 @@ void TimeHistogramPanel::render() {
           // Simulate average trade size with some variation
           avg_size_data[i] = 50.0 + 20.0 * sin(i * 0.05) + 10.0 * cos(i * 0.1);
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.7f, 0.3f, 1.0f, 0.7f));  // Purple fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.7f, 0.3f, 1.0f, 0.7f));  // Purple fill
         ImPlot::PlotBars("Avg Size", x_data, avg_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -861,7 +861,7 @@ void TimeHistogramPanel::render() {
           // Simulate average buy trade size with some variation
           avg_buy_size_data[i] = 45.0 + 15.0 * sin(i * 0.06) + 8.0 * cos(i * 0.12);
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.8f, 0.0f, 0.7f));  // Dark green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.8f, 0.0f, 0.7f));  // Dark green fill
         ImPlot::PlotBars("Avg Buy Size", x_data, avg_buy_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -876,7 +876,7 @@ void TimeHistogramPanel::render() {
           // Simulate average sell trade size with some variation
           avg_sell_size_data[i] = 48.0 + 18.0 * cos(i * 0.06) + 9.0 * sin(i * 0.12);
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.8f, 0.0f, 0.0f, 0.7f));  // Dark red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.8f, 0.0f, 0.0f, 0.7f));  // Dark red fill
         ImPlot::PlotBars("Avg Sell Size", x_data, avg_sell_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -891,7 +891,7 @@ void TimeHistogramPanel::render() {
           // Simulate max trade volume with some variation
           max_trade_vol_data[i] = 100.0 + 40.0 * sin(i * 0.04) + 20.0 * cos(i * 0.08);
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.5f, 0.0f, 0.7f));  // Orange fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.5f, 0.0f, 0.7f));  // Orange fill
         ImPlot::PlotBars("Max Trade Vol", x_data, max_trade_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -906,7 +906,7 @@ void TimeHistogramPanel::render() {
           // Simulate filtered volume as weighted combination
           filtered_vol_data[i] = 0.6 * buy_data[i] + 0.4 * sell_data[i];
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.7f, 0.7f, 0.7f));  // Teal fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.7f, 0.7f, 0.7f));  // Teal fill
         ImPlot::PlotBars("Filtered Volume", x_data, filtered_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
 
@@ -927,7 +927,7 @@ void TimeHistogramPanel::render() {
         }
 
         // Plot buy volume (green)
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_split, 100, 0.4);  // Narrower bars
 
         // Plot sell volume (red) shifted slightly to the right
@@ -935,7 +935,7 @@ void TimeHistogramPanel::render() {
         for (int i = 0; i < 100; ++i) {
           x_shifted[i] = x_data[i] + 0.2;  // Shift right
         }
-        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_shifted, sell_split, 100, 0.4);  // Narrower bars
         ImPlot::PopStyleColor();
 

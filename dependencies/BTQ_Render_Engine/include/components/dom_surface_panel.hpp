@@ -13,7 +13,7 @@
 
 namespace BTQuant {
 
-// Order Book Level Structure (matches the one in the compute shader)
+// Order Book Level Structure for heatmap data
 struct OrderBookLevel {
     float price;           // Price level
     uint32_t askQuantity;  // Ask volume at this price
@@ -180,45 +180,8 @@ class DomSurfacePanel : public PanelBase {
   double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
   bool show_persistent_lines_ = true;         // Toggle for persistent line display
 
-  // Vulkan Compute Integration Members
-  VkBuffer orderBookBuffer_ = VK_NULL_HANDLE;
-  VkDeviceMemory orderBookBufferMemory_ = VK_NULL_HANDLE;
-  VkBuffer heatmapOutputBuffer_ = VK_NULL_HANDLE;
-  VkDeviceMemory heatmapOutputBufferMemory_ = VK_NULL_HANDLE;
-  VkImage heatmapImage_ = VK_NULL_HANDLE;
-  VkDeviceMemory heatmapImageMemory_ = VK_NULL_HANDLE;
-  VkImageView heatmapImageView_ = VK_NULL_HANDLE;
-  VkSampler heatmapSampler_ = VK_NULL_HANDLE;
-  VkDescriptorSet descriptorSet_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout descriptorSetLayout_ = VK_NULL_HANDLE;
-  VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
-  VkPipeline computePipeline_ = VK_NULL_HANDLE;
-  VkCommandBuffer computeCommandBuffer_ = VK_NULL_HANDLE;
-  VkFence computeFence_ = VK_NULL_HANDLE;
-  VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
-  ImTextureID heatmapTextureId_ = nullptr;
-  bool vulkanInitialized_ = false;
-  bool needsVulkanUpdate_ = true;
-
   // Helper to refresh data buffer
   void updateHeatmapData();
-
-  // Vulkan Compute Integration Methods
-  bool initializeVulkanCompute();
-  void destroyVulkanCompute();
-  void updateVulkanHeatmap();
-  void createDescriptorSetLayout();
-  void createComputePipeline();
-  void createDescriptorPool();
-  void createDescriptorSet();
-  void createHeatmapImage();
-  void createHeatmapImageView();
-  void createSampler();
-  void createComputeCommandBuffer();
-  void recordComputeCommands();
-  void submitComputeCommands();
-  void createOrderBookBuffer();
-  void updateOrderBookBuffer();
 
   // Trade Bubbles Methods
   void updateTradeBubbles();

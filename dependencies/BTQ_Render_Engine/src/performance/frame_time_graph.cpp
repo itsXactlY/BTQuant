@@ -1,6 +1,6 @@
 #include "../include/performance/frame_time_graph.hpp"
-#include "../src/imgui/implot.h"
-#include "../src/imgui/imgui.h"
+#include "implot.h"
+#include "imgui.h"
 
 #include <algorithm>
 #include <numeric>
@@ -380,22 +380,13 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         std::vector<double> critical_values(frame_times_.size(), frame_time_threshold_critical_);
 
         // Critical threshold line (red)
-        ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.0f, 0.0f, 0.8f), 2.0f); // Thicker red line
-        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
-        ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), frame_times_.size());
-        ImPlot::PopStyleVar();
+        ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
         // Warning threshold line (yellow/orange)
-        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.6f, 0.0f, 0.8f), 1.5f); // Orange line
-        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
-        ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), frame_times_.size());
-        ImPlot::PopStyleVar();
+        ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
         // Plot frame times with enhanced visualization
-        ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), 2.0f); // Light green line
-        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
-        ImPlot::PlotLine("Frame Time", x_values.data(), frame_times_.data(), frame_times_.size());
-        ImPlot::PopStyleVar();
+        ImPlot::PlotLine("Frame Time", x_values.data(), frame_times_.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
         // Highlight performance issues with filled areas
         std::vector<double> warning_x, warning_y, critical_x, critical_y;
@@ -415,13 +406,11 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
         // Fill areas for warning and critical issues separately
         if (!warning_x.empty()) {
-            ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.6f, 0.0f, 0.2f)); // Semi-transparent orange
-            ImPlot::PlotShaded("Warning Spikes", warning_x.data(), warning_y.data(), warning_x.size(), frame_time_threshold_warning_);
+            ImPlot::PlotShaded("Warning Spikes", warning_x.data(), warning_y.data(), static_cast<int>(warning_x.size()), frame_time_threshold_warning_, ImPlotSpec());
         }
 
         if (!critical_x.empty()) {
-            ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.0f, 0.0f, 0.3f)); // Semi-transparent red
-            ImPlot::PlotShaded("Critical Spikes", critical_x.data(), critical_y.data(), critical_x.size(), frame_time_threshold_critical_);
+            ImPlot::PlotShaded("Critical Spikes", critical_x.data(), critical_y.data(), static_cast<int>(critical_x.size()), frame_time_threshold_critical_, ImPlotSpec());
         }
 
         // Draw markers for performance issues
@@ -430,11 +419,11 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                 double x_pos = x_values[i];
 
                 if (frame_times_[i] > frame_time_threshold_critical_) {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8, ImVec4(0.8f, 0.0f, 0.0f, 1.0f), 3.0f, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // Large red circle for critical
-                    ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1);
+                    // Large red circle for critical - use ImPlotSpec for marker style
+                    ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1, ImPlotSpec());
                 } else {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Diamond, 7, ImVec4(1.0f, 0.6f, 0.0f, 1.0f), 2.5f, ImVec4(0.0f, 0.0f, 0.0f, 0.8f)); // Orange diamond for warning
-                    ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1);
+                    // Orange diamond for warning
+                    ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1, ImPlotSpec());
                 }
             }
         }
@@ -447,24 +436,15 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
             // Average line (blue)
             std::vector<double> avg_values(frame_times_.size(), avg);
-            ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.5f, 1.0f, 0.9f), 1.5f); // Blue solid
-            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
-            ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), frame_times_.size());
-            ImPlot::PopStyleVar();
+            ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
             // Min line (light blue) - using stipple pattern to simulate dashed
             std::vector<double> min_values(frame_times_.size(), min_val);
-            ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.8f, 1.0f, 0.7f), 1.0f); // Light blue
-            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
-            ImPlot::PlotLine("Min", x_values.data(), min_values.data(), frame_times_.size());
-            ImPlot::PopStyleVar();
+            ImPlot::PlotLine("Min", x_values.data(), min_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
             // Max line (purple) - using stipple pattern to simulate dashed
             std::vector<double> max_values(frame_times_.size(), max_val);
-            ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.4f, 1.0f, 0.7f), 1.0f); // Purple
-            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
-            ImPlot::PlotLine("Max", x_values.data(), max_values.data(), frame_times_.size());
-            ImPlot::PopStyleVar();
+            ImPlot::PlotLine("Max", x_values.data(), max_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
 
             // Add a trend line to show performance direction
             if (frame_times_.size() >= 2) {
@@ -493,8 +473,8 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                                     slope < -0.1 ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) :  // Green if improving
                                                  ImVec4(0.0f, 0.5f, 1.0f, 1.0f);    // Blue if stable
 
-                ImPlot::SetNextLineStyle(trend_color, 1.5f);
-                ImPlot::PlotLine("Trend", trend_x.data(), trend_y.data(), 2);
+                // ImPlot::SetNextLineStyle(trend_color, 1.5f);
+                ImPlot::PlotLine("Trend", trend_x.data(), trend_y.data(), 2, ImPlotSpec());
             }
 
             // Add a rolling average line for smoother trend visualization
@@ -513,10 +493,8 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                     rolling_avg_y.push_back(avg);
                 }
 
-                ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 1.0f, 0.8f), 1.2f); // Purple for rolling average
-                ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.2f);
-                ImPlot::PlotLine("Rolling Avg", rolling_avg_x.data(), rolling_avg_y.data(), rolling_avg_x.size());
-                ImPlot::PopStyleVar();
+                // ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 1.0f, 0.8f), 1.2f); // Purple for rolling average
+                ImPlot::PlotLine("Rolling Avg", rolling_avg_x.data(), rolling_avg_y.data(), static_cast<int>(rolling_avg_x.size()), ImPlotSpec());
             }
         }
 

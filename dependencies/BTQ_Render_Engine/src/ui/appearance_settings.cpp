@@ -694,7 +694,7 @@ std::vector<std::string> AppearanceSettings::get_available_themes() const {
     return themes;
 }
 
-void AppearanceSettings::add_custom_theme(const std::string& name, const ThemeDefinition& theme_def) {
+void AppearanceSettings::add_custom_theme(const std::string& name, const SimpleColorTheme& theme_def) {
     // In a real implementation, this would store custom themes
     // For now, we just acknowledge the setting system handles this
     custom_themes_[name] = theme_def;

@@ -10,8 +10,9 @@
 namespace BTQuant {
 namespace UI {
 
-// Structure to define a complete theme
-struct ThemeDefinition {
+// Structure to define a simple color theme (for appearance settings)
+// Note: This is different from the full ThemeDefinition in unified_theme_system.hpp
+struct SimpleColorTheme {
     ImVec4 background_primary;
     ImVec4 background_secondary;
     ImVec4 background_panel;
@@ -43,14 +44,14 @@ public:
     std::vector<std::string> get_available_themes() const;
 
     // Add a custom theme
-    void add_custom_theme(const std::string& name, const ThemeDefinition& theme_def);
+    void add_custom_theme(const std::string& name, const SimpleColorTheme& theme_def);
 
     // Render appearance settings UI
     void render_appearance_settings_ui();
 
 private:
     SettingsManager& settings_manager_;
-    std::map<std::string, ThemeDefinition> custom_themes_;
+    std::map<std::string, SimpleColorTheme> custom_themes_;
 
     // Initialize theme-specific settings
     void initialize_theme_settings();

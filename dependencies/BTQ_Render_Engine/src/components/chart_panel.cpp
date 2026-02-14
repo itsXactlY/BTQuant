@@ -2635,10 +2635,10 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       ImVec4 vp_color = colors.text;
       vp_color.w = 0.25f;  // reduced alpha
 
-      ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
-      ImPlot::PushStyleColor(ImPlotCol_Line,
-                             ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f));  // clearer border
+      // ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
+      // ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
+      // ImPlot::PushStyleColor(ImPlotCol_Line,
+      //                        ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f));  // clearer border
 
       // Calculate bar width in plot coordinates based on volume values
       double max_vol_display = vp_max_vol * 4.0;  // Same as used in SetupAxisLimits for X2
@@ -2662,8 +2662,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
       }
 
-      ImPlot::PopStyleColor(2);
-      ImPlot::PopStyleVar();
+      // ImPlot::PopStyleColor(2);
+      // ImPlot::PopStyleVar();
     }
 
     // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)
@@ -2970,8 +2970,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     ImPlot::EndPlot();
   }
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor(3);
+  // ImPlot::PopStyleVar();
+  // ImPlot::PopStyleColor(3);
 }
 
 // Helper method to render enhanced step profile histograms on candle bars
@@ -4004,12 +4004,10 @@ void ChartPanel::update_aggressor_trades_data() {
     // Convert timestamp from microseconds to seconds for consistency with chart data
     double timestamp_seconds = static_cast<double>(trade.timestamp) / 1000000.0;
     
-    // Determine if this is a buy or sell based on aggressor side
-    // For simplicity, we'll consider trades at or above the market price as buys (aggressor on ask)
-    // and trades below as sells (aggressor on bid)
-    bool is_buy = trade.aggressor_side == RenderEngine::AggressorSide::BUY;
+    // Use the is_buy field directly from TradeData
+    bool is_buy = trade.is_buy;
     
-    aggressor_trades_.emplace_back(timestamp_seconds, trade.price, trade.size, is_buy, trade.id);
+    aggressor_trades_.emplace_back(timestamp_seconds, trade.price, trade.size, is_buy, 0);
   }
 }
 

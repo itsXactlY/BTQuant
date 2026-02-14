@@ -293,33 +293,27 @@ void DepthChartPanel::render_depth_chart_implot() {
 
     // Plot bid depth (Neon Green)
     if (!bid_prices_.empty()) {
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_bid_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_bid_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Bids", bid_prices_.data(), bid_cumulative_.data(),
                          static_cast<int>(bid_prices_.size()), 0.0);
       ImPlot::PlotLine("Bids", bid_prices_.data(), bid_cumulative_.data(),
                        static_cast<int>(bid_prices_.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Plot ask depth (Neon Red)
     if (!ask_prices_.empty()) {
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_ask_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_ask_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Asks", ask_prices_.data(), ask_cumulative_.data(),
                          static_cast<int>(ask_prices_.size()), 0.0);
       ImPlot::PlotLine("Asks", ask_prices_.data(), ask_cumulative_.data(),
                        static_cast<int>(ask_prices_.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Draw mid-price vertical line
     if (mid_price_ > 0) {
       double mid_line_x[2] = {mid_price_, mid_price_};
       double mid_line_y[2] = {0, max_depth_ * 1.1};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 1.0f, 0.5f));
       ImPlot::PlotLine("Mid", mid_line_x, mid_line_y, 2);
-      ImPlot::PopStyleColor();
 
       // Annotation for mid price
       char mid_label[32];
@@ -402,40 +396,32 @@ void DepthChartPanel::render_depth_chart_separate_sides() {
         bid_negative_values[i] = -bid_cumulative_[i];
       }
 
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_bid_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_bid_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Bids", bid_prices_.data(), bid_negative_values.data(),
                          static_cast<int>(bid_prices_.size()), 0.0);
       ImPlot::PlotLine("Bids", bid_prices_.data(), bid_negative_values.data(),
                        static_cast<int>(bid_prices_.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Plot ask depth (Neon Red) - on the positive side of Y-axis
     if (!ask_prices_.empty()) {
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_ask_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_ask_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Asks", ask_prices_.data(), ask_cumulative_.data(),
                          static_cast<int>(ask_prices_.size()), 0.0);
       ImPlot::PlotLine("Asks", ask_prices_.data(), ask_cumulative_.data(),
                        static_cast<int>(ask_prices_.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Draw zero-depth horizontal line
     double zero_line_x[2] = {price_min, price_max};
     double zero_line_y[2] = {0, 0};
-    ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.8f, 0.8f, 0.8f, 0.3f));
     ImPlot::PlotLine("Zero", zero_line_x, zero_line_y, 2);
-    ImPlot::PopStyleColor();
 
     // Draw mid-price vertical line
     if (mid_price_ > 0) {
       double mid_line_x[2] = {mid_price_, mid_price_};
       double mid_line_y[2] = {-max_depth_for_axis, max_depth_for_axis};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 1.0f, 0.5f));
       ImPlot::PlotLine("Mid", mid_line_x, mid_line_y, 2);
-      ImPlot::PopStyleColor();
 
       // Annotation for mid price
       char mid_label[32];
@@ -513,13 +499,11 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
         transformed_bid_prices[i] = price_min + normalized * (mid_point - price_min);
       }
 
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_bid_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_bid_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Bids", transformed_bid_prices.data(), bid_cumulative_.data(),
                          static_cast<int>(transformed_bid_prices.size()), 0.0);
       ImPlot::PlotLine("Bids", transformed_bid_prices.data(), bid_cumulative_.data(),
                        static_cast<int>(transformed_bid_prices.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Plot ask depth (Neon Red) - only show ask data on the right side of the chart
@@ -539,22 +523,18 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
         transformed_ask_prices[i] = mid_point + normalized * (price_max - mid_point);
       }
 
-      ImPlot::PushStyleColor(ImPlotCol_Fill, col_ask_fill);
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_ask_line);
+      // Note: Using ImPlotSpec for styling in v0.18 API
       ImPlot::PlotShaded("Asks", transformed_ask_prices.data(), ask_cumulative_.data(),
                          static_cast<int>(transformed_ask_prices.size()), 0.0);
       ImPlot::PlotLine("Asks", transformed_ask_prices.data(), ask_cumulative_.data(),
                        static_cast<int>(transformed_ask_prices.size()));
-      ImPlot::PopStyleColor(2);
     }
 
     // Draw mid-price vertical line (the dividing line between bid and ask areas)
     if (mid_price_ > 0) {
       double mid_line_x[2] = {mid_price_, mid_price_};
       double mid_line_y[2] = {0, max_depth_for_axis};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 1.0f, 0.5f));
       ImPlot::PlotLine("Mid", mid_line_x, mid_line_y, 2);
-      ImPlot::PopStyleColor();
 
       // Annotation for mid price
       char mid_label[32];

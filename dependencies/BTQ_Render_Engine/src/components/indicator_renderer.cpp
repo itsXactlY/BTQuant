@@ -113,12 +113,12 @@ void IndicatorRenderer::render_sma(const std::string& symbol, RenderEngine::Time
 
   auto time_values = cast_timestamps(result.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
   ImPlot::PlotLine(("SMA" + std::to_string(params.period1)).c_str(), time_values.data(),
                    result.values.data(), static_cast<int>(result.values.size()));
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 void IndicatorRenderer::render_ema(const std::string& symbol, RenderEngine::TimeFrame timeframe,
@@ -134,12 +134,12 @@ void IndicatorRenderer::render_ema(const std::string& symbol, RenderEngine::Time
 
   auto time_values = cast_timestamps(result.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
   ImPlot::PlotLine(("EMA" + std::to_string(params.period1)).c_str(), time_values.data(),
                    result.values.data(), static_cast<int>(result.values.size()));
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 void IndicatorRenderer::render_rsi(const std::string& symbol, RenderEngine::TimeFrame timeframe,
@@ -155,8 +155,8 @@ void IndicatorRenderer::render_rsi(const std::string& symbol, RenderEngine::Time
 
   auto time_values = cast_timestamps(result.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
   ImPlot::PlotLine(("RSI" + std::to_string(params.period1)).c_str(), time_values.data(),
                    result.values.data(), static_cast<int>(result.values.size()));
 
@@ -173,8 +173,8 @@ void IndicatorRenderer::render_rsi(const std::string& symbol, RenderEngine::Time
   p2 = ImPlot::PlotToPixels(x_max, 70);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 void IndicatorRenderer::render_macd(const std::string& symbol, RenderEngine::TimeFrame timeframe,
@@ -199,8 +199,8 @@ void IndicatorRenderer::render_macd(const std::string& symbol, RenderEngine::Tim
   auto macd_time = cast_timestamps(macd.timestamps);
   auto signal_time = cast_timestamps(signal.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   ImPlot::PlotLine("MACD", macd_time.data(), macd.values.data(),
                    static_cast<int>(macd.values.size()));
@@ -214,8 +214,8 @@ void IndicatorRenderer::render_macd(const std::string& symbol, RenderEngine::Tim
                      static_cast<int>(hist.values.size()), 0.67);
   }
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 void IndicatorRenderer::render_bollinger(const std::string& symbol,
@@ -237,8 +237,8 @@ void IndicatorRenderer::render_bollinger(const std::string& symbol,
   if (mid.values.empty()) return;
   auto time_values = cast_timestamps(mid.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   ImPlot::PlotLine("Bollinger Mid", time_values.data(), mid.values.data(),
                    static_cast<int>(mid.values.size()));
@@ -247,8 +247,8 @@ void IndicatorRenderer::render_bollinger(const std::string& symbol,
   ImPlot::PlotLine("Bollinger Lower", time_values.data(), lower.values.data(),
                    static_cast<int>(lower.values.size()));
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 void IndicatorRenderer::render_stochastic(const std::string& symbol,
@@ -271,8 +271,8 @@ void IndicatorRenderer::render_stochastic(const std::string& symbol,
   auto k_time = cast_timestamps(k.timestamps);
   auto d_time = cast_timestamps(d.timestamps);
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
+  // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   ImPlot::PlotLine("Stoch K", k_time.data(), k.values.data(), static_cast<int>(k.values.size()));
   ImPlot::PlotLine("Stoch D", d_time.data(), d.values.data(), static_cast<int>(d.values.size()));
@@ -286,8 +286,8 @@ void IndicatorRenderer::render_stochastic(const std::string& symbol,
   p2 = ImPlot::PlotToPixels(limits.X.Max, 80);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor();
+//   ImPlot::PopStyleVar();
+//   ImPlot::PopStyleColor();
 }
 
 }  // namespace BTQuant

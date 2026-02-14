@@ -1,5 +1,6 @@
 #include "components/option_analytics_panel.hpp"
 
+#include <algorithm>  // For std::sort
 #include <iomanip>
 #include <sstream>
 #include <cmath>
@@ -350,15 +351,15 @@ void OptionAnalyticsPanel::renderSmileTab() {
 
             // Plot calls
             if (!sorted_strikes.empty()) {
-                ImPlot::SetNextLineStyle(colors[color_idx % 6], 2.0f);
+                // ImPlot::SetNextLineStyle(colors[color_idx % 6], 2.0f);
                 ImPlot::PlotLine(("Calls " + exp_data.date).c_str(),
                                 sorted_strikes.data(), sorted_iv_calls.data(), static_cast<int>(sorted_strikes.size()));
 
                 // Plot puts with different line style to distinguish from calls
-                ImPlot::SetNextLineStyle(ImColor(colors[color_idx % 6].x * 0.7f,
-                                                colors[color_idx % 6].y * 0.7f,
-                                                colors[color_idx % 6].z * 0.7f,
-                                                colors[color_idx % 6].w), 1.5f);
+                // ImPlot::SetNextLineStyle(ImColor(colors[color_idx % 6].x * 0.7f,
+                //                                 colors[color_idx % 6].y * 0.7f,
+                //                                 colors[color_idx % 6].z * 0.7f,
+                //                                 colors[color_idx % 6].w), 1.5f);
                 ImPlot::PlotLine(("Puts " + exp_data.date).c_str(),
                                 sorted_strikes.data(), sorted_iv_puts.data(), static_cast<int>(sorted_strikes.size()));
             }
@@ -366,9 +367,9 @@ void OptionAnalyticsPanel::renderSmileTab() {
             color_idx++;
         }
 
-        ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.25f);
+        // ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.25f);
         ImPlot::EndPlot();
-        ImPlot::PopStyleVar();
+//         ImPlot::PopStyleVar();
     }
 
     // Add some explanatory text

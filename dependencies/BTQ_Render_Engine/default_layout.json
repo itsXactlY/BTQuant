@@ -6,12 +6,48 @@
     "panels": [
         {
             "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 2,
+            "grid_width": 3,
+            "grid_x": 0,
             "grid_y": 2,
             "position": [
-                1280.0,
+                0.0,
                 555.0
+            ],
+            "size": [
+                1920.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 1,
+            "position": [
+                1280.0,
+                292.5
+            ],
+            "size": [
+                640.0,
+                262.5
+            ],
+            "symbol": "",
+            "title": "Volume Profile",
+            "type": 14,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 0,
+            "position": [
+                1280.0,
+                30.0
             ],
             "size": [
                 640.0,
@@ -24,24 +60,6 @@
         },
         {
             "grid_height": 2,
-            "grid_width": 1,
-            "grid_x": 2,
-            "grid_y": 0,
-            "position": [
-                1280.0,
-                30.0
-            ],
-            "size": [
-                640.0,
-                525.0
-            ],
-            "symbol": "",
-            "title": "ETH-USDT Orderbook",
-            "type": 10,
-            "visible": true
-        },
-        {
-            "grid_height": 3,
             "grid_width": 2,
             "grid_x": 0,
             "grid_y": 0,
@@ -51,10 +69,10 @@
             ],
             "size": [
                 1280.0,
-                787.5
+                525.0
             ],
             "symbol": "",
-            "title": "ETH-USDT Chart [15m]",
+            "title": "BTCUSDT Chart [1s]",
             "type": 0,
             "visible": true
         }

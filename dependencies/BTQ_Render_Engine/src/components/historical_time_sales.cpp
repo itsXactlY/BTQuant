@@ -1143,19 +1143,19 @@ void HistoricalTimeSalesPanel::renderTradePaceChart() {
 
       // Plot the three different time windows
       if (!tpm_1min_values.empty()) {
-        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f);  // Red for 1min
+        // ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f);  // Red for 1min
         ImPlot::PlotLine("1 Min", timestamps.data(), tpm_1min_values.data(),
                          static_cast<int>(timestamps.size()));
       }
 
       if (!tpm_5min_values.empty()) {
-        ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.0f);  // Green for 5min
+        // ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.0f);  // Green for 5min
         ImPlot::PlotLine("5 Min", timestamps.data(), tpm_5min_values.data(),
                          static_cast<int>(timestamps.size()));
       }
 
       if (!tpm_15min_values.empty()) {
-        ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 1.0f);  // Blue for 15min
+        // ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 1.0f);  // Blue for 15min
         ImPlot::PlotLine("15 Min", timestamps.data(), tpm_15min_values.data(),
                          static_cast<int>(timestamps.size()));
       }

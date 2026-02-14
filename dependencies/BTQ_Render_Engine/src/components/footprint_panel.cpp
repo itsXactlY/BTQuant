@@ -718,8 +718,8 @@ void FootprintPanel::render() {
   // Imbalance and Exhaustion Detection Controls
   static bool show_imbalances = true;
   static bool show_exhaustion = true;
-  static double imbalance_threshold = 3.0;
-  static double exhaustion_threshold = 3.0;
+  static float imbalance_threshold = 3.0f;
+  static float exhaustion_threshold = 3.0f;
   
   ImGui::Separator();
   ImGui::Text("Imbalance & Exhaustion Detection:");

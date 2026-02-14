@@ -1,4 +1,5 @@
 #include "../../include/components/quant_workspace_component.hpp"
+#include "../../include/components/chart_panel.hpp"  // Required for complete type in dynamic_cast
 
 #include <glm/glm.hpp>
 #include <iostream>

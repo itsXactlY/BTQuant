@@ -223,21 +223,21 @@ void TpoPanel::render() {
       double va_x[] = {0.0, time_window, time_window, 0.0};
       double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
       
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
+      // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
       ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
       ImPlot::PopStyleColor();
       
       // Draw Value Area High (VAH) line
       double vah_line_x[2] = {0, time_window};
       double vah_line_y[2] = {value_area_high, value_area_high};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
       
       // Draw Value Area Low (VAL) line
       double val_line_x[2] = {0, time_window};
       double val_line_y[2] = {value_area_low, value_area_low};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
     }
@@ -246,8 +246,8 @@ void TpoPanel::render() {
     if (local_poc_price > 0) {
       double poc_line_x[2] = {0, time_window};
       double poc_line_y[2] = {local_poc_price, local_poc_price};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
+      // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
       ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();

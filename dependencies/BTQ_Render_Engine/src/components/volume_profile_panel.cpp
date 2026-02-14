@@ -1241,7 +1241,7 @@ void VolumeProfilePanel::render_volume_bars() {
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
             double poc_line_x[2] = {bar_left_extent, right_anchor};  // From left extent to right anchor
             double poc_line_y[2] = {poc_price_, poc_price_};
-            ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+            // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
             ImPlot::PopStyleColor();
           }
@@ -1336,7 +1336,7 @@ void VolumeProfilePanel::render_volume_bars() {
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
             double poc_line_x[2] = {left_anchor, bar_right_extent};  // From left anchor to right extent
             double poc_line_y[2] = {poc_price_, poc_price_};
-            ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+            // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
             ImPlot::PopStyleColor();
           }
@@ -1434,7 +1434,7 @@ void VolumeProfilePanel::render_volume_bars() {
           // For other modes, use ImPlot's PlotLine
           double poc_line_x[2] = {-composite_max_volume_, composite_max_volume_};
           double poc_line_y[2] = {composite_poc_price_, composite_poc_price_};
-          ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+          // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
           ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
           ImPlot::PopStyleColor();
         }
@@ -1446,7 +1446,7 @@ void VolumeProfilePanel::render_volume_bars() {
           // For other modes, use ImPlot's PlotLine
           double poc_line_x[2] = {-max_volume_, max_volume_};
           double poc_line_y[2] = {virgin_poc_price_, virgin_poc_price_};
-          ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f)); // Cyan color for virgin POC
+          // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f)); // Cyan color for virgin POC
           ImPlot::PlotLine("Virgin POC", poc_line_x, poc_line_y, 2);
           ImPlot::PopStyleColor();
         }
@@ -1458,7 +1458,7 @@ void VolumeProfilePanel::render_volume_bars() {
           // For other modes, use ImPlot's PlotLine
           double poc_line_x[2] = {-max_volume_, max_volume_};
           double poc_line_y[2] = {poc_price_, poc_price_};
-          ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+          // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
           ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
           ImPlot::PopStyleColor();
         }
@@ -1521,7 +1521,7 @@ void VolumeProfilePanel::render_volume_bars() {
       double vah_line_y[2] = {display_vah_price, display_vah_price};
 
       // Use brighter color for VAH line to make it more visible
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
 
@@ -1599,7 +1599,7 @@ void VolumeProfilePanel::render_volume_bars() {
       double val_line_y[2] = {display_val_price, display_val_price};
 
       // Use brighter color for VAL line to make it more visible
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
 
@@ -1644,7 +1644,7 @@ void VolumeProfilePanel::render_volume_bars() {
     if (analytics.vwap > 0) {
       double vwap_line_x[2] = {-max_volume_, max_volume_};
       double vwap_line_y[2] = {analytics.vwap, analytics.vwap};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
+      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
       ImPlot::PlotLine("VWAP", vwap_line_x, vwap_line_y, 2);
       ImPlot::PopStyleColor();
     }
@@ -1973,7 +1973,7 @@ void VolumeProfilePanel::render_volume_bars() {
           // For other modes, use ImPlot's PlotLine
           double poc_line_x[2] = {-yesterday_max_volume_, yesterday_max_volume_};
           double poc_line_y[2] = {yesterday_poc_price_, yesterday_poc_price_};
-          ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 0.3f)); // 30% opacity
+          // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 0.3f)); // 30% opacity
           ImPlot::PlotLine("Yesterday POC", poc_line_x, poc_line_y, 2);
           ImPlot::PopStyleColor();
         }
@@ -2211,7 +2211,7 @@ void VolumeProfilePanel::calculate_virgin_poc() {
     
     // Get current market price from analytics
     auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-    double current_price = analytics.last_price > 0 ? analytics.last_price : volume_profile_[volume_profile_.size()/2].price;
+    double current_price = analytics.last_trade_price > 0 ? analytics.last_trade_price : volume_profile_[volume_profile_.size()/2].price;
     
     // Find the virgin level closest to current market price (as potential resistance/support)
     double min_distance = std::numeric_limits<double>::max();
@@ -3897,7 +3897,7 @@ void VolumeProfilePanel::renderCustomProfileOverlay(ImDrawList* draw_list) {
   double start_line_x[2] = {start_time, start_time};
   double start_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 0.8f)); // Green
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 0.8f)); // Green
   ImPlot::PlotLine("Start Time Selection", start_line_x, start_line_y, 2);
   ImPlot::PopStyleColor();
 
@@ -3905,7 +3905,7 @@ void VolumeProfilePanel::renderCustomProfileOverlay(ImDrawList* draw_list) {
   double end_line_x[2] = {end_time, end_time};
   double end_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
 
-  ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.0f, 0.0f, 0.8f)); // Red
+  // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.0f, 0.0f, 0.8f)); // Red
   ImPlot::PlotLine("End Time Selection", end_line_x, end_line_y, 2);
   ImPlot::PopStyleColor();
 

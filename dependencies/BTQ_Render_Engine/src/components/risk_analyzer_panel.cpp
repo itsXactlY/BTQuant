@@ -206,8 +206,8 @@ void RiskAnalyzerPanel::render_risk_chart() {
     }
 
     // Plot the P/L curve with enhanced styling
-    ImPlot::PushStyleColor(ImPlotCol_Line, col_profit);
-    ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f); // Thicker line for better visibility
+    // ImPlot::PushStyleColor(ImPlotCol_Line, col_profit);
+    // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f); // Thicker line for better visibility
     ImPlot::PlotLine("P/L Curve", underlying_prices_.data(), profit_losses_.data(),
                      static_cast<int>(underlying_prices_.size()));
     ImPlot::PopStyleVar();
@@ -220,8 +220,8 @@ void RiskAnalyzerPanel::render_risk_chart() {
       double y_max = ImPlot::GetPlotLimits().Y.Max;
       double current_line_y[2] = {y_min, y_max};
 
-      ImPlot::PushStyleColor(ImPlotCol_Line, col_current);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
+      // ImPlot::PushStyleColor(ImPlotCol_Line, col_current);
+      // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
       ImPlot::PlotLine("Current Price", current_line_x, current_line_y, 2);
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
@@ -236,8 +236,8 @@ void RiskAnalyzerPanel::render_risk_chart() {
     // Add zero P/L reference line
     double zero_line_x[2] = {underlying_prices_.front(), underlying_prices_.back()};
     double zero_line_y[2] = {0.0, 0.0};
-    ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.5f, 0.5f, 0.5f, 0.5f)); // Gray for zero line
-    ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
+    // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.5f, 0.5f, 0.5f, 0.5f)); // Gray for zero line
+    // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
     ImPlot::PlotLine("Zero P/L", zero_line_x, zero_line_y, 2);
     ImPlot::PopStyleVar();
     ImPlot::PopStyleColor();

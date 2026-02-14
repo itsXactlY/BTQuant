@@ -316,6 +316,9 @@ class VolumeProfilePanel : public PanelBase {
   void reset_session_profiles();              // Reset all session profiles
   void detect_and_handle_session_boundaries(); // Detect and handle session boundaries
 
+  // Virgin POC methods
+  void calculate_virgin_poc();                // Calculate virgin POC from historical data
+
   // Subscribe to processor notifications
   void subscribe_to_updates();
 };

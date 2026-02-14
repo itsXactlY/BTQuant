@@ -1,7 +1,8 @@
 #include "../../include/ui/font_manager.hpp"
 
 #include <imgui.h>
-#include <misc/fonts/imgui_fonts_droid_sans.h>  // For default font loading
+// Note: misc/fonts/imgui_fonts_droid_sans.h not available in all ImGui builds
+// Using AddFontDefault() instead which doesn't require external font data
 #include <algorithm>
 #include <iostream>
 

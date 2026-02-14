@@ -1356,15 +1356,28 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       break;
       
     case LayoutPreset::MODERN_TRADING:
-      // Modern trading layout with multiple panels
-      add_panel(PanelType::CHART, "Price Chart", 0, 0, 2, 2);
-      add_panel(PanelType::ORDERBOOK, "Order Book", 2, 0, 1, 2);
-      add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 1, 1);
-      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 1, 2, 1, 1);
-      add_panel(PanelType::TRADING_ORDERS, "Orders", 2, 2, 1, 1);
-      add_panel(PanelType::TRADING_POSITIONS, "Positions", 0, 3, 1, 1);
-      add_panel(PanelType::RISK_METRICS, "Risk", 1, 3, 1, 1);
-      add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
+      // MMT programmatic Grid Construction
+      // Set up a 100-column grid system to enable percentage-based splits
+      set_grid_layout(100, 100);
+      
+      // Create central ChartSuperNode (occupies majority of space)
+      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 85);  // 72% width, 85% height
+      
+      // Split Left (3%) -> drawing_tools_panel
+      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 85);  // 3% width, 85% height
+      
+      // Split Right (25%) -> dom_surface_panel + orderbook_panel (stacked vertically)
+      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // 25% width, 42% height (top half)
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // 25% width, 43% height (bottom half)
+      
+      // Split Right-Bottom (40%) -> time_and_sales (Trades)
+      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 85, 25, 15);  // 25% width, 15% height
+      
+      // Split Center-Bottom (15%) -> time_histogram_panel
+      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 85, 72, 15);  // 72% width, 15% height
+      
+      // Status bar at the bottom
+      add_panel(PanelType::STATUS_BAR, "Status", 0, 99, 100, 1);  // Full width, 1% height
       break;
       
     case LayoutPreset::DASHBOARD_ONLY:

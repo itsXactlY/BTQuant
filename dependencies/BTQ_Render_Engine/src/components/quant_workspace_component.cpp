@@ -43,6 +43,26 @@ void QuantWorkspaceComponent::update(float dt) {
   // NOTE: Data sync is handled in main loop (main_trading_terminal.cpp)
   // to avoid double-sync per frame
   panel_manager_->update(dt);
+  
+  // Update crosshair synchronization if enabled
+  if (global_crosshair_enabled_) {
+    // Check if any chart panel is currently showing crosshair info
+    // This would be handled by the individual chart panels, but we can coordinate them here
+    // For now, we'll just track the mouse position for potential synchronization
+    ImVec2 current_mouse_pos = ImGui::GetMousePos();
+    
+    // Only update if mouse has moved significantly
+    float mouse_move_threshold = 1.0f; // Minimum movement to trigger update
+    float distance = sqrt(pow(current_mouse_pos.x - last_crosshair_position_.x, 2) + 
+                          pow(current_mouse_pos.y - last_crosshair_position_.y, 2));
+    
+    if (distance > mouse_move_threshold) {
+      last_crosshair_position_ = current_mouse_pos;
+      crosshair_active_ = true;
+    } else {
+      crosshair_active_ = false;
+    }
+  }
 }
 
 void QuantWorkspaceComponent::render_gui() {
@@ -56,6 +76,127 @@ void QuantWorkspaceComponent::render_gui() {
 
   // Render all panels through the panel manager
   panel_manager_->render();
+  
+  // Handle global crosshair synchronization after all panels are rendered
+  if (global_crosshair_enabled_) {
+    handle_global_crosshair_sync();
+  }
+}
+
+void QuantWorkspaceComponent::handle_global_crosshair_sync() {
+  // This method will coordinate crosshair positions across all chart panels
+  // For true global crosshair sync, we need to share crosshair position data between panels
+  
+  // Get all panel IDs
+  auto panel_ids = panel_manager_->get_all_panel_ids();
+  
+  // Find all chart panels
+  std::vector<ChartPanel*> chart_panels;
+  for (uint32_t panel_id : panel_ids) {
+    auto* panel = panel_manager_->get_panel_by_id(panel_id);
+    if (!panel) continue;
+    
+    // Check if this is a chart panel
+    if (panel->get_config().type == PanelType::CHART) {
+      auto* chart_panel = dynamic_cast<ChartPanel*>(panel);
+      if (chart_panel) {
+        chart_panels.push_back(chart_panel);
+      }
+    }
+  }
+  
+  // If we have multiple chart panels, implement crosshair synchronization
+  if (chart_panels.size() > 1) {
+    // Find the chart panel that currently has the mouse cursor
+    ChartPanel* active_chart = get_chart_panel_under_cursor();
+    
+    if (active_chart) {
+      // Get the mouse position in screen coordinates
+      ImVec2 mouse_pos = ImGui::GetMousePos();
+      
+      // Find the panel ID for the active chart to get its position
+      auto all_panel_ids = panel_manager_->get_all_panel_ids();
+      uint32_t active_panel_id = 0;
+      for (uint32_t id : all_panel_ids) {
+        auto* panel = panel_manager_->get_panel_by_id(id);
+        if (panel == static_cast<PanelBase*>(active_chart)) {
+          active_panel_id = id;
+          break;
+        }
+      }
+      
+      if (active_panel_id != 0) {
+        // Get the chart panel's position and size to calculate relative mouse position
+        ImVec2 panel_pos = panel_manager_->get_panel_position(active_panel_id);
+        ImVec2 panel_size = panel_manager_->get_panel_size(active_panel_id);
+        
+        // Calculate the relative X position within the active chart panel (0.0 to 1.0)
+        float rel_x = (mouse_pos.x - panel_pos.x) / panel_size.x;
+        
+        // Synchronize this relative position to all other chart panels
+        for (auto* chart_panel : chart_panels) {
+          if (chart_panel != active_chart) {
+            // Calculate the absolute screen X position for this chart panel
+            uint32_t target_panel_id = 0;
+            for (uint32_t id : all_panel_ids) {
+              auto* panel = panel_manager_->get_panel_by_id(id);
+              if (panel == static_cast<PanelBase*>(chart_panel)) {
+                target_panel_id = id;
+                break;
+              }
+            }
+            
+            if (target_panel_id != 0) {
+              ImVec2 target_panel_pos = panel_manager_->get_panel_position(target_panel_id);
+              ImVec2 target_panel_size = panel_manager_->get_panel_size(target_panel_id);
+              
+              // Calculate the absolute X position in the target panel based on relative position
+              float target_x = target_panel_pos.x + rel_x * target_panel_size.x;
+              
+              // Set the global crosshair position for this chart
+              chart_panel->set_global_crosshair_position(target_x, true);
+            }
+          } else {
+            // For the active chart, we still enable the global crosshair state
+            chart_panel->set_global_crosshair_position(mouse_pos.x, true);
+          }
+        }
+      }
+    } else {
+      // If no chart has the mouse, disable global sync on all charts
+      for (auto* chart_panel : chart_panels) {
+        chart_panel->set_global_crosshair_position(0.0, false);
+      }
+    }
+  }
+}
+
+ChartPanel* QuantWorkspaceComponent::get_chart_panel_under_cursor() const {
+  ImVec2 mouse_pos = ImGui::GetMousePos();
+  auto panel_ids = panel_manager_->get_all_panel_ids();
+  
+  for (uint32_t panel_id : panel_ids) {
+    auto* panel = panel_manager_->get_panel_by_id(panel_id);
+    if (!panel) continue;
+    
+    // Check if this is a chart panel
+    if (panel->get_config().type == PanelType::CHART) {
+      auto* chart_panel = dynamic_cast<ChartPanel*>(panel);
+      if (chart_panel) {
+        // Get the panel's position and size
+        ImVec2 panel_pos = panel_manager_->get_panel_position(panel_id);
+        ImVec2 panel_size = panel_manager_->get_panel_size(panel_id);
+        
+        // Check if mouse is within the panel bounds
+        if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
+            mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
+          return chart_panel;
+        }
+      }
+    }
+  }
+  
+  return nullptr; // No chart panel found under cursor
 }
 
 void QuantWorkspaceComponent::render_dashboard_controls() {

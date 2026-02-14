@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "../analytics/cluster_engine.hpp"    // For ClusterEngine and imbalance/exhaustion detection
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "panel_base.hpp"
@@ -176,6 +177,9 @@ class FootprintPanel : public PanelBase {
 
   // Level of Detail (LOD) system for footprint rendering
   BTQuant::Rendering::FootprintLOD lod_system_;
+
+  // Cluster Engine for advanced imbalance and exhaustion detection
+  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
 
   // Rendering Helpers
   ImU32 getCellColor(const FootprintCell& cell, double max_volume = 10000.0) const;

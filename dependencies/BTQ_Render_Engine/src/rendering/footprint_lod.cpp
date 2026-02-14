@@ -31,6 +31,25 @@ FootprintLOD::FootprintLOD()
     , performance_lod_enabled_(true) {} // Performance-based LOD enabled by default
 
 
+// Helper function to calculate luminance of a color
+float FootprintLOD::calculateLuminance(ImU32 color) const {
+    float r = ((color >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+    float g = ((color >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+    float b = ((color >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+    
+    // Calculate luminance using the standard formula
+    return 0.299f * r + 0.587f * g + 0.114f * b;
+}
+
+// Helper function to determine appropriate text color based on background luminance
+ImU32 FootprintLOD::getTextColorForBackground(ImU32 backgroundColor) const {
+    float luminance = calculateLuminance(backgroundColor);
+    
+    // If background is bright, use black text; if dark, use white text
+    return luminance > 0.5f ? IM_COL32_BLACK : IM_COL32_WHITE;
+}
+
+
 float FootprintLOD::calculateProgressiveLOD(float cell_width_px, float cell_height_px,
                                           float zoom_factor) const {
     float min_dimension = std::min(cell_width_px, cell_height_px);
@@ -644,7 +663,27 @@ void FootprintLOD::applyLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on LOD settings
@@ -704,7 +743,83 @@ void FootprintLOD::applyLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -776,7 +891,27 @@ void FootprintLOD::applyDistanceBasedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on LOD settings
@@ -836,7 +971,83 @@ void FootprintLOD::applyDistanceBasedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -1055,7 +1266,27 @@ void FootprintLOD::applySimplifiedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on simplified LOD settings
@@ -1150,7 +1381,27 @@ void FootprintLOD::applyEnhancedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on enhanced LOD settings
@@ -1210,7 +1461,83 @@ void FootprintLOD::applyEnhancedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -1278,7 +1605,27 @@ void FootprintLOD::applyProgressiveLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on progressive LOD settings
@@ -1338,7 +1685,83 @@ void FootprintLOD::applyProgressiveLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -1474,7 +1897,27 @@ void FootprintLOD::applyMultiResolutionLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on multi-resolution LOD settings
@@ -1534,7 +1977,83 @@ void FootprintLOD::applyMultiResolutionLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -1775,7 +2294,27 @@ void FootprintLOD::applyContextualLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on contextual LOD settings
@@ -1835,7 +2374,83 @@ void FootprintLOD::applyContextualLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -1943,7 +2558,27 @@ void FootprintLOD::applyFoveatedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on foveated LOD settings
@@ -2003,7 +2638,83 @@ void FootprintLOD::applyFoveatedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -2207,7 +2918,27 @@ void FootprintLOD::applyZoomInOutLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on zoom-aware LOD settings
@@ -2267,7 +2998,83 @@ void FootprintLOD::applyZoomInOutLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -2417,7 +3224,27 @@ void FootprintLOD::applyAdaptiveZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on adaptive zoom LOD settings
@@ -2477,7 +3304,83 @@ void FootprintLOD::applyAdaptiveZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -2600,7 +3503,27 @@ void FootprintLOD::applySmoothZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on smooth zoom LOD settings
@@ -2660,7 +3583,83 @@ void FootprintLOD::applySmoothZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -2787,7 +3786,27 @@ void FootprintLOD::applyGradientBasedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on gradient-based LOD settings
@@ -2847,7 +3866,83 @@ void FootprintLOD::applyGradientBasedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -3008,7 +4103,27 @@ void FootprintLOD::applyZoomLevelLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on zoom-level optimized LOD settings
@@ -3068,7 +4183,83 @@ void FootprintLOD::applyZoomLevelLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -3242,7 +4433,27 @@ void FootprintLOD::applyEnhancedZoomInLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on enhanced zoom-in LOD settings
@@ -3302,7 +4513,83 @@ void FootprintLOD::applyEnhancedZoomInLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -3378,7 +4665,27 @@ void FootprintLOD::applyTileBasedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on tile-based LOD settings
@@ -3438,7 +4745,83 @@ void FootprintLOD::applyTileBasedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -3569,7 +4952,27 @@ void FootprintLOD::applySimplifiedZoomOutLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on simplified zoom-out LOD settings
@@ -3804,7 +5207,27 @@ void FootprintLOD::applyAdvancedZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on advanced zoom LOD settings
@@ -3864,7 +5287,83 @@ void FootprintLOD::applyAdvancedZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -4017,7 +5516,27 @@ void FootprintLOD::applyMultiScaleLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on multi-scale LOD settings
@@ -4077,7 +5596,83 @@ void FootprintLOD::applyMultiScaleLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -4249,7 +5844,27 @@ void FootprintLOD::applyContinuousLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on continuous LOD settings
@@ -4309,7 +5924,83 @@ void FootprintLOD::applyContinuousLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -4390,7 +6081,27 @@ void FootprintLOD::applyZoomOutSimplificationLODToCell(const FootprintCell& cell
             ImVec2 center_p2 = ImVec2((p1.x + p2.x) * 0.5f + 2.0f, (p1.y + p2.y) * 0.5f + 2.0f);
             draw_list->AddRectFilled(center_p1, center_p2, color_with_lod_alpha);
         } else {
-            draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+            // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
         }
     }
 
@@ -4524,7 +6235,27 @@ void FootprintLOD::applyIntelligentZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on intelligent zoom LOD settings
@@ -4584,7 +6315,83 @@ void FootprintLOD::applyIntelligentZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -4700,7 +6507,27 @@ void FootprintLOD::applyEdgeBasedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on edge-based LOD settings
@@ -4767,7 +6594,83 @@ void FootprintLOD::applyEdgeBasedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -4926,7 +6829,27 @@ void FootprintLOD::applyPriorityBasedLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on priority-based LOD settings
@@ -4986,7 +6909,83 @@ void FootprintLOD::applyPriorityBasedLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -5194,7 +7193,27 @@ void FootprintLOD::applySmartLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on smart LOD settings
@@ -5254,7 +7273,83 @@ void FootprintLOD::applySmartLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -5435,7 +7530,27 @@ void FootprintLOD::applyZoomDependentLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on zoom-dependent LOD settings
@@ -5495,7 +7610,83 @@ void FootprintLOD::applyZoomDependentLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -5677,7 +7868,27 @@ void FootprintLOD::applyProgressiveZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on progressive zoom LOD settings
@@ -5737,7 +7948,83 @@ void FootprintLOD::applyProgressiveZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -5919,7 +8206,27 @@ void FootprintLOD::applyCoreLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on core LOD settings
@@ -5979,7 +8286,83 @@ void FootprintLOD::applyCoreLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -6196,7 +8579,27 @@ void FootprintLOD::applyUltimateZoomLODToCell(const FootprintCell& cell,
         unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on ultimate zoom LOD settings
@@ -6256,7 +8659,83 @@ void FootprintLOD::applyUltimateZoomLODToCell(const FootprintCell& cell,
             ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
                            (p1.y + p2.y - text_size.y) * 0.5f);
 
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+            // Determine text color based on background luminance for better contrast
+            // Calculate the alpha value that would be used for the gradient
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            double cell_volume = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(panel->getVolumeDataType())) {
+                case Data::VolumeAnalysisType::Delta:
+                case Data::VolumeAnalysisType::DeltaPercent:
+                case Data::VolumeAnalysisType::CumulativeDelta:
+                    // For delta types, use absolute delta value for alpha calculation
+                    cell_volume = std::abs(cell.delta);
+                    break;
+
+                case Data::VolumeAnalysisType::BuyVolume:
+                case Data::VolumeAnalysisType::SellVolume:
+                case Data::VolumeAnalysisType::BuySellVolume:
+                    // For buy/sell types, use the respective volumes
+                    if (panel->getVolumeDataType() == Data::VolumeDataType::BuyVolume) {
+                        cell_volume = cell.bid_volume;
+                    } else if (panel->getVolumeDataType() == Data::VolumeDataType::SellVolume) {
+                        cell_volume = cell.ask_volume;
+                    } else {  // BuySellVolume
+                        cell_volume = std::abs(cell.delta);
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::Volume:
+                case Data::VolumeAnalysisType::BuyVolumePercent:
+                case Data::VolumeAnalysisType::SellVolumePercent:
+                case Data::VolumeAnalysisType::Trades:
+                case Data::VolumeAnalysisType::BuyTrades:
+                case Data::VolumeAnalysisType::SellTrades:
+                case Data::VolumeAnalysisType::FilteredVolume:
+                    // For volume intensity types, use total volume or trade count
+                    if (panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::Trades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::BuyTrades) ||
+                        panel->getVolumeDataType() == static_cast<Data::VolumeDataType>(Data::VolumeAnalysisType::SellTrades)) {
+                        cell_volume = static_cast<double>(cell.trade_count);
+                    } else {
+                        cell_volume = total_vol;
+                    }
+                    break;
+
+                case Data::VolumeAnalysisType::AverageSize:
+                case Data::VolumeAnalysisType::AverageBuySize:
+                case Data::VolumeAnalysisType::AverageSellSize:
+                case Data::VolumeAnalysisType::MaxOneTradeVolume:
+                default:
+                    // For other metrics, use the delta field which contains the calculated value
+                    cell_volume = std::abs(cell.delta);
+                    break;
+            }
+
+            // Calculate intensity based on node_volume / max_volume_in_bar
+            float intensity = max_volume > 0.0
+                                  ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f)
+                                  : 0.05f;
+
+            // Calculate the alpha value that would be used for the gradient
+            unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+            unsigned char calculated_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier * intensity);
+            
+            // Determine text color based on background luminance for better contrast
+            // Use the start color of the gradient for luminance calculation
+            bool buy_dominates = cell.delta > 0.0;
+            ImU32 background_color_for_text;
+            
+            if (buy_dominates) {
+                // For buy dominance, use the start color of the gradient (#00E676 with calculated alpha)
+                background_color_for_text = IM_COL32(0, 230, 118, calculated_alpha);
+            } else {
+                // For sell dominance or neutral, use the original color with calculated alpha
+                background_color_for_text = (cell_color & 0x00FFFFFF) | (calculated_alpha << 24);
+            }
+            
+            ImU32 text_color = getTextColorForBackground(background_color_for_text);
+            draw_list->AddText(text_pos, text_color, cell_label.c_str());
         }
     }
 
@@ -6506,7 +8985,27 @@ void FootprintLOD::applyMainLODToCell(const FootprintCell& cell,
         const unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
         const ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
 
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        // Determine if Buy Delta dominates for gradient direction
+        bool buy_dominates = cell.delta > 0.0;
+
+        if (buy_dominates) {
+            // Create gradient from #00E676 (Alpha 0.7) to #00E676 (Alpha 0.1) for Buy Delta dominance
+            ImU32 gradient_start = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.7));  // #00E676 with Alpha 0.7
+            ImU32 gradient_end = IM_COL32(0, 230, 118, static_cast<int>(255 * 0.1));    // #00E676 with Alpha 0.1
+            
+            // Use AddRectFilledMultiColor for gradient effect
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        } else {
+            // For sell dominance or neutral, use the original color with gradient effect
+            // Create gradient from the original color (higher alpha) to original color (lower alpha)
+            unsigned char start_alpha = static_cast<unsigned char>(new_alpha);
+            unsigned char end_alpha = static_cast<unsigned char>(new_alpha * 0.1f);
+            
+            ImU32 gradient_start = (cell_color & 0x00FFFFFF) | (start_alpha << 24);
+            ImU32 gradient_end = (cell_color & 0x00FFFFFF) | (end_alpha << 24);
+            
+            draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
+        }
     }
 
     // Render borders based on main LOD settings

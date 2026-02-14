@@ -62,10 +62,19 @@ class QuantWorkspaceComponent : public UIComponent {
   std::vector<std::string> order_sides_ = {"Buy", "Sell"};
   std::vector<std::string> order_types_ = {"Market", "Limit"};
 
+  // Crosshair synchronization state
+  bool global_crosshair_enabled_ = true;  // Enable/disable global crosshair sync
+  ImVec2 last_crosshair_position_{0, 0};  // Last recorded crosshair position
+  bool crosshair_active_ = false;         // Whether crosshair is currently active
+
   // UI rendering methods
   void render_dashboard_controls();
   void render_orders_panel();
   void render_positions_panel();
+  
+  // Crosshair synchronization methods
+  void handle_global_crosshair_sync();
+  ChartPanel* get_chart_panel_under_cursor() const;
 
 };
 

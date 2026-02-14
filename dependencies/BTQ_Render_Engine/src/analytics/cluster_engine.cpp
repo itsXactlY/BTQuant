@@ -100,16 +100,20 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
     for (int time_bucket = 0; time_bucket < 16; ++time_bucket) {
       // Get buy volume at current price level P (with mutex protection)
       double buy_volume_at_p;
+      double sell_volume_at_p;
       {
         std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
         buy_volume_at_p = cluster_canvas_[price_idx][time_bucket].buy_volume;
+        sell_volume_at_p = cluster_canvas_[price_idx][time_bucket].sell_volume;
       }
 
       // Get sell volume at previous price level P-1 (with mutex protection)
       double sell_volume_at_p_minus_1;
+      double buy_volume_at_p_minus_1;
       {
         std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 1][time_bucket].volume_mutex);
         sell_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].sell_volume;
+        buy_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].buy_volume;
       }
 
       // Calculate ratio of buy_volume at P to sell_volume at P-1
@@ -127,18 +131,6 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
       }
 
       // Also check the reverse diagonal: sell_volume at price P with buy_volume at price P-1
-      double sell_volume_at_p;
-      {
-        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
-        sell_volume_at_p = cluster_canvas_[price_idx][time_bucket].sell_volume;
-      }
-
-      double buy_volume_at_p_minus_1;
-      {
-        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 1][time_bucket].volume_mutex);
-        buy_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].buy_volume;
-      }
-
       if (buy_volume_at_p_minus_1 > 0) {
         double reverse_ratio = sell_volume_at_p / buy_volume_at_p_minus_1;
 
@@ -148,6 +140,45 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
           imbalances.emplace_back(
               static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
               time_bucket, sell_volume_at_p, buy_volume_at_p_minus_1, reverse_ratio);
+        }
+      }
+      
+      // Enhanced diagonal detection: Look for multi-level diagonal patterns
+      // Check for buy volume at P compared to sell volume at P-2 (extended diagonal)
+      if (price_idx >= 2) {
+        double sell_volume_at_p_minus_2;
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 2][time_bucket].volume_mutex);
+          sell_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].sell_volume;
+        }
+        
+        if (sell_volume_at_p_minus_2 > 0) {
+          double extended_ratio = buy_volume_at_p / sell_volume_at_p_minus_2;
+          
+          if (extended_ratio > threshold * 1.5) { // Higher threshold for extended patterns
+            imbalances.emplace_back(
+                static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                time_bucket, buy_volume_at_p, sell_volume_at_p_minus_2, extended_ratio);
+          }
+        }
+      }
+      
+      // Check for sell volume at P compared to buy volume at P-2 (reverse extended diagonal)
+      if (price_idx >= 2) {
+        double buy_volume_at_p_minus_2;
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 2][time_bucket].volume_mutex);
+          buy_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].buy_volume;
+        }
+        
+        if (buy_volume_at_p_minus_2 > 0) {
+          double reverse_extended_ratio = sell_volume_at_p / buy_volume_at_p_minus_2;
+          
+          if (reverse_extended_ratio > threshold * 1.5) { // Higher threshold for extended patterns
+            imbalances.emplace_back(
+                static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                time_bucket, sell_volume_at_p, buy_volume_at_p_minus_2, reverse_extended_ratio);
+          }
         }
       }
     }
@@ -316,10 +347,193 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
             threshold                                           // High ratio indicator
         );
       }
+      
+      // Enhanced stacked imbalance: Look for multi-timeframe patterns
+      // Compare current time bucket with multiple previous time buckets to detect sustained imbalances
+      double buy_volume_2_bars_ago = 0.0, sell_volume_2_bars_ago = 0.0;
+      bool has_2_bars_ago = false;
+      
+      if (time_bucket >= 2) {
+        has_2_bars_ago = true;
+        // Get data from 2 time buckets ago
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 2].volume_mutex);
+          buy_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].buy_volume;
+          sell_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].sell_volume;
+        }
+        
+        // Detect sustained bullish pressure: increasing buy volume over 3 consecutive periods
+        if (buy_volume_2_bars_ago > 0 && buy_volume_previous > buy_volume_2_bars_ago && 
+            buy_volume_current > buy_volume_previous && 
+            buy_volume_current > buy_volume_2_bars_ago * threshold) {
+          double sustained_bullish_ratio = buy_volume_current / buy_volume_2_bars_ago;
+          imbalances.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              buy_volume_current,                                 // Current buy volume
+              buy_volume_2_bars_ago,                              // Volume 2 bars ago
+              sustained_bullish_ratio                            // Sustained bullish ratio
+          );
+        }
+        
+        // Detect sustained bearish pressure: increasing sell volume over 3 consecutive periods
+        if (sell_volume_2_bars_ago > 0 && sell_volume_previous > sell_volume_2_bars_ago && 
+            sell_volume_current > sell_volume_previous && 
+            sell_volume_current > sell_volume_2_bars_ago * threshold) {
+          double sustained_bearish_ratio = sell_volume_current / sell_volume_2_bars_ago;
+          imbalances.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              sell_volume_current,                                // Current sell volume
+              sell_volume_2_bars_ago,                             // Volume 2 bars ago
+              sustained_bearish_ratio                            // Sustained bearish ratio
+          );
+        }
+      }
+      
+      // Enhanced exhaustion detection within stacked patterns
+      // Detect when strong momentum suddenly weakens
+      if (has_2_bars_ago) {
+        double avg_buy_prev_2 = (buy_volume_2_bars_ago + buy_volume_previous) / 2.0;
+        double avg_sell_prev_2 = (sell_volume_2_bars_ago + sell_volume_previous) / 2.0;
+        
+        // Potential bullish exhaustion: strong previous buying followed by current weakness
+        if (avg_buy_prev_2 > 0 && buy_volume_current < avg_buy_prev_2 / threshold && 
+            sell_volume_current > avg_sell_prev_2 * threshold) {
+          double exh_ratio = (avg_buy_prev_2 / buy_volume_current) * (sell_volume_current / avg_sell_prev_2);
+          imbalances.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              buy_volume_current,                                 // Current buy volume
+              sell_volume_current,                                // Current sell volume
+              exh_ratio                                          // Exhaustion ratio
+          );
+        }
+        
+        // Potential bearish exhaustion: strong previous selling followed by current weakness
+        if (avg_sell_prev_2 > 0 && sell_volume_current < avg_sell_prev_2 / threshold && 
+            buy_volume_current > avg_buy_prev_2 * threshold) {
+          double exh_ratio = (avg_sell_prev_2 / sell_volume_current) * (buy_volume_current / avg_buy_prev_2);
+          imbalances.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              buy_volume_current,                                 // Current buy volume
+              sell_volume_current,                                // Current sell volume
+              exh_ratio                                          // Exhaustion ratio
+          );
+        }
+      }
     }
   }
 
   return imbalances;
+}
+
+std::vector<std::tuple<int64_t, int, double, double, double, std::string>>
+ClusterEngine::detect_exhaustion_moves(double threshold) const {
+  std::vector<std::tuple<int64_t, int, double, double, double, std::string>> exhaustion_moves;
+
+  // Exhaustion moves typically occur when there's extreme buying/selling pressure followed by weakness
+  // This can be detected by looking for:
+  // 1. High volume in one direction (buy or sell)
+  // 2. Followed by lower volume in the same direction or reversal
+  // 3. Price movement stalling despite high volume
+  
+  for (size_t price_idx = 0; price_idx < cluster_canvas_.size(); ++price_idx) {
+    for (int time_bucket = 1; time_bucket < 16; ++time_bucket) {
+      // Get current and previous time bucket data
+      double current_buy_volume, current_sell_volume;
+      double prev_buy_volume, prev_sell_volume;
+      
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+        current_buy_volume = cluster_canvas_[price_idx][time_bucket].buy_volume;
+        current_sell_volume = cluster_canvas_[price_idx][time_bucket].sell_volume;
+      }
+      
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 1].volume_mutex);
+        prev_buy_volume = cluster_canvas_[price_idx][time_bucket - 1].buy_volume;
+        prev_sell_volume = cluster_canvas_[price_idx][time_bucket - 1].sell_volume;
+      }
+      
+      // Calculate total volumes
+      double current_total_volume = current_buy_volume + current_sell_volume;
+      double prev_total_volume = prev_buy_volume + prev_sell_volume;
+      
+      // Calculate deltas
+      double current_delta = current_buy_volume - current_sell_volume;
+      double prev_delta = prev_buy_volume - prev_sell_volume;
+      
+      // Bullish exhaustion: Strong buying pressure followed by weakness or reversal
+      if (prev_delta > 0 && std::abs(prev_delta) > threshold * 100) { // Strong previous buying
+        if (current_delta < 0 && std::abs(current_delta) > threshold * 50) { // Reversal to selling
+          // This indicates bullish exhaustion - buyers exhausted, sellers taking control
+          exhaustion_moves.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              current_buy_volume,                                 // Current buy volume
+              current_sell_volume,                                // Current sell volume
+              std::abs(current_delta),                            // Magnitude of reversal
+              "Bullish Exhaustion"                                // Type of exhaustion
+          );
+        } else if (current_total_volume < prev_total_volume / 2.0 && current_delta < prev_delta / 2.0) {
+          // Volume dries up and momentum weakens - also bullish exhaustion
+          exhaustion_moves.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              current_buy_volume,                                 // Current buy volume
+              current_sell_volume,                                // Current sell volume
+              std::abs(current_delta - prev_delta),               // Change in momentum
+              "Bullish Exhaustion (Weak)"                         // Type of exhaustion
+          );
+        }
+      }
+      
+      // Bearish exhaustion: Strong selling pressure followed by weakness or reversal
+      if (prev_delta < 0 && std::abs(prev_delta) > threshold * 100) { // Strong previous selling
+        if (current_delta > 0 && std::abs(current_delta) > threshold * 50) { // Reversal to buying
+          // This indicates bearish exhaustion - sellers exhausted, buyers stepping in
+          exhaustion_moves.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              current_buy_volume,                                 // Current buy volume
+              current_sell_volume,                                // Current sell volume
+              std::abs(current_delta),                            // Magnitude of reversal
+              "Bearish Exhaustion"                                // Type of exhaustion
+          );
+        } else if (current_total_volume < prev_total_volume / 2.0 && std::abs(current_delta) < std::abs(prev_delta) / 2.0) {
+          // Volume dries up and momentum weakens - also bearish exhaustion
+          exhaustion_moves.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              current_buy_volume,                                 // Current buy volume
+              current_sell_volume,                                // Current sell volume
+              std::abs(prev_delta - current_delta),               // Change in momentum
+              "Bearish Exhaustion (Weak)"                         // Type of exhaustion
+          );
+        }
+      }
+      
+      // Hidden exhaustion: Extreme volume in one direction but price doesn't move proportionally
+      if (current_total_volume > 0 && std::abs(current_delta) / current_total_volume < 0.1) {
+        // High volume but little directional bias - potential exhaustion
+        if (current_total_volume > threshold * 200) { // Very high total volume
+          std::string exhaustion_type = current_delta > 0 ? "Hidden Bullish Exhaustion" : "Hidden Bearish Exhaustion";
+          exhaustion_moves.emplace_back(
+              static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+              time_bucket,                                        // Current time bucket
+              current_buy_volume,                                 // Current buy volume
+              current_sell_volume,                                // Current sell volume
+              current_total_volume,                               // Total volume
+              exhaustion_type                                      // Type of exhaustion
+          );
+        }
+      }
+    }
+  }
+
+  return exhaustion_moves;
 }
 
 void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& trade,

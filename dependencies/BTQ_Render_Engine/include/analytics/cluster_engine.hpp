@@ -157,6 +157,10 @@ class ClusterEngine {
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_stacked_imbalances(
       double threshold = 3.0) const;
 
+  // Detect exhaustion moves by identifying extreme buying/selling pressure followed by weakness
+  std::vector<std::tuple<int64_t, int, double, double, double, std::string>> detect_exhaustion_moves(
+      double threshold = 3.0) const;
+
   // Getter method to access the cluster canvas for visualization
   const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
 

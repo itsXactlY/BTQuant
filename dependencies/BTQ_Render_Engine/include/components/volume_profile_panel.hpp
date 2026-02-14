@@ -13,7 +13,7 @@
 namespace BTQuant {
 
 // Enum for profile mode
-enum class ProfileMode { Step, Right, Left, Custom, Session, Composite };
+enum class ProfileMode { Step, Right, Left, Custom, Session, Composite, Virgin };
 
 // Struct for profile settings
 struct ProfileSettings {
@@ -258,6 +258,11 @@ class VolumeProfilePanel : public PanelBase {
   // Profile settings
   ProfileMode profile_mode_ = ProfileMode::Step;
   ProfileSettings profile_settings_{};
+
+  // Virgin POC tracking
+  std::vector<bool> virgin_price_levels_;  // Track which price levels have not been touched
+  double virgin_poc_price_ = 0.0;         // Virgin Point of Control
+  std::vector<VolumeLevel> virgin_volume_profile_;  // Virgin volume profile
 
   // Profile anchor markers for Custom Profile mode
   bool use_custom_time_range_ = false;  // Whether to use custom time range

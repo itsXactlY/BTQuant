@@ -488,6 +488,12 @@ public:
                                 const std::vector<FootprintCell>& stacked_imbalances,
                                 const FootprintPanel* panel) const;
 
+    // Helper function to calculate luminance of a color
+    float calculateLuminance(ImU32 color) const;
+
+    // Helper function to determine appropriate text color based on background luminance
+    ImU32 getTextColorForBackground(ImU32 backgroundColor) const;
+
     // Apply zoom-out simplification LOD to cell rendering
     void applyZoomOutSimplificationLODToCell(const FootprintCell& cell,
                                            ImDrawList* draw_list,

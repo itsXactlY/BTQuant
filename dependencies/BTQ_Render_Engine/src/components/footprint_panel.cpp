@@ -125,6 +125,9 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
   lod_system_.setTextRenderThreshold(12.0f);
   lod_system_.setLabelRenderThreshold(20.0f);
   lod_system_.setDetailRenderThreshold(8.0f);
+  
+  // Initialize the ClusterEngine with a default tick size
+  cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size of 0.25
 }
 
 void FootprintPanel::update(float /*dt*/) {
@@ -580,8 +583,12 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   // Use a light grey color with low alpha to indicate filtered cells
   ImU32 greyed_out_color = IM_COL32(128, 128, 128, 64);  // Grey with transparency
 
-  // Draw filled cell with greyed-out appearance
-  draw_list->AddRectFilled(p1, p2, greyed_out_color);
+  // Draw filled cell with gradient greyed-out appearance for filtered cells
+  ImU32 gradient_start = IM_COL32(128, 128, 128, 80);   // Grey with slightly higher alpha
+  ImU32 gradient_end = IM_COL32(128, 128, 128, 40);     // Grey with lower alpha
+  
+  // Use AddRectFilledMultiColor for gradient effect even in filtered cells
+  draw_list->AddRectFilledMultiColor(p1, p2, gradient_start, gradient_end, gradient_end, gradient_start);
 
   // Draw subtle border for cell separation (normal case)
   ImU32 border_color = IM_COL32(128, 128, 128, 40);  // Grey, low alpha
@@ -596,9 +603,10 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
     // Center text in cell
     ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f, (p1.y + p2.y - text_size.y) * 0.5f);
 
-    // Use a lighter grey text for filtered cells
-    draw_list->AddText(text_pos, IM_COL32(200, 200, 200, 128),
-                       label.c_str());  // Light grey text with transparency
+    // Determine text color based on background luminance for better contrast in filtered cells
+    ImU32 background_color_for_text = IM_COL32(128, 128, 128, 64); // Average of gradient colors
+    ImU32 text_color = lod_system_.getTextColorForBackground(background_color_for_text);
+    draw_list->AddText(text_pos, text_color, label.c_str());
   }
 }
 
@@ -701,17 +709,25 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
 
 void FootprintPanel::render() {
   begin_panel_window();
-  
-  // Simple placeholder rendering to allow compilation
-  ImGui::Text("Footprint Panel - Placeholder View");
-  ImGui::Text("Symbol: %s", config_.symbol.c_str());
-  
+
   // Show some basic controls
-  ImGui::Separator();
   ImGui::Checkbox("Show Volume Labels", &show_volume_labels_);
   ImGui::Checkbox("Show Delta Indicator", &show_delta_indicator_);
   ImGui::SliderFloat("Delta Threshold", &delta_threshold_, -100.0f, 100.0f);
   
+  // Imbalance and Exhaustion Detection Controls
+  static bool show_imbalances = true;
+  static bool show_exhaustion = true;
+  static double imbalance_threshold = 3.0;
+  static double exhaustion_threshold = 3.0;
+  
+  ImGui::Separator();
+  ImGui::Text("Imbalance & Exhaustion Detection:");
+  ImGui::Checkbox("Show Imbalances", &show_imbalances);
+  ImGui::Checkbox("Show Exhaustion", &show_exhaustion);
+  ImGui::SliderFloat("Imbalance Threshold", &imbalance_threshold, 1.0f, 10.0f);
+  ImGui::SliderFloat("Exhaustion Threshold", &exhaustion_threshold, 1.0f, 10.0f);
+
   // Number formatting options
   const char* number_formats[] = {"Raw", "Thousands (K)", "Millions (M)", "Scientific", "Custom Decimal"};
   int current_format = static_cast<int>(number_format_);
@@ -723,46 +739,208 @@ void FootprintPanel::render() {
     ImGui::SliderInt("Decimal Places", &custom_decimal_places_, 0, 8);
   }
 
-  // Placeholder for the actual footprint chart
-  ImGui::Separator();
-  ImGui::Text("Footprint Chart Area");
+  // Volume data type selection
+  const char* volume_types[] = {
+      "Volume", "Delta", "Delta Percent", "Buy Volume", "Sell Volume", "Buy/Sell Volume",
+      "Buy Volume Percent", "Sell Volume Percent", "Trades", "Buy Trades", "Sell Trades",
+      "Cumulative Delta", "Average Size", "Average Buy Size", "Average Sell Size", "Max One Trade Volume", "Filtered Volume"
+  };
   
-  // Create a child window to simulate the chart area
-  if (ImGui::BeginChild("FootprintChartArea", ImVec2(0, 300), true)) {
-    ImGui::Text("Footprint visualization would appear here");
-    ImGui::Text("X-axis: Time");
-    ImGui::Text("Y-axis: Price");
-    ImGui::Text("Color/Size: Volume/Delta");
-    
-    // Example of how cells might be visualized
-    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      
-    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();   
-    if (canvas_sz.x < 50) canvas_sz.x = 50.0f;
-    if (canvas_sz.y < 50) canvas_sz.y = 50.0f;
-    
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    
-    // Draw a simple grid as a placeholder
-    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
-    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(30, 30, 30, 255));
-    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(200, 200, 200, 255));
-    
-    // Draw some sample "cells" as rectangles
-    for (int i = 0; i < 10; i++) {
-      for (int j = 0; j < 5; j++) {
-        ImVec2 cell_p0 = ImVec2(canvas_p0.x + i * (canvas_sz.x / 10), canvas_p0.y + j * (canvas_sz.y / 5));
-        ImVec2 cell_p1 = ImVec2(cell_p0.x + (canvas_sz.x / 10) - 2, cell_p0.y + (canvas_sz.y / 5) - 2);
+  int current_vol_type = static_cast<int>(volume_data_type_);
+  if (ImGui::Combo("Volume Data Type", &current_vol_type, volume_types, IM_ARRAYSIZE(volume_types))) {
+    volume_data_type_ = static_cast<Data::VolumeDataType>(current_vol_type);
+  }
+
+  // Time aggregation type selection
+  const char* time_agg_types[] = {
+      "1 Second", "5 Seconds", "15 Seconds", "30 Seconds", "1 Minute", 
+      "5 Minutes", "15 Minutes", "30 Minutes", "1 Hour", "4 Hours", "1 Day"
+  };
+  
+  int current_time_agg = static_cast<int>(time_aggregation_type_);
+  if (ImGui::Combo("Time Aggregation", &current_time_agg, time_agg_types, IM_ARRAYSIZE(time_agg_types))) {
+    time_aggregation_type_ = static_cast<Data::TimeAggregationType>(current_time_agg);
+  }
+
+  // Price aggregation type selection
+  const char* price_agg_types[] = {
+      "1 Tick", "2 Ticks", "5 Ticks", "10 Ticks", "25 Ticks", "50 Ticks", "100 Ticks", "Custom"
+  };
+  
+  int current_price_agg = static_cast<int>(price_aggregation_type_);
+  if (ImGui::Combo("Price Aggregation", &current_price_agg, price_agg_types, IM_ARRAYSIZE(price_agg_types))) {
+    price_aggregation_type_ = static_cast<Data::PriceAggregationType>(current_price_agg);
+  }
+
+  if (price_aggregation_type_ == Data::PriceAggregationType::P_CUSTOM) {
+    double min_val = 0.01;
+    double max_val = 10.0;
+    ImGui::SliderScalar("Custom Price Aggregation", ImGuiDataType_Double, &custom_price_aggregation_value_, &min_val, &max_val, "%.3f");
+  }
+
+  // Volume filter controls
+  ImGui::Checkbox("Enable Volume Filter", &enable_volume_filter_);
+  if (enable_volume_filter_) {
+    double min_val = 0.0;
+    double max_val = max_volume_threshold_;
+    ImGui::SliderScalar("Volume Threshold", ImGuiDataType_Double, &volume_threshold_, &min_val, &max_val, "%.2f");
+  }
+
+  // Zoom sensitivity control
+  ImGui::SliderFloat("Zoom Sensitivity", &zoom_sensitivity_, 0.1f, 3.0f);
+
+  // Initialize some dummy data for testing if cells are empty
+  if (cells_.empty()) {
+    // Generate sample footprint cells for demonstration
+    for (int i = 0; i < 20; ++i) {
+      for (int j = 0; j < 15; ++j) {
+        double x_pos = i * 1.0;  // Time dimension
+        double y_pos = j * 5.0;  // Price dimension
+        double width = 0.8;       // Time width
+        double height = 4.0;      // Price height
         
-        // Random color based on position for demonstration
-        ImU32 color = IM_COL32(100 + i * 15, 100 + j * 30, 150, 200);
-        draw_list->AddRectFilled(cell_p0, cell_p1, color);
-        draw_list->AddRect(cell_p0, cell_p1, IM_COL32(255, 255, 255, 100));
+        // Generate varying volumes to demonstrate gradient effects
+        double bid_vol = 100.0 + (i * 50.0) + (j * 30.0);
+        double ask_vol = 80.0 + (i * 40.0) + (j * 20.0);
+        
+        // Randomly make some cells have higher buy or sell volume to show gradient effects
+        if ((i + j) % 3 == 0) {
+          bid_vol *= 2.0;  // Higher buy volume
+        } else if ((i + j) % 3 == 1) {
+          ask_vol *= 2.0;  // Higher sell volume
+        }
+        
+        FootprintCell cell(x_pos, y_pos, width, height, bid_vol, ask_vol, 
+                          static_cast<uint32_t>(50 + i + j), y_pos);
+        cell.buy_trade_count = static_cast<uint32_t>(bid_vol / 10.0);
+        cell.sell_trade_count = static_cast<uint32_t>(ask_vol / 10.0);
+        cell.max_single_trade_volume = std::max(bid_vol, ask_vol) / 5.0;
+        
+        cells_.push_back(cell);
+      }
+    }
+  }
+
+  // Main footprint chart area using ImPlot
+  if (ImPlot::BeginPlot("##FootprintChart", ImVec2(-1, -1))) {
+    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+    
+    // Get the plot dimensions for zoom calculation
+    float plot_width = ImPlot::GetPlotSize().x;
+    float plot_height = ImPlot::GetPlotSize().y;
+    
+    // Calculate zoom factor based on visible range
+    ImPlotRect limits = ImPlot::GetPlotLimits();
+    double x_range = limits.X.Max - limits.X.Min;
+    double y_range = limits.Y.Max - limits.Y.Min;
+    
+    // Calculate approximate zoom factor (this is a simplified approach)
+    float zoom_factor = std::min(plot_width / static_cast<float>(x_range), 
+                                plot_height / static_cast<float>(y_range));
+    
+    // Calculate max volume for intensity calculation
+    double max_volume = 1.0; // This would normally come from actual data
+    if (!cells_.empty()) {
+      for (const auto& cell : cells_) {
+        double cell_total_vol = cell.bid_volume + cell.ask_volume;
+        if (cell_total_vol > max_volume) {
+          max_volume = cell_total_vol;
+        }
+      }
+    }
+
+    // Detect imbalances for highlighting
+    std::vector<FootprintCell> diagonal_imbalances;
+    std::vector<FootprintCell> stacked_imbalances;
+    detectImbalances(cells_, diagonal_imbalances, stacked_imbalances);
+    
+    // Use ClusterEngine for advanced imbalance and exhaustion detection
+    std::vector<std::tuple<int64_t, int, double, double, double>> diagonal_imbalances_raw;
+    std::vector<std::tuple<int64_t, int, double, double, double>> stacked_imbalances_raw;
+    std::vector<std::tuple<int64_t, int, double, double, double, std::string>> exhaustion_moves_raw;
+    
+    if (cluster_engine_) {
+        diagonal_imbalances_raw = cluster_engine_->detect_diagonal_imbalances(imbalance_threshold);
+        stacked_imbalances_raw = cluster_engine_->detect_stacked_imbalances(imbalance_threshold);
+        if (show_exhaustion) {
+            exhaustion_moves_raw = cluster_engine_->detect_exhaustion_moves(exhaustion_threshold);
+        }
+    }
+    
+    // Convert raw detection results to visual indicators
+    std::vector<FootprintCell> exhaustion_signals;
+    if (show_exhaustion) {
+        // Convert exhaustion moves to visual indicators
+        for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
+            // Find corresponding cells in our visualization grid
+            for (const auto& cell : cells_) {
+                // Simple mapping - in a real implementation, this would map price_level and time_bucket to cell coordinates
+                if (std::abs(cell.y - static_cast<double>(price_level)) < 5.0) { // Rough price match
+                    exhaustion_signals.push_back(cell);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Render each footprint cell using the LOD system
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    for (const auto& cell : cells_) {
+      // Skip cells below the volume threshold if filtering is enabled
+      if (enable_volume_filter_ && (cell.bid_volume + cell.ask_volume) < volume_threshold_) {
+        renderFilteredCell(cell, draw_list, max_volume, zoom_factor);
+      } else {
+        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances, zoom_factor);
       }
     }
     
-    ImGui::EndChild();
+    // Highlight imbalance and exhaustion areas if enabled
+    if (show_imbalances || show_exhaustion) {
+        // Highlight diagonal imbalances from raw detection
+        for (const auto& [price_level, time_bucket, buy_vol, sell_vol, ratio] : diagonal_imbalances_raw) {
+            // Map the detected price level and time bucket to visual cells
+            for (const auto& cell : cells_) {
+                if (std::abs(cell.y - static_cast<double>(price_level)) < 5.0) { // Rough price match
+                    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width/2, cell.y - cell.height/2);
+                    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width/2, cell.y + cell.height/2);
+                    draw_list->AddRect(p1, p2, IM_COL32(255, 255, 0, 200), 0.0f, 0, 3.0f); // Yellow border for diagonal imbalances
+                    break;
+                }
+            }
+        }
+        
+        // Highlight stacked imbalances from raw detection
+        for (const auto& [price_level, time_bucket, buy_vol, sell_vol, ratio] : stacked_imbalances_raw) {
+            // Map the detected price level and time bucket to visual cells
+            for (const auto& cell : cells_) {
+                if (std::abs(cell.y - static_cast<double>(price_level)) < 5.0) { // Rough price match
+                    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width/2, cell.y - cell.height/2);
+                    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width/2, cell.y + cell.height/2);
+                    draw_list->AddRect(p1, p2, IM_COL32(0, 255, 255, 200), 0.0f, 0, 3.0f); // Cyan border for stacked imbalances
+                    break;
+                }
+            }
+        }
+        
+        if (show_exhaustion) {
+            // Highlight exhaustion moves from raw detection
+            for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
+                // Map the detected price level and time bucket to visual cells
+                for (const auto& cell : cells_) {
+                    if (std::abs(cell.y - static_cast<double>(price_level)) < 5.0) { // Rough price match
+                        ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width/2, cell.y - cell.height/2);
+                        ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width/2, cell.y + cell.height/2);
+                        draw_list->AddRect(p1, p2, IM_COL32(255, 0, 255, 200), 0.0f, 0, 3.0f); // Magenta border for exhaustion signals
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    ImPlot::EndPlot();
   }
-  
+
   end_panel_window();
 }
 }

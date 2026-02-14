@@ -25,6 +25,11 @@ VolumeProfilePanel::VolumeProfilePanel(const PanelConfig& config,
   composite_days_count_ = 5;  // Default to 5 days
   auto_update_composite_ = true;
 
+  // Initialize virgin POC tracking
+  virgin_price_levels_.resize(NUM_PRICE_LEVELS, true);  // Initially all levels are virgin
+  virgin_poc_price_ = 0.0;
+  virgin_volume_profile_.reserve(NUM_PRICE_LEVELS);
+
   // C++26: Subscribe to push notifications instead of polling
   subscribe_to_updates();
 }
@@ -431,6 +436,11 @@ void VolumeProfilePanel::build_volume_profile() {
           if (max_vol_in_bucket > max_volume_) {
             max_volume_ = max_vol_in_bucket;
           }
+          
+          // Mark this price level as not virgin anymore
+          if (bucket_index < virgin_price_levels_.size()) {
+            virgin_price_levels_[bucket_index] = false;
+          }
         }
       }
 
@@ -478,6 +488,12 @@ void VolumeProfilePanel::build_volume_profile() {
     volume_profile_.clear();
     volume_profile_.resize(NUM_PRICE_LEVELS);
 
+    // Also resize virgin profile if needed
+    if (virgin_volume_profile_.size() != NUM_PRICE_LEVELS) {
+      virgin_volume_profile_.clear();
+      virgin_volume_profile_.resize(NUM_PRICE_LEVELS);
+    }
+
     for (size_t i = 0; i < NUM_PRICE_LEVELS; ++i) {
       volume_profile_[i].price = min_price + (i + 0.5) * price_bucket_size_;
       volume_profile_[i].buy_volume = 0;
@@ -486,12 +502,26 @@ void VolumeProfilePanel::build_volume_profile() {
       volume_profile_[i].buy_trades = 0;
       volume_profile_[i].sell_trades = 0;
       volume_profile_[i].total_trades = 0;
+
+      // Initialize virgin profile with same price levels
+      virgin_volume_profile_[i].price = volume_profile_[i].price;
+      virgin_volume_profile_[i].buy_volume = 0;
+      virgin_volume_profile_[i].sell_volume = 0;
+      virgin_volume_profile_[i].total_volume = 0;
+      virgin_volume_profile_[i].buy_trades = 0;
+      virgin_volume_profile_[i].sell_trades = 0;
+      virgin_volume_profile_[i].total_trades = 0;
     }
 
-    // Aggregate trades into buckets
+    // Aggregate trades into buckets and update virgin status
     for (const auto& trade : trades) {
       size_t bucket = static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
       bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
+
+      // Mark this price level as not virgin anymore
+      if (bucket < virgin_price_levels_.size()) {
+        virgin_price_levels_[bucket] = false;
+      }
 
       if (trade.is_buy) {
         volume_profile_[bucket].buy_volume += trade.size;
@@ -531,6 +561,9 @@ void VolumeProfilePanel::build_volume_profile() {
         }
     }
 
+    // Calculate Virgin POC - find the highest virgin price level with potential significance
+    calculate_virgin_poc();
+
     // Calculate Value Area
     calculate_value_area();
   }
@@ -551,8 +584,8 @@ void VolumeProfilePanel::render_controls() {
 
   // Add profile mode selection
   ImGui::SameLine();
-  const char* profile_modes[] = {"Step", "Right", "Left", "Custom", "Session", "Composite"};
-  ImGui::Combo("Profile Mode", reinterpret_cast<int*>(&profile_mode_), profile_modes, 6);
+  const char* profile_modes[] = {"Step", "Right", "Left", "Custom", "Session", "Composite", "Virgin"};
+  ImGui::Combo("Profile Mode", reinterpret_cast<int*>(&profile_mode_), profile_modes, 7);
 
   // Add VA% control
   ImGui::SameLine();
@@ -687,6 +720,27 @@ void VolumeProfilePanel::render_controls() {
     }
   }
 
+  // Add controls for Virgin Profile mode when Virgin mode is selected
+  if (profile_mode_ == ProfileMode::Virgin) {
+    ImGui::Separator();
+    ImGui::Text("Virgin Profile Settings:");
+    
+    // Show number of virgin price levels remaining
+    int virgin_count = 0;
+    for (bool is_virgin : virgin_price_levels_) {
+      if (is_virgin) virgin_count++;
+    }
+    
+    ImGui::Text("Untouched Price Levels: %d", virgin_count);
+    ImGui::Text("Virgin POC: %.4f", virgin_poc_price_);
+    
+    // Button to reset virgin tracking (mark all levels as virgin again)
+    if (ImGui::Button("Reset Virgin Tracking")) {
+      std::fill(virgin_price_levels_.begin(), virgin_price_levels_.end(), true);
+      virgin_poc_price_ = 0.0;
+    }
+  }
+
   // Display VAH and VAL if available
   double display_vah = vah_price_;
   double display_val = val_price_;
@@ -696,12 +750,21 @@ void VolumeProfilePanel::render_controls() {
     display_vah = composite_vah_price_;
     display_val = composite_val_price_;
     display_poc = composite_poc_price_;
+  } else if (profile_mode_ == ProfileMode::Virgin) {
+    // For Virgin profile, we show the virgin POC but don't typically show VAH/VAL
+    display_poc = virgin_poc_price_;
+    // Keep default values for VAH and VAL (they won't be displayed for Virgin mode)
   }
 
   ImGui::SameLine();
-  ImGui::Text("| VAH: %.4f", display_vah);
-  ImGui::SameLine();
-  ImGui::Text("| VAL: %.4f", display_val);
+  if (profile_mode_ != ProfileMode::Virgin) {
+    ImGui::Text("| VAH: %.4f", display_vah);
+    ImGui::SameLine();
+    ImGui::Text("| VAL: %.4f", display_val);
+  } else {
+    // For Virgin mode, show Virgin POC instead of regular POC
+    ImGui::Text("| Virgin POC: %.4f", display_poc);
+  }
 
   // Add profile statistics panel
   if (ImGui::CollapsingHeader("Profile Statistics")) {
@@ -717,6 +780,10 @@ void VolumeProfilePanel::render_controls() {
       stats_poc_price = composite_poc_price_;
       stats_vah_price = composite_vah_price_;
       stats_val_price = composite_val_price_;
+    } else if (profile_mode_ == ProfileMode::Virgin) {
+      // For Virgin profile, we'll show the virgin POC but use the regular volume profile for stats
+      stats_poc_price = virgin_poc_price_;
+      // Virgin profile doesn't typically have VAH/VAL, so we'll leave those as is
     }
 
     ImGui::Text("POC Price: %.4f", stats_poc_price);
@@ -1313,6 +1380,42 @@ void VolumeProfilePanel::render_volume_bars() {
         }
         break;
       }
+      case ProfileMode::Virgin: {
+        // Virgin Profile: Render only the untouched/virgin price levels
+        // This highlights price levels that have not been tested yet
+        
+        if (!volume_profile_.empty()) {
+          // Prepare data for ImPlot horizontal bars using only virgin price levels
+          std::vector<double> virgin_prices;
+          std::vector<double> virgin_buy_volumes;
+          std::vector<double> virgin_sell_volumes;
+
+          // Only include virgin price levels (those that haven't been touched)
+          for (size_t i = 0; i < volume_profile_.size() && i < virgin_price_levels_.size(); ++i) {
+            if (virgin_price_levels_[i]) {  // Only include virgin levels
+              virgin_prices.push_back(volume_profile_[i].price);
+              
+              // For virgin levels, we show the potential volume that could accumulate
+              // This could be based on historical patterns or simply highlight the level
+              virgin_buy_volumes.push_back(volume_profile_[i].buy_volume * 0.1); // Reduced volume for visual distinction
+              virgin_sell_volumes.push_back(-volume_profile_[i].sell_volume * 0.1); // Negative for left side
+            }
+          }
+
+          if (!virgin_prices.empty()) {
+            // Render the virgin profile with a different appearance
+            render_split_profile(virgin_prices.data(), virgin_buy_volumes.data(), virgin_sell_volumes.data(),
+                                 static_cast<int>(virgin_prices.size()), bar_height * 0.8); // Slightly thinner bars
+
+            // Update the main profile variables to show virgin values in UI
+            poc_price_ = virgin_poc_price_;
+          } else {
+            // If no virgin levels remain, show a message
+            ImGui::Text("No virgin price levels remaining - all have been tested");
+          }
+        }
+        break;
+      }
       case ProfileMode::Custom:
       default:
         // Custom Profile Mode: Split bars with buy volume on left (green) and sell volume on right (red)
@@ -1333,6 +1436,18 @@ void VolumeProfilePanel::render_volume_bars() {
           double poc_line_y[2] = {composite_poc_price_, composite_poc_price_};
           ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
           ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+          ImPlot::PopStyleColor();
+        }
+      }
+    } else if (profile_mode_ == ProfileMode::Virgin) {
+      // For virgin profile, use virgin POC if available
+      if (virgin_poc_price_ > 0) {
+        if (profile_mode_ != ProfileMode::Step) {
+          // For other modes, use ImPlot's PlotLine
+          double poc_line_x[2] = {-max_volume_, max_volume_};
+          double poc_line_y[2] = {virgin_poc_price_, virgin_poc_price_};
+          ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f)); // Cyan color for virgin POC
+          ImPlot::PlotLine("Virgin POC", poc_line_x, poc_line_y, 2);
           ImPlot::PopStyleColor();
         }
       }
@@ -1360,6 +1475,12 @@ void VolumeProfilePanel::render_volume_bars() {
       display_vah_price = composite_vah_price_;
       display_val_price = composite_val_price_;
       display_max_volume = composite_max_volume_;
+    } else if (profile_mode_ == ProfileMode::Virgin) {
+      // For virgin profile, we don't typically show VAH/VAL since it's about untouched levels
+      // So we'll keep the default values or set them to 0
+      display_vah_price = 0.0; // Don't show VAH for virgin profile
+      display_val_price = 0.0; // Don't show VAL for virgin profile
+      display_max_volume = max_volume_;
     }
 
     if (display_vah_price > 0) {
@@ -2071,6 +2192,46 @@ void VolumeProfilePanel::calculate_value_area_for_session(SessionProfile& sessio
   // Set the VAH and VAL prices for the session
   session.vah_price = session.volume_profile[end_idx].price;
   session.val_price = session.volume_profile[start_idx].price;
+}
+
+// Calculate Virgin POC - find the highest virgin price level with potential significance
+void VolumeProfilePanel::calculate_virgin_poc() {
+  // Find the virgin price levels that are still untouched
+  std::vector<VolumeLevel> virgin_levels;
+  
+  for (size_t i = 0; i < volume_profile_.size() && i < virgin_price_levels_.size(); ++i) {
+    if (virgin_price_levels_[i]) {
+      virgin_levels.push_back(volume_profile_[i]);
+    }
+  }
+
+  if (!virgin_levels.empty()) {
+    // For virgin POC, we want to identify the most significant untouched price level
+    // This could be based on proximity to current market price, or historical importance
+    
+    // Get current market price from analytics
+    auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+    double current_price = analytics.last_price > 0 ? analytics.last_price : volume_profile_[volume_profile_.size()/2].price;
+    
+    // Find the virgin level closest to current market price (as potential resistance/support)
+    double min_distance = std::numeric_limits<double>::max();
+    double closest_virgin_price = virgin_levels[0].price;
+    
+    for (const auto& level : virgin_levels) {
+      double distance = std::abs(level.price - current_price);
+      if (distance < min_distance) {
+        min_distance = distance;
+        closest_virgin_price = level.price;
+      }
+    }
+    
+    // Alternatively, we could also consider the price levels that are most likely to be tested
+    // based on their position relative to current market conditions
+    virgin_poc_price_ = closest_virgin_price;
+  } else {
+    // If no virgin levels remain, set to 0
+    virgin_poc_price_ = 0.0;
+  }
 }
 
 void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,

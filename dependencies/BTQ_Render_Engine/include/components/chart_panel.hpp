@@ -191,6 +191,10 @@ class ChartPanel : public PanelBase {
   // Method to initialize active indicators from current configuration
   void initialize_active_indicators();
 
+  // Global crosshair sync methods
+  void set_global_crosshair_position(double x_pos, bool active);
+  std::pair<double, bool> get_global_crosshair_state() const;
+
   // Override methods from PanelBase for settings functionality
   PanelSettingsInterface* get_settings_interface() override { return settings_.get(); }
   void open_settings() override;
@@ -338,6 +342,10 @@ class ChartPanel : public PanelBase {
   
   std::vector<LiquidityLevel> liquidity_levels_;
   double max_liquidity_volume_ = 1.0;  // Track max volume for scaling
+
+  // Global crosshair synchronization state
+  bool global_crosshair_active_ = false;
+  double global_crosshair_x_pos_ = 0.0;
 
   // Accessors for view range (needed for synchronization)
   friend class PanelManager;  // Allow PanelManager to access private members for synchronization
@@ -539,6 +547,22 @@ class ChartPanel : public PanelBase {
   bool show_delta_overlay_ = false;
   bool show_cumulative_delta_overlay_ = false;
   bool show_session_vwap_ = true;  // Session VWAP overlay toggle
+
+  // --- Floating Toolbars Configuration ---
+  bool floating_top_toolbar_ = false;
+  bool floating_left_sidebar_ = false;
+  bool floating_right_sidebar_ = false;
+  bool floating_bottom_toolbar_ = false;
+  
+  // Positions and sizes for floating windows
+  ImVec2 floating_top_toolbar_pos_ = ImVec2(10, 10);
+  ImVec2 floating_top_toolbar_size_ = ImVec2(400, 40);
+  ImVec2 floating_left_sidebar_pos_ = ImVec2(10, 60);
+  ImVec2 floating_left_sidebar_size_ = ImVec2(50, 300);
+  ImVec2 floating_right_sidebar_pos_ = ImVec2(800, 60);
+  ImVec2 floating_right_sidebar_size_ = ImVec2(250, 300);
+  ImVec2 floating_bottom_toolbar_pos_ = ImVec2(10, 600);
+  ImVec2 floating_bottom_toolbar_size_ = ImVec2(800, 40);
   
   // --- Quantower Layout Rendering Methods ---
   
@@ -564,6 +588,12 @@ class ChartPanel : public PanelBase {
   
   // 3.5 Bottom Toolbar (Volume Analysis)
   void render_bottom_toolbar();
+
+  // Floating toolbar rendering methods
+  void render_floating_top_toolbar();
+  void render_floating_left_sidebar();
+  void render_floating_right_sidebar();
+  void render_floating_bottom_toolbar();
 };
 
 }  // namespace BTQuant

@@ -351,6 +351,7 @@ class ChartPanel : public PanelBase {
   void render_context_menu(const ChartInstance& chart);
   void render_anchored_vwap_overlay(const ChartInstance& chart);
   void render_session_vwap_overlay(const ChartInstance& chart);
+  void render_cumulative_delta_overlay(const ChartInstance& chart);
   void create_anchored_vwap_at_time(uint64_t timestamp);
   void render_trades_popup();
 
@@ -463,7 +464,7 @@ class ChartPanel : public PanelBase {
   // Liquidity bars functionality
   void render_liquidity_bars(const ChartInstance& chart);
   void update_liquidity_data();
-  
+
   // Configuration for liquidity bars
   bool show_liquidity_bars_ = true;
   float liquidity_bar_width_ = 10.0f;  // Width of liquidity bars in pixels
@@ -471,9 +472,39 @@ class ChartPanel : public PanelBase {
   ImVec4 liquidity_bids_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.7f);  // Green for bids
   ImVec4 liquidity_asks_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.7f);  // Red for asks
 
+  // Aggressor Trade Bubbles functionality
+  struct TradeBubble {
+    double timestamp;
+    double price;
+    double volume;
+    bool is_buy;  // true for buy (aggressor on bid), false for sell (aggressor on ask)
+    uint64_t trade_id;
+
+    TradeBubble(double ts, double p, double v, bool buy, uint64_t id)
+        : timestamp(ts), price(p), volume(v), is_buy(buy), trade_id(id) {}
+  };
+
+  void render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx);
+  void update_aggressor_trades_data();
+  
+  // Configuration for aggressor trade bubbles
+  bool show_aggressor_bubbles_ = true;
+  float bubble_min_size_ = 3.0f;  // Minimum bubble size in pixels
+  float bubble_max_size_ = 15.0f; // Maximum bubble size in pixels
+  float bubble_opacity_ = 0.8f;   // Opacity of bubbles
+  ImVec4 bubble_buy_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.8f);  // Green for buy trades
+  ImVec4 bubble_sell_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.8f); // Red for sell trades
+  std::vector<TradeBubble> aggressor_trades_;
+
   // ========================================================================
   // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
   // ========================================================================
+  
+  // --- Layout Constants (TASK_CHART_ANATOMY.md Phase 1.1) ---
+  static constexpr float TOP_BAR_HEIGHT = 32.0f;
+  static constexpr float BOTTOM_BAR_HEIGHT = 32.0f;
+  static constexpr float LEFT_SIDEBAR_WIDTH = 45.0f;
+  static constexpr float RIGHT_SIDEBAR_WIDTH = 220.0f;
   
   // --- 3.1 Top Toolbar State ---
   char symbol_input_buffer_[32] = "BTC-USDT";  // Symbol lookup input buffer

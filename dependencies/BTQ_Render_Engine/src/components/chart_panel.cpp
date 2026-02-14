@@ -306,6 +306,11 @@ void ChartPanel::update(float dt) {
   if (show_liquidity_bars_) {
     update_liquidity_data();
   }
+
+  // Update aggressor trades data periodically (every frame for real-time updates)
+  if (show_aggressor_bubbles_) {
+    update_aggressor_trades_data();
+  }
 }
 
 void ChartPanel::render() {
@@ -328,22 +333,27 @@ void ChartPanel::render() {
   const ChartInstance& chart = it->second;
 
   // ========================================================================
-  // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
+  // QUANTOWER-STYLE 5-PART LAYOUT (TASK_CHART_ANATOMY.md Phase 1.2)
   // ========================================================================
   
-  // 3.1 Top Toolbar (Main Controls)
+  // 1. Top Toolbar (Spans full width)
+  ImGui::BeginChild("ChartTopBar", ImVec2(0, TOP_BAR_HEIGHT), false, ImGuiWindowFlags_NoScrollbar);
   render_top_toolbar();
+  ImGui::EndChild();
   
-  // Create a horizontal layout: Left Sidebar | Main Chart Area | Right Sidebar
-  ImGui::BeginChild("MainChartArea", ImVec2(0, -30));  // Reserve space for bottom toolbar
+  // Middle Section (Contains Left Bar, Chart, Right Bar)
+  float middle_height = ImGui::GetContentRegionAvail().y - BOTTOM_BAR_HEIGHT;
+  ImGui::BeginChild("ChartMiddleRegion", ImVec2(0, middle_height), false, ImGuiWindowFlags_NoScrollbar);
   
-  // 3.2 Left Sidebar (Tools & Objects)
+  // 2. Left Sidebar
+  ImGui::BeginChild("ChartLeftSidebar", ImVec2(LEFT_SIDEBAR_WIDTH, 0), true, ImGuiWindowFlags_NoScrollbar);
   render_left_sidebar();
-  
+  ImGui::EndChild();
   ImGui::SameLine();
   
-  // Main Chart Content Area
-  ImGui::BeginChild("ChartContent", ImVec2(-120, 0));  // Reserve space for right sidebar
+  // 3. Main Chart Area (Dynamic width)
+  float chart_width = ImGui::GetContentRegionAvail().x - RIGHT_SIDEBAR_WIDTH;
+  ImGui::BeginChild("ChartMainArea", ImVec2(chart_width, 0), false);
     
     // Render chart controls in a collapsible header (legacy - can be hidden in Quantower mode)
     if (ImGui::CollapsingHeader("Chart Controls")) {
@@ -374,13 +384,17 @@ void ChartPanel::render() {
   
   ImGui::SameLine();
   
-  // 3.4 Right Sidebar Order Entry
+  // 4. Right Sidebar Order Entry
+  ImGui::BeginChild("ChartRightSidebar", ImVec2(RIGHT_SIDEBAR_WIDTH, 0), true);
   render_right_sidebar_order_entry();
+  ImGui::EndChild();
   
-  ImGui::EndChild();  // End MainChartArea
+  ImGui::EndChild();  // End ChartMiddleRegion
   
-  // 3.5 Bottom Toolbar (Volume Analysis)
+  // 5. Bottom Toolbar (Volume Analysis)
+  ImGui::BeginChild("ChartBottomBar", ImVec2(0, BOTTOM_BAR_HEIGHT), true, ImGuiWindowFlags_NoScrollbar);
   render_bottom_toolbar();
+  ImGui::EndChild();
 
   end_panel_window();
 
@@ -663,6 +677,12 @@ void ChartPanel::render_indicator_selector() {
   ImGui::SameLine();
   if (ImGui::Checkbox("Crosshair Info", &indicator_config_.show_crosshair_info)) {
     sync_active_indicators_with_config();
+  }
+
+  // Aggressor Trade Bubbles
+  ImGui::SeparatorText("Trade Visualization");
+  if (ImGui::Checkbox("Aggressor Bubbles", &show_aggressor_bubbles_)) {
+    // Toggle aggressor bubbles visibility
   }
 
   ImGui::PopStyleVar();
@@ -2882,9 +2902,19 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     // Render session VWAP overlays
     render_session_vwap_overlay(chart);
 
+    // Render cumulative delta overlay if enabled
+    if (show_cumulative_delta_overlay_) {
+      render_cumulative_delta_overlay(chart);
+    }
+
     // Render liquidity bars on the right-hand price axis
     if (show_liquidity_bars_) {
       render_liquidity_bars(chart);
+    }
+
+    // Render aggressor trade bubbles
+    if (show_aggressor_bubbles_) {
+      render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx);
     }
 
     ImPlot::EndPlot();
@@ -3812,26 +3842,114 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
   for (const auto& level : liquidity_levels_) {
     // Convert the price to Y coordinate
     ImVec2 level_pos = ImPlot::PlotToPixels(limits.X.Max, level.price); // Use rightmost X for liquidity bars
-    
+
     // Calculate bar width based on volume (relative to max volume)
     float bar_width = (static_cast<float>(level.volume) / static_cast<float>(max_liquidity_volume_)) * liquidity_bar_width_;
-    
+
     // Determine color based on bid/ask
     ImVec4 color = level.is_bid ? liquidity_bids_color_ : liquidity_asks_color_;
     color.w *= liquidity_bar_opacity_; // Apply opacity
     ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
-    
+
     // Calculate the top and bottom Y positions for the bar (small height to make it look like a line)
     float bar_height = 2.0f; // Small height to make it appear as a horizontal line
-    
+
     // Calculate the left edge of the bar (extending from the right axis inward)
     float bar_left_x = right_edge_x - bar_width;
-    
+
     // Draw the liquidity bar as a horizontal line extending from the right axis
     ImVec2 bar_start = ImVec2(bar_left_x, level_pos.y - bar_height/2);
     ImVec2 bar_end = ImVec2(right_edge_x, level_pos.y + bar_height/2);
-    
+
     draw_list->AddRectFilled(bar_start, bar_end, im_color);
+  }
+}
+
+// Method to render aggressor trade bubbles on the chart
+void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx) {
+  if (!show_aggressor_bubbles_ || aggressor_trades_.empty() || chart.dates.empty()) {
+    return;
+  }
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  if (!draw_list) return;
+
+  // Find the maximum volume for scaling bubble sizes
+  double max_volume = 1.0;
+  for (const auto& trade : aggressor_trades_) {
+    if (trade.volume > max_volume) {
+      max_volume = trade.volume;
+    }
+  }
+
+  // Draw bubbles for each aggressor trade
+  for (const auto& trade : aggressor_trades_) {
+    // Find the closest candle in the visible range
+    auto it = std::lower_bound(chart.dates.begin(), chart.dates.end(), trade.timestamp);
+    
+    if (it == chart.dates.end()) continue;
+    
+    size_t chart_idx = std::distance(chart.dates.begin(), it);
+    
+    // Only render if the trade is within or near the visible range
+    if (chart_idx < start_idx || chart_idx >= end_idx) {
+      // Check if it's close enough to the visible range to still be shown
+      if (chart_idx < start_idx && (start_idx - chart_idx) > 5) continue;
+      if (chart_idx >= end_idx && (chart_idx - end_idx) > 5) continue;
+    }
+
+    // Convert the trade timestamp and price to screen coordinates
+    ImVec2 bubble_pos = ImPlot::PlotToPixels(trade.timestamp, trade.price);
+
+    // Calculate bubble size based on volume (scaled between min and max size)
+    float bubble_size = bubble_min_size_ + 
+                       (bubble_max_size_ - bubble_min_size_) * 
+                       (static_cast<float>(trade.volume) / static_cast<float>(max_volume));
+
+    // Determine color based on trade type (buy/sell)
+    ImVec4 color = trade.is_buy ? bubble_buy_color_ : bubble_sell_color_;
+    color.w *= bubble_opacity_; // Apply opacity
+    ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
+
+    // Draw the bubble as a filled circle
+    draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
+
+    // Draw a subtle border to make the bubble more visible
+    ImVec4 border_color = color;
+    border_color.w = 0.3f; // Less opaque border
+    ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+    draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
+  }
+}
+
+// Method to update aggressor trades data from the market data processor
+void ChartPanel::update_aggressor_trades_data() {
+  if (!processor_ || symbol_.empty()) return;
+
+  // Get the current symbol ID from the chart manager
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+  if (!symbol_id_opt) return;
+
+  uint32_t current_symbol_id = *symbol_id_opt;
+
+  // Get recent trades for the symbol
+  auto analytics = processor_->getSymbolAnalytics(current_symbol_id);
+  const auto& recent_trades = analytics.recent_trades;
+
+  // Clear existing aggressor trades
+  aggressor_trades_.clear();
+
+  // Add recent trades as bubbles
+  for (const auto& trade : recent_trades) {
+    // Convert timestamp from microseconds to seconds for consistency with chart data
+    double timestamp_seconds = static_cast<double>(trade.timestamp) / 1000000.0;
+    
+    // Determine if this is a buy or sell based on aggressor side
+    // For simplicity, we'll consider trades at or above the market price as buys (aggressor on ask)
+    // and trades below as sells (aggressor on bid)
+    bool is_buy = trade.aggressor_side == RenderEngine::AggressorSide::BUY;
+    
+    aggressor_trades_.emplace_back(timestamp_seconds, trade.price, trade.size, is_buy, trade.id);
   }
 }
 
@@ -3839,12 +3957,8 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
 // QUANTOWER-STYLE 5-PART LAYOUT IMPLEMENTATION (Phase 3)
 // ============================================================================
 
-// 3.1 Top Toolbar (Main Controls)
+// 3.1 Top Toolbar (Main Controls) - called within ChartTopBar child
 void ChartPanel::render_top_toolbar() {
-  // Render a horizontal ImGui bar at the top
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
-  ImGui::BeginChild("TopBar", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar);
-  
   // Symbol Lookup (InputText)
   ImGui::PushItemWidth(100);
   if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_), 
@@ -3938,15 +4052,11 @@ void ChartPanel::render_top_toolbar() {
   const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
   ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
   
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
+  // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
-// 3.2 Left Sidebar (Tools & Objects)
+// 3.2 Left Sidebar (Tools & Objects) - called within ChartLeftSidebar child
 void ChartPanel::render_left_sidebar() {
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
-  ImGui::BeginChild("Sidebar", ImVec2(40, 0), true);
-  
   // Crosshair button
   ImVec4 crosshair_color = show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
@@ -3994,7 +4104,17 @@ void ChartPanel::render_left_sidebar() {
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
-  
+
+  // Trade Bubbles button
+  ImGui::Spacing();
+  ImVec4 bubbles_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
+  if (ImGui::Button("B", ImVec2(32, 32))) {
+    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
+
   // Separator
   ImGui::Spacing();
   ImGui::Separator();
@@ -4032,8 +4152,7 @@ void ChartPanel::render_left_sidebar() {
   render_overlays_popup();
   render_indicators_popup();
   
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
+  // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
 void ChartPanel::render_drawing_tools_popup() {
@@ -4079,11 +4198,26 @@ void ChartPanel::render_overlays_popup() {
     ImGui::Checkbox("Bollinger Bands", &indicator_config_.show_bollinger);
     ImGui::Checkbox("Fibonacci Levels", &indicator_config_.show_fibonacci);
     ImGui::Checkbox("Session VWAP", &show_session_vwap_);
-    
+    ImGui::Checkbox("Aggressor Bubbles", &show_aggressor_bubbles_);
+
+    // Bubble size configuration
+    if (show_aggressor_bubbles_) {
+        ImGui::Separator();
+        ImGui::Text("Bubble Settings:");
+        
+        ImGui::SliderFloat("Min Size", &bubble_min_size_, 1.0f, 10.0f, "%.1f");
+        ImGui::SliderFloat("Max Size", &bubble_max_size_, 5.0f, 30.0f, "%.1f");
+        ImGui::SliderFloat("Opacity", &bubble_opacity_, 0.1f, 1.0f, "%.2f");
+        
+        ImGui::Text("Colors:");
+        ImGui::ColorEdit4("Buy Color", &bubble_buy_color_.x, ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit4("Sell Color", &bubble_sell_color_.x, ImGuiColorEditFlags_NoInputs);
+    }
+
     // Anchored VWAP section
     ImGui::Separator();
     ImGui::Text("Anchored VWAPs: %zu", anchored_vwaps_.size());
-    
+
     ImGui::EndPopup();
   }
 }
@@ -4274,11 +4408,8 @@ void ChartPanel::render_snap_to_last_button() {
   }
 }
 
-// 3.4 Right Sidebar Order Entry
+// 3.4 Right Sidebar Order Entry (called within ChartRightSidebar child)
 void ChartPanel::render_right_sidebar_order_entry() {
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-  ImGui::BeginChild("OrderEntry", ImVec2(120, 0), true);
-  
   ImGui::Text("Quick Order");
   ImGui::Separator();
   
@@ -4330,8 +4461,7 @@ void ChartPanel::render_right_sidebar_order_entry() {
   ImGui::Text("Best Ask: %.2f", cached_best_ask_);
   ImGui::Text("Spread: %.4f", cached_best_ask_ - cached_best_bid_);
   
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
+  // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
 void ChartPanel::update_cached_quotes() {
@@ -4391,11 +4521,8 @@ void ChartPanel::execute_market_order(bool is_buy) {
   }
 }
 
-// 3.5 Bottom Toolbar (Volume Analysis)
+// 3.5 Bottom Toolbar (Volume Analysis) - called within BottomBar child
 void ChartPanel::render_bottom_toolbar() {
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
-  ImGui::BeginChild("BottomBar", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar);
-  
   // Volume Profile toggle
   ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, vp_color);
@@ -4431,7 +4558,7 @@ void ChartPanel::render_bottom_toolbar() {
   ImGui::SameLine();
   ImGui::Spacing();
   ImGui::SameLine();
-  
+
   // Liquidity bars toggle
   ImVec4 liq_color = show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, liq_color);
@@ -4440,11 +4567,22 @@ void ChartPanel::render_bottom_toolbar() {
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Liquidity Bars on price axis");
-  
+
+  ImGui::SameLine();
+
+  // Aggressor bubbles toggle
+  ImVec4 bubble_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Button, bubble_color);
+  if (ImGui::Button("Bubbles", ImVec2(70, 0))) {
+    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Aggressor Trade Bubbles");
+
   ImGui::SameLine();
   ImGui::Spacing();
   ImGui::SameLine();
-  
+
   // Current volume info (if chart data available)
   auto charts = chart_manager_->get_charts();
   auto it = charts.find(chart_id_);
@@ -4456,8 +4594,78 @@ void ChartPanel::render_bottom_toolbar() {
     }
   }
   
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
+  // Note: EndChild() and PopStyleVar() are handled by the caller (render())
+}
+
+// Render the cumulative delta overlay on the chart
+void ChartPanel::render_cumulative_delta_overlay(const ChartInstance& chart) {
+  if (chart.dates.empty() || chart.volumes.empty()) {
+    return;  // Nothing to render if no data
+  }
+
+  // Get the draw list for overlaying on the plot
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  // Calculate cumulative delta values
+  std::vector<double> cumulative_delta_values;
+  cumulative_delta_values.reserve(chart.dates.size());
+
+  double cumulative_delta = 0.0;
+  for (size_t i = 0; i < chart.dates.size(); ++i) {
+    double candle_delta = 0.0;
+    
+    // Estimate delta based on price movement within the candle
+    // If close > open, more buying pressure; if close < open, more selling pressure
+    if (i < chart.opens.size() && i < chart.closes.size() && i < chart.highs.size() && i < chart.lows.size()) {
+      double open = chart.opens[i];
+      double close = chart.closes[i];
+      double volume = chart.volumes[i];
+      
+      if (close > open) {
+        // More aggressive buying - assign positive delta
+        candle_delta = volume * (close - open) / (chart.highs[i] - chart.lows[i] + 1e-8); // Normalize by range to get proportional delta
+      } else if (close < open) {
+        // More aggressive selling - assign negative delta
+        candle_delta = -volume * (open - close) / (chart.highs[i] - chart.lows[i] + 1e-8); // Normalize by range to get proportional delta
+      } else {
+        // No directional bias - neutral
+        candle_delta = 0.0;
+      }
+    }
+    
+    cumulative_delta += candle_delta;
+    cumulative_delta_values.push_back(cumulative_delta);
+  }
+
+  // Now render the cumulative delta line
+  if (cumulative_delta_values.size() > 1) {
+    // Prepare points for polyline
+    std::vector<ImVec2> points;
+    points.reserve(cumulative_delta_values.size());
+
+    // Transform data points to screen coordinates
+    for (size_t i = 0; i < cumulative_delta_values.size() && i < chart.dates.size(); ++i) {
+      // Transform to screen coordinates using ImPlot
+      ImVec2 point = ImPlot::PlotToPixels(chart.dates[i], cumulative_delta_values[i]);
+      points.push_back(point);
+    }
+
+    // Draw the cumulative delta line with dynamic coloring based on slope
+    for (size_t i = 1; i < points.size(); ++i) {
+      // Determine color based on the slope (positive/negative)
+      ImVec4 color;
+      if (cumulative_delta_values[i] >= cumulative_delta_values[i-1]) {
+        // Positive slope - green
+        color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);  // Bright green
+      } else {
+        // Negative slope - red
+        color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Bright red
+      }
+
+      // Draw line segment
+      draw_list->AddLine(points[i-1], points[i], ImGui::ColorConvertFloat4ToU32(color), 2.0f);
+    }
+  }
 }
 
 

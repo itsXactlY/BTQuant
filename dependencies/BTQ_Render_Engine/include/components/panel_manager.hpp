@@ -77,6 +77,8 @@ class PanelManager {
   void save_layout(const std::string& filename);
   void load_layout(const std::string& filename);
   void apply_layout_preset(LayoutPreset preset);
+  void split_left_drawing_tools_panel();
+  void split_right_dom_orderbook_panels();
 
   // Symbol propagation
   void set_active_symbol(uint32_t symbol_id, const std::string& symbol_name);

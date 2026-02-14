@@ -1359,23 +1359,23 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       // MMT programmatic Grid Construction
       // Set up a 100-column grid system to enable percentage-based splits
       set_grid_layout(100, 100);
-      
-      // Create central ChartSuperNode (occupies majority of space)
-      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 85);  // 72% width, 85% height
-      
+
+      // Create central ChartSuperNode
+      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 85);  // Central chart taking most space
+
       // Split Left (3%) -> drawing_tools_panel
-      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 85);  // 3% width, 85% height
-      
-      // Split Right (25%) -> dom_surface_panel + orderbook_panel (stacked vertically)
-      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // 25% width, 42% height (top half)
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // 25% width, 43% height (bottom half)
-      
+      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 85);  // Left side panel
+
+      // Split Right (25%) -> dom_surface_panel + orderbook_panel
+      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // Top-right
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // Bottom-right
+
       // Split Right-Bottom (40%) -> time_and_sales (Trades)
-      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 85, 25, 15);  // 25% width, 15% height
-      
+      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 85, 25, 15);  // Bottom-right quadrant
+
       // Split Center-Bottom (15%) -> time_histogram_panel
-      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 85, 72, 15);  // 72% width, 15% height
-      
+      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 85, 72, 15);  // Bottom-center
+
       // Status bar at the bottom
       add_panel(PanelType::STATUS_BAR, "Status", 0, 99, 100, 1);  // Full width, 1% height
       break;
@@ -1405,6 +1405,29 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       add_panel(PanelType::STATUS_BAR, "Status", 0, 3, 3, 1);
       break;
   }
+}
+
+void PanelManager::split_left_drawing_tools_panel() {
+  // Set up a 100-column grid system to enable percentage-based splits
+  set_grid_layout(100, 100);
+
+  // Clear any existing panels to start fresh
+  clear_panels();
+
+  // Add the drawing tools panel on the left taking 3% of the width
+  add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 100);
+}
+
+void PanelManager::split_right_dom_orderbook_panels() {
+  // Set up a 100-column grid system to enable percentage-based splits
+  set_grid_layout(100, 100);
+
+  // Clear any existing panels to start fresh
+  clear_panels();
+
+  // Split Right (25%) -> dom_surface_panel + orderbook_panel
+  add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // Right-top
+  add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // Right-bottom
 }
 
 }  // namespace BTQuant

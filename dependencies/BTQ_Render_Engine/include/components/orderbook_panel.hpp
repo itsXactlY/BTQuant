@@ -8,6 +8,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "../trading/trade_command_queue.hpp"
 
 namespace BTQuant {
 
@@ -99,6 +100,10 @@ class OrderbookPanel : public PanelBase {
 
   // Helper method to update the lock-free orderbook cache
   void updateOrderbookCache();
+
+  // Order placement functionality
+  void place_order_at_price(double price, RenderEngine::OrderSide side, double quantity = 0.0);
+  void render_order_placement_buttons(const PriceLevel& level, bool is_bid);
 
   struct PriceLevelVolume {
     double bought = 0.0;

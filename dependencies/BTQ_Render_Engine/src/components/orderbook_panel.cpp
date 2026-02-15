@@ -674,7 +674,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   if (!cumulative_asks.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
 
   // Use Table instead of Columns for modern layout (C++26 style UI)
-  if (ImGui::BeginTable("OrderbookTable", 8,
+  if (ImGui::BeginTable("OrderbookTable", 9,
                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchSame)) {
     // Setup Columns
@@ -686,6 +686,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60); // New column for volume delta over last 5 seconds
     ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 40); // New column for order placement buttons
     ImGui::TableHeadersRow();
 
     const auto& colors = ThemeManager::getInstance().getColors();
@@ -1122,6 +1123,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         }
       }
 
+      // 9. Action Buttons
+      ImGui::TableSetColumnIndex(8);
+      render_order_placement_buttons(level, false); // false for ask (sell order)
+
       ImGui::PopID();
     }
 
@@ -1474,6 +1479,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         }
       }
 
+      // 9. Action Buttons
+      ImGui::TableSetColumnIndex(8);
+      render_order_placement_buttons(level, true); // true for bid (buy order)
+
       ImGui::PopID();
     }
 
@@ -1610,6 +1619,94 @@ void OrderbookPanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
+}
+
+void OrderbookPanel::place_order_at_price(double price, RenderEngine::OrderSide side, double quantity) {
+  // Create a trade command based on the selected price level
+  BTQuant::RenderEngine::TradeCommand cmd;
+
+  // Set the command properties
+  cmd.command_id = BTQuant::RenderEngine::GlobalTradeQueue::instance().next_command_id();
+  cmd.symbol_id = symbol_id_;
+  cmd.symbol = symbol_name_;  // Use the current symbol name
+  cmd.exchange = bridge_ ? bridge_->getExchangeName(symbol_id_) : "Unknown";
+  cmd.side = side;
+  cmd.type = BTQuant::RenderEngine::OrderType::MARKET;  // Default to market order
+  cmd.tif = BTQuant::RenderEngine::TimeInForce::GTC;    // Default to Good Till Cancel
+  
+  // Use provided quantity or default to a small amount
+  cmd.quantity = (quantity > 0.0) ? quantity : 0.001;  // Default small quantity
+  cmd.price = price;    // Use the selected price
+  cmd.stop_price = 0.0; // Not used for market orders
+
+  // Set timestamp
+  cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()
+  ).count();
+
+  // Set client order ID
+  cmd.client_order_id = cmd.command_id;
+
+  // Add notes about the origin of this order
+  cmd.notes = "Order placed from Orderbook panel at price " + std::to_string(price);
+
+  // Push the command to the global trade queue
+  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
+
+  if (pushed) {
+    std::cout << "[OrderbookPanel] Order queued: "
+              << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
+              << " " << cmd.quantity << " " << symbol_name_
+              << " @ " << price
+              << " from orderbook level" << std::endl;
+  } else {
+    std::cerr << "[OrderbookPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
+  }
+}
+
+void OrderbookPanel::render_order_placement_buttons(const PriceLevel& level, bool is_bid) {
+  // Create buy/sell buttons for each price level
+  // For bids, show a buy button (to buy at the bid price)
+  // For asks, show a sell button (to sell at the ask price)
+
+  // Button size
+  ImVec2 button_size(30, 18);
+
+  // Buy button - for bids (to buy at bid price) or for placing buy limit orders at ask prices
+  if (is_bid) {
+    ImVec4 buy_button_color = ImVec4(0.0f, 0.8f, 0.0f, 0.6f);  // Semi-transparent green
+    ImGui::PushStyleColor(ImGuiCol_Button, buy_button_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 1.0f, 0.0f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.6f, 0.0f, 0.9f));
+
+    if (ImGui::Button("B##buy_btn", button_size)) {
+      place_order_at_price(level.price, BTQuant::RenderEngine::OrderSide::BUY);
+    }
+
+    ImGui::PopStyleColor(3);
+
+    // Add tooltip for the buy button
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Buy at %.4f", level.price);
+    }
+  } else {
+    // Sell button - for asks (to sell at ask price)
+    ImVec4 sell_button_color = ImVec4(0.8f, 0.0f, 0.0f, 0.6f);  // Semi-transparent red
+    ImGui::PushStyleColor(ImGuiCol_Button, sell_button_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("S##sell_btn", button_size)) {
+      place_order_at_price(level.price, BTQuant::RenderEngine::OrderSide::SELL);
+    }
+
+    ImGui::PopStyleColor(3);
+
+    // Add tooltip for the sell button
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Sell at %.4f", level.price);
+    }
+  }
 }
 
 }  // namespace BTQuant

@@ -127,9 +127,6 @@ void QuantWorkspaceComponent::render_gui() {
     ImGui::DockBuilderAddNode(dock_main); // Add empty node
     ImGui::DockBuilderSetNodeSize(dock_main, viewport->WorkSize);
 
-    // Apply docking flags
-    ImGuiDockNodeFlags dock_flags = ImGuiDockNodeFlags_NoTabBar;
-    dock_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
     
     // Split the main dock for the drawing tools sidebar (left)
     ImGuiID dock_left = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.03f, nullptr, &dock_main);

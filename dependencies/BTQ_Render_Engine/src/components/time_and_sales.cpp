@@ -1075,8 +1075,16 @@ void TimeAndSalesPanel::render_trade_table() {
               // Large trades (>avg*5) in yellow
               price_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
             } else {
-              // Regular trades: buy in green, sell in red
-              price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
+              // Regular trades: Ask hits (BUY) in Neon Mint, Bid hits (SELL) in Crimson
+              // Ask hit: buyer takes liquidity at ask price (is_buy = true)
+              // Bid hit: seller takes liquidity at bid price (is_buy = false)
+              if (trade.is_buy) {
+                // Ask hit - Neon Mint (#00E676)
+                price_color = ImVec4(0.0f, 0.902f, 0.443f, 1.0f);  // #00E676 converted to 0-1 range
+              } else {
+                // Bid hit - Crimson (#FF3B69)
+                price_color = ImVec4(1.0f, 0.231f, 0.412f, 1.0f);  // #FF3B69 converted to 0-1 range
+              }
             }
 
             // Apply bold font for block trades if available
@@ -1086,8 +1094,14 @@ void TimeAndSalesPanel::render_trade_table() {
                                   : ThemeManager::getInstance().getMainFont());
             }
 
+            // Apply the determined color to the price text
+            ImGui::PushStyleColor(ImGuiCol_Text, price_color);
+            
             // Use monospaced font for price
             BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.price, "%.4f");
+
+            // Restore original text color
+            ImGui::PopStyleColor();
 
             if (is_block_trade_price) {
               ImGui::PopFont();

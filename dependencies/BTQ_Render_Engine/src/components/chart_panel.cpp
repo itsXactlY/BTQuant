@@ -4678,33 +4678,25 @@ void ChartPanel::update_cached_quotes() {
 void ChartPanel::execute_market_order(bool is_buy) {
   // Phase 4.2: Push to SPSC queue for async execution
   // The UI thread never waits for the HTTP/WebSocket response
-  
+
   // Get symbol ID
   auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
   uint32_t sym_id = symbol_id_opt.value_or(0);
-  
-  // Create the trade command
-  RenderEngine::TradeCommand cmd(
+
+  // Use the new routing method to create and push the trade command
+  bool pushed = RenderEngine::GlobalTradeQueue::push_market_order(
     sym_id,
     symbol_,
     exchange_,
     is_buy ? RenderEngine::OrderSide::BUY : RenderEngine::OrderSide::SELL,
-    RenderEngine::OrderType::MARKET,
     order_quantity_,
     static_cast<RenderEngine::TimeInForce>(selected_tif_)
   );
-  
-  // Set additional fields
-  cmd.price = is_buy ? cached_best_ask_ : cached_best_bid_;
-  
-  // Push to the global SPSC queue (non-blocking)
-  bool pushed = RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
-  
+
   if (pushed) {
     std::cout << "[ChartPanel] Market Order QUEUED: "
               << (is_buy ? "BUY" : "SELL") << " "
               << order_quantity_ << " " << symbol_
-              << " @ " << (is_buy ? cached_best_ask_ : cached_best_bid_)
               << " TIF: " << static_cast<int>(selected_tif_)
               << std::endl;
   } else {

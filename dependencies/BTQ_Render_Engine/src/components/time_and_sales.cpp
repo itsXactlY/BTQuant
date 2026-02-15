@@ -1527,40 +1527,20 @@ void TimeAndSalesPanel::render_trade_action_buttons(const RenderEngine::TradeDat
 }
 
 void TimeAndSalesPanel::place_order_from_trade(const RenderEngine::TradeData& trade, BTQuant::RenderEngine::OrderSide side) {
-  // Create a trade command based on the selected trade
-  BTQuant::RenderEngine::TradeCommand cmd;
-  
-  // Set the command properties
-  cmd.command_id = BTQuant::RenderEngine::GlobalTradeQueue::instance().next_command_id();
-  cmd.symbol_id = trade.symbol_id;
-  cmd.symbol = symbol_name_;  // Use the current symbol name
-  cmd.exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
-  cmd.side = side;
-  cmd.type = BTQuant::RenderEngine::OrderType::MARKET;  // Default to market order
-  cmd.tif = BTQuant::RenderEngine::TimeInForce::GTC;    // Default to Good Till Cancel
-  cmd.quantity = trade.size;  // Use the same size as the trade
-  cmd.price = trade.price;    // Use the same price as the trade
-  cmd.stop_price = 0.0;       // Not used for market orders
-  
-  // Set timestamp
-  cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::high_resolution_clock::now().time_since_epoch()
-  ).count();
-  
-  // Set client order ID
-  cmd.client_order_id = cmd.command_id;
-  
-  // Add notes about the origin of this order
-  cmd.notes = "Order placed from Time & Sales panel based on trade at " + std::to_string(trade.price);
-  
-  // Push the command to the global trade queue
-  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
-  
+  // Use the new routing method to create and push the trade command
+  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_market_order(
+    trade.symbol_id,
+    symbol_name_,  // Use the current symbol name
+    bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown",
+    side,
+    trade.size,  // Use the same size as the trade
+    BTQuant::RenderEngine::TimeInForce::GTC    // Default to Good Till Cancel
+  );
+
   if (pushed) {
     std::cout << "[TimeAndSalesPanel] Order queued: "
               << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
               << " " << trade.size << " " << symbol_name_
-              << " @ " << trade.price
               << " based on observed trade" << std::endl;
   } else {
     std::cerr << "[TimeAndSalesPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;

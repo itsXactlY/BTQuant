@@ -203,17 +203,64 @@ public:
         static TradeCommandQueue queue;
         return queue;
     }
-    
+
     // Convenience method to push a command
     static bool push_command(const TradeCommand& cmd) {
         return instance().push(cmd);
     }
-    
+
     // Convenience method to push a command (move)
     static bool push_command(TradeCommand&& cmd) {
         return instance().push(std::move(cmd));
     }
-    
+
+    // Convenience method to create and push a market order command
+    static bool push_market_order(uint32_t symbol_id, const std::string& symbol, const std::string& exchange,
+                                  OrderSide side, double quantity, TimeInForce tif = TimeInForce::GTC) {
+        TradeCommand cmd(symbol_id, symbol, exchange, side, OrderType::MARKET, quantity, tif);
+        cmd.command_id = instance().next_command_id();
+        cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch()
+        ).count();
+        cmd.client_order_id = cmd.command_id;
+        cmd.notes = "Market order from UI";
+        return instance().push(std::move(cmd));
+    }
+
+    // Convenience method to create and push a limit order command
+    static bool push_limit_order(uint32_t symbol_id, const std::string& symbol, const std::string& exchange,
+                                 OrderSide side, double quantity, double price, TimeInForce tif = TimeInForce::GTC) {
+        TradeCommand cmd(symbol_id, symbol, exchange, side, OrderType::LIMIT, quantity, tif);
+        cmd.command_id = instance().next_command_id();
+        cmd.price = price;
+        cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch()
+        ).count();
+        cmd.client_order_id = cmd.command_id;
+        cmd.notes = "Limit order from UI";
+        return instance().push(std::move(cmd));
+    }
+
+    // Generic method to route any trade command with proper initialization
+    template<typename... Args>
+    static bool route_command(OrderType order_type, Args&&... args) {
+        TradeCommand cmd(std::forward<Args>(args)...);
+        cmd.command_id = instance().next_command_id();
+        cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch()
+        ).count();
+        cmd.client_order_id = cmd.command_id;
+        cmd.type = order_type;
+        
+        std::string order_type_str = order_type == OrderType::MARKET ? "Market" : 
+                                    order_type == OrderType::LIMIT ? "Limit" :
+                                    order_type == OrderType::STOP_MARKET ? "Stop-Market" :
+                                    order_type == OrderType::STOP_LIMIT ? "Stop-Limit" : "Trailing-Stop";
+        cmd.notes = order_type_str + " order from UI";
+        
+        return instance().push(std::move(cmd));
+    }
+
 private:
     GlobalTradeQueue() = delete;
 };

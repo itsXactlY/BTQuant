@@ -1622,42 +1622,22 @@ void OrderbookPanel::render_panel_header() {
 }
 
 void OrderbookPanel::place_order_at_price(double price, RenderEngine::OrderSide side, double quantity) {
-  // Create a trade command based on the selected price level
-  BTQuant::RenderEngine::TradeCommand cmd;
-
-  // Set the command properties
-  cmd.command_id = BTQuant::RenderEngine::GlobalTradeQueue::instance().next_command_id();
-  cmd.symbol_id = symbol_id_;
-  cmd.symbol = symbol_name_;  // Use the current symbol name
-  cmd.exchange = bridge_ ? bridge_->getExchangeName(symbol_id_) : "Unknown";
-  cmd.side = side;
-  cmd.type = BTQuant::RenderEngine::OrderType::MARKET;  // Default to market order
-  cmd.tif = BTQuant::RenderEngine::TimeInForce::GTC;    // Default to Good Till Cancel
+  // Use the new routing method to create and push the trade command
+  double actual_quantity = (quantity > 0.0) ? quantity : 0.001;  // Default small quantity
   
-  // Use provided quantity or default to a small amount
-  cmd.quantity = (quantity > 0.0) ? quantity : 0.001;  // Default small quantity
-  cmd.price = price;    // Use the selected price
-  cmd.stop_price = 0.0; // Not used for market orders
-
-  // Set timestamp
-  cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::high_resolution_clock::now().time_since_epoch()
-  ).count();
-
-  // Set client order ID
-  cmd.client_order_id = cmd.command_id;
-
-  // Add notes about the origin of this order
-  cmd.notes = "Order placed from Orderbook panel at price " + std::to_string(price);
-
-  // Push the command to the global trade queue
-  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
+  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_market_order(
+    symbol_id_,
+    symbol_name_,
+    bridge_ ? bridge_->getExchangeName(symbol_id_) : "Unknown",
+    side,
+    actual_quantity,
+    BTQuant::RenderEngine::TimeInForce::GTC
+  );
 
   if (pushed) {
     std::cout << "[OrderbookPanel] Order queued: "
               << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
-              << " " << cmd.quantity << " " << symbol_name_
-              << " @ " << price
+              << " " << actual_quantity << " " << symbol_name_
               << " from orderbook level" << std::endl;
   } else {
     std::cerr << "[OrderbookPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;

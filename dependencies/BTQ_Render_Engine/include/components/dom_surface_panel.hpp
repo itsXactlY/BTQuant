@@ -225,6 +225,9 @@ class DomSurfacePanel : public PanelBase {
   
   // Vulkan texture members
   ImageAllocation heatmap_texture_;
+  VkSampler heatmap_sampler_ = VK_NULL_HANDLE;
+  VkImageView heatmap_image_view_ = VK_NULL_HANDLE;
+  ImTextureID heatmap_texture_id_ = nullptr;
   bool texture_initialized_ = false;
   std::shared_ptr<VulkanCore> vulkan_core_;
 };

@@ -9,6 +9,7 @@
 #include "implot.h"
 #include "../../include/components/interaction_manager.hpp"
 #include <ctime>
+#include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
 
 namespace BTQuant {
 
@@ -1986,6 +1987,49 @@ void VolumeProfilePanel::render_volume_bars() {
     // Render custom profile overlay if in custom profile mode and time range selection is active
     if (profile_mode_ == ProfileMode::Custom) {
       renderCustomProfileOverlay(ImPlot::GetPlotDrawList());
+    }
+
+    // Draw 1px dashed line when g_crosshair.active == true
+    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
+      ImPlotRect limits = ImPlot::GetPlotLimits();
+      
+      // Get the global crosshair time position
+      uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
+      double global_time_seconds = static_cast<double>(global_time) / 1000000.0; // Convert microseconds to seconds
+      
+      // Draw vertical dashed line at the global crosshair time position
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+      ImVec2 top = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Max);
+      ImVec2 bottom = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Min);
+
+      // Draw the synchronized crosshair line as a 1px dashed line
+      const float dash_length = 4.0f;
+      const float gap_length = 2.0f;
+      const float line_thickness = 1.0f;
+
+      // Draw dashed line
+      float current_y = top.y;
+      bool draw_segment = true;
+
+      while (current_y < bottom.y) {
+          float next_y = current_y + (draw_segment ? dash_length : gap_length);
+
+          if (next_y > bottom.y) {
+              next_y = bottom.y;
+          }
+
+          if (draw_segment) {
+              draw_list->AddLine(
+                  ImVec2(top.x, current_y),
+                  ImVec2(top.x, next_y),
+                  IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
+                  line_thickness
+              );
+          }
+
+          current_y = next_y;
+          draw_segment = !draw_segment;
+      }
     }
 
     ImPlot::EndPlot();

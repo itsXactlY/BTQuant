@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
+#include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
 
 namespace BTQuant {
 
@@ -1560,6 +1561,48 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
 
     // Plot shaded area for asks (Red - descending from top)
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
+
+    // Draw 1px dashed line when g_crosshair.active == true
+    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
+      ImPlotRect limits = ImPlot::GetPlotLimits();
+      
+      // For orderbook depth chart, use the crosshair price to draw a vertical line
+      double crosshair_price = QuantWorkspaceComponent::g_crosshair.price.load();
+      
+      // Draw vertical dashed line at crosshair price position
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+      ImVec2 top = ImPlot::PlotToPixels(crosshair_price, limits.Y.Max);
+      ImVec2 bottom = ImPlot::PlotToPixels(crosshair_price, limits.Y.Min);
+
+      // Draw the synchronized crosshair line as a 1px dashed line
+      const float dash_length = 4.0f;
+      const float gap_length = 2.0f;
+      const float line_thickness = 1.0f;
+
+      // Draw dashed line
+      float current_y = top.y;
+      bool draw_segment = true;
+
+      while (current_y < bottom.y) {
+          float next_y = current_y + (draw_segment ? dash_length : gap_length);
+
+          if (next_y > bottom.y) {
+              next_y = bottom.y;
+          }
+
+          if (draw_segment) {
+              draw_list->AddLine(
+                  ImVec2(top.x, current_y),
+                  ImVec2(top.x, next_y),
+                  IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
+                  line_thickness
+              );
+          }
+
+          current_y = next_y;
+          draw_segment = !draw_segment;
+      }
+    }
 
     ImPlot::EndPlot();
   }

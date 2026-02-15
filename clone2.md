@@ -79,21 +79,21 @@
 
 - [x] **6.1: The Flush Top Toolbar**
 - [x] Render `BeginChild("Toolbar", (0, 32))` with `NoScrollbar`.
-- [ ] Wire `Symbol Input` to `MarketDataProcessor::subscribe(new_symbol)`.
+- [x] Wire `Symbol Input` to `MarketDataProcessor::subscribe(new_symbol)`.
 - [x] **6.2: Quick Order Sidebar**
-- [ ] If `Mouse Trading` enabled: Render massive `BUY MKT` / `SELL MKT` buttons.
-- [ ] Display live `best_bid` / `best_ask` from atomics inside the button text.
-- [ ] **6.3: Trade Command Routing**
-- [ ] Button Click -> Populate `TradeCommand` POD -> `trade_command_queue_.push()`.
+- [x] If `Mouse Trading` enabled: Render massive `BUY MKT` / `SELL MKT` buttons.
+- [x] Display live `best_bid` / `best_ask` from atomics inside the button text.
+- [x] **6.3: Trade Command Routing**
+- [x] Button Click -> Populate `TradeCommand` POD -> `trade_command_queue_.push()`.
 
 ---
 
 ## Phase 7: Sub-Pixel Polish & Sync
 **Target:** `src/ui/font_manager.cpp` & `src/components/quant_workspace_component.cpp`
 
-- [ ] **7.1: High-DPI Typography**
-- [ ] Load *JetBrains Mono* with `OversampleH = 4`.
-- [ ] Ensure all numeric data uses the monospaced atlas for perfect column alignment.
-- [ ] **7.2: Universal Crosshair Sync**
-- [ ] Read/Write to `GlobalCrosshair` atomics defined in `quant_workspace_component.hpp`.
+- [x] **7.1: High-DPI Typography**
+- [x] Load *JetBrains Mono* with `OversampleH = 4`.
+- [x] Ensure all numeric data uses the monospaced atlas for perfect column alignment.
+- [x] **7.2: Universal Crosshair Sync**
+- [x] Read/Write to `GlobalCrosshair` atomics defined in `quant_workspace_component.hpp`.
 - [ ] Draw 1px dashed line in all panels when `g_crosshair.active == true`.

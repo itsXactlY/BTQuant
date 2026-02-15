@@ -60,6 +60,18 @@ public:
     void bindLockFreeSnapshotPipeline(const LockFreeSnapshotPipeline& pipeline, const char* window_name = "Market Data");
 
     /**
+     * @brief Bind market table data to ImGui visualization
+     * @param bid_volume Volume at the best bid price
+     * @param ask_volume Volume at the best ask price
+     * @param last_price Last traded price
+     * @param bid_price Best bid price
+     * @param ask_price Best ask price
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindMarketTable(double bid_volume, double ask_volume, double last_price,
+                        double bid_price, double ask_price, const char* window_name = "Market Table");
+
+    /**
      * @brief Render all bound visualizations
      */
     void render();

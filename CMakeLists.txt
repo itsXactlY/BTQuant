@@ -31,6 +31,10 @@ set(PUBBTQUANT_SOURCES
     src/ui/compute_to_imgui_bind.cpp
 )
 
+# Find Dependencies
+find_package(Vulkan REQUIRED)
+find_package(Threads REQUIRED)
+
 # Add subdirectories
 add_subdirectory(dependencies/BTQ_Render_Engine)
 
@@ -44,8 +48,19 @@ if(PUBBTQUANT_SOURCES)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/include
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/src/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/imgui-src
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/imgui-src/backends
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/implot-src
     )
-    
+
+    # Link against the necessary libraries
+    target_link_libraries(pubbtquant PRIVATE
+        btq_render_lib
+        glfw
+        dl
+        pthread
+    )
+
 endif()
 
 # Documentation target

@@ -355,24 +355,44 @@ set(BTQUANT_TERMINAL_SOURCES
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 
-add_executable(BTQuantTerminal ${BTQUANT_TERMINAL_SOURCES} ${COMPILED_SHADERS})
+# Create a library containing the ImGui implementation
+add_library(btq_render_lib STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMPLOT_DIR}/implot.cpp
+    ${IMPLOT_DIR}/implot_items.cpp
+    src/rendering/imgui_optimizer.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
+)
 
-target_include_directories(BTQuantTerminal PRIVATE
+target_include_directories(btq_render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
     ${json_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
+)
+
+# Create the executable
+add_executable(BTQuantTerminal ${BTQUANT_TERMINAL_SOURCES} ${COMPILED_SHADERS})
+
+target_include_directories(BTQuantTerminal PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
@@ -383,6 +403,7 @@ target_include_directories(BTQuantTerminal PRIVATE
 find_package(TBB REQUIRED)
 
 target_link_libraries(BTQuantTerminal PRIVATE
+    btq_render_lib
     Vulkan::Vulkan
     glfw
     dl

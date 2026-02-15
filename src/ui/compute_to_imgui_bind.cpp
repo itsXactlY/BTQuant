@@ -8,6 +8,7 @@
 
 #include "ui/compute_to_imgui_bind.h"
 #include "rendering/imgui_optimizer.hpp"
+#include "imgui.h"
 #include <algorithm>
 #include <cmath>
 
@@ -84,12 +85,12 @@ void ComputeToImGuiBind::bindLiquiditySweepDetector(const LiquiditySweepDetector
 
 void ComputeToImGuiBind::bindLockFreeSnapshotPipeline(const LockFreeSnapshotPipeline& pipeline, const char* window_name) {
     m_snapshot_pipeline = &pipeline;
-    
+
     // Create a visualization entry for market data
     BoundVisualization viz;
     viz.window_name = window_name;
     viz.is_visible = true;
-    
+
     // Set up the render callback
     viz.render_callback = [this, &pipeline, window_name]() {
         if (ImGui::Begin(window_name)) {
@@ -98,7 +99,26 @@ void ComputeToImGuiBind::bindLockFreeSnapshotPipeline(const LockFreeSnapshotPipe
         }
         ImGui::End();
     };
-    
+
+    m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::bindMarketTable(double bid_volume, double ask_volume, double last_price,
+                                        double bid_price, double ask_price, const char* window_name) {
+    // Create a visualization entry for market table
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback
+    viz.render_callback = [bid_volume, ask_volume, last_price, bid_price, ask_price, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Render the market table with [Buys | Asks | Price | Bids | Sells] format
+            renderMarketTable(bid_volume, ask_volume, last_price, bid_price, ask_price);
+        }
+        ImGui::End();
+    };
+
     m_visualizations.push_back(viz);
 }
 

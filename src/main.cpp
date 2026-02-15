@@ -1,6 +1,7 @@
 #include "analytics/tpoengine.h"
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
+#include "ui/compute_to_imgui_bind.h"
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -272,22 +273,32 @@ int main() {
 
     // Test the new market table rendering functionality
     std::cout << "\n=== Testing Market Table Rendering [Buys | Asks | Price | Bids | Sells] ===\n";
-    
+
     // Example values for the market table
     double bid_vol = 1250.50;
     double ask_vol = 980.75;
     double last_px = 102.45;
     double bid_px = 102.40;
     double ask_px = 102.50;
-    
+
     std::cout << "Sample market data:\n";
     std::cout << "Bid Volume (Buys): " << bid_vol << std::endl;
     std::cout << "Ask Volume (Asks): " << ask_vol << std::endl;
     std::cout << "Last Price: " << last_px << std::endl;
     std::cout << "Bid Price: " << bid_px << std::endl;
     std::cout << "Ask Price: " << ask_px << std::endl;
-    
+
     std::cout << "\nMarket table rendering functionality is ready for UI integration.\n";
+
+    // Initialize UI binding system
+    std::cout << "\n=== Initializing UI Binding System ===\n";
+    
+    BTQuant::UI::ComputeToImGuiBind ui_bind;
+    
+    // Bind the market table to the UI
+    ui_bind.bindMarketTable(bid_vol, ask_vol, last_px, bid_px, ask_px, "Market Table [Buys | Asks | Price | Bids | Sells]");
+    
+    std::cout << "Market table bound to UI successfully!\n";
 
     std::cout << "\nAll analytics modules tested successfully!\n";
 

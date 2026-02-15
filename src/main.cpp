@@ -5,6 +5,7 @@
 #include "analytics/rawtradetable.h"
 #include "ui/compute_to_imgui_bind.h"
 #include "audio/pitch_shifter.h"
+#include "audio/audio_engine_integration.h"
 #include "imgui.h"
 #include <iostream>
 #include <vector>
@@ -350,6 +351,17 @@ int main() {
     // Create a raw trade table with capacity for 1000 trades
     RawTradeTable trade_table(1000);
 
+    // Initialize audio integration to trigger sounds on new trades
+    std::cout << "Initializing audio integration for trade notifications...\n";
+    AudioIntegration::TradeAudioNotifier audio_notifier;
+    if (audio_notifier.initializeAudio()) {
+        // Connect the audio notifier to the trade table
+        audio_notifier.connectToTradeTable(trade_table);
+        std::cout << "Audio integration connected to trade table\n";
+    } else {
+        std::cout << "Warning: Could not initialize audio, continuing without sound\n";
+    }
+
     // Generate some sample trades
     auto trade_base_time = std::chrono::system_clock::now();
     std::vector<RawTrade> sample_trades;
@@ -367,7 +379,7 @@ int main() {
 
     std::cout << "Adding " << sample_trades.size() << " sample trades to the table...\n";
 
-    // Add trades to the table
+    // Add trades to the table (this will trigger audio notifications if audio is enabled)
     trade_table.add_trades(sample_trades);
 
     // Get trade statistics
@@ -468,7 +480,7 @@ int main() {
     // Demonstrate the concept with trading data
     std::cout << "\nApplying pitch shift to trading volume data:\n";
     std::vector<RawTrade> sample_trades_for_pitch = trade_table.get_recent_trades(10);
-    
+
     for (const auto& trade : sample_trades_for_pitch) {
         double trade_pitch = pitch_shifter.calculate_pitch(trade.volume);
         char pitch_char = trade_pitch < 220.0 ? 'B' : (trade_pitch < 330.0 ? 'M' : 'H'); // Bass, Mid, High
@@ -476,6 +488,9 @@ int main() {
     }
 
     std::cout << "\nPitch shifting functionality (Big trade = Deep bass) implemented and tested successfully!\n";
+
+    // Clean up audio resources
+    audio_notifier.shutdownAudio();
 
     return 0;
 }

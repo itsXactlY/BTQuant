@@ -7,6 +7,7 @@
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
+#include <thread>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -27,17 +28,75 @@ namespace RenderEngine {
 static ma_engine g_engine;
 static bool audio_initialized = false;
 
-// Simple tone generation for trade sounds
+// Function to generate a tone and play it using ma_engine (the core requirement)
 static ma_result play_simple_tone(ma_engine* engine, float frequency, float duration, float amplitude) {
     if (engine == NULL) {
         return MA_INVALID_ARGS;
     }
+
+    // Calculate buffer size based on sample rate and duration
+    ma_uint32 sampleRate = 44100;
+    ma_uint32 channels = 1; // Mono
+    ma_uint32 totalFrames = (ma_uint32)(sampleRate * duration);
     
-    // For now, we'll use a simple approach that creates a sound in memory
-    // In a real implementation, we'd create a proper data source for dynamic tone generation
-    // But for the purpose of this integration, we'll log the intended sound and return success
-    std::cout << "[Audio] Playing trade tone - Frequency: " << frequency
-              << "Hz, Amplitude: " << amplitude << ", Duration: " << duration << "s" << std::endl;
+    if (totalFrames == 0) {
+        return MA_SUCCESS; // Nothing to play
+    }
+    
+    // Allocate memory for the audio data
+    float* pAudioData = (float*)malloc(totalFrames * channels * sizeof(float));
+    if (pAudioData == NULL) {
+        return MA_OUT_OF_MEMORY;
+    }
+    
+    // Generate a simple sine wave
+    for (ma_uint32 i = 0; i < totalFrames; i++) {
+        float t = (float)i / sampleRate; // Time in seconds
+        float sample = amplitude * sinf(2.0f * M_PI * frequency * t);
+        pAudioData[i] = sample;
+    }
+    
+    // Create a sound from our generated data
+    ma_sound sound;
+    ma_sound_config config = ma_sound_config_init();
+    config.pUserData = pAudioData; // Store the audio data in user data
+    
+    // Create a data source for the generated audio
+    ma_audio_buffer buffer;
+    ma_audio_buffer_config bufferConfig = ma_audio_buffer_config_init(
+        ma_format_f32,    // Format
+        channels,         // Channels 
+        totalFrames,      // Size in frames
+        pAudioData        // Data pointer
+    );
+    
+    ma_result result = ma_audio_buffer_init(&bufferConfig, &buffer);
+    if (result != MA_SUCCESS) {
+        free(pAudioData);
+        return result;
+    }
+    
+    // Initialize the sound with the audio buffer
+    result = ma_sound_init_from_data_source(engine, &buffer.data_source, 0, NULL, &sound);
+    if (result != MA_SUCCESS) {
+        ma_audio_buffer_uninit(&buffer);
+        free(pAudioData);
+        return result;
+    }
+    
+    // Set volume and play the sound
+    ma_sound_set_volume(&sound, amplitude);
+    ma_sound_start(&sound);
+    
+    // NOTE: In a real implementation, you'd want to wait for the sound to finish
+    // or use a callback mechanism to clean up resources after playback.
+    // For this implementation, we'll sleep briefly to allow the sound to play
+    std::this_thread::sleep_for(std::chrono::milliseconds((int)(duration * 1000)));
+    
+    // Clean up resources after playback
+    ma_sound_uninit(&sound);
+    ma_audio_buffer_uninit(&buffer);
+    free(pAudioData);
     
     return MA_SUCCESS;
 }

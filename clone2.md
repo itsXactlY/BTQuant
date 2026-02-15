@@ -66,9 +66,9 @@
 
 - [x] **5.1: Raw Trade Table**
 - [x] Columns: `[Exchange Logo] | Price | Qty | Time`.
-- [ ] Render exchange icons from the pre-loaded texture atlas in `GPUMemoryManager`.
-- [ ] **5.2: Order Flow Acoustics**
-- [ ] Integrate `miniaudio` into the `MarketDataProcessor` poll loop.
+- [x] Render exchange icons from the pre-loaded texture atlas in `GPUMemoryManager`.
+- [x] **5.2: Order Flow Acoustics**
+- [x] Integrate `miniaudio` into the `MarketDataProcessor` poll loop.
 - [ ] Trigger `ma_engine_play_sound` on new trade detection.
 - [ ] Pitch Shift: Scale pitch inversely to volume (Big trade = Deep bass).
 

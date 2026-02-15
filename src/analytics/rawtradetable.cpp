@@ -10,23 +10,33 @@ RawTradeTable::RawTradeTable(size_t max_capacity) : max_capacity_(max_capacity) 
 
 void RawTradeTable::add_trade(const RawTrade& trade) {
     std::lock_guard<std::mutex> lock(trades_mutex_);
-    
+
     trades_.push_front(trade);
-    
+
     // Trim if we exceed capacity
     if (trades_.size() > max_capacity_) {
         trades_.pop_back();
+    }
+    
+    // Call the trade notification callback if set
+    if (trade_callback_) {
+        trade_callback_(trade);
     }
 }
 
 void RawTradeTable::add_trades(const std::vector<RawTrade>& trades) {
     std::lock_guard<std::mutex> lock(trades_mutex_);
-    
+
     // Add trades in reverse order to maintain chronological order in the front
     for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
         trades_.push_front(*it);
+        
+        // Call the trade notification callback for each trade if set
+        if (trade_callback_) {
+            trade_callback_(*it);
+        }
     }
-    
+
     // Trim if we exceed capacity
     while (trades_.size() > max_capacity_) {
         trades_.pop_back();

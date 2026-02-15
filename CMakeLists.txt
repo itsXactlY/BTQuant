@@ -31,6 +31,7 @@ set(PUBBTQUANT_SOURCES
     src/analytics/rawtradetable.cpp
     src/ui/compute_to_imgui_bind.cpp
     src/audio/pitch_shifter.cpp
+    src/audio/audio_engine_integration.cpp
 )
 
 # Find Dependencies

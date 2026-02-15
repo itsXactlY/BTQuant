@@ -444,6 +444,8 @@ void OrderbookPanel::render() {
         ImGui::InputDouble("##CustomAggValue", &custom_aggregation_value_, 0.01f, 1.0f, "%.4f");
         ImGui::PopItemWidth();
     }
+    
+    // USD/COIN toggle - moved to header section as per requirement
   } else {
     const auto& colors = ThemeManager::getInstance().getColors();
     ImGui::TextColored(colors.accent_red, "No active symbols detected in SHM!");
@@ -558,38 +560,100 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   std::vector<PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
   std::vector<PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
 
-  // Calculate average order size for large order detection
+  // Calculate average order size for large order detection based on selected unit
   size_t total_levels = aggregated_bids.size() + aggregated_asks.size();
   if (total_levels > 0) {
     double total_size = 0.0;
-    for (const auto& level : aggregated_bids) total_size += level.size;
-    for (const auto& level : aggregated_asks) total_size += level.size;
+    for (const auto& level : aggregated_bids) {
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          total_size += level.size * snapshot_opt->last_trade_price;
+        } else {
+          total_size += level.size * level.price;
+        }
+      } else {
+        total_size += level.size;
+      }
+    }
+    for (const auto& level : aggregated_asks) {
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          total_size += level.size * snapshot_opt->last_trade_price;
+        } else {
+          total_size += level.size * level.price;
+        }
+      } else {
+        total_size += level.size;
+      }
+    }
     average_order_size_ = total_size / total_levels;
   } else {
     average_order_size_ = 0.0;
   }
 
-  // Calculate max volume for relative scaling
+  // Calculate max volume for relative scaling based on selected unit
   double max_vol = 1.0;
-  for (const auto& level : aggregated_bids) max_vol = std::max(max_vol, level.size);
-  for (const auto& level : aggregated_asks) max_vol = std::max(max_vol, level.size);
+  for (const auto& level : aggregated_bids) {
+    double display_size = level.size;
+    if (volume_unit_ == VolumeUnit::USD) {
+      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+      if (snapshot_opt.has_value()) {
+        display_size = level.size * snapshot_opt->last_trade_price;
+      } else {
+        display_size = level.size * level.price;
+      }
+    }
+    max_vol = std::max(max_vol, display_size);
+  }
+  for (const auto& level : aggregated_asks) {
+    double display_size = level.size;
+    if (volume_unit_ == VolumeUnit::USD) {
+      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+      if (snapshot_opt.has_value()) {
+        display_size = level.size * snapshot_opt->last_trade_price;
+      } else {
+        display_size = level.size * level.price;
+      }
+    }
+    max_vol = std::max(max_vol, display_size);
+  }
   if (max_vol < 1.0) max_vol = 1.0;
 
-  // Calculate cumulative volumes for liquidity bars
+  // Calculate cumulative volumes for liquidity bars based on selected unit
   std::vector<double> cumulative_bids(aggregated_bids.size());
   std::vector<double> cumulative_asks(aggregated_asks.size());
 
   // Calculate cumulative bid volumes (from best bid outward)
   double bid_sum = 0.0;
   for (size_t i = 0; i < aggregated_bids.size(); ++i) {
-    bid_sum += aggregated_bids[i].size;
+    double display_size = aggregated_bids[i].size;
+    if (volume_unit_ == VolumeUnit::USD) {
+      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+      if (snapshot_opt.has_value()) {
+        display_size = aggregated_bids[i].size * snapshot_opt->last_trade_price;
+      } else {
+        display_size = aggregated_bids[i].size * aggregated_bids[i].price;
+      }
+    }
+    bid_sum += display_size;
     cumulative_bids[i] = bid_sum;
   }
 
   // Calculate cumulative ask volumes (from best ask outward)
   double ask_sum = 0.0;
   for (size_t i = 0; i < aggregated_asks.size(); ++i) {
-    ask_sum += aggregated_asks[i].size;
+    double display_size = aggregated_asks[i].size;
+    if (volume_unit_ == VolumeUnit::USD) {
+      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+      if (snapshot_opt.has_value()) {
+        display_size = aggregated_asks[i].size * snapshot_opt->last_trade_price;
+      } else {
+        display_size = aggregated_asks[i].size * aggregated_asks[i].price;
+      }
+    }
+    ask_sum += display_size;
     cumulative_asks[i] = ask_sum;
   }
 
@@ -636,8 +700,17 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity
-      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      // Calculate heatmap intensity for this level with adjustable sensitivity based on selected unit
+      double display_size = level.size;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          display_size = level.size * snapshot_opt->last_trade_price;
+        } else {
+          display_size = level.size * level.price;
+        }
+      }
+      float raw_intensity = std::clamp((float)(display_size / max_vol), 0.0f, 1.0f);
       float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
@@ -668,8 +741,17 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity
-      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      // Calculate heatmap intensity for this level with adjustable sensitivity based on selected unit
+      double display_size = level.size;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          display_size = level.size * snapshot_opt->last_trade_price;
+        } else {
+          display_size = level.size * level.price;
+        }
+      }
+      float raw_intensity = std::clamp((float)(display_size / max_vol), 0.0f, 1.0f);
       float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
@@ -703,9 +785,33 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       ImGui::TableNextRow();
       ImGui::PushID(i);  // Unique ID for this row/side
 
+      // Calculate display size for large order detection based on selected unit
+      double display_size = level.size;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          display_size = level.size * snapshot_opt->last_trade_price;
+        } else {
+          display_size = level.size * level.price;
+        }
+      }
+      
+      // Calculate average order size based on selected unit for large order detection
+      double avg_display_size = average_order_size_;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          avg_display_size = average_order_size_ * snapshot_opt->last_trade_price;
+        } else {
+          // Use a representative price for the symbol
+          // For now, we'll use the current level's price as a fallback
+          avg_display_size = average_order_size_ * level.price;
+        }
+      }
+      
       // Check if this is a large order
-      bool is_large_order = average_order_size_ > 0 &&
-                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = avg_display_size > 0 &&
+                           (display_size / avg_display_size) * 100.0 >= large_order_threshold_percentage_;
 
       // 1. Bid (Empty)
       ImGui::TableSetColumnIndex(0);
@@ -863,8 +969,21 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       // 5. Ask Size (with Bar)
       ImGui::TableSetColumnIndex(4);
       {
+        // Get the last price for conversion if needed
+        double display_size = level.size;
+        if (volume_unit_ == VolumeUnit::USD) {
+          // Get the last trade price for conversion to USD
+          auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+          if (snapshot_opt.has_value()) {
+            display_size = level.size * snapshot_opt->last_trade_price;
+          } else {
+            // Fallback to current price level if no snapshot available
+            display_size = level.size * level.price;
+          }
+        }
+
         float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(level.size / max_vol);
+        float bar_width = width * (float)(display_size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
 
         ImGui::GetWindowDrawList()->AddRectFilled(
@@ -875,7 +994,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         if (is_large_order) {
           // Draw yellow background for large orders
           ImVec2 text_pos = ImGui::GetCursorScreenPos();
-          ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", level.size).c_str());
+          ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", display_size).c_str());
           ImGui::GetWindowDrawList()->AddRectFilled(
               text_pos,
               ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
@@ -884,10 +1003,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           // Draw text with increased weight effect by drawing it multiple times slightly offset
           // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-          ImGui::Text("%.4f", level.size);
+          ImGui::Text("%.4f", display_size);
           ImGui::PopStyleColor();
         } else {
-          ImGui::Text("%.4f", level.size);
+          ImGui::Text("%.4f", display_size);
         }
       }
 
@@ -992,20 +1111,57 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       ImGui::TableNextRow();
       ImGui::PushID(i + 1000);  // Offset to ensure uniqueness from Asks
 
+      // Calculate display size for large order detection based on selected unit
+      double display_size = level.size;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          display_size = level.size * snapshot_opt->last_trade_price;
+        } else {
+          display_size = level.size * level.price;
+        }
+      }
+      
+      // Calculate average order size based on selected unit for large order detection
+      double avg_display_size = average_order_size_;
+      if (volume_unit_ == VolumeUnit::USD) {
+        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+        if (snapshot_opt.has_value()) {
+          avg_display_size = average_order_size_ * snapshot_opt->last_trade_price;
+        } else {
+          // Use a representative price for the symbol
+          // For now, we'll use the current level's price as a fallback
+          avg_display_size = average_order_size_ * level.price;
+        }
+      }
+      
       // Check if this is a large order
-      bool is_large_order = average_order_size_ > 0 &&
-                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = avg_display_size > 0 &&
+                           (display_size / avg_display_size) * 100.0 >= large_order_threshold_percentage_;
 
       // 1. Bid Size (with Bar)
       ImGui::TableSetColumnIndex(0);
       {
+        // Get the last price for conversion if needed
+        double display_size = level.size;
+        if (volume_unit_ == VolumeUnit::USD) {
+          // Get the last trade price for conversion to USD
+          auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
+          if (snapshot_opt.has_value()) {
+            display_size = level.size * snapshot_opt->last_trade_price;
+          } else {
+            // Fallback to current price level if no snapshot available
+            display_size = level.size * level.price;
+          }
+        }
+
         // Draw bar from right to left? Standard is Left or Right aligned.
         // Image 1 implies Right aligned for Bid? No, standard is bars grow from
         // center spine (Price). But here Columns are separated. Let's do
         // Standard Left-to-Right for now, or Right-to-Left if it looks better
         // next to Price. Let's do Right-to-Left for Bid to "point" to Price.
         float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(level.size / max_vol);
+        float bar_width = width * (float)(display_size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
 
         ImGui::GetWindowDrawList()->AddRectFilled(
@@ -1015,7 +1171,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                 ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f)));
 
         // Text Right Aligned
-        auto text = std::format("{:.4f}", level.size);
+        auto text = std::format("{:.4f}", display_size);
         float text_width = ImGui::CalcTextSize(text.c_str()).x;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - text_width);
 
@@ -1383,6 +1539,25 @@ void OrderbookPanel::reset_depth() {
 void OrderbookPanel::render_panel_header() {
   // Call parent implementation to render the default header
   PanelBase::render_panel_header();
+
+  // Add USD/COIN toggle to the panel header
+  ImGui::Separator();
+  ImGui::Text("Units:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(80);
+  const char* unit_options[] = {"COIN", "USD"};
+  int current_unit = static_cast<int>(volume_unit_);
+  if (ImGui::BeginCombo("##UnitToggle", unit_options[current_unit])) {
+      for (int i = 0; i < 2; ++i) {
+          bool is_selected = (current_unit == i);
+          if (ImGui::Selectable(unit_options[i], is_selected)) {
+              volume_unit_ = static_cast<VolumeUnit>(i);
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+  }
+  ImGui::PopItemWidth();
 
   // Add heatmap intensity slider to the panel header
   ImGui::Separator();

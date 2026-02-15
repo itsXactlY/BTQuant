@@ -86,6 +86,14 @@ class OrderbookPanel : public PanelBase {
   // Helper method to detect order flow events by comparing snapshots
   void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
 
+  // Unit toggle functionality
+  enum class VolumeUnit {
+    COIN,
+    USD
+  };
+  
+  VolumeUnit volume_unit_ = VolumeUnit::COIN;  // Default to COIN units
+
   // Helper method to track volume changes for delta calculation
   void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
 

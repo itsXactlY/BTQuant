@@ -540,7 +540,8 @@ void OrderbookPanel::render() {
 
   ImGui::Spacing();
   ImGui::Separator();
-  ImGui::Text("Market Depth (Cumulative)");
+  ImGui::Text("Market Depth Visualization");
+  ImGui::Text("Asks (Red) descend from top | Bids (Green) ascend from bottom");
   render_market_depth_chart(orderbook);
 
   end_panel_window();
@@ -910,18 +911,26 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the right
+      // Draw cumulative volume bar extending from price column to the right (for asks)
       if (i < static_cast<int>(cumulative_asks.size())) {
           float width = ImGui::GetContentRegionAvail().x;
           float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Position the bar to start from the left edge of the price column and extend right
+          // This represents cumulative depth from the best ask downward
           ImGui::GetWindowDrawList()->AddRectFilled(
               ImVec2(pos.x, pos.y),
               ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
               ImGui::GetColorU32(
                   ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f)));
+          
+          // Add a subtle border to make the depth bar more visible
+          ImGui::GetWindowDrawList()->AddRect(
+              ImVec2(pos.x, pos.y),
+              ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+              ImGui::GetColorU32(
+                  ImVec4(colors.accent_red.x * 0.8f, colors.accent_red.y * 0.8f, colors.accent_red.z * 0.8f, 0.5f)), 1.0f);
       }
 
       ImGui::SameLine();
@@ -990,6 +999,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
             ImGui::GetColorU32(
                 ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f)));
+        
+        // Add a subtle border to make the individual volume bar more visible
+        ImGui::GetWindowDrawList()->AddRect(
+            pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(
+                ImVec4(colors.accent_red.x * 0.8f, colors.accent_red.y * 0.8f, colors.accent_red.z * 0.8f, 0.4f)), 1.0f);
 
         if (is_large_order) {
           // Draw yellow background for large orders
@@ -1169,6 +1184,13 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
             ImGui::GetColorU32(
                 ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f)));
+        
+        // Add a subtle border to make the individual volume bar more visible
+        ImGui::GetWindowDrawList()->AddRect(
+            ImVec2(pos.x + width - bar_width, pos.y),
+            ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(
+                ImVec4(colors.accent_green.x * 0.8f, colors.accent_green.y * 0.8f, colors.accent_green.z * 0.8f, 0.4f)), 1.0f);
 
         // Text Right Aligned
         auto text = std::format("{:.4f}", display_size);
@@ -1286,18 +1308,26 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the left
+      // Draw cumulative volume bar extending from price column to the left (for bids)
       if (i < static_cast<int>(cumulative_bids.size())) {
           float width = ImGui::GetContentRegionAvail().x;
           float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Position the bar to start from the right edge of the price column and extend left
+          // This represents cumulative depth from the best bid upward
           ImGui::GetWindowDrawList()->AddRectFilled(
               ImVec2(pos.x + width - bar_width, pos.y),
               ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
               ImGui::GetColorU32(
                   ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
+          
+          // Add a subtle border to make the depth bar more visible
+          ImGui::GetWindowDrawList()->AddRect(
+              ImVec2(pos.x + width - bar_width, pos.y),
+              ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+              ImGui::GetColorU32(
+                  ImVec4(colors.accent_green.x * 0.8f, colors.accent_green.y * 0.8f, colors.accent_green.z * 0.8f, 0.5f)), 1.0f);
       }
 
       ImGui::SameLine();
@@ -1452,9 +1482,9 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
   if (aggregated_bids.empty() || aggregated_asks.empty()) return;
 
   if (ImPlot::BeginPlot("##Depth", ImVec2(-1, 150), ImPlotFlags_CanvasOnly)) {
-    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+    ImPlot::SetupAxes("Price", "Volume", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
 
-    // Handle Bids - Cumulative depth from best bid down
+    // Handle Bids - Cumulative depth from best bid down (Green area)
     std::vector<double> bx, by;
     if (!aggregated_bids.empty()) {
       double cumulative_depth = 0.0;
@@ -1477,16 +1507,12 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
       by.push_back(0.0);
     }
 
-    const auto& colors = ThemeManager::getInstance().getColors();
-    // ImPlot::SetNextFillStyle(colors.accent_green);
-    ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
-
-    // Handle Asks - Cumulative depth from best ask up
+    // Handle Asks - Cumulative depth from best ask up (Red area)
     std::vector<double> ax, ay;
     if (!aggregated_asks.empty()) {
       double cumulative_depth = 0.0;
 
-      // Add points from best ask to worst ask
+      // Add points from best ask to worst ask (Red area - descending from top)
       for (const auto& ask : aggregated_asks) {
         cumulative_depth += ask.size;
         ax.push_back(ask.price);
@@ -1504,7 +1530,10 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
       ay.insert(ay.begin(), 0.0);
     }
 
-    // ImPlot::SetNextFillStyle(colors.accent_red);
+    // Plot shaded area for bids (Green - ascending from bottom)
+    ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
+
+    // Plot shaded area for asks (Red - descending from top)
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
 
     ImPlot::EndPlot();

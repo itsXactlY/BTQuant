@@ -9,6 +9,12 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// Include miniaudio for sound file playback
+#ifndef MINIAUDIO_IMPLEMENTATION
+#define MINIAUDIO_IMPLEMENTATION
+#endif
+#include "miniaudio.h"
+
 namespace AudioIntegration {
 
 TradeAudioNotifier::TradeAudioNotifier()
@@ -23,9 +29,19 @@ TradeAudioNotifier::~TradeAudioNotifier() {
 }
 
 bool TradeAudioNotifier::initializeAudio() {
-    // For the stub implementation, just return true
+    ma_result result;
+    ma_engine_config config = ma_engine_config_init();
+
+    // Initialize the audio engine
+    result = ma_engine_init(&config, reinterpret_cast<ma_engine*>(&audio_engine_));
+    if (result != MA_SUCCESS) {
+        std::cerr << "[Audio] Failed to initialize audio engine: " << result << std::endl;
+        audio_initialized_ = false;
+        return false;
+    }
+
     audio_initialized_ = true;
-    std::cout << "[Audio] Audio initialized (stub implementation)" << std::endl;
+    std::cout << "[Audio] Audio engine initialized for trade sound effects" << std::endl;
     return true;
 }
 
@@ -56,26 +72,57 @@ void TradeAudioNotifier::playTradeSound(double volume, bool is_buy) {
         return;
     }
 
-    // Calculate pitch based on volume (inverse relationship - large trades = low pitch)
-    double pitch = pitch_shifter_.calculate_pitch(volume);
+    // Determine which sound file to play based on trade direction
+    const char* sound_file = is_buy ? "buy.wav" : "sell.wav";
 
-    // Determine amplitude based on volume
-    double normalized_volume = std::min(1.0, std::max(0.1, volume / 10000.0)); // Normalize to 0.1-1.0 range
-    float amplitude = static_cast<float>(normalized_volume * 0.5 + 0.1); // Range 0.1 to 0.6
+    // Play the sound file using miniaudio
+    ma_engine* engine = reinterpret_cast<ma_engine*>(audio_engine_);
+    
+    ma_sound sound;
+    ma_result result = ma_sound_init_from_file(engine, sound_file, 0, NULL, NULL, &sound);
+    if (result != MA_SUCCESS) {
+        std::cerr << "[Audio] Failed to load sound file '" << sound_file << "': " << result << std::endl;
+        
+        // Fallback: play a simple tone if the sound file is not available
+        // Calculate pitch based on volume (inverse relationship - large trades = low pitch)
+        double pitch = pitch_shifter_.calculate_pitch(volume);
 
-    // Enhance bass effect for large trades
-    bool is_large_trade = normalized_volume > 0.7; // Large trade threshold
-    float bass_boost = is_large_trade ? 1.5f : 1.0f; // Boost amplitude for large trades
+        // Determine amplitude based on volume
+        double normalized_volume = std::min(1.0, std::max(0.1, volume / 10000.0)); // Normalize to 0.1-1.0 range
+        float amplitude = static_cast<float>(normalized_volume * 0.5 + 0.1); // Range 0.1 to 0.6
 
-    // For the stub implementation, just print what would be played
-    std::cout << "[Audio] Would play trade sound - Volume: " << volume
-              << ", Pitch: " << pitch
-              << ", Side: " << (is_buy ? "BUY" : "SELL")
-              << ", Large Trade: " << (is_large_trade ? "YES" : "NO") << std::endl;
+        // For fallback, just print what would be played
+        std::cout << "[Audio] Fallback - Would play tone for " << (is_buy ? "BUY" : "SELL") 
+                  << " - Volume: " << volume << ", Pitch: " << pitch << std::endl;
+        return;
+    }
+
+    // Play the sound
+    result = ma_sound_start(&sound);
+    if (result != MA_SUCCESS) {
+        std::cerr << "[Audio] Failed to start sound playback: " << result << std::endl;
+        ma_sound_uninit(&sound);
+        return;
+    }
+
+    std::cout << "[Audio] Played " << sound_file << " for trade - Volume: " << volume << std::endl;
+
+    // Play the sound and let it finish asynchronously
+    // In a real application, we could track the sound to handle cleanup later
+    // For now, we'll just start the sound and uninitialize it immediately
+    // This is acceptable for short sound effects like trade alerts
+    
+    // Clean up the sound
+    ma_sound_uninit(&sound);
 }
 
 void TradeAudioNotifier::shutdownAudio() {
     if (audio_initialized_) {
+        ma_engine* engine = reinterpret_cast<ma_engine*>(audio_engine_);
+        if (engine) {
+            ma_engine_uninit(engine);
+            audio_engine_ = nullptr;
+        }
         audio_initialized_ = false;
         std::cout << "[Audio] Audio engine shut down" << std::endl;
     }

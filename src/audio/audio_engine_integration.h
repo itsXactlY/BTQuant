@@ -6,7 +6,7 @@
 #include <memory>
 
 // Forward declaration of miniaudio types
-// #include "miniaudio.h"  // Only include if needed elsewhere
+struct ma_engine;  // Forward declare the miniaudio engine type
 
 namespace AudioIntegration {
 

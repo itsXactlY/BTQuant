@@ -9,6 +9,9 @@
 #include <functional>
 #include <memory>
 
+// Forward declaration
+class TradeRingBuffer;
+
 // Structure to represent a single raw trade
 struct RawTrade {
     std::chrono::system_clock::time_point timestamp;
@@ -36,9 +39,6 @@ struct TradeStats {
 
 // Function type for trade notification callbacks
 typedef std::function<void(const RawTrade&)> TradeNotificationCallback;
-
-// Forward declaration
-class TradeRingBuffer;
 
 class RawTradeTable {
 private:

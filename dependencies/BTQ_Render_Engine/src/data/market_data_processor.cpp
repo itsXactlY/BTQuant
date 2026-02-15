@@ -18,7 +18,8 @@ MarketDataProcessor::MarketDataProcessor()
       volatility_window_size_(100),
       spread_analysis_window_(50),
       parallel_processing_enabled_(true),
-      orderbook_snapshot_buffer_(ORDERBOOK_SNAPSHOT_BUFFER_SIZE) {
+      orderbook_snapshot_buffer_(ORDERBOOK_SNAPSHOT_BUFFER_SIZE),
+      atomic_snapshots_(MAX_SYMBOLS) {
   // Initialize shards
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     shards_.emplace_back(std::make_unique<Shard>());
@@ -204,47 +205,34 @@ std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symb
 }
 
 std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
-  auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
-
-  auto it = shard.data.find(symbol_id);
-  if (it == shard.data.end()) {
+  // Bounds check to ensure symbol_id is within the array size
+  if (symbol_id >= MAX_SYMBOLS) {
     return std::nullopt;
   }
 
-  const auto& symbol_data = it->second;
+  // Read from the atomic snapshot array directly without locks
+  const auto& atomic_snapshot = atomic_snapshots_[symbol_id];
 
-  // Build atomic snapshot from latest orderbook and trade data
+  // Load values using memory_order_relaxed for optimal performance
   AtomicL2Snapshot snapshot;
-  snapshot.symbol_id = symbol_id;
-  snapshot.timestamp = symbol_data.last_update_time;
-
-  // Get best bid/ask from latest orderbook
-  if (!symbol_data.recent_orderbooks.empty()) {
-    const auto& latest_ob = symbol_data.recent_orderbooks.back();
-    if (!latest_ob.bids.empty()) {
-      snapshot.best_bid = latest_ob.bids.front().price;
-      snapshot.best_bid_size = latest_ob.bids.front().size;
-    }
-    if (!latest_ob.asks.empty()) {
-      snapshot.best_ask = latest_ob.asks.front().price;
-      snapshot.best_ask_size = latest_ob.asks.front().size;
-    }
-    snapshot.spread = latest_ob.spread;
-    snapshot.spread_percent = latest_ob.spread_percent;
+  snapshot.symbol_id = atomic_snapshot.symbol_id.load(std::memory_order_relaxed);
+  
+  // Only return a snapshot if it contains valid data (symbol_id != 0 means it's been initialized)
+  if (snapshot.symbol_id == 0) {
+    return std::nullopt;
   }
-
-  // Get last trade info
-  snapshot.last_trade_price = symbol_data.last_trade_price;
-  snapshot.last_trade_size = symbol_data.last_trade_size;
-  snapshot.last_trade_time = symbol_data.last_trade_time;
-
-  // Calculate mid-price
-  if (snapshot.best_bid > 0.0 && snapshot.best_ask > 0.0) {
-    snapshot.mid_price = (snapshot.best_bid + snapshot.best_ask) / 2.0;
-  } else if (snapshot.last_trade_price > 0.0) {
-    snapshot.mid_price = snapshot.last_trade_price;
-  }
+  
+  snapshot.timestamp = atomic_snapshot.timestamp.load(std::memory_order_relaxed);
+  snapshot.best_bid = atomic_snapshot.best_bid.load(std::memory_order_relaxed);
+  snapshot.best_ask = atomic_snapshot.best_ask.load(std::memory_order_relaxed);
+  snapshot.best_bid_size = atomic_snapshot.best_bid_size.load(std::memory_order_relaxed);
+  snapshot.best_ask_size = atomic_snapshot.best_ask_size.load(std::memory_order_relaxed);
+  snapshot.spread = atomic_snapshot.spread.load(std::memory_order_relaxed);
+  snapshot.spread_percent = atomic_snapshot.spread_percent.load(std::memory_order_relaxed);
+  snapshot.last_trade_price = atomic_snapshot.last_trade_price.load(std::memory_order_relaxed);
+  snapshot.last_trade_size = atomic_snapshot.last_trade_size.load(std::memory_order_relaxed);
+  snapshot.last_trade_time = atomic_snapshot.last_trade_time.load(std::memory_order_relaxed);
+  snapshot.mid_price = atomic_snapshot.mid_price.load(std::memory_order_relaxed);
 
   return snapshot;
 }
@@ -927,6 +915,49 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
     static uint64_t update_counter = 0;
     if (++update_counter % 5 == 0) {  // Update spread analysis every 5 updates
       updateSpreadAnalysis(symbol_data);
+    }
+  }
+
+  // Update atomic snapshot for lock-free access
+  if (update.symbol_id < MAX_SYMBOLS) {
+    auto& atomic_snapshot = atomic_snapshots_[update.symbol_id];
+    
+    // Update the atomic snapshot with the latest data
+    atomic_snapshot.symbol_id.store(update.symbol_id, std::memory_order_relaxed);
+    atomic_snapshot.timestamp.store(update.timestamp, std::memory_order_relaxed);
+    
+    // Update bid/ask data based on orderbook update
+    if (update.type == MarketDataType::ORDERBOOK && !update.bids.empty() && !update.asks.empty()) {
+      atomic_snapshot.best_bid.store(update.bids.front().price, std::memory_order_relaxed);
+      atomic_snapshot.best_bid_size.store(update.bids.front().size, std::memory_order_relaxed);
+      atomic_snapshot.best_ask.store(update.asks.front().price, std::memory_order_relaxed);
+      atomic_snapshot.best_ask_size.store(update.asks.front().size, std::memory_order_relaxed);
+      
+      double spread = update.asks.front().price - update.bids.front().price;
+      atomic_snapshot.spread.store(spread, std::memory_order_relaxed);
+      if (update.bids.front().price > 0.0) {
+        atomic_snapshot.spread_percent.store((spread / update.bids.front().price) * 100.0, std::memory_order_relaxed);
+      }
+    }
+    
+    // Update trade data based on trade update
+    if (update.type == MarketDataType::TRADE) {
+      atomic_snapshot.last_trade_price.store(update.price, std::memory_order_relaxed);
+      atomic_snapshot.last_trade_size.store(update.size, std::memory_order_relaxed);
+      atomic_snapshot.last_trade_time.store(update.timestamp, std::memory_order_relaxed);
+    }
+    
+    // Calculate and update mid price
+    double best_bid = atomic_snapshot.best_bid.load(std::memory_order_relaxed);
+    double best_ask = atomic_snapshot.best_ask.load(std::memory_order_relaxed);
+    if (best_bid > 0.0 && best_ask > 0.0) {
+      atomic_snapshot.mid_price.store((best_bid + best_ask) / 2.0, std::memory_order_relaxed);
+    } else {
+      // Fallback to last trade price if bid/ask not available
+      double last_trade_price = atomic_snapshot.last_trade_price.load(std::memory_order_relaxed);
+      if (last_trade_price > 0.0) {
+        atomic_snapshot.mid_price.store(last_trade_price, std::memory_order_relaxed);
+      }
     }
   }
 

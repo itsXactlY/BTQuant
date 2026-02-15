@@ -113,25 +113,49 @@ struct OrderBookSnapshot {
 
 // Atomic L2 Snapshot for lock-free UI reads (Phase 4.1)
 // This structure is designed for single-read atomic access from UI threads
+// Atomic version of the snapshot for lock-free access
+struct AtomicSymbolInfo {
+  std::atomic<uint32_t> symbol_id{0};
+  std::atomic<uint64_t> timestamp{0};
+
+  // Best bid/ask (top of book)
+  std::atomic<double> best_bid{0.0};
+  std::atomic<double> best_ask{0.0};
+  std::atomic<double> best_bid_size{0.0};
+  std::atomic<double> best_ask_size{0.0};
+
+  // Spread info
+  std::atomic<double> spread{0.0};
+  std::atomic<double> spread_percent{0.0};
+
+  // Last trade info
+  std::atomic<double> last_trade_price{0.0};
+  std::atomic<double> last_trade_size{0.0};
+  std::atomic<uint64_t> last_trade_time{0};
+
+  // Mid price for convenience
+  std::atomic<double> mid_price{0.0};
+};
+
 struct AtomicL2Snapshot {
   uint32_t symbol_id = 0;
   uint64_t timestamp = 0;
-  
+
   // Best bid/ask (top of book)
   double best_bid = 0.0;
   double best_ask = 0.0;
   double best_bid_size = 0.0;
   double best_ask_size = 0.0;
-  
+
   // Spread info
   double spread = 0.0;
   double spread_percent = 0.0;
-  
+
   // Last trade info
   double last_trade_price = 0.0;
   double last_trade_size = 0.0;
   uint64_t last_trade_time = 0;
-  
+
   // Mid price for convenience
   double mid_price = 0.0;
 };
@@ -593,6 +617,11 @@ class MarketDataProcessor {
   mutable std::mutex snapshot_buffer_mutex_;  // Mutex to protect concurrent access
   std::atomic<size_t> snapshot_write_index_{0};
   std::atomic<size_t> snapshot_count_{0};
+
+  // Atomic snapshot array for lock-free access (Phase 4.1)
+  // Pre-allocated array of atomic symbol info for zero-lock reads
+  static constexpr size_t MAX_SYMBOLS = 100000;  // Maximum number of symbols supported
+  std::vector<AtomicSymbolInfo> atomic_snapshots_;
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;

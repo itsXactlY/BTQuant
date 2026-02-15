@@ -48,8 +48,8 @@ bool FontManager::initialize() {
     // Configure main font
     ImFontConfig main_config;
     main_config.SizePixels = scaled_main_size;  // Scaled size for high-DPI
-    main_config.OversampleH = 3;
-    main_config.OversampleV = 3;
+    main_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    main_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     main_config.PixelSnapH = true;
 
     // Load main font (using default for now, could be customized)
@@ -62,17 +62,36 @@ bool FontManager::initialize() {
     // Configure monospace font for numerical displays
     ImFontConfig mono_config;
     mono_config.SizePixels = scaled_mono_size;  // Scaled size for high-DPI
-    mono_config.OversampleH = 3;
-    mono_config.OversampleV = 3;
+    mono_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    mono_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     mono_config.PixelSnapH = true;
-    strcpy(mono_config.Name, "Monospace##Custom");
+    strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
-    // Attempt to load a monospace font (fallback to default if unavailable)
-    // Using a common monospace font that should be available
-    monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
-
-    // If we wanted to load a specific TTF font file, we would do:
-    // monospace_font_ = io.Fonts->AddFontFromFileTTF("path/to/monospace.ttf", scaled_mono_size, &mono_config);
+    // Attempt to load JetBrains Mono font (try multiple possible locations)
+    monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    
+    // If not in system fonts, try project resources
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If not in project resources, try alternative system locations
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If not in alternative system location, try home directory
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/home/alca/.local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If JetBrains Mono isn't available, fall back to default monospace font with same oversampling
+    if (!monospace_font_) {
+        mono_config.OversampleH = 4;  // Maintain oversampling even for fallback
+        mono_config.OversampleV = 4;
+        monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
+        std::cout << "Warning: JetBrains Mono font not found, using default monospace font with oversampling H=4, V=4" << std::endl;
+    }
 
     if (!monospace_font_) {
         std::cerr << "Failed to load monospace font, falling back to default" << std::endl;
@@ -83,8 +102,8 @@ bool FontManager::initialize() {
     // Configure header font
     ImFontConfig header_config;
     header_config.SizePixels = scaled_header_size;  // Scaled size for high-DPI
-    header_config.OversampleH = 3;
-    header_config.OversampleV = 3;
+    header_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    header_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     header_config.PixelSnapH = true;
     strcpy(header_config.Name, "Header##Custom");
 
@@ -127,8 +146,8 @@ void FontManager::updateFontScaling(float dpi_scale) {
     // Reconfigure main font with new scale
     ImFontConfig main_config;
     main_config.SizePixels = scaled_main_size;  // Scaled size for high-DPI
-    main_config.OversampleH = 3;
-    main_config.OversampleV = 3;
+    main_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    main_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     main_config.PixelSnapH = true;
 
     main_font_ = io.Fonts->AddFontDefault(&main_config);
@@ -136,18 +155,42 @@ void FontManager::updateFontScaling(float dpi_scale) {
     // Reconfigure monospace font with new scale
     ImFontConfig mono_config;
     mono_config.SizePixels = scaled_mono_size;  // Scaled size for high-DPI
-    mono_config.OversampleH = 3;
-    mono_config.OversampleV = 3;
+    mono_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    mono_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     mono_config.PixelSnapH = true;
-    strcpy(mono_config.Name, "Monospace##Custom");
+    strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
-    monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
+    // Attempt to load JetBrains Mono font (try multiple possible locations)
+    monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    
+    // If not in system fonts, try project resources
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If not in project resources, try alternative system locations
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If not in alternative system location, try home directory
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/home/alca/.local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    // If JetBrains Mono isn't available, fall back to default monospace font with same oversampling
+    if (!monospace_font_) {
+        mono_config.OversampleH = 4;  // Maintain oversampling even for fallback
+        mono_config.OversampleV = 4;
+        monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
+        std::cout << "Warning: JetBrains Mono font not found (during font scaling update), using default monospace font with oversampling H=4, V=4" << std::endl;
+    }
 
     // Reconfigure header font with new scale
     ImFontConfig header_config;
     header_config.SizePixels = scaled_header_size;  // Scaled size for high-DPI
-    header_config.OversampleH = 3;
-    header_config.OversampleV = 3;
+    header_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    header_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     header_config.PixelSnapH = true;
     strcpy(header_config.Name, "Header##Custom");
 

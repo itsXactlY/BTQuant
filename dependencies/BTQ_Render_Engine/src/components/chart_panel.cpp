@@ -2597,6 +2597,33 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         chart.highs.empty() ? 1 : *std::max_element(chart.highs.begin(), chart.highs.end());
   }
 
+  // Apply price centering mode if not in manual drag mode
+  if (chart.closes.size() > 0 && !user_dragged_chart_) {
+    double current_price = chart.closes.back();  // Get the most recent closing price
+    
+    switch (price_centering_mode_) {
+      case PriceCenteringMode::CENTER_MODE: {
+        // Center Mode: Mathematically lock Y-limits: y_min = current_price - range
+        // Calculate a range based on the current visible data or a fixed percentage
+        double current_range = y_axis_max_pre - y_axis_min_pre;
+        
+        // If the range is too small, use a percentage of the current price
+        if (current_range < current_price * 0.01) {  // 1% of current price as minimum range
+          current_range = current_price * 0.01;
+        }
+        
+        // Apply the center mode formula: y_min = current_price - range
+        // This means the current price will be at y_min + range
+        y_axis_min_pre = current_price - current_range;
+        y_axis_max_pre = current_price + current_range;  // Symmetric around current price
+        break;
+      }
+      default:
+        // Other modes handled elsewhere
+        break;
+    }
+  }
+
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs)) {
     // ===== ALL SETUP CALLS MUST HAPPEN FIRST - BEFORE ANY LOCKING FUNCTIONS =====
@@ -4109,7 +4136,7 @@ void ChartPanel::render_top_toolbar() {
   ImGui::SameLine();
   
   // Price Centering Mode indicator
-  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
+  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual", "Center"};
   ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
   
   // Note: EndChild() and PopStyleVar() are handled by the caller (render())
@@ -4361,35 +4388,35 @@ void ChartPanel::toggle_favorite_tool(const std::string& tool_name) {
 // 3.3 Price Centering Implementation
 void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double last_price) {
   if (chart.closes.empty() || last_price <= 0) return;
-  
+
   ImPlotRect limits = ImPlot::GetPlotLimits();
-  
+
   switch (price_centering_mode_) {
     case PriceCenteringMode::AUTO:
       // Standard ImPlot AutoFit - let ImPlot handle it
       // This is the default behavior, no manual intervention needed
       break;
-      
+
     case PriceCenteringMode::AUTO_CENTERED: {
       // Center on last price: (Y_max + Y_min)/2 == last_price
       double y_range = limits.Y.Max - limits.Y.Min;
       double half_range = y_range / 2.0;
-      
+
       double new_y_min = last_price - half_range;
       double new_y_max = last_price + half_range;
-      
+
       ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
       break;
     }
-    
+
     case PriceCenteringMode::KEEP_IN_VIEW: {
       // Only adjust Y limits if last_price exceeds current bounds
       double y_min = limits.Y.Min;
       double y_max = limits.Y.Max;
       double margin = (y_max - y_min) * 0.1;  // 10% margin
-      
+
       bool needs_adjustment = false;
-      
+
       if (last_price < y_min + margin) {
         // Price is too low, shift down
         y_min = last_price - margin * 2;
@@ -4401,17 +4428,36 @@ void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double l
         y_min = y_max - (limits.Y.Max - limits.Y.Min);
         needs_adjustment = true;
       }
-      
+
       if (needs_adjustment) {
         ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
       }
       break;
     }
-    
+
     case PriceCenteringMode::MANUAL:
       // Disable all auto-fitting - use stored manual limits
       ImPlot::SetNextAxisLimits(ImAxis_Y1, manual_y_min_, manual_y_max_, ImGuiCond_Always);
       break;
+
+    case PriceCenteringMode::CENTER_MODE: {
+      // Center Mode: Mathematically lock Y-limits: y_min = current_price - range
+      // Calculate a range based on the current visible data or a fixed percentage
+      double current_range = limits.Y.Max - limits.Y.Min;
+      
+      // If the range is too small, use a percentage of the current price
+      if (current_range < last_price * 0.01) {  // 1% of current price as minimum range
+        current_range = last_price * 0.01;
+      }
+      
+      // Apply the center mode formula: y_min = current_price - range
+      // This means the current price will be at y_min + range
+      double y_min = last_price - current_range;
+      double y_max = last_price + current_range;  // Symmetric around current price
+
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
+      break;
+    }
   }
 }
 
@@ -4420,24 +4466,24 @@ void ChartPanel::handle_y_axis_context_menu() {
   if (ImGui::BeginPopup("YAxisContextMenu")) {
     ImGui::Text("Price Centering Mode");
     ImGui::Separator();
-    
+
     int mode = static_cast<int>(price_centering_mode_);
-    if (ImGui::RadioButton("Auto", mode == 0)) {
+    if (ImGui::RadioButton("Auto", mode == static_cast<int>(PriceCenteringMode::AUTO))) {
       price_centering_mode_ = PriceCenteringMode::AUTO;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Standard ImPlot AutoFit");
-    
-    if (ImGui::RadioButton("Auto Centered", mode == 1)) {
+
+    if (ImGui::RadioButton("Auto Centered", mode == static_cast<int>(PriceCenteringMode::AUTO_CENTERED))) {
       price_centering_mode_ = PriceCenteringMode::AUTO_CENTERED;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Center on last price");
-    
-    if (ImGui::RadioButton("Keep in View", mode == 2)) {
+
+    if (ImGui::RadioButton("Keep in View", mode == static_cast<int>(PriceCenteringMode::KEEP_IN_VIEW))) {
       price_centering_mode_ = PriceCenteringMode::KEEP_IN_VIEW;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Only adjust if price exceeds bounds");
-    
-    if (ImGui::RadioButton("Manual", mode == 3)) {
+
+    if (ImGui::RadioButton("Manual", mode == static_cast<int>(PriceCenteringMode::MANUAL))) {
       price_centering_mode_ = PriceCenteringMode::MANUAL;
       // Store current limits as manual limits
       ImPlotRect limits = ImPlot::GetPlotLimits();
@@ -4445,7 +4491,12 @@ void ChartPanel::handle_y_axis_context_menu() {
       manual_y_max_ = limits.Y.Max;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Disable auto-fitting");
-    
+
+    if (ImGui::RadioButton("Center Mode", mode == static_cast<int>(PriceCenteringMode::CENTER_MODE))) {
+      price_centering_mode_ = PriceCenteringMode::CENTER_MODE;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mathematically lock Y-limits: y_min = current_price - range");
+
     ImGui::EndPopup();
   }
 }
@@ -4758,7 +4809,7 @@ void ChartPanel::render_floating_top_toolbar() {
   ImGui::SameLine();
 
   // Price Centering Mode indicator
-  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
+  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual", "Center"};
   ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
 
   // Floating toolbar controls

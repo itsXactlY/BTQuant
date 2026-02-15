@@ -92,7 +92,8 @@ enum class PriceCenteringMode {
   AUTO,           // Standard ImPlot AutoFit
   AUTO_CENTERED,  // Center on last price: (Y_max + Y_min)/2 == last_price
   KEEP_IN_VIEW,   // Only adjust if last_price exceeds bounds
-  MANUAL          // Disable auto-fitting, triggered on drag
+  MANUAL,         // Disable auto-fitting, triggered on drag
+  CENTER_MODE     // Center Mode: Mathematically lock Y-limits: y_min = current_price - range
 };
 
 // Chart style options

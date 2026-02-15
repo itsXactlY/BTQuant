@@ -14,6 +14,7 @@ FontManager::FontManager()
     : main_font_(nullptr),
       monospace_font_(nullptr),
       header_font_(nullptr),
+      icons_font_(nullptr),
       is_initialized_(false) {
 }
 
@@ -35,12 +36,12 @@ bool FontManager::initialize() {
     // Calculate DPI scaling factor based on display framebuffer scale
     float dpi_scale = io.DisplayFramebufferScale.x;
     if (dpi_scale < 1.0f) dpi_scale = 1.0f;  // Minimum scale of 1.0
-    
+
     // Apply DPI scaling to font sizes
     float base_main_size = 16.0f;
     float base_mono_size = 14.0f;
     float base_header_size = 20.0f;
-    
+
     float scaled_main_size = base_main_size * dpi_scale;
     float scaled_mono_size = base_mono_size * dpi_scale;
     float scaled_header_size = base_header_size * dpi_scale;
@@ -59,35 +60,62 @@ bool FontManager::initialize() {
         return false;
     }
 
-    // Configure monospace font for numerical displays
+    // Configure monospace font for numerical displays with high oversampling for crisp text on high-DPI displays
     ImFontConfig mono_config;
     mono_config.SizePixels = scaled_mono_size;  // Scaled size for high-DPI
-    mono_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
-    mono_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    mono_config.OversampleH = 4;  // Critical for eliminating sub-pixel aliasing on high-DPI screens
+    mono_config.OversampleV = 4;  // Critical for eliminating sub-pixel aliasing on high-DPI screens
     mono_config.PixelSnapH = true;
     strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
     // Attempt to load JetBrains Mono font (try multiple possible locations)
+    // Prioritize system-wide installations first
     monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     
-    // If not in system fonts, try project resources
+    // If not in system fonts, try common Linux installation paths
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+
+    // If not in system locations, try project resources
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     }
-    
-    // If not in project resources, try alternative system locations
+
+    // If not in project resources, try user-specific locations
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+
+    // If not in user-specific location, try alternative user locations
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+
+    // If JetBrains Mono isn't available, try other popular monospace fonts with high oversampling
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
     }
     
-    // If not in alternative system location, try home directory
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/home/alca/.local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
     }
-    
-    // If JetBrains Mono isn't available, fall back to default monospace font with same oversampling
+
+    // If JetBrains Mono isn't available, fall back to default monospace font with same high oversampling
     if (!monospace_font_) {
-        mono_config.OversampleH = 4;  // Maintain oversampling even for fallback
+        mono_config.OversampleH = 4;  // Maintain high oversampling even for fallback
         mono_config.OversampleV = 4;
         monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
         std::cout << "Warning: JetBrains Mono font not found, using default monospace font with oversampling H=4, V=4" << std::endl;
@@ -113,7 +141,65 @@ bool FontManager::initialize() {
         header_font_ = main_font_;
     }
 
+    // Configure FontAwesome 6 font configuration for UI iconography
+    ImFontConfig icons_config;
+    icons_config.SizePixels = scaled_main_size;  // Same size as main font for consistency
+    icons_config.OversampleH = 4;  // High oversampling for crisp icons on high-DPI displays
+    icons_config.OversampleV = 4;  // High oversampling for crisp icons on high-DPI displays
+    icons_config.PixelSnapH = true;
+    strcpy(icons_config.Name, "FontAwesome6##Icons");
+
+    // Define the range of icons to include
+    static const ImWchar icons_ranges[] = { 
+        0xE000, 0xF8FF, // FontAwesome icons range
+        0
+    };
+
+    // Attempt to load FontAwesome 6 font (try multiple possible locations)
+    ImFont* icons_font = nullptr;
+    
+    // Try common system locations for FontAwesome 6
+    icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font-Awesome-6-Free-Solid-900.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/Font Awesome 6 Brands-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    // Try common alternative locations
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("./resources/fonts/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    if (!icons_font) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string icons_font_path = std::string(home_dir) + "/.local/share/fonts/Font Awesome 6 Free-Regular-400.otf";
+            icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
+        }
+    }
+    
+    if (!icons_font) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string icons_font_path = std::string(home_dir) + "/.fonts/Font Awesome 6 Free-Regular-400.otf";
+            icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
+        }
+    }
+    
+    // If FontAwesome 6 is not available, log a warning but continue
+    if (!icons_font) {
+        std::cout << "Warning: FontAwesome 6 font not found, UI iconography may not be available" << std::endl;
+    } else {
+        // Assign the loaded icons font to our member variable
+        icons_font_ = icons_font;
+    }
+
     // Build the font atlas
+    io.Fonts->Build();
     unsigned char* pixels;
     int width, height;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
@@ -124,18 +210,18 @@ bool FontManager::initialize() {
 
 void FontManager::updateFontScaling(float dpi_scale) {
     ImGuiIO& io = ImGui::GetIO();
-    
+
     // If no DPI scale provided, calculate from framebuffer scale
     if (dpi_scale <= 0.0f) {
         dpi_scale = io.DisplayFramebufferScale.x;
         if (dpi_scale < 1.0f) dpi_scale = 1.0f;  // Minimum scale of 1.0
     }
-    
+
     // Apply DPI scaling to font sizes
     float base_main_size = 16.0f;
     float base_mono_size = 14.0f;
     float base_header_size = 20.0f;
-    
+
     float scaled_main_size = base_main_size * dpi_scale;
     float scaled_mono_size = base_mono_size * dpi_scale;
     float scaled_header_size = base_header_size * dpi_scale;
@@ -152,35 +238,62 @@ void FontManager::updateFontScaling(float dpi_scale) {
 
     main_font_ = io.Fonts->AddFontDefault(&main_config);
 
-    // Reconfigure monospace font with new scale
+    // Reconfigure monospace font with new scale - ensure high oversampling for crisp text on high-DPI displays
     ImFontConfig mono_config;
     mono_config.SizePixels = scaled_mono_size;  // Scaled size for high-DPI
-    mono_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
-    mono_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
+    mono_config.OversampleH = 4;  // Critical for eliminating sub-pixel aliasing on high-DPI screens
+    mono_config.OversampleV = 4;  // Critical for eliminating sub-pixel aliasing on high-DPI screens
     mono_config.PixelSnapH = true;
     strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
     // Attempt to load JetBrains Mono font (try multiple possible locations)
+    // Prioritize system-wide installations first
     monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     
-    // If not in system fonts, try project resources
+    // If not in system fonts, try common Linux installation paths
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+
+    // If not in system locations, try project resources
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     }
-    
-    // If not in project resources, try alternative system locations
+
+    // If not in project resources, try user-specific locations
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+
+    // If not in user-specific location, try alternative user locations
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+
+    // If JetBrains Mono isn't available, try other popular monospace fonts with high oversampling
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
     }
     
-    // If not in alternative system location, try home directory
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/home/alca/.local/share/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
     }
-    
-    // If JetBrains Mono isn't available, fall back to default monospace font with same oversampling
+
+    // If JetBrains Mono isn't available, fall back to default monospace font with same high oversampling
     if (!monospace_font_) {
-        mono_config.OversampleH = 4;  // Maintain oversampling even for fallback
+        mono_config.OversampleH = 4;  // Maintain high oversampling even for fallback
         mono_config.OversampleV = 4;
         monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
         std::cout << "Warning: JetBrains Mono font not found (during font scaling update), using default monospace font with oversampling H=4, V=4" << std::endl;
@@ -196,9 +309,66 @@ void FontManager::updateFontScaling(float dpi_scale) {
 
     header_font_ = io.Fonts->AddFontDefault(&header_config);
 
+    // Configure FontAwesome 6 font configuration for UI iconography
+    ImFontConfig icons_config;
+    icons_config.SizePixels = scaled_main_size;  // Same size as main font for consistency
+    icons_config.OversampleH = 4;  // High oversampling for crisp icons on high-DPI displays
+    icons_config.OversampleV = 4;  // High oversampling for crisp icons on high-DPI displays
+    icons_config.PixelSnapH = true;
+    strcpy(icons_config.Name, "FontAwesome6##Icons");
+
+    // Define the range of icons to include
+    static const ImWchar icons_ranges[] = { 
+        0xE000, 0xF8FF, // FontAwesome icons range
+        0
+    };
+
+    // Attempt to load FontAwesome 6 font (try multiple possible locations)
+    ImFont* icons_font = nullptr;
+    
+    // Try common system locations for FontAwesome 6
+    icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font-Awesome-6-Free-Solid-900.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/Font Awesome 6 Brands-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    // Try common alternative locations
+    if (!icons_font) {
+        icons_font = io.Fonts->AddFontFromFileTTF("./resources/fonts/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
+    }
+    
+    if (!icons_font) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string icons_font_path = std::string(home_dir) + "/.local/share/fonts/Font Awesome 6 Free-Regular-400.otf";
+            icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
+        }
+    }
+    
+    if (!icons_font) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string icons_font_path = std::string(home_dir) + "/.fonts/Font Awesome 6 Free-Regular-400.otf";
+            icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
+        }
+    }
+    
+    // If FontAwesome 6 is not available, log a warning but continue
+    if (!icons_font) {
+        std::cout << "Warning: FontAwesome 6 font not found (during font scaling update), UI iconography may not be available" << std::endl;
+    } else {
+        // Assign the loaded icons font to our member variable
+        icons_font_ = icons_font;
+    }
+
     // Rebuild the font atlas and upload to GPU
     io.Fonts->Build();
-    
+
     // For Vulkan backend, we need to manually rebuild and upload the font texture
     // This is typically done in the render loop, but we force it here
     ImGui_ImplVulkan_DestroyFontUploadObjects();
@@ -285,6 +455,27 @@ void FontManager::renderFormattedNumericalValue(float value, const char* format)
 
 bool FontManager::isInitialized() const {
     return is_initialized_;
+}
+
+ImFont* FontManager::getIconsFont() const {
+    return icons_font_;
+}
+
+void FontManager::renderIcon(const char* icon_code) const {
+    if (icons_font_) {
+        ImGui::PushFont(icons_font_);
+        ImGui::Text("%s", icon_code);
+        ImGui::PopFont();
+    } else {
+        // If icons font is not available, just render the text
+        ImGui::Text("%s", icon_code);
+    }
+}
+
+void FontManager::pushIconsFont() const {
+    if (icons_font_) {
+        ImGui::PushFont(icons_font_);
+    }
 }
 
 }  // namespace UI

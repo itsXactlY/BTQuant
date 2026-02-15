@@ -101,12 +101,29 @@ public:
      */
     void updateFontScaling(float dpi_scale = 0.0f);
 
+    /**
+     * @brief Get the icons font for UI iconography
+     */
+    ImFont* getIconsFont() const;
+
+    /**
+     * @brief Render an icon using the FontAwesome 6 font
+     * @param icon_code The Unicode codepoint for the icon (e.g., "\uf002" for search)
+     */
+    void renderIcon(const char* icon_code) const;
+
+    /**
+     * @brief Push the icons font onto the ImGui font stack
+     */
+    void pushIconsFont() const;
+
 private:
     FontManager();  // Private constructor for singleton
 
     ImFont* main_font_;
     ImFont* monospace_font_;
     ImFont* header_font_;
+    ImFont* icons_font_;  // Font for UI iconography
     bool is_initialized_;
 };
 

@@ -157,7 +157,7 @@ class PanelBase {
 
  private:
   // Background image properties
-  ImTextureID background_texture_ = nullptr;
+  ImTextureID background_texture_ = 0;
   bool use_background_image_ = false;
 };
 

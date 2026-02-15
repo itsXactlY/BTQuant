@@ -102,6 +102,12 @@ class DomSurfacePanel : public PanelBase {
   void set_enable_fade_out(bool enable) { enable_fade_out_ = enable; }
   void set_heatmap_intensity(float intensity) { heatmap_intensity_ = intensity; }
 
+  // Multi-Exchange Aggregation Configuration
+  void setMultiExchangeAggregationEnabled(bool enabled) { multi_exchange_aggregation_enabled_ = enabled; }
+  void setSelectedExchanges(const std::vector<std::string>& exchanges) { selected_exchanges_ = exchanges; }
+  bool isMultiExchangeAggregationEnabled() const { return multi_exchange_aggregation_enabled_; }
+  const std::vector<std::string>& getSelectedExchanges() const { return selected_exchanges_; }
+
   // Persistent Level Configuration
   void setPersistenceThresholdMs(uint64_t ms) { persistence_threshold_ms_ = ms; }
   void setPersistenceTimeoutMs(double ms) { persistence_timeout_ms_ = ms; }
@@ -119,6 +125,10 @@ class DomSurfacePanel : public PanelBase {
   int price_bins_ = 100;            // Number of vertical price buckets (Y-axis price)
   double price_range_ = 0.02;       // +/- 2% from mid price
   float heatmap_intensity_ = 1.0f;  // Intensity/sensitivity of heatmap color mapping
+
+  // Multi-Exchange Aggregation
+  bool multi_exchange_aggregation_enabled_ = false;  // Whether to aggregate data from multiple exchanges
+  std::vector<std::string> selected_exchanges_;     // List of exchanges to aggregate from
 
   // Data storage for heatmap
   // ImPlot PlotHeatmap data size = rows * cols
@@ -222,12 +232,16 @@ class DomSurfacePanel : public PanelBase {
   void initializeVulkanTexture();
   void updateVulkanTexture();
   void destroyVulkanTexture();
-  
+
+  // Multi-exchange aggregation methods
+  void aggregateSingleExchangeData();
+  void aggregateMultiExchangeData();
+
   // Vulkan texture members
   ImageAllocation heatmap_texture_;
   VkSampler heatmap_sampler_ = VK_NULL_HANDLE;
   VkImageView heatmap_image_view_ = VK_NULL_HANDLE;
-  ImTextureID heatmap_texture_id_ = nullptr;
+  ImTextureID heatmap_texture_id_ = 0;
   bool texture_initialized_ = false;
   std::shared_ptr<VulkanCore> vulkan_core_;
 };

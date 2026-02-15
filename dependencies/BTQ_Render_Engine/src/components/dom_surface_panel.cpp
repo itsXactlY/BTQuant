@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 #include "backends/imgui_impl_vulkan.h"
+#include "symbol_registry.hpp"
 
 namespace BTQuant {
 
@@ -207,6 +208,17 @@ void DomSurfacePanel::renderTradeBubbles() {
 void DomSurfacePanel::updateHeatmapData() {
   if (current_symbol_id_ == 0 || !processor_) return;
 
+  // If multi-exchange aggregation is enabled, aggregate data from multiple exchanges
+  if (multi_exchange_aggregation_enabled_ && !selected_exchanges_.empty()) {
+    // Aggregate data from multiple exchanges
+    aggregateMultiExchangeData();
+  } else {
+    // Use single exchange data (original behavior)
+    aggregateSingleExchangeData();
+  }
+}
+
+void DomSurfacePanel::aggregateSingleExchangeData() {
   // Request ALL available orderbook history (0 = no limit)
   auto history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
   if (history.empty()) return;
@@ -325,6 +337,164 @@ void DomSurfacePanel::updateHeatmapData() {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
         if (bin >= 0 && bin < price_bins_) {
+          heatmap_data_[bin * time_steps + t] += level.size;
+          max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
+        }
+      }
+    }
+  }
+
+  bounds_min_[0] = 0;
+  bounds_min_[1] = min_price;
+  bounds_max_[0] = static_cast<double>(time_steps);
+  bounds_max_[1] = max_price;
+
+  scale_max_ = max_vol > 0 ? max_vol : 1.0;
+}
+
+void DomSurfacePanel::aggregateMultiExchangeData() {
+  // For multi-exchange aggregation, we need to get data from multiple exchanges
+  // This is a simplified implementation - in a real system, we'd need to:
+  // 1. Get historical data for the same symbol from multiple exchanges
+  // 2. Align timestamps across exchanges
+  // 3. Aggregate volumes appropriately
+  
+  std::vector<RenderEngine::HistoricalOrderbookData> combined_history;
+  
+  // Get the symbol name for the current symbol ID to find equivalent symbols on other exchanges
+  std::string base_symbol_name = "UNKNOWN";
+  auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(current_symbol_id_);
+  if (symbol_info_opt) {
+    base_symbol_name = symbol_info_opt->symbol;
+  }
+  
+  // If we have selected exchanges, try to get data from them
+  if (!selected_exchanges_.empty()) {
+    // For each selected exchange, get the corresponding symbol data
+    for (const auto& exchange : selected_exchanges_) {
+      // Find the symbol ID for the same symbol on this exchange
+      auto exchange_symbol_id_opt = SymbolRegistry::instance().get_symbol_id(exchange, base_symbol_name);
+      
+      if (exchange_symbol_id_opt.has_value()) {
+        auto exchange_history = processor_->getHistoricalOrderbooks(exchange_symbol_id_opt.value(), 0);
+        
+        // For now, we'll just append the data from each exchange
+        // In a real implementation, we would need to align timestamps and merge the data properly
+        combined_history.insert(combined_history.end(), exchange_history.begin(), exchange_history.end());
+      }
+    }
+  } else {
+    // If no specific exchanges are selected, use the current symbol's data as a fallback
+    auto base_history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
+    combined_history = base_history;
+  }
+  
+  // If no data was found, return early
+  if (combined_history.empty()) {
+    auto base_history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
+    if (base_history.empty()) return;
+    combined_history = base_history;
+  }
+  
+  // Sort combined history by timestamp to ensure proper chronological order
+  std::sort(combined_history.begin(), combined_history.end(), 
+            [](const auto& a, const auto& b) {
+              return a.timestamp < b.timestamp;
+            });
+  
+  // Determine price range across all exchanges
+  double min_price = std::numeric_limits<double>::max();
+  double max_price = std::numeric_limits<double>::lowest();
+
+  if (auto_scale_price_) {
+    for (const auto& book : combined_history) {
+      if (!book.bids.empty())
+        min_price = std::min(min_price, book.bids.back().price);  // Lowest bid (deepest)
+      if (!book.bids.empty()) max_price = std::max(max_price, book.bids.front().price);
+      if (!book.asks.empty()) min_price = std::min(min_price, book.asks.front().price);
+      if (!book.asks.empty())
+        max_price = std::max(max_price,
+                             book.asks.back().price);  // Highest ask (deepest)
+    }
+    // Add some padding
+    if (min_price < max_price) {
+      double spread = max_price - min_price;
+      min_price -= spread * 0.05;
+      max_price += spread * 0.05;
+    } else {
+      // Fallback
+      auto latest = combined_history.back();
+      double mid = 0;
+      if (!latest.bids.empty())
+        mid = latest.bids.front().price;
+      else if (!latest.asks.empty())
+        mid = latest.asks.front().price;
+      min_price = mid * 0.98;
+      max_price = mid * 1.02;
+    }
+  } else {
+    // Legacy fixed range logic
+    const auto& latest = combined_history.back();
+    double mid_price = 0;
+    if (!latest.bids.empty() && !latest.asks.empty()) {
+      mid_price = (latest.bids.front().price + latest.asks.front().price) / 2.0;
+    } else if (!latest.bids.empty()) {
+      mid_price = latest.bids.front().price;
+    } else if (!latest.asks.empty()) {
+      mid_price = latest.asks.front().price;
+    } else {
+      return;
+    }
+    min_price = mid_price * (1.0 - price_range_);
+    max_price = mid_price * (1.0 + price_range_);
+  }
+
+  if (max_price <= min_price) return;
+
+  // Time bounds (X-axis)
+  if (!combined_history.empty()) {
+    history_start_timestamp_ = combined_history.front().timestamp;
+    history_end_timestamp_ = combined_history.back().timestamp;
+  }
+
+  // Ensure valid time range
+  if (history_end_timestamp_ <= history_start_timestamp_) {
+    history_end_timestamp_ = history_start_timestamp_ + 1;
+  }
+
+  double price_step = (max_price - min_price) / static_cast<double>(price_bins_);
+  int time_steps = static_cast<int>(combined_history.size());
+  size_t total_size = static_cast<size_t>(price_bins_) * static_cast<size_t>(time_steps);
+
+  if (heatmap_data_.size() != total_size) {
+    heatmap_data_.assign(total_size, 0.0);
+  } else {
+    std::fill(heatmap_data_.begin(), heatmap_data_.end(), 0.0);
+  }
+
+  double max_vol = 0;
+
+  // Aggregate data from all exchanges at each time step
+  for (int t = 0; t < time_steps; ++t) {
+    const auto& book = combined_history[t];
+
+    // Bids
+    for (const auto& level : book.bids) {
+      if (level.price >= min_price && level.price < max_price) {
+        int bin = static_cast<int>((level.price - min_price) / price_step);
+        if (bin >= 0 && bin < price_bins_) {
+          // In multi-exchange mode, we aggregate volumes from all exchanges
+          heatmap_data_[bin * time_steps + t] += level.size;
+          max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
+        }
+      }
+    }
+    // Asks
+    for (const auto& level : book.asks) {
+      if (level.price >= min_price && level.price < max_price) {
+        int bin = static_cast<int>((level.price - min_price) / price_step);
+        if (bin >= 0 && bin < price_bins_) {
+          // In multi-exchange mode, we aggregate volumes from all exchanges
           heatmap_data_[bin * time_steps + t] += level.size;
           max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
         }
@@ -804,6 +974,75 @@ void DomSurfacePanel::render_panel_header() {
   // Call parent implementation to render the default header
   PanelBase::render_panel_header();
 
+  // Create a dummy invisible button to capture right-clicks for the context menu
+  // This ensures the context menu appears when right-clicking anywhere in the header area
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));  // Transparent button
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.2f));  // Slightly highlighted on hover
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 0.3f));   // More highlighted when active
+  
+  // Invisible button that spans the entire header area to capture right-clicks
+  if (ImGui::InvisibleButton("##DOMHeaderArea", ImVec2(ImGui::GetContentRegionAvail().x, 25.0f))) {
+    // Left click action - could be used for other interactions if needed
+  }
+  
+  // Add context menu for the DOM header area
+  if (ImGui::BeginPopupContextItem("##DOMHeaderArea")) {
+    if (ImGui::MenuItem("Aggregated Heatmap", nullptr, &multi_exchange_aggregation_enabled_)) {
+      // Toggle multi-exchange aggregation
+    }
+
+    // Add exchange selection submenu if multi-exchange aggregation is enabled
+    if (multi_exchange_aggregation_enabled_) {
+      if (ImGui::BeginMenu("Select Exchanges")) {
+        // Get available exchanges from the processor or symbol registry
+        std::vector<std::string> available_exchanges;
+
+        // Try to get exchanges from the processor if available
+        if (processor_) {
+          // Attempt to get exchanges from the processor's symbol registry
+          // This assumes the processor has access to a symbol registry
+          auto registry = SymbolRegistry::instance();
+          available_exchanges = registry.get_exchanges();
+
+          // If no exchanges were found, use a default list
+          if (available_exchanges.empty()) {
+            available_exchanges = {
+              "Binance", "Coinbase", "Kraken", "Bybit", "OKX", "Bitfinex", "Huobi"
+            };
+          }
+        } else {
+          // Use default exchanges if processor is not available
+          available_exchanges = {
+            "Binance", "Coinbase", "Kraken", "Bybit", "OKX", "Bitfinex", "Huobi"
+          };
+        }
+
+        for (auto& exchange : available_exchanges) {
+          bool is_selected = std::find(selected_exchanges_.begin(), selected_exchanges_.end(), exchange) != selected_exchanges_.end();
+          if (ImGui::MenuItem(exchange.c_str(), nullptr, &is_selected)) {
+            if (is_selected) {
+              // Add exchange to selection if not already present
+              if (std::find(selected_exchanges_.begin(), selected_exchanges_.end(), exchange) == selected_exchanges_.end()) {
+                selected_exchanges_.push_back(exchange);
+              }
+            } else {
+              // Remove exchange from selection
+              selected_exchanges_.erase(
+                std::remove(selected_exchanges_.begin(), selected_exchanges_.end(), exchange),
+                selected_exchanges_.end()
+              );
+            }
+          }
+        }
+        ImGui::EndMenu();
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+  
+  ImGui::PopStyleColor(3); // Restore button colors
+
   // Add heatmap intensity slider to the panel header
   ImGui::Separator();
   ImGui::Text("Heatmap Intensity:");
@@ -816,10 +1055,11 @@ void DomSurfacePanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
-  
+
   // Add Large Order Tracker controls
   ImGui::Text("Large Order Tracker:");
   ImGui::SameLine();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderFloat("##Threshold", &large_order_threshold_, 1.0f, 50.0f, "Threshold: %.1fx", ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
@@ -829,11 +1069,26 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::PopItemWidth();
   ImGui::SameLine();
   ImGui::Checkbox("Fade Out", &enable_fade_out_);
+  ImGui::PopStyleVar();
   ImGui::Separator();
-  
+
+  // Add Multi-Exchange Aggregation controls
+  if (multi_exchange_aggregation_enabled_) {
+    ImGui::Text("Multi-Exchange Aggregation:");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "ACTIVE"); // Green indicator
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Configure##Exchanges")) {
+      // This would open a modal dialog or expand controls, but for now we'll just show the context menu
+      ImGui::OpenPopup("##DOMHeaderArea");
+    }
+    ImGui::Separator();
+  }
+
   // Add Persistent Level controls
   ImGui::Text("Persistent Levels:");
   ImGui::SameLine();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 1000, 30000, "%d ms");
   ImGui::PopItemWidth();
@@ -841,6 +1096,7 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::PushItemWidth(150);
   ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 10000, 120000, "%d ms");
   ImGui::PopItemWidth();
+  ImGui::PopStyleVar();
   ImGui::Separator();
 
   // Add Flush DOM Ruler controls
@@ -848,9 +1104,11 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::SameLine();
   ImGui::Checkbox("Show##FlushDOMRuler", &show_flush_dom_ruler_);
   ImGui::SameLine();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderFloat("Width##FlushDOMRuler", &flush_dom_ruler_width_, 0.01f, 0.2f, "%.2f%%", ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
+  ImGui::PopStyleVar();
   ImGui::Separator();
 }
 

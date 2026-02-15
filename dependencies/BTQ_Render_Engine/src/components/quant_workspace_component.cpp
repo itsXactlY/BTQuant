@@ -15,6 +15,9 @@ GlobalCrosshair QuantWorkspaceComponent::g_crosshair;
 // Define the static global crosshair price variable
 std::atomic<double> QuantWorkspaceComponent::g_crosshair_price{0.0};
 
+// Define the static global crosshair time variable
+std::atomic<uint64_t> QuantWorkspaceComponent::g_crosshair_time{0};
+
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

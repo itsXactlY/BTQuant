@@ -887,11 +887,11 @@ void DomSurfacePanel::render() {
       // Draw 1px dashed line when g_crosshair.active == true
       if (QuantWorkspaceComponent::g_crosshair.active.load()) {
         ImPlotRect limits = ImPlot::GetPlotLimits();
-        
+
         // Get the global crosshair time position
         uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
         double global_time_seconds = static_cast<double>(global_time) / 1000000.0; // Convert microseconds to seconds
-        
+
         // Draw vertical dashed line at the global crosshair time position
         ImDrawList* draw_list = ImPlot::GetPlotDrawList();
         ImVec2 top = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Max);
@@ -924,6 +924,41 @@ void DomSurfacePanel::render() {
 
             current_y = next_y;
             draw_segment = !draw_segment;
+        }
+        
+        // Draw horizontal dashed line at g_crosshair_price
+        double crosshair_price = QuantWorkspaceComponent::g_crosshair_price.load(std::memory_order_relaxed);
+        ImVec2 left = ImPlot::PlotToPixels(limits.X.Min, crosshair_price);
+        ImVec2 right = ImPlot::PlotToPixels(limits.X.Max, crosshair_price);
+
+        // Draw the horizontal crosshair line as a 1px dashed line with ImGuiCol_TextDisabled color
+        const float h_dash_length = 4.0f;
+        const float h_gap_length = 2.0f;
+        const float h_line_thickness = 1.0f;
+        ImU32 h_line_color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+
+        // Draw horizontal dashed line
+        float current_x = left.x;
+        bool h_draw_segment = true;
+
+        while (current_x < right.x) {
+            float next_x = current_x + (h_draw_segment ? h_dash_length : h_gap_length);
+
+            if (next_x > right.x) {
+                next_x = right.x;
+            }
+
+            if (h_draw_segment) {
+                draw_list->AddLine(
+                    ImVec2(current_x, left.y),
+                    ImVec2(next_x, left.y),
+                    h_line_color, // Horizontal dashed line using ImGuiCol_TextDisabled
+                    h_line_thickness
+                );
+            }
+
+            current_x = next_x;
+            h_draw_segment = !h_draw_segment;
         }
       }
 

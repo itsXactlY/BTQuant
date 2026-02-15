@@ -146,6 +146,20 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
   settings_ = std::make_unique<ChartPanelSettings>(static_cast<void*>(this));
 }
 
+ChartPanel::~ChartPanel() {
+  // Unsubscribe from MarketDataProcessor if we have an active subscription
+  if (processor_ && subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
+    subscription_id_ = 0;
+  }
+  
+  // Clean up the indicator renderer
+  if (indicator_renderer_) {
+    delete indicator_renderer_;
+    indicator_renderer_ = nullptr;
+  }
+}
+
 void ChartPanel::initialize_active_indicators() {
   // Clear existing indicators
   active_indicators_.clear();
@@ -343,7 +357,7 @@ void ChartPanel::render() {
     render_floating_top_toolbar();
   } else {
     // 1. Top Toolbar (Spans full width)
-    ImGui::BeginChild("ChartTopBar", ImVec2(0, TOP_BAR_HEIGHT), false, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("Toolbar", ImVec2(0, 32), false, ImGuiWindowFlags_NoScrollbar);
     render_top_toolbar();
     ImGui::EndChild();
   }
@@ -444,6 +458,26 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
   symbol_ = symbol;
   exchange_ = exchange;
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
+
+  // Subscribe to the new symbol in the MarketDataProcessor
+  if (processor_) {
+    auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+    if (symbol_id_opt) {
+      // Unsubscribe from previous symbol if we had a subscription
+      if (subscription_id_ != 0) {
+        processor_->unsubscribe(subscription_id_);
+        subscription_id_ = 0;
+      }
+      
+      // Subscribe to the new symbol for CANDLE updates
+      subscription_id_ = processor_->subscribe(
+          *symbol_id_opt, RenderEngine::NotificationType::CANDLE,
+          [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+            // Mark dirty to trigger chart update
+            this->markDirty();
+          });
+    }
+  }
 
   // Recreate chart with new symbol
   // Don't destroy old one, so we can switch back to it with state preserved

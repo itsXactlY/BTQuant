@@ -119,7 +119,7 @@ struct OrderBookSnapshot {
 // Atomic L2 Snapshot for lock-free UI reads (Phase 4.1)
 // This structure is designed for single-read atomic access from UI threads
 // Atomic version of the snapshot for lock-free access
-struct AtomicSymbolInfo {
+struct alignas(64) AtomicSymbolInfo {
   std::atomic<uint32_t> symbol_id{0};
   std::atomic<uint64_t> timestamp{0};
 

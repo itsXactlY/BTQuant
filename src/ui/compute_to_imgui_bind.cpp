@@ -693,7 +693,9 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
         ImGui::TableSetColumnIndex(3);
         BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_price, "%.2f");
 
-        // Sells column (represents sell-side volume at best ask)
+        // Sells column (represents sell-side volume at best bid - opposite of buys)
+        // In a typical market context, sells could refer to executed sell trades
+        // For now, we'll use ask_volume, but in a real scenario this might come from a different parameter
         ImGui::TableSetColumnIndex(4);
         BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_volume, "%.2f");
 

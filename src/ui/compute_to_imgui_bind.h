@@ -12,6 +12,7 @@
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
 #include "analytics/rawtradetable.h"
+#include "trading/trade_command_queue.hpp"  // Include TradeCommand queue functionality
 #include <memory>
 #include <functional>
 #include <vector>

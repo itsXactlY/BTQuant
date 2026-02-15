@@ -54,6 +54,7 @@ if(PUBBTQUANT_SOURCES)
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/imgui-src
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/imgui-src/backends
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/implot-src
+        ${CMAKE_CURRENT_SOURCE_DIR}/_deps/readerwriterqueue-src
     )
 
     # Link against the necessary libraries

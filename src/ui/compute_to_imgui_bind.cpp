@@ -10,6 +10,7 @@
 #include "rendering/imgui_optimizer.hpp"
 #include "imgui.h"
 #include "ui/font_manager.hpp"  // Include font manager for monospaced font
+#include "trading/trade_command_queue.hpp"  // Include TradeCommand queue functionality
 #include <algorithm>
 #include <cmath>
 
@@ -973,31 +974,56 @@ void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipelin
                 // Get the current bid and ask prices from atomic data
                 double bid_price = data.bid_price.load();
                 double ask_price = data.ask_price.load();
-                
+
                 // Create a toggle for mouse trading mode
                 static bool mouse_trading_enabled = true; // Default to enabled
-                
+
                 // Toggle button for mouse trading
                 if (ImGui::Checkbox("Enable Mouse Trading", &mouse_trading_enabled)) {
                     // Toggle state changed
                 }
-                
+
                 ImGui::Separator();
-                
+
                 // If Mouse Trading enabled: Render massive BUY MKT / SELL MKT buttons
                 if (mouse_trading_enabled) {
                     // Market Buy button with Best Ask - MASSIVE BUTTONS
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.8f, 0.0f, 1.0f)); // Brighter green
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 20)); // Increase padding
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10)); // Adjust spacing
-                    
+
                     char buy_label[64];
                     snprintf(buy_label, sizeof(buy_label), "BUY MKT\n%.2f", ask_price);
                     if (ImGui::Button(buy_label, ImVec2(200, 100))) {  // MASSIVE button size
-                        // Execute market buy order - in a real implementation this would connect to trading interface
-                        printf("Executing BUY MKT order at price: %.2f\n", ask_price);
+                        // Button Click -> Populate `TradeCommand` POD -> `trade_command_queue_.push()`
+                        BTQuant::RenderEngine::TradeCommand command;
+                        command.symbol_id = symbol_index;
+                        command.symbol = "SYMBOL_" + std::to_string(symbol_index); // Placeholder symbol
+                        command.exchange = "DEFAULT_EXCHANGE"; // Placeholder exchange
+                        command.side = BTQuant::RenderEngine::OrderSide::BUY;
+                        command.type = BTQuant::RenderEngine::OrderType::MARKET;
+                        command.quantity = 1.0; // Default quantity - could be configurable
+                        command.price = ask_price; // Use ask price for market buy
+                        command.tif = BTQuant::RenderEngine::TimeInForce::IOC; // Immediate or cancel
+                        
+                        // Set timestamp
+                        command.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()
+                        ).count();
+                        
+                        // Generate unique command ID
+                        static std::atomic<uint64_t> command_counter{1};
+                        command.command_id = command_counter.fetch_add(1);
+                        
+                        // Push to global trade command queue
+                        bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(command));
+                        if (pushed) {
+                            printf("BUY MKT TradeCommand pushed to queue successfully at price: %.2f\n", ask_price);
+                        } else {
+                            printf("Failed to push BUY MKT TradeCommand to queue at price: %.2f\n", ask_price);
+                        }
                     }
-                    
+
                     ImGui::PopStyleVar(2);
                     ImGui::PopStyleColor();
 
@@ -1007,20 +1033,45 @@ void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipelin
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.0f, 0.0f, 1.0f)); // Brighter red
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 20)); // Increase padding
                     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10)); // Adjust spacing
-                    
+
                     char sell_label[64];
                     snprintf(sell_label, sizeof(sell_label), "SELL MKT\n%.2f", bid_price);
                     if (ImGui::Button(sell_label, ImVec2(200, 100))) {  // MASSIVE button size
-                        // Execute market sell order - in a real implementation this would connect to trading interface
-                        printf("Executing SELL MKT order at price: %.2f\n", bid_price);
+                        // Button Click -> Populate `TradeCommand` POD -> `trade_command_queue_.push()`
+                        BTQuant::RenderEngine::TradeCommand command;
+                        command.symbol_id = symbol_index;
+                        command.symbol = "SYMBOL_" + std::to_string(symbol_index); // Placeholder symbol
+                        command.exchange = "DEFAULT_EXCHANGE"; // Placeholder exchange
+                        command.side = BTQuant::RenderEngine::OrderSide::SELL;
+                        command.type = BTQuant::RenderEngine::OrderType::MARKET;
+                        command.quantity = 1.0; // Default quantity - could be configurable
+                        command.price = bid_price; // Use bid price for market sell
+                        command.tif = BTQuant::RenderEngine::TimeInForce::IOC; // Immediate or cancel
+                        
+                        // Set timestamp
+                        command.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::high_resolution_clock::now().time_since_epoch()
+                        ).count();
+                        
+                        // Generate unique command ID
+                        static std::atomic<uint64_t> command_counter{1000}; // Different counter to avoid conflicts
+                        command.command_id = command_counter.fetch_add(1);
+                        
+                        // Push to global trade command queue
+                        bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(command));
+                        if (pushed) {
+                            printf("SELL MKT TradeCommand pushed to queue successfully at price: %.2f\n", bid_price);
+                        } else {
+                            printf("Failed to push SELL MKT TradeCommand to queue at price: %.2f\n", bid_price);
+                        }
                     }
-                    
+
                     ImGui::PopStyleVar(2);
                     ImGui::PopStyleColor();
 
                     ImGui::Separator();
                 }
-                
+
                 // Show current market data
                 ImGui::Text("Current Market Data:");
                 ImGui::Text("Best Bid: %.2f", bid_price);

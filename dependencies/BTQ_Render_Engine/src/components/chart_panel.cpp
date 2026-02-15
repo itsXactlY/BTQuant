@@ -5242,13 +5242,13 @@ void ChartPanel::render_bottom_toolbar() {
 
 // Floating toolbar implementations
 void ChartPanel::render_floating_top_toolbar() {
-  ImGui::SetNextWindowPos(floating_top_toolbar_pos_);
-  ImGui::SetNextWindowSize(floating_top_toolbar_size_);
+  // Set cursor position for the floating toolbar - positioned at the top of the chart area
+  ImVec2 toolbar_pos = ImVec2(10.0f, 10.0f); // Position from top-left of the parent window
+  ImGui::SetCursorPos(toolbar_pos);
 
-  ImGui::Begin("Floating Top Toolbar", nullptr,
-               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_AlwaysAutoResize);
-
+  // Create a borderless toolbar using ImGui::BeginGroup to group elements together
+  ImGui::BeginGroup();
+  
   // Symbol Lookup (InputText)
   ImGui::PushItemWidth(100);
   if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_),
@@ -5333,55 +5333,8 @@ void ChartPanel::render_floating_top_toolbar() {
   }
   ImGui::PopItemWidth();
 
-  ImGui::SameLine();
-  ImGui::Spacing();
-  ImGui::SameLine();
-
-  // Mouse Trading vs. Keyboard Trading toggle button
-  const char* trading_mode_label =
-      (trading_mode_ == TradingMode::MOUSE_TRADING) ? "Mouse" : "Keyboard";
-  ImVec4 button_color = (trading_mode_ == TradingMode::MOUSE_TRADING)
-                            ? ImVec4(0.2f, 0.6f, 0.2f, 1.0f)   // Green for mouse
-                            : ImVec4(0.6f, 0.4f, 0.2f, 1.0f);  // Orange for keyboard
-
-  ImGui::PushStyleColor(ImGuiCol_Button, button_color);
-  if (ImGui::Button(trading_mode_label, ImVec2(70, 0))) {
-    trading_mode_ = (trading_mode_ == TradingMode::MOUSE_TRADING) ? TradingMode::KEYBOARD_TRADING
-                                                                  : TradingMode::MOUSE_TRADING;
-  }
-  ImGui::PopStyleColor();
-
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Toggle between Mouse Trading and Keyboard Trading modes");
-  }
-
-  ImGui::SameLine();
-  ImGui::Spacing();
-  ImGui::SameLine();
-
-  // Auto-follow checkbox
-  ImGui::Checkbox("Auto-follow", &follow_latest_);
-
-  ImGui::SameLine();
-
-  // Price Scale Mode indicator
-  const char* scale_modes[] = {"Auto", "Centered", "In View", "Manual", "Center"};
-  ImGui::Text("Y: %s", scale_modes[static_cast<int>(price_scale_mode_)]);
-
-  // Floating toolbar controls
-  ImGui::SameLine();
-  ImGui::Spacing();
-  ImGui::SameLine();
-
-  // Dock button
-  if (ImGui::Button("Dock")) {
-    floating_top_toolbar_ = false;
-  }
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Dock this toolbar");
-  }
-
-  ImGui::End();
+  // End the group for the toolbar elements
+  ImGui::EndGroup();
 }
 
 void ChartPanel::render_floating_left_sidebar() {

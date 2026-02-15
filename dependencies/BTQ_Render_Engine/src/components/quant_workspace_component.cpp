@@ -135,7 +135,7 @@ void QuantWorkspaceComponent::render_gui() {
     ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, nullptr, &dock_main);
     
     // Further split the right side into top and bottom sections
-    ImGuiID dock_right_bottom = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.3f, nullptr, &dock_right);
+    ImGuiID dock_right_bottom = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.40f, nullptr, &dock_right);
     
     // Dock the panels to their respective spaces
     ImGui::DockBuilderDockWindow("Drawing Tools", dock_left);

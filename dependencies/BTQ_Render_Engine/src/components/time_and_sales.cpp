@@ -878,10 +878,10 @@ void TimeAndSalesPanel::render_trade_table() {
   if (ImGui::BeginTable(table_id, 4,
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
-    ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+    ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
     ImGui::TableHeadersRow();
 
     // Count filtered trades to determine the total for the clipper
@@ -964,32 +964,10 @@ void TimeAndSalesPanel::render_trade_table() {
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
             }
 
-            // Time column (HH:MM:SS.mmm)
+            // Exchange column
             ImGui::TableSetColumnIndex(0);
-            bool is_block_trade_time =
-                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
-
-            if (is_block_trade_time) {
-              // Make block trades stand out with a more prominent visual indicator
-              // Using a heavier font weight if available, or a different approach
-              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
-                                  ? ThemeManager::getInstance().getLargeFont()
-                                  : ThemeManager::getInstance().getMainFont());
-            }
-
-            if (trade.timestamp > 0) {
-              time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
-              uint64_t millis = (trade.timestamp / 1000) % 1000;
-              char time_str[16];
-              strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-              ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
-            } else {
-              ImGui::Text("-");
-            }
-
-            if (is_block_trade_time) {
-              ImGui::PopFont();
-            }
+            std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+            ImGui::Text("%s", exchange.c_str());
 
             // Price column - Enhanced coloring based on trade size
             ImGui::TableSetColumnIndex(1);
@@ -1024,65 +1002,58 @@ void TimeAndSalesPanel::render_trade_table() {
               ImGui::PopFont();
             }
 
-            // Size column
+            // Qty column (previously Size)
             ImGui::TableSetColumnIndex(2);
-            // Color size based on trade size thresholds
-            ImVec4 size_color = colors.text;  // Default color
-            bool is_block_trade_size =
+            // Color qty based on trade size thresholds
+            ImVec4 qty_color = colors.text;  // Default color
+            bool is_block_trade_qty =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
-            if (is_block_trade_size) {
+            if (is_block_trade_qty) {
               // Block trades in orange
-              size_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+              qty_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
             } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
               // Large trades in yellow
-              size_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+              qty_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
             }
 
             // Apply bold font for block trades if available
-            if (is_block_trade_size) {
+            if (is_block_trade_qty) {
               ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
                                   ? ThemeManager::getInstance().getLargeFont()
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            ImGui::TextColored(size_color, "%.4f", trade.size);
+            ImGui::TextColored(qty_color, "%.4f", trade.size);
 
-            if (is_block_trade_size) {
+            if (is_block_trade_qty) {
               ImGui::PopFont();
             }
 
-            // Side column
+            // Time column (HH:MM:SS.mmm) - moved to last position
             ImGui::TableSetColumnIndex(3);
-            ImVec4 side_color = colors.text;  // Default color
-            bool is_block_trade_side =
+            bool is_block_trade_time =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
-            if (is_block_trade_side) {
-              // Block trades in orange
-              side_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
-            } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
-              // Large trades in yellow
-              side_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
-            } else {
-              // Regular trades: buy in green, sell in red
-              side_color = trade.is_buy ? colors.accent_green : colors.accent_red;
-            }
-
-            // Apply bold font for block trades if available
-            if (is_block_trade_side) {
+            if (is_block_trade_time) {
+              // Make block trades stand out with a more prominent visual indicator
+              // Using a heavier font weight if available, or a different approach
               ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
                                   ? ThemeManager::getInstance().getLargeFont()
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            if (trade.is_buy) {
-              ImGui::TextColored(side_color, "BUY");
+            if (trade.timestamp > 0) {
+              time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
+              uint64_t millis = (trade.timestamp / 1000) % 1000;
+              char time_str[16];
+              strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
+              ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
             } else {
-              ImGui::TextColored(side_color, "SELL");
+              ImGui::Text("-");
             }
 
-            if (is_block_trade_side) {
+            if (is_block_trade_time) {
               ImGui::PopFont();
             }
 

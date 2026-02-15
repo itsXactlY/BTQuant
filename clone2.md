@@ -70,7 +70,7 @@
 - [x] **5.2: Order Flow Acoustics**
 - [x] Integrate `miniaudio` into the `MarketDataProcessor` poll loop.
 - [ ] Trigger `ma_engine_play_sound` on new trade detection.
-- [ ] Pitch Shift: Scale pitch inversely to volume (Big trade = Deep bass).
+- [x] Pitch Shift: Scale pitch inversely to volume (Big trade = Deep bass).
 
 ---
 

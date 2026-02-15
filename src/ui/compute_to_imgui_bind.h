@@ -12,6 +12,7 @@
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
 #include "analytics/rawtradetable.h"
+#include "analytics/orderbook_snapshot_100level.h"
 #include "trading/trade_command_queue.hpp"  // Include TradeCommand queue functionality
 #include <memory>
 #include <functional>
@@ -146,10 +147,41 @@ public:
      */
     void bindMouseTradingInterface(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, const char* window_name = "Mouse Trading Interface");
 
+    /**
+     * @brief Bind SSBO aggregator for multiple exchange order book aggregation
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindSSBOAggregator(const char* window_name = "SSBO Order Book Aggregator");
+
+    /**
+     * @brief Add an exchange's order book snapshot to the SSBO aggregator
+     * @param exchange_name Name of the exchange
+     * @param snapshot Order book snapshot from the exchange
+     */
+    void addExchangeSnapshotToSSBOAggregator(const std::string& exchange_name,
+                                           const OrderBookSnapshot100Level& snapshot);
+
+    /**
+     * @brief Bind exchange trade table data to ImGui visualization
+     * @param trades Vector of raw trades to display
+     * @param exchange_names Vector of exchange names corresponding to the trades
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindExchangeTradeTable(const std::vector<RawTrade>& trades, 
+                               const std::vector<std::string>& exchange_names,
+                               const char* window_name = "Exchange Trade Table");
+
 private:
     struct BoundVisualization {
         std::string window_name;
         std::function<void()> render_callback;
+        bool is_visible;
+    };
+
+    struct RawTradeTableVisualization {
+        std::string window_name;
+        const RawTradeTable* trade_table;
+        double volume_filter;
         bool is_visible;
     };
 
@@ -178,6 +210,7 @@ private:
 
     std::vector<BoundVisualization> m_visualizations;
     std::vector<OrderBookVisualization> m_order_book_visualizations;
+    std::vector<RawTradeTableVisualization> m_raw_trade_table_visualizations;
 
     // References to compute modules (stored as weak references)
     const TPOEngine* m_tpo_engine;
@@ -187,6 +220,9 @@ private:
 
     // Internal state
     bool m_initialized;
+
+    // SSBO Aggregator
+    std::unique_ptr<class SSBOAggregator> m_ssbo_aggregator;
 };
 
 /**
@@ -276,10 +312,18 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
 /**
  * @brief Helper function to visualize Raw Trade Table in ImGui
  * @param trade_table Reference to the Raw Trade Table instance
+ * @param volume_filter Minimum volume threshold for displaying trades
+ */
+void visualizeRawTradeTable(const RawTradeTable& trade_table, double volume_filter = 0.0);
+
+/**
+ * @brief Helper function to render exchange trade table with [Exchange Logo] | Price | Qty | Time format
+ * @param trades Vector of raw trades to display
+ * @param exchange_names Vector of exchange names corresponding to the trades
  * @param width Width of the visualization
  * @param height Height of the visualization
  */
-void visualizeRawTradeTable(const RawTradeTable& trade_table, float width = 600.0f, float height = 400.0f);
+void renderExchangeTradeTable(const std::vector<RawTrade>& trades, const std::vector<std::string>& exchange_names, float width = 600.0f, float height = 400.0f);
 
 } // namespace UI
 } // namespace BTQuant

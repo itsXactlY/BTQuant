@@ -225,26 +225,37 @@ void ComputeToImGuiBind::bindRawTradeTable(const RawTradeTable& trade_table, con
     m_raw_trade_table = &trade_table;
 
     // Create a visualization entry for raw trade table
-    BoundVisualization viz;
+    RawTradeTableVisualization viz;
     viz.window_name = window_name;
+    viz.trade_table = &trade_table;
+    viz.volume_filter = 0.0; // Default filter value - show all trades
     viz.is_visible = true;
 
-    // Set up the render callback
-    viz.render_callback = [this, &trade_table, window_name]() {
-        if (ImGui::Begin(window_name)) {
-            // Visualize raw trade table
-            visualizeRawTradeTable(trade_table);
-        }
-        ImGui::End();
-    };
-
-    m_visualizations.push_back(viz);
+    m_raw_trade_table_visualizations.push_back(viz);
 }
 
 void ComputeToImGuiBind::render() {
     for (auto& viz : m_visualizations) {
         if (viz.is_visible && viz.render_callback) {
             viz.render_callback();
+        }
+    }
+    
+    // Render raw trade table visualizations with filter controls
+    for (auto& raw_viz : m_raw_trade_table_visualizations) {
+        if (raw_viz.is_visible) {
+            if (ImGui::Begin(raw_viz.window_name.c_str())) {
+                // Add filter input in the header
+                ImGui::Text("Volume Filter: ");
+                ImGui::SameLine();
+                ImGui::PushItemWidth(100);
+                ImGui::InputDouble("##VolumeFilter", &raw_viz.volume_filter, 0.1f, 1.0f, "%.3f");
+                ImGui::PopItemWidth();
+                
+                // Visualize raw trade table with filter
+                visualizeRawTradeTable(*raw_viz.trade_table, raw_viz.volume_filter);
+            }
+            ImGui::End();
         }
     }
 }
@@ -777,7 +788,7 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
     ImGui::Dummy(canvas_size);
 }
 
-void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float height) {
+void visualizeRawTradeTable(const RawTradeTable& trade_table, double volume_filter) {
     // Get trade statistics
     auto stats = trade_table.get_trade_statistics();
 
@@ -837,31 +848,17 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
 
         // Store positions of rows where brackets should be drawn
         std::vector<std::pair<ImVec2, ImVec2>> bracket_positions; // Top and bottom positions for each bracket
-        
-        // Process trades to identify slippage brackets
+
+        // Process trades to identify slippage brackets - only render trades that meet the volume filter
         for (size_t i = 0; i < recent_trades.size(); ++i) {
             const auto& trade = recent_trades[i];
             
-            ImGui::TableNextRow();
-
-            // Calculate time delta with next trade if it exists
-            if (i < recent_trades.size() - 1) {
-                const auto& next_trade = recent_trades[i + 1];
-                
-                // Calculate time difference in milliseconds
-                auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    trade.timestamp - next_trade.timestamp
-                ).count();
-                
-                // Use absolute value since we're comparing consecutive trades chronologically
-                time_diff = std::abs(time_diff);
-                
-                // Check if time delta < 50ms and price changed
-                if (time_diff < 50 && std::abs(trade.price - next_trade.price) > 0.000001) { // Small epsilon for floating point comparison
-                    // Store the positions for drawing the bracket after the table is rendered
-                    // We'll get the actual positions after the row is rendered
-                }
+            // Skip rendering this trade if its volume is less than the filter value
+            if (trade.volume < volume_filter) {
+                continue;
             }
+
+            ImGui::TableNextRow();
 
             // Time column
             ImGui::TableSetColumnIndex(0);
@@ -896,62 +893,6 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
         }
 
         ImGui::EndTable();
-        
-        // Now draw the slippage brackets after the table is rendered
-        // We need to recalculate positions based on the table layout
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        
-        // Get the table's position and dimensions to calculate where to draw brackets
-        ImVec2 table_pos = ImGui::GetItemRectMin();
-        
-        // Calculate the row height more accurately by getting the actual row height from ImGui
-        float row_height = ImGui::GetTextLineHeightWithSpacing(); // More accurate row height
-        
-        for (size_t i = 0; i < recent_trades.size() - 1; ++i) {
-            const auto& current_trade = recent_trades[i];
-            const auto& next_trade = recent_trades[i + 1];
-            
-            // Calculate time difference in milliseconds
-            auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-                current_trade.timestamp - next_trade.timestamp
-            ).count();
-            
-            // Use absolute value since we're comparing consecutive trades chronologically
-            time_diff = std::abs(time_diff);
-            
-            // Check if time delta < 50ms and price changed
-            if (time_diff < 50 && std::abs(current_trade.price - next_trade.price) > 0.000001) { // Small epsilon for floating point comparison
-                // Calculate positions for the bracket
-                // The bracket should connect the current row and the next row
-                float top_y = table_pos.y + ImGui::GetFrameHeight() + (i * row_height) + (row_height * 0.2f); // Skip header row and add some offset
-                float bottom_y = table_pos.y + ImGui::GetFrameHeight() + ((i + 1) * row_height) + (row_height * 0.8f); // Position for next row with offset
-                float bracket_x = table_pos.x + 5; // Position on the left side of the table
-                
-                // Draw a 1px vertical white bracket connecting the rows
-                // Draw the vertical line
-                draw_list->AddLine(
-                    ImVec2(bracket_x, top_y),
-                    ImVec2(bracket_x, bottom_y),
-                    IM_COL32_WHITE, // White color
-                    1.0f // 1px thickness
-                );
-                
-                // Draw small horizontal lines at the top and bottom to form the bracket shape
-                draw_list->AddLine(
-                    ImVec2(bracket_x - 3, top_y),
-                    ImVec2(bracket_x + 3, top_y),
-                    IM_COL32_WHITE, // White color
-                    1.0f // 1px thickness
-                );
-                
-                draw_list->AddLine(
-                    ImVec2(bracket_x - 3, bottom_y),
-                    ImVec2(bracket_x + 3, bottom_y),
-                    IM_COL32_WHITE, // White color
-                    1.0f // 1px thickness
-                );
-            }
-        }
     }
 
     // Show additional controls

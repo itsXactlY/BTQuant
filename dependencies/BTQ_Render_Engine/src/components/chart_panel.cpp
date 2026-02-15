@@ -1,6 +1,7 @@
 #include "../../include/components/chart_panel.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -3074,15 +3075,18 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     // Handle mouse drag interaction for custom profile creation
     handleMouseDragInteraction();
 
-    if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
+    if (ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-      render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
-
+      
       // Update global crosshair atomics when crosshair is active in this chart
-      QuantWorkspaceComponent::g_crosshair.price.store(mouse_pos.y);
-      QuantWorkspaceComponent::g_crosshair.time.store(
-          static_cast<uint64_t>(mouse_pos.x * 1000000));  // Convert to microseconds
-      QuantWorkspaceComponent::g_crosshair.active.store(true);
+      QuantWorkspaceComponent::g_crosshair_price.store(mouse_pos.y, std::memory_order_relaxed);
+      QuantWorkspaceComponent::g_crosshair_time.store(
+          static_cast<uint64_t>(mouse_pos.x * 1000000), std::memory_order_relaxed);  // Convert to microseconds
+      QuantWorkspaceComponent::g_crosshair.active.store(true, std::memory_order_relaxed);
+
+      if (indicator_config_.show_crosshair_info) {
+        render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
+      }
     } else if (!ImPlot::IsPlotHovered()) {
       // If mouse is not over this plot, check if this chart was the source of the global crosshair
       // and potentially deactivate it if needed

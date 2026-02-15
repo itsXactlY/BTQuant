@@ -1487,8 +1487,22 @@ void DomSurfacePanel::renderMMTLayout() {
       if (i < orderbook.bids.size()) {
         // Calculate buy pressure based on bid size and recent trades
         double buy_pressure = orderbook.bids[i].size; // Placeholder for actual buy pressure calculation
+        
+        // Get cumulative buy volume from ClusterEngine if available
+        double cumulative_buy_volume = 0.0;
+        if (cluster_engine_) {
+          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.bids[i].price / cluster_engine_->get_tick_size()));
+          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
+          
+          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
+            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
+              cumulative_buy_volume += time_bucket.getBuyVolume();
+            }
+          }
+        }
+        
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-        ImGui::Text("%.4f", buy_pressure);
+        ImGui::Text("%.4f", cumulative_buy_volume > 0 ? cumulative_buy_volume : buy_pressure);
         ImGui::PopStyleColor();
 
         // Render cumulative volume bar extending right for buys
@@ -1496,9 +1510,10 @@ void DomSurfacePanel::renderMMTLayout() {
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
 
-        // Calculate normalized volume for the bar width
+        // Calculate normalized volume for the bar width based on cumulative volume if available
+        double volume_for_bar = cumulative_buy_volume > 0 ? cumulative_buy_volume : buy_pressure;
         if (max_volume > 0) {
-            float bar_width = static_cast<float>((buy_pressure / max_volume) * max_bar_width);
+            float bar_width = static_cast<float>((volume_for_bar / max_volume) * max_bar_width);
 
             // Draw the cumulative volume bar
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -1514,8 +1529,23 @@ void DomSurfacePanel::renderMMTLayout() {
       ImGui::TableSetColumnIndex(1);
       if (i < orderbook.asks.size()) {
         // Show ask volume in red
+        double ask_volume = orderbook.asks[i].size;
+        
+        // Get cumulative sell volume from ClusterEngine if available
+        double cumulative_sell_volume = 0.0;
+        if (cluster_engine_) {
+          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.asks[i].price / cluster_engine_->get_tick_size()));
+          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
+          
+          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
+            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
+              cumulative_sell_volume += time_bucket.getSellVolume();
+            }
+          }
+        }
+        
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
-        ImGui::Text("%.4f", orderbook.asks[i].size);
+        ImGui::Text("%.4f", cumulative_sell_volume > 0 ? cumulative_sell_volume : ask_volume);
         ImGui::PopStyleColor();
 
         // Render cumulative volume bar extending left for sells
@@ -1523,8 +1553,10 @@ void DomSurfacePanel::renderMMTLayout() {
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
 
+        // Calculate normalized volume for the bar width based on cumulative volume if available
+        double volume_for_bar = cumulative_sell_volume > 0 ? cumulative_sell_volume : ask_volume;
         if (max_volume > 0) {
-            float bar_width = static_cast<float>((orderbook.asks[i].size / max_volume) * max_bar_width);
+            float bar_width = static_cast<float>((volume_for_bar / max_volume) * max_bar_width);
 
             // Draw the cumulative volume bar extending to the left
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -1568,8 +1600,23 @@ void DomSurfacePanel::renderMMTLayout() {
       ImGui::TableSetColumnIndex(3);
       if (i < orderbook.bids.size()) {
         // Show bid volume in green
+        double bid_volume = orderbook.bids[i].size;
+        
+        // Get cumulative bid volume from ClusterEngine if available
+        double cumulative_bid_volume = 0.0;
+        if (cluster_engine_) {
+          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.bids[i].price / cluster_engine_->get_tick_size()));
+          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
+          
+          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
+            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
+              cumulative_bid_volume += time_bucket.getBuyVolume();
+            }
+          }
+        }
+        
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-        ImGui::Text("%.4f", orderbook.bids[i].size);
+        ImGui::Text("%.4f", cumulative_bid_volume > 0 ? cumulative_bid_volume : bid_volume);
         ImGui::PopStyleColor();
 
         // Render cumulative volume bar extending right for bids
@@ -1577,8 +1624,10 @@ void DomSurfacePanel::renderMMTLayout() {
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
 
+        // Calculate normalized volume for the bar width based on cumulative volume if available
+        double volume_for_bar = cumulative_bid_volume > 0 ? cumulative_bid_volume : bid_volume;
         if (max_volume > 0) {
-            float bar_width = static_cast<float>((orderbook.bids[i].size / max_volume) * max_bar_width);
+            float bar_width = static_cast<float>((volume_for_bar / max_volume) * max_bar_width);
 
             // Draw the cumulative volume bar
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -1595,8 +1644,22 @@ void DomSurfacePanel::renderMMTLayout() {
       if (i < orderbook.asks.size()) {
         // Calculate sell pressure based on ask size and recent trades
         double sell_pressure = orderbook.asks[i].size; // Placeholder for actual sell pressure calculation
+        
+        // Get cumulative sell volume from ClusterEngine if available
+        double cumulative_sell_volume_col5 = 0.0;
+        if (cluster_engine_) {
+          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.asks[i].price / cluster_engine_->get_tick_size()));
+          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
+          
+          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
+            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
+              cumulative_sell_volume_col5 += time_bucket.getSellVolume();
+            }
+          }
+        }
+        
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
-        ImGui::Text("%.4f", sell_pressure);
+        ImGui::Text("%.4f", cumulative_sell_volume_col5 > 0 ? cumulative_sell_volume_col5 : sell_pressure);
         ImGui::PopStyleColor();
 
         // Render cumulative volume bar extending left for sells
@@ -1604,8 +1667,10 @@ void DomSurfacePanel::renderMMTLayout() {
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
 
+        // Calculate normalized volume for the bar width based on cumulative volume if available
+        double volume_for_bar = cumulative_sell_volume_col5 > 0 ? cumulative_sell_volume_col5 : sell_pressure;
         if (max_volume > 0) {
-            float bar_width = static_cast<float>((sell_pressure / max_volume) * max_bar_width);
+            float bar_width = static_cast<float>((volume_for_bar / max_volume) * max_bar_width);
 
             // Draw the cumulative volume bar extending to the left
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -1661,9 +1726,9 @@ void DomSurfacePanel::renderMMTLayout() {
 
       for (const auto& price_level : cluster_canvas) {
         for (const auto& time_bucket : price_level) {
-          // Access the data without mutex since we're just reading
-          total_buy_volume += time_bucket.buy_volume_raw.load();
-          total_sell_volume += time_bucket.sell_volume_raw.load();
+          // Access the data without mutex since we're just reading using atomic operations
+          total_buy_volume += time_bucket.getBuyVolume();
+          total_sell_volume += time_bucket.getSellVolume();
         }
       }
 
@@ -1677,7 +1742,7 @@ void DomSurfacePanel::renderMMTLayout() {
     ImGui::Text("Cumulative Volume Columns:");
 
     // Render cumulative volume bars for each price level
-    if (!cluster_canvas.empty()) {
+    if (cluster_engine_) {
       // Calculate the current viewport to determine which price levels to display
       // Get the current orderbook to determine the price range
       auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
@@ -1724,14 +1789,14 @@ void DomSurfacePanel::renderMMTLayout() {
         for (int64_t tick_idx = min_tick_index; tick_idx <= max_tick_index; ++tick_idx) {
           int64_t relative_idx = tick_idx - cluster_engine_->get_min_tick_index();
 
-          if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < cluster_canvas.size()) {
+          if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < cluster_engine_->getClusterCanvas().size()) {
             // Calculate cumulative volumes for this price level across all time buckets
             double level_buy_volume = 0.0;
             double level_sell_volume = 0.0;
 
-            for (const auto& time_bucket : cluster_canvas[relative_idx]) {
-              level_buy_volume += time_bucket.buy_volume_raw.load();
-              level_sell_volume += time_bucket.sell_volume_raw.load();
+            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_idx]) {
+              level_buy_volume += time_bucket.getBuyVolume();
+              level_sell_volume += time_bucket.getSellVolume();
             }
 
             double price = tick_idx * cluster_engine_->get_tick_size();
@@ -1767,14 +1832,14 @@ void DomSurfacePanel::renderMMTLayout() {
               // Draw buy and sell volume bars using the new helper function
               ImVec2 pos = ImGui::GetCursorScreenPos();
               ImDrawList* draw_list = ImGui::GetWindowDrawList();
-              
+
               // Call the new function to render horizontal bars
-              renderHorizontalVolumeBars(draw_list, 
+              renderHorizontalVolumeBars(draw_list,
                                         ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - ImGui::GetTextLineHeight() * 0.6f) / 2),
-                                        bar_width, 
+                                        bar_width,
                                         ImGui::GetTextLineHeight() * 0.6f,
-                                        buy_vol, 
-                                        sell_vol, 
+                                        buy_vol,
+                                        sell_vol,
                                         max_volume);
 
               // Add some spacing

@@ -69,6 +69,13 @@ class QuantWorkspaceComponent : public UIComponent {
   static uint32_t get_global_active_symbol_id() { return g_active_symbol_id.load(); }
   static void set_global_active_symbol_id(uint32_t symbol_id) { g_active_symbol_id.store(symbol_id); }
 
+  // Global USD mode flag for currency display
+  static std::atomic<bool> g_usd_mode;
+
+  // Helper methods for accessing global USD mode
+  static bool get_global_usd_mode() { return g_usd_mode.load(); }
+  static void set_global_usd_mode(bool usd_mode) { g_usd_mode.store(usd_mode); }
+
   // Global SymbolSelector instance
   static BTQuant::SymbolSelector g_symbol_selector;
   static BTQuant::SymbolSelectorState g_symbol_selector_state;

@@ -167,9 +167,23 @@ public:
      * @param exchange_names Vector of exchange names corresponding to the trades
      * @param window_name Name of the ImGui window to render in
      */
-    void bindExchangeTradeTable(const std::vector<RawTrade>& trades, 
+    void bindExchangeTradeTable(const std::vector<RawTrade>& trades,
                                const std::vector<std::string>& exchange_names,
                                const char* window_name = "Exchange Trade Table");
+
+    /**
+     * @brief Render a header with USD/COIN toggle switch
+     * @param usd_display_mode Reference to boolean controlling display mode
+     * @param window_name Name of the ImGui window to render in
+     */
+    void renderHeaderWithToggle(bool& usd_display_mode, const char* window_name = "Header");
+
+    /**
+     * @brief Add a header with USD/COIN toggle to the visualization system
+     * @param usd_display_mode Reference to boolean controlling display mode
+     * @param window_name Name of the ImGui window to render in
+     */
+    void addHeaderWithToggle(bool& usd_display_mode, const char* window_name = "Header");
 
 private:
     struct BoundVisualization {
@@ -208,9 +222,16 @@ private:
         bool usd_display_mode;
     };
 
+    struct HeaderVisualization {
+        std::string window_name;
+        bool* display_mode_ref;  // Pointer to external boolean to control display mode
+        bool is_visible;
+    };
+
     std::vector<BoundVisualization> m_visualizations;
     std::vector<OrderBookVisualization> m_order_book_visualizations;
     std::vector<RawTradeTableVisualization> m_raw_trade_table_visualizations;
+    std::vector<HeaderVisualization> m_header_visualizations;
 
     // References to compute modules (stored as weak references)
     const TPOEngine* m_tpo_engine;

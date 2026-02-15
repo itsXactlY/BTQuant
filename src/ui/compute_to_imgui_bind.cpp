@@ -240,7 +240,7 @@ void ComputeToImGuiBind::render() {
             viz.render_callback();
         }
     }
-    
+
     // Render raw trade table visualizations with filter controls
     for (auto& raw_viz : m_raw_trade_table_visualizations) {
         if (raw_viz.is_visible) {
@@ -251,7 +251,7 @@ void ComputeToImGuiBind::render() {
                 ImGui::PushItemWidth(100);
                 ImGui::InputDouble("##VolumeFilter", &raw_viz.volume_filter, 0.1f, 1.0f, "%.3f");
                 ImGui::PopItemWidth();
-                
+
                 // Visualize raw trade table with filter
                 visualizeRawTradeTable(*raw_viz.trade_table, raw_viz.volume_filter);
             }
@@ -1278,6 +1278,75 @@ void renderExchangeTradeTable(const std::vector<RawTrade>& trades, const std::ve
 
         ImGui::EndTable();
     }
+}
+
+void ComputeToImGuiBind::renderHeaderWithToggle(bool& usd_display_mode, const char* window_name) {
+    // Render header with USD/COIN toggle inside a window
+    if (ImGui::Begin(window_name)) {
+        // Create a header-like section with the toggle
+        ImGui::Text("Trading Dashboard");
+        ImGui::SameLine(ImGui::GetWindowWidth() - 150); // Align to right
+        
+        // USD/COIN toggle radio buttons
+        if (ImGui::RadioButton("USD", usd_display_mode)) {
+            usd_display_mode = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("COIN", !usd_display_mode)) {
+            usd_display_mode = false;
+        }
+        
+        ImGui::Separator();
+    }
+    ImGui::End();
+}
+
+void ComputeToImGuiBind::addHeaderWithToggle(bool& usd_display_mode, const char* window_name) {
+    // Create a visualization entry for the header with toggle
+    HeaderVisualization header_viz;
+    header_viz.window_name = window_name;
+    header_viz.display_mode_ref = &usd_display_mode;  // Store pointer to the external boolean
+    header_viz.is_visible = true;
+
+    // Create a regular visualization with a render callback that accesses the header data
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Store the header visualization to maintain state
+    size_t viz_idx = m_header_visualizations.size();
+    m_header_visualizations.push_back(header_viz);
+
+    // Set up the render callback with access to the stored header data
+    viz.render_callback = [this, viz_idx, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Access the stored header data and toggle state
+            auto& header_data = m_header_visualizations[viz_idx];
+            
+            // Safely dereference the pointer (with null check)
+            if (header_data.display_mode_ref != nullptr) {
+                bool& usd_display_mode = *(header_data.display_mode_ref);
+
+                // Create a header-like section with the toggle
+                ImGui::Text("Trading Dashboard");
+                ImGui::SameLine(ImGui::GetWindowWidth() - 150); // Align to right
+                
+                // USD/COIN toggle radio buttons
+                if (ImGui::RadioButton("USD", usd_display_mode)) {
+                    usd_display_mode = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::RadioButton("COIN", !usd_display_mode)) {
+                    usd_display_mode = false;
+                }
+                
+                ImGui::Separator();
+            }
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
 }
 
 } // namespace UI

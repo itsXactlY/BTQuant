@@ -77,9 +77,7 @@ int main(int argc, char** argv) {
   }
 
   // 6. Setup Custom Menu Bar
-  static bool usd_mode = true; // Default to USD mode
-  
-  dashboard->set_custom_menubar_callback([&dashboard, &usd_mode]() {
+  dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
       auto* workspace = dashboard->get_workspace_component();
       auto* panel_mgr = workspace ? workspace->getPanelManager() : nullptr;
@@ -142,19 +140,23 @@ int main(int argc, char** argv) {
 
     // Currency Toggle Menu Item
     if (ImGui::BeginMenu("Currency")) {
-      bool prev_usd_mode = usd_mode;
-      if (ImGui::MenuItem("USD", nullptr, usd_mode)) {
-        usd_mode = true;
-      }
-      if (ImGui::MenuItem("COIN", nullptr, !usd_mode)) {
-        usd_mode = false;
-      }
+      bool current_usd_mode = BTQuant::QuantWorkspaceComponent::get_global_usd_mode();
+      bool prev_usd_mode = current_usd_mode;
       
+      if (ImGui::MenuItem("USD", nullptr, current_usd_mode)) {
+        current_usd_mode = true;
+        BTQuant::QuantWorkspaceComponent::set_global_usd_mode(true);
+      }
+      if (ImGui::MenuItem("COIN", nullptr, !current_usd_mode)) {
+        current_usd_mode = false;
+        BTQuant::QuantWorkspaceComponent::set_global_usd_mode(false);
+      }
+
       // If currency mode changed, notify the system
-      if (prev_usd_mode != usd_mode) {
-        std::cout << "Currency mode switched to: " << (usd_mode ? "USD" : "COIN") << std::endl;
+      if (prev_usd_mode != current_usd_mode) {
+        std::cout << "Currency mode switched to: " << (current_usd_mode ? "USD" : "COIN") << std::endl;
       }
-      
+
       ImGui::EndMenu();
     }
 

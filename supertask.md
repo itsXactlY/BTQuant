@@ -76,17 +76,17 @@
 - [x] **42.** Color code the Price column: `#00E676` (Neon Mint) for Ask hits, `#FF3B69` (Crimson) for Bid hits.
 - [x] **43.** Slippage Bracket: Calculate time delta between consecutive trades. If `< 50ms` and price changed, draw a 1px vertical white bracket linking the rows.
 - [x] **44.** Add `Filter` input in the header. Skip rendering any trade with `size < filter_val`.
-- [ ] **45.** Integrate `miniaudio` into the data processor.
-- [ ] **46.** Trigger `ma_engine_play_sound("buy.wav")` or `"sell.wav"` on incoming trades.
-- [ ] **47.** Calculate audio pitch: `pitch = 1.0f - (log10(size) * scalar)`. Massive trades sound like a heavy bass thud.
+- [x] **45.** Integrate `miniaudio` into the data processor.
+- [x] **46.** Trigger `ma_engine_play_sound("buy.wav")` or `"sell.wav"` on incoming trades.
+- [x] **47.** Calculate audio pitch: `pitch = 1.0f - (log10(size) * scalar)`. Massive trades sound like a heavy bass thud.
 
 ---
 
 ## Phase 6: Order Book Widget
 **Target Files:** `src/components/orderbook_panel.cpp`
 
-- [ ] **48.** Render the UI header with a `USD / COIN` toggle switch.
-- [ ] **49.** If USD is active, multiply atomic sizes by the atomic `current_price` on the fly during the render loop.
+- [x] **48.** Render the UI header with a `USD / COIN` toggle switch.
+- [x] **49.** If USD is active, multiply atomic sizes by the atomic `current_price` on the fly during the render loop.
 - [ ] **50.** Render Asks descending from top. Render Bids ascending from bottom.
 - [ ] **51.** Access `snapshot_asks_` and `snapshot_bids_` via `std::memory_order_acquire`. ZERO mutexes allowed here.
 

@@ -567,7 +567,7 @@ int main() {
     std::vector<std::string> exchange_names;
 
     auto exchange_base_time = std::chrono::system_clock::now();
-    
+
     // Create sample trades from different exchanges
     for (int i = 0; i < 10; ++i) {
         RawTrade trade;
@@ -578,7 +578,7 @@ int main() {
         trade.trade_id = "EXCH_T" + std::to_string(100 + i);
 
         exchange_trades.push_back(trade);
-        
+
         // Assign exchange names
         if (i % 3 == 0) {
             exchange_names.push_back("Binance");
@@ -601,8 +601,22 @@ int main() {
 
     std::cout << "Exchange Trade Table bound to UI successfully!\n";
 
+    // Add the header with USD/COIN toggle to the UI system
+    std::cout << "\n=== Adding Header with USD/COIN Toggle ===\n";
+    
+    // Create a boolean to hold the display mode state
+    static bool usd_display_mode = true;  // Default to USD mode
+    
+    // Add the header with toggle to the UI system
+    ui_bind.addHeaderWithToggle(usd_display_mode, "Main Header");
+
+    std::cout << "Header with USD/COIN toggle added to UI system successfully!\n";
+
     // Clean up audio resources
     audio_notifier.shutdownAudio();
+
+    // Note: In a real application, you would have a main UI loop here
+    // For testing purposes, we'll just return
 
     return 0;
 }

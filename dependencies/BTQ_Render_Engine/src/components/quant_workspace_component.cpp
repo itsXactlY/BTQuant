@@ -21,6 +21,9 @@ std::atomic<uint64_t> QuantWorkspaceComponent::g_crosshair_time{0};
 // Define the static global active symbol ID variable
 std::atomic<uint32_t> QuantWorkspaceComponent::g_active_symbol_id{0};
 
+// Define the static global USD mode variable (default to true for USD mode)
+std::atomic<bool> QuantWorkspaceComponent::g_usd_mode{true};
+
 // Define the static global SymbolSelector instance
 BTQuant::SymbolSelector QuantWorkspaceComponent::g_symbol_selector;
 BTQuant::SymbolSelectorState QuantWorkspaceComponent::g_symbol_selector_state;

@@ -18,7 +18,7 @@
 namespace AudioIntegration {
 
 TradeAudioNotifier::TradeAudioNotifier()
-    : pitch_shifter_(440.0, 1.0, 10000.0)  // Default pitch settings
+    : pitch_shifter_(440.0, 1.0, 10000.0, 0.1)  // Default pitch settings with scalar
     , audio_engine_(nullptr)
     , audio_initialized_(false)
 {

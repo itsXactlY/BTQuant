@@ -451,7 +451,7 @@ int main() {
     std::cout << "\n=== Testing Pitch Shifting (Volume-Inverse Pitch Scaling) ===\n";
 
     // Create a pitch shifter with base pitch of 440Hz (A4 note)
-    PitchShifter pitch_shifter(440.0, 1.0, 10000.0);
+    PitchShifter pitch_shifter(440.0, 1.0, 10000.0, 0.1);
 
     // Simulate different trade volumes and see how pitch changes
     std::vector<double> test_volumes = {10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0};

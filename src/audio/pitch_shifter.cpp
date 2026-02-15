@@ -2,13 +2,16 @@
 #include <algorithm>
 #include <stdexcept>
 
-PitchShifter::PitchShifter(double base_pitch, double min_volume, double max_volume)
-    : base_pitch_(base_pitch), min_volume_(min_volume), max_volume_(max_volume) {
+PitchShifter::PitchShifter(double base_pitch, double min_volume, double max_volume, double scalar)
+    : base_pitch_(base_pitch), min_volume_(min_volume), max_volume_(max_volume), scalar_(scalar) {
     if (min_volume_ >= max_volume_) {
         throw std::invalid_argument("Min volume must be less than max volume");
     }
     if (base_pitch <= 0) {
         throw std::invalid_argument("Base pitch must be positive");
+    }
+    if (scalar <= 0) {
+        throw std::invalid_argument("Scalar must be positive");
     }
 }
 
@@ -16,26 +19,19 @@ double PitchShifter::calculate_pitch_multiplier(double volume) const {
     // Clamp volume to the defined range
     volume = std::max(min_volume_, std::min(max_volume_, volume));
 
-    // Use logarithmic scaling to handle the wide range of trade volumes more naturally
-    double log_min_volume = std::log10(min_volume_);
-    double log_max_volume = std::log10(max_volume_);
-    double log_volume = std::log10(std::max(volume, min_volume_));
-
-    // Normalize log volume to [0, 1] range
-    double normalized_log_volume = (log_volume - log_min_volume) / (log_max_volume - log_min_volume);
-
-    // Apply inverse relationship: higher volume -> lower pitch (deeper bass)
-    // Use a power function to make the effect more pronounced
-    double pitch_factor = 1.0 - normalized_log_volume; // Inverse relationship
-
-    // Apply a curve to make the effect more noticeable in the middle range
-    // Using a more aggressive curve to emphasize the deep bass effect for large trades
-    pitch_factor = std::pow(pitch_factor, 2.0);
-
-    // Ensure the factor is within reasonable bounds (0.05 to 1.0 for more dramatic bass effect)
-    pitch_factor = std::max(0.05, pitch_factor);
-
-    return pitch_factor;
+    // Calculate using the required formula: pitch_ratio = 1.0f - (log10(size) * scalar)
+    // For our implementation, we'll use volume as the "size" parameter
+    double log_volume = std::log10(volume);
+    
+    // Apply the formula: pitch_ratio = 1.0 - (log10(size) * scalar)
+    // This creates an inverse relationship where larger volumes result in lower pitch (bass)
+    double pitch_ratio = 1.0 - (log_volume * scalar_);
+    
+    // Ensure the pitch ratio stays within reasonable bounds
+    // Since log10 of large numbers can make the result negative, we need to clamp
+    pitch_ratio = std::max(0.05, pitch_ratio); // Minimum 0.05 to prevent zero/negative pitch
+    
+    return pitch_ratio;
 }
 
 double PitchShifter::calculate_pitch(double volume) const {
@@ -109,4 +105,11 @@ void PitchShifter::set_volume_range(double min_volume, double max_volume) {
     }
     min_volume_ = min_volume;
     max_volume_ = max_volume;
+}
+
+void PitchShifter::set_scalar(double scalar) {
+    if (scalar <= 0) {
+        throw std::invalid_argument("Scalar must be positive");
+    }
+    scalar_ = scalar;
 }

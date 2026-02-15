@@ -29,12 +29,12 @@
 - [x] **13.** Apply `ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_PassthruCentralNode`.
 - [x] **14.** Execute `DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.03f)` for the Drawing Tools sidebar.
 - [x] **15.** Execute `DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f)` for the right DOM/Orderbook column.
-- [ ] **16.** Split the right column down (`ImGuiDir_Down, 0.40f`) to create the Time & Sales area.
+- [x] **16.** Split the right column down (`ImGuiDir_Down, 0.40f`) to create the Time & Sales area.
 - [x] **17.** Split the center node down (`ImGuiDir_Down, 0.15f`) for Time Histograms.
-- [ ] **18.** Dock `"Drawing Tools"` into the Left ID.
-- [ ] **19.** Dock `"Main Chart"` into the Center ID.
-- [ ] **20.** Dock `"DOM Surface"` and `"Order Book"` into the Right-Top ID (creating a tab group).
-- [ ] **21.** Dock `"Time & Sales"` into the Right-Bottom ID.
+- [x] **18.** Dock `"Drawing Tools"` into the Left ID.
+- [x] **19.** Dock `"Main Chart"` into the Center ID.
+- [x] **20.** Dock `"DOM Surface"` and `"Order Book"` into the Right-Top ID (creating a tab group).
+- [x] **21.** Dock `"Time & Sales"` into the Right-Bottom ID.
 
 ---
 

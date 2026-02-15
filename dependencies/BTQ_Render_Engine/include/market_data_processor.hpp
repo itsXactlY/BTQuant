@@ -626,10 +626,12 @@ class MarketDataProcessor {
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
 
-  // Audio acoustics functionality for order flow
+  // Audio acoustics functionality for order flow (5.2: Order Flow Acoustics)
+  // Implements real-time audio feedback for market activity with pitch scaling
+  // based on trade volume (large trades = low pitch/bass, small trades = high pitch)
   void initializeAudioEngine();
   void shutdownAudioEngine();
-  void playTradeSound(double volume, bool is_buy);
+  void playTradeSound(double volume, bool is_buy);  // Core method for triggering trade sounds
   void setAudioEnabled(bool enabled) { audio_enabled_ = enabled; }
   bool isAudioEnabled() const { return audio_enabled_; }
 

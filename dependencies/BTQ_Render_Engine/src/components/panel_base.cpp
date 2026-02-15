@@ -41,7 +41,7 @@ void PanelBase::render() {
   }
 
   // Render background image if enabled using channel splitting to ensure it's behind other content
-  if (use_background_image_ && background_texture_ != nullptr) {
+  if (use_background_image_ && background_texture_ != 0) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Split the draw list into channels: 0 for background, 1 for foreground
@@ -73,7 +73,7 @@ void PanelBase::render() {
   ImGui::Text("Implementation coming soon...");
 
   // Merge channels back together if we were using background image
-  if (use_background_image_ && background_texture_ != nullptr) {
+  if (use_background_image_ && background_texture_ != 0) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     draw_list->ChannelsMerge();
   }

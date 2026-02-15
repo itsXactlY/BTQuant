@@ -12,6 +12,11 @@
 #include "panel_base.hpp"
 #include "vulkan_base_types.hpp"
 
+// Forward declaration for ClusterEngine
+namespace Analytics {
+    class ClusterEngine;
+}
+
 namespace BTQuant {
 
 // Order Book Level Structure for heatmap data
@@ -252,6 +257,9 @@ class DomSurfacePanel : public PanelBase {
   ImTextureID heatmap_texture_id_ = 0;
   bool texture_initialized_ = false;
   std::shared_ptr<VulkanCore> vulkan_core_;
+
+  // Cluster Engine for cumulative volume data
+  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
 };
 
 }  // namespace BTQuant

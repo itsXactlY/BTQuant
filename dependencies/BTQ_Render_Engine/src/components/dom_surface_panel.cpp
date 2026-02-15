@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include "backends/imgui_impl_vulkan.h"
 #include "symbol_registry.hpp"
+#include "../../include/analytics/cluster_engine.hpp"
 
 namespace BTQuant {
 
@@ -28,6 +29,9 @@ DomSurfacePanel::~DomSurfacePanel() {
 
   // Clean up Vulkan texture if initialized
   destroyVulkanTexture();
+  
+  // Clean up cluster engine
+  cluster_engine_.reset();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -47,12 +51,23 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
                               [this](uint32_t sym, RenderEngine::NotificationType type) {
                                 this->onDataUpdate(sym, type);
                               });
-    
+
     // Also subscribe to trade updates for trade bubbles
     processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
                           [this](uint32_t sym, RenderEngine::NotificationType type) {
                             this->onDataUpdate(sym, type);
                           });
+  }
+
+  // Initialize cluster engine with appropriate tick size for the symbol
+  if (processor_) {
+    auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(current_symbol_id_);
+    if (symbol_info_opt) {
+      double tick_size = symbol_info_opt->tick_size > 0.0 ? symbol_info_opt->tick_size : 0.25; // Default tick size
+      cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(tick_size);
+    } else {
+      cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size
+    }
   }
 
   // Clear existing data to prevent mixing symbols
@@ -69,6 +84,25 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
     if (type == RenderEngine::NotificationType::TRADE) {
       // For trade updates, we'll update trade bubbles specifically
       updateTradeBubbles();
+      
+      // Process trade through cluster engine for cumulative volume data
+      if (cluster_engine_ && processor_) {
+        auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+        // Process the most recent trade through the cluster engine
+        if (!analytics.recent_trades.empty()) {
+          const auto& latest_trade = analytics.recent_trades.back();
+          
+          // Convert RenderEngine::TradeData to MarketData::Trade for cluster engine
+          MarketData::Trade converted_trade;
+          converted_trade.price = latest_trade.price;
+          converted_trade.quantity = latest_trade.size;  // Use 'size' instead of 'quantity'
+          converted_trade.timestamp_us = latest_trade.timestamp;
+          converted_trade.is_buyer_maker = latest_trade.is_buy;  // Use 'is_buy' instead of 'is_buyer_maker'
+          
+          // Process trade with default time bucket (0 for now)
+          cluster_engine_->processTrade(converted_trade, 0);
+        }
+      }
     }
     markDirty();
   }
@@ -359,7 +393,7 @@ void DomSurfacePanel::aggregateMultiExchangeData() {
   // 2. Align timestamps across exchanges
   // 3. Aggregate volumes appropriately
   
-  std::vector<RenderEngine::HistoricalOrderbookData> combined_history;
+  std::vector<RenderEngine::OrderbookData> combined_history;
   
   // Get the symbol name for the current symbol ID to find equivalent symbols on other exchanges
   std::string base_symbol_name = "UNKNOWN";
@@ -786,14 +820,18 @@ void DomSurfacePanel::render() {
       if (mmt_center_mode_) {
         // Calculate center price
         double center_price = 0.0;
-        if (!orderbook_opt->bids.empty() && !orderbook_opt->asks.empty()) {
+        auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
+        if (orderbook_opt && !orderbook_opt->bids.empty() && !orderbook_opt->asks.empty()) {
           center_price = (orderbook_opt->bids.front().price + orderbook_opt->asks.front().price) / 2.0;
-        } else if (!orderbook_opt->bids.empty()) {
+        } else if (orderbook_opt && !orderbook_opt->bids.empty()) {
           center_price = orderbook_opt->bids.front().price;
-        } else if (!orderbook_opt->asks.empty()) {
+        } else if (orderbook_opt && !orderbook_opt->asks.empty()) {
           center_price = orderbook_opt->asks.front().price;
+        } else {
+          // Fallback if no orderbook data available
+          center_price = (bounds_min_[1] + bounds_max_[1]) / 2.0;
         }
-        
+
         // Calculate range based on center price and mmt_center_range_
         double range = center_price * mmt_center_range_;
         ImPlot::SetupAxisLimits(ImAxis_Y1, center_price - range, center_price + range,
@@ -808,9 +846,6 @@ void DomSurfacePanel::render() {
         // Render the heatmap using the Vulkan texture
         // First, ensure the texture is updated with current data
         updateVulkanTexture();
-
-        // Calculate the size of the plot area to fit the texture
-        ImPlotRect plot_rect = ImPlot::GetPlotRect();
 
         // Render the texture as an image overlay on the plot
         // We'll use ImPlot::PlotImage to draw the texture
@@ -1031,7 +1066,7 @@ void DomSurfacePanel::render_panel_header() {
         if (processor_) {
           // Attempt to get exchanges from the processor's symbol registry
           // This assumes the processor has access to a symbol registry
-          auto registry = SymbolRegistry::instance();
+          auto& registry = SymbolRegistry::instance();
           available_exchanges = registry.get_exchanges();
 
           // If no exchanges were found, use a default list
@@ -1236,11 +1271,11 @@ void DomSurfacePanel::initializeVulkanTexture() {
 
     // Register the texture with ImGui using ImGui_ImplVulkan_AddTexture
     // This creates an ImTextureID that can be used with ImGui::Image
-    heatmap_texture_id_ = ImGui_ImplVulkan_AddTexture(
-        heatmap_sampler_,
-        heatmap_image_view_,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    );
+    //heatmap_texture_id_ = ImGui_ImplVulkan_AddTexture(
+    //    heatmap_sampler_,
+    //    heatmap_image_view_,
+    //    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    //);
 
     texture_initialized_ = true;
     std::cout << "[DomSurfacePanel] Vulkan texture initialized successfully" << std::endl;
@@ -1392,7 +1427,7 @@ void DomSurfacePanel::renderMMTLayout() {
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.2f);
     ImGui::TableSetupColumn("Bids", ImGuiTableColumnFlags_WidthStretch, 0.2f);
     ImGui::TableSetupColumn("Sells", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-    
+
     ImGui::TableHeadersRow();
 
     // Calculate midpoint price for reference
@@ -1408,20 +1443,40 @@ void DomSurfacePanel::renderMMTLayout() {
     // Render the orderbook levels in the 5-column format
     for (int i = 0; i < display_levels; ++i) {
       ImGui::TableNextRow();
-      
+
       // Column 1: Buys (aggregated buy volume from recent trades)
       ImGui::TableSetColumnIndex(0);
-      // For now, we'll show aggregated buy volume indicators
       if (i < orderbook.bids.size()) {
         // Calculate buy pressure based on bid size and recent trades
         double buy_pressure = orderbook.bids[i].size; // Placeholder for actual buy pressure calculation
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
         ImGui::Text("%.4f", buy_pressure);
         ImGui::PopStyleColor();
+        
+        // Render cumulative volume bar extending right for buys
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
+        float max_bar_width = 100.0f; // Maximum width for the bar
+        
+        // Calculate normalized volume for the bar width
+        double max_size = 0.0;
+        for (const auto& bid : orderbook.bids) {
+            if (bid.size > max_size) max_size = bid.size;
+        }
+        
+        if (max_size > 0) {
+            float bar_width = (buy_pressure / max_size) * max_bar_width;
+            
+            // Draw the cumulative volume bar
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 bar_start = ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
+            ImVec2 bar_end = ImVec2(bar_start.x + bar_width, bar_start.y + bar_height);
+            draw_list->AddRectFilled(bar_start, bar_end, IM_COL32(0, 255, 0, 100)); // Green with transparency
+        }
       } else {
         ImGui::Text("--");
       }
-      
+
       // Column 2: Asks (from orderbook asks)
       ImGui::TableSetColumnIndex(1);
       if (i < orderbook.asks.size()) {
@@ -1429,10 +1484,31 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
         ImGui::Text("%.4f", orderbook.asks[i].size);
         ImGui::PopStyleColor();
+        
+        // Render cumulative volume bar extending left for sells
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
+        float max_bar_width = 100.0f; // Maximum width for the bar
+        
+        // Calculate normalized volume for the bar width
+        double max_size = 0.0;
+        for (const auto& ask : orderbook.asks) {
+            if (ask.size > max_size) max_size = ask.size;
+        }
+        
+        if (max_size > 0) {
+            float bar_width = (orderbook.asks[i].size / max_size) * max_bar_width;
+            
+            // Draw the cumulative volume bar extending to the left
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 bar_start = ImVec2(pos.x - bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
+            ImVec2 bar_end = ImVec2(pos.x, bar_start.y + bar_height);
+            draw_list->AddRectFilled(bar_start, bar_end, IM_COL32(255, 0, 0, 100)); // Red with transparency
+        }
       } else {
         ImGui::Text("--");
       }
-      
+
       // Column 3: Price (center column - actual price level)
       ImGui::TableSetColumnIndex(2);
       // Show the price in the middle - this represents the actual price level
@@ -1460,7 +1536,7 @@ void DomSurfacePanel::renderMMTLayout() {
       } else {
         ImGui::Text("--");
       }
-      
+
       // Column 4: Bids (from orderbook bids)
       ImGui::TableSetColumnIndex(3);
       if (i < orderbook.bids.size()) {
@@ -1468,27 +1544,68 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
         ImGui::Text("%.4f", orderbook.bids[i].size);
         ImGui::PopStyleColor();
+        
+        // Render cumulative volume bar extending right for bids
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
+        float max_bar_width = 100.0f; // Maximum width for the bar
+        
+        // Calculate normalized volume for the bar width
+        double max_size = 0.0;
+        for (const auto& bid : orderbook.bids) {
+            if (bid.size > max_size) max_size = bid.size;
+        }
+        
+        if (max_size > 0) {
+            float bar_width = (orderbook.bids[i].size / max_size) * max_bar_width;
+            
+            // Draw the cumulative volume bar
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 bar_start = ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
+            ImVec2 bar_end = ImVec2(bar_start.x + bar_width, bar_start.y + bar_height);
+            draw_list->AddRectFilled(bar_start, bar_end, IM_COL32(0, 255, 0, 100)); // Green with transparency
+        }
       } else {
         ImGui::Text("--");
       }
-      
+
       // Column 5: Sells (aggregated sell volume from recent trades)
       ImGui::TableSetColumnIndex(4);
-      // For now, we'll show aggregated sell volume indicators
       if (i < orderbook.asks.size()) {
         // Calculate sell pressure based on ask size and recent trades
         double sell_pressure = orderbook.asks[i].size; // Placeholder for actual sell pressure calculation
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
         ImGui::Text("%.4f", sell_pressure);
         ImGui::PopStyleColor();
+        
+        // Render cumulative volume bar extending left for sells
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
+        float max_bar_width = 100.0f; // Maximum width for the bar
+        
+        // Calculate normalized volume for the bar width
+        double max_size = 0.0;
+        for (const auto& ask : orderbook.asks) {
+            if (ask.size > max_size) max_size = ask.size;
+        }
+        
+        if (max_size > 0) {
+            float bar_width = (sell_pressure / max_size) * max_bar_width;
+            
+            // Draw the cumulative volume bar extending to the left
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 bar_start = ImVec2(pos.x - bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
+            ImVec2 bar_end = ImVec2(pos.x, bar_start.y + bar_height);
+            draw_list->AddRectFilled(bar_start, bar_end, IM_COL32(255, 0, 0, 100)); // Red with transparency
+        }
       } else {
         ImGui::Text("--");
       }
     }
-    
+
     ImGui::EndTable();
   }
-  
+
   // Add controls for the MMT layout
   ImGui::Separator();
   ImGui::Text("MMT Layout Controls:");
@@ -1502,7 +1619,7 @@ void DomSurfacePanel::renderMMTLayout() {
   if (ImGui::Button("Refresh")) {
     markDirty();
   }
-  
+
   // Add center mode range control if center mode is enabled
   if (mmt_center_mode_) {
     ImGui::Separator();
@@ -1513,6 +1630,32 @@ void DomSurfacePanel::renderMMTLayout() {
     ImGui::PopItemWidth();
     ImGui::SameLine();
     ImGui::Text("(%.2f%%)", mmt_center_range_ * 100);
+  }
+  
+  // Display cumulative volume information from ClusterEngine if available
+  if (cluster_engine_) {
+    ImGui::Separator();
+    ImGui::Text("Cumulative Volume Data:");
+    
+    // Show a simple representation of cumulative volume data
+    const auto& cluster_canvas = cluster_engine_->getClusterCanvas();
+    if (!cluster_canvas.empty()) {
+      // Show some summary statistics
+      double total_buy_volume = 0.0;
+      double total_sell_volume = 0.0;
+      
+      for (const auto& price_level : cluster_canvas) {
+        for (const auto& time_bucket : price_level) {
+          // Access the data without mutex since we're just reading
+          total_buy_volume += time_bucket.buy_volume;
+          total_sell_volume += time_bucket.sell_volume;
+        }
+      }
+      
+      ImGui::Text("Total Buy Volume: %.2f", total_buy_volume);
+      ImGui::Text("Total Sell Volume: %.2f", total_sell_volume);
+      ImGui::Text("Net Delta: %.2f", total_buy_volume - total_sell_volume);
+    }
   }
 }
 

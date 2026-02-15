@@ -329,6 +329,13 @@ void ChartPanel::update(float dt) {
   if (show_aggressor_bubbles_) {
     update_aggressor_trades_data();
   }
+  
+  // Synchronize with global crosshair state
+  // Update local state based on global crosshair if it's active and this chart is not currently hovered
+  if (QuantWorkspaceComponent::g_crosshair.active.load() && !ImPlot::IsPlotHovered()) {
+    global_crosshair_active_ = true;
+    global_crosshair_x_pos_ = static_cast<double>(QuantWorkspaceComponent::g_crosshair.time.load()) / 1000000.0;
+  }
 }
 
 void ChartPanel::render() {
@@ -2966,13 +2973,23 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     } else if (!ImPlot::IsPlotHovered()) {
       // If mouse is not over this plot, check if this chart was the source of the global crosshair
       // and potentially deactivate it if needed
+      
+      // Check if this chart was the source of the active global crosshair
+      // If so, and if the mouse has moved away for some time, we might want to deactivate
+      // For now, we'll leave the global crosshair active until another chart takes over
+      // or until explicitly deactivated by the workspace component
     }
     
-    // Additionally, if the global crosshair is active but not from this chart, 
+    // Additionally, if the global crosshair is active but not from this chart,
     // we might want to update the local crosshair state based on global state
     if (QuantWorkspaceComponent::g_crosshair.active.load() && !ImPlot::IsPlotHovered()) {
         // This chart isn't currently hovered, but global crosshair is active
         // We can still draw the global crosshair line
+        
+        // Optionally update local state to reflect global crosshair position
+        // This enables cross-chart synchronization even when not hovering
+        global_crosshair_active_ = true;
+        global_crosshair_x_pos_ = static_cast<double>(QuantWorkspaceComponent::g_crosshair.time.load()) / 1000000.0;
     }
     
     // Render global synchronized crosshair if enabled

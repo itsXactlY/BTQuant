@@ -46,6 +46,14 @@ class QuantWorkspaceComponent : public UIComponent {
 
   // Public access to global crosshair
   static GlobalCrosshair g_crosshair;
+  
+  // Helper methods for accessing global crosshair state
+  static double get_global_crosshair_price() { return g_crosshair.price.load(); }
+  static uint64_t get_global_crosshair_time() { return g_crosshair.time.load(); }
+  static bool get_global_crosshair_active() { return g_crosshair.active.load(); }
+  static void set_global_crosshair_price(double price) { g_crosshair.price.store(price); }
+  static void set_global_crosshair_time(uint64_t time) { g_crosshair.time.store(time); }
+  static void set_global_crosshair_active(bool active) { g_crosshair.active.store(active); }
 
  private:
   // Core systems

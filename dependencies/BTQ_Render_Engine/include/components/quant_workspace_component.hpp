@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "../hotspine_data_bridge.hpp"
@@ -15,6 +16,16 @@
 #include "panel_manager.hpp"
 
 namespace BTQuant {
+
+// Global crosshair synchronization data
+struct GlobalCrosshair {
+    std::atomic<double> price{0.0};
+    std::atomic<uint64_t> time{0};
+    std::atomic<bool> active{false};
+    
+    GlobalCrosshair() = default;
+    GlobalCrosshair(double p, uint64_t t, bool a) : price(p), time(t), active(a) {}
+};
 
 class QuantWorkspaceComponent : public UIComponent {
  public:
@@ -32,6 +43,9 @@ class QuantWorkspaceComponent : public UIComponent {
   void clear_data() override;
 
   void refresh_hierarchical_selector();  // Made public for workspace manager
+
+  // Public access to global crosshair
+  static GlobalCrosshair g_crosshair;
 
  private:
   // Core systems
@@ -71,7 +85,7 @@ class QuantWorkspaceComponent : public UIComponent {
   void render_dashboard_controls();
   void render_orders_panel();
   void render_positions_panel();
-  
+
   // Crosshair synchronization methods
   void handle_global_crosshair_sync();
   ChartPanel* get_chart_panel_under_cursor() const;

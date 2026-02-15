@@ -2495,6 +2495,12 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
   double close = chart.closes[closest_idx];
   double volume = chart.volumes[closest_idx];
 
+  // Update global crosshair atomics when crosshair info is rendered
+  // This means the crosshair is active on this chart
+  QuantWorkspaceComponent::g_crosshair.price.store(close); // Use close price as the reference
+  QuantWorkspaceComponent::g_crosshair.time.store(static_cast<uint64_t>(chart.dates[closest_idx] * 1000000)); // Convert to microseconds
+  QuantWorkspaceComponent::g_crosshair.active.store(true);
+
   // Render crosshair info overlay
   ImGui::SetNextWindowPos(ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
   ImGui::SetNextWindowSize(ImVec2(200, 150));
@@ -2952,6 +2958,21 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
+      
+      // Update global crosshair atomics when crosshair is active in this chart
+      QuantWorkspaceComponent::g_crosshair.price.store(mouse_pos.y);
+      QuantWorkspaceComponent::g_crosshair.time.store(static_cast<uint64_t>(mouse_pos.x * 1000000)); // Convert to microseconds
+      QuantWorkspaceComponent::g_crosshair.active.store(true);
+    } else if (!ImPlot::IsPlotHovered()) {
+      // If mouse is not over this plot, check if this chart was the source of the global crosshair
+      // and potentially deactivate it if needed
+    }
+    
+    // Additionally, if the global crosshair is active but not from this chart, 
+    // we might want to update the local crosshair state based on global state
+    if (QuantWorkspaceComponent::g_crosshair.active.load() && !ImPlot::IsPlotHovered()) {
+        // This chart isn't currently hovered, but global crosshair is active
+        // We can still draw the global crosshair line
     }
     
     // Render global synchronized crosshair if enabled
@@ -2959,26 +2980,114 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       // Convert the stored global crosshair X position to plot coordinates
       // This requires knowing the current plot limits to map screen coordinates
       ImPlotRect limits = ImPlot::GetPlotLimits();
-      
+
       // Calculate the X coordinate in plot space based on the stored screen position
       // We need to map the screen X coordinate back to plot X coordinate
       ImVec2 plot_size = ImPlot::GetPlotSize();
       ImVec2 plot_pos = ImPlot::GetPlotPos();
-      
+
       // Calculate the relative position within the plot area
       float rel_x = (global_crosshair_x_pos_ - plot_pos.x) / plot_size.x;
-      
+
       // Map to plot coordinate
       double plot_x = limits.X.Min + rel_x * (limits.X.Max - limits.X.Min);
-      
+
       // Draw the vertical line at the synchronized position
       ImDrawList* draw_list = ImPlot::GetPlotDrawList();
       ImVec2 top = ImPlot::PlotToPixels(plot_x, limits.Y.Max);
       ImVec2 bottom = ImPlot::PlotToPixels(plot_x, limits.Y.Min);
+
+      // Draw the synchronized crosshair line as a 1px dashed line
+      // Use dashed line pattern to distinguish from regular crosshair
+      const float dash_length = 4.0f;
+      const float gap_length = 2.0f;
+      const float line_thickness = 1.0f;
       
-      // Draw the synchronized crosshair line (dashed or different color to distinguish)
-      draw_list->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y), 
-                         IM_COL32(255, 255, 0, 200), 1.0f); // Yellow dashed line for global sync
+      // Draw dashed line
+      float current_y = top.y;
+      bool draw_segment = true;
+      
+      while (current_y < bottom.y) {
+          float next_y = current_y + (draw_segment ? dash_length : gap_length);
+          
+          if (next_y > bottom.y) {
+              next_y = bottom.y;
+          }
+          
+          if (draw_segment) {
+              draw_list->AddLine(
+                  ImVec2(top.x, current_y),
+                  ImVec2(top.x, next_y),
+                  IM_COL32(255, 255, 0, 200), // Yellow dashed line for global sync
+                  line_thickness
+              );
+          }
+          
+          current_y = next_y;
+          draw_segment = !draw_segment;
+      }
+    }
+    
+    // Also draw the global crosshair if g_crosshair is active (Universal Crosshair Sync)
+    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
+      // Get the global crosshair time position
+      uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
+      
+      // Convert the global time to a plot X coordinate
+      // This requires mapping the time value to the chart's X-axis range
+      ImPlotRect limits = ImPlot::GetPlotLimits();
+      
+      // Get chart instance to access the time data
+      auto charts = chart_manager_->get_charts();
+      auto it = charts.find(chart_id_);
+      if (it != charts.end()) {
+          const ChartInstance& chart = it->second;
+          
+          if (!chart.dates.empty()) {
+              // Convert global_time (microseconds) to seconds for comparison with chart.dates
+              double global_time_seconds = static_cast<double>(global_time) / 1000000.0;
+              
+              // Find the corresponding X position for this time
+              double plot_x = global_time_seconds; // Direct mapping assuming chart.dates are in seconds
+              
+              // Ensure the time is within the visible range
+              if (plot_x >= limits.X.Min && plot_x <= limits.X.Max) {
+                  // Draw the vertical line at the global crosshair position
+                  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+                  ImVec2 top = ImPlot::PlotToPixels(plot_x, limits.Y.Max);
+                  ImVec2 bottom = ImPlot::PlotToPixels(plot_x, limits.Y.Min);
+
+                  // Draw the synchronized crosshair line as a 1px dashed line
+                  const float dash_length = 4.0f;
+                  const float gap_length = 2.0f;
+                  const float line_thickness = 1.0f;
+                  
+                  // Draw dashed line
+                  float current_y = top.y;
+                  bool draw_segment = true;
+                  
+                  while (current_y < bottom.y) {
+                      float next_y = current_y + (draw_segment ? dash_length : gap_length);
+                      
+                      if (next_y > bottom.y) {
+                          next_y = bottom.y;
+                      }
+                      
+                      if (draw_segment) {
+                          draw_list->AddLine(
+                              ImVec2(top.x, current_y),
+                              ImVec2(top.x, next_y),
+                              IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
+                              line_thickness
+                          );
+                      }
+                      
+                      current_y = next_y;
+                      draw_segment = !draw_segment;
+                  }
+              }
+          }
+      }
     }
 
     // Handle drawing tools mouse events

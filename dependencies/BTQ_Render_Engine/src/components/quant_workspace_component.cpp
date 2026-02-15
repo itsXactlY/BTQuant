@@ -9,6 +9,9 @@
 
 namespace BTQuant {
 
+// Define the static global crosshair instance
+GlobalCrosshair QuantWorkspaceComponent::g_crosshair;
+
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
@@ -45,24 +48,50 @@ void QuantWorkspaceComponent::update(float dt) {
   // NOTE: Data sync is handled in main loop (main_trading_terminal.cpp)
   // to avoid double-sync per frame
   panel_manager_->update(dt);
-  
+
   // Update crosshair synchronization if enabled
   if (global_crosshair_enabled_) {
     // Check if any chart panel is currently showing crosshair info
     // This would be handled by the individual chart panels, but we can coordinate them here
     // For now, we'll just track the mouse position for potential synchronization
     ImVec2 current_mouse_pos = ImGui::GetMousePos();
-    
+
     // Only update if mouse has moved significantly
     float mouse_move_threshold = 1.0f; // Minimum movement to trigger update
-    float distance = sqrt(pow(current_mouse_pos.x - last_crosshair_position_.x, 2) + 
+    float distance = sqrt(pow(current_mouse_pos.x - last_crosshair_position_.x, 2) +
                           pow(current_mouse_pos.y - last_crosshair_position_.y, 2));
-    
+
     if (distance > mouse_move_threshold) {
       last_crosshair_position_ = current_mouse_pos;
       crosshair_active_ = true;
     } else {
       crosshair_active_ = false;
+    }
+    
+    // Update global crosshair based on the current state
+    // If no chart panel is actively using the crosshair, we might want to deactivate the global crosshair
+    ChartPanel* active_chart = get_chart_panel_under_cursor();
+    if (!active_chart) {
+      // If no chart is under the cursor, check if we should keep the global crosshair active
+      // based on the global state
+      if (!ImPlot::IsPlotHovered()) { // If no plot is hovered anywhere
+        // Only deactivate if the mouse hasn't moved much (indicating it's not actively being used)
+        if (distance <= mouse_move_threshold) {
+          // Gradually fade out or deactivate the global crosshair after a period of inactivity
+          // For now, we'll just ensure it's properly tracked
+          if (!crosshair_active_) {
+            // If local crosshair is inactive, make sure global crosshair is also inactive
+            g_crosshair.active.store(false);
+          }
+        }
+      }
+    } else {
+      // If there is an active chart, make sure the global crosshair reflects the current state
+      if (crosshair_active_) {
+        // The active chart should have updated the global crosshair via render_crosshair_info
+        // But we can ensure it's marked as active
+        g_crosshair.active.store(true);
+      }
     }
   }
 }
@@ -94,16 +123,16 @@ void QuantWorkspaceComponent::render_gui() {
 void QuantWorkspaceComponent::handle_global_crosshair_sync() {
   // This method will coordinate crosshair positions across all chart panels
   // For true global crosshair sync, we need to share crosshair position data between panels
-  
+
   // Get all panel IDs
   auto panel_ids = panel_manager_->get_all_panel_ids();
-  
+
   // Find all chart panels
   std::vector<ChartPanel*> chart_panels;
   for (uint32_t panel_id : panel_ids) {
     auto* panel = panel_manager_->get_panel_by_id(panel_id);
     if (!panel) continue;
-    
+
     // Check if this is a chart panel
     if (panel->get_config().type == PanelType::CHART) {
       auto* chart_panel = dynamic_cast<ChartPanel*>(panel);
@@ -112,16 +141,16 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
       }
     }
   }
-  
+
   // If we have multiple chart panels, implement crosshair synchronization
   if (chart_panels.size() > 1) {
     // Find the chart panel that currently has the mouse cursor
     ChartPanel* active_chart = get_chart_panel_under_cursor();
-    
+
     if (active_chart) {
       // Get the mouse position in screen coordinates
       ImVec2 mouse_pos = ImGui::GetMousePos();
-      
+
       // Find the panel ID for the active chart to get its position
       auto all_panel_ids = panel_manager_->get_all_panel_ids();
       uint32_t active_panel_id = 0;
@@ -132,15 +161,15 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
           break;
         }
       }
-      
+
       if (active_panel_id != 0) {
         // Get the chart panel's position and size to calculate relative mouse position
         ImVec2 panel_pos = panel_manager_->get_panel_position(active_panel_id);
         ImVec2 panel_size = panel_manager_->get_panel_size(active_panel_id);
-        
+
         // Calculate the relative X position within the active chart panel (0.0 to 1.0)
         float rel_x = (mouse_pos.x - panel_pos.x) / panel_size.x;
-        
+
         // Synchronize this relative position to all other chart panels
         for (auto* chart_panel : chart_panels) {
           if (chart_panel != active_chart) {
@@ -153,14 +182,14 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
                 break;
               }
             }
-            
+
             if (target_panel_id != 0) {
               ImVec2 target_panel_pos = panel_manager_->get_panel_position(target_panel_id);
               ImVec2 target_panel_size = panel_manager_->get_panel_size(target_panel_id);
-              
+
               // Calculate the absolute X position in the target panel based on relative position
               float target_x = target_panel_pos.x + rel_x * target_panel_size.x;
-              
+
               // Set the global crosshair position for this chart
               chart_panel->set_global_crosshair_position(target_x, true);
             }
@@ -169,12 +198,53 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
             chart_panel->set_global_crosshair_position(mouse_pos.x, true);
           }
         }
+        
+        // Update the global crosshair atomics for universal sync
+        // Convert mouse position to chart time/price coordinates
+        ImPlot::SetNextPlotLimits(0, 1, 0, 1, ImGuiCond_Always); // This is a workaround to access plot coordinates
+        
+        // Since we can't directly access the plot coordinates here, we'll update the global crosshair
+        // with the active state and let each chart panel handle the conversion
+        g_crosshair.active.store(true);
+        
+        // We need to get the chart instance to determine the time at the mouse position
+        // For now, we'll just set the active state and let each chart handle the time conversion
       }
     } else {
       // If no chart has the mouse, disable global sync on all charts
       for (auto* chart_panel : chart_panels) {
         chart_panel->set_global_crosshair_position(0.0, false);
       }
+      
+      // Also disable the global crosshair
+      g_crosshair.active.store(false);
+    }
+  } else if (chart_panels.size() == 1) {
+    // If there's only one chart panel, we still need to update the global crosshair state
+    ChartPanel* single_chart = chart_panels[0];
+    auto [pos, active] = single_chart->get_global_crosshair_state();
+    
+    if (active) {
+      g_crosshair.active.store(true);
+      // We'll update the time/price when the chart renders
+    } else {
+      g_crosshair.active.store(false);
+    }
+  }
+  
+  // Update the global crosshair when a chart panel is active
+  if (crosshair_active_) {
+    // Get the current mouse position to determine the time and price
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    
+    // Find which chart panel the mouse is over and get its plot coordinates
+    ChartPanel* active_chart = get_chart_panel_under_cursor();
+    if (active_chart) {
+      // We'll update the global crosshair data when the chart renders
+      // since that's where we have access to the plot coordinate system
+      g_crosshair.active.store(true);
+    } else {
+      g_crosshair.active.store(false);
     }
   }
 }

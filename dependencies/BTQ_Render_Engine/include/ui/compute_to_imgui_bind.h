@@ -11,14 +11,10 @@
 #include "analytics/tpoengine.h"
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
-#include "analytics/rawtradetable.h"
 #include <memory>
 #include <functional>
 #include <vector>
 #include <string>
-
-// Need to include imgui.h to get ImU32 definition
-#include "imgui.h"
 
 // Forward declaration to avoid including imgui.h in header
 struct ImGuiContext;
@@ -61,31 +57,7 @@ public:
      * @param pipeline Reference to the Lock-Free Snapshot Pipeline instance
      * @param window_name Name of the ImGui window to render in
      */
-    void bindLockFreeSnapshotPipeline(const LockFreeSnapshotPipeline& pipeline, const char* window_name = "Market Data");
-
-    /**
-     * @brief Bind market table data to ImGui visualization
-     * @param bid_volume Volume at the best bid price
-     * @param ask_volume Volume at the best ask price
-     * @param last_price Last traded price
-     * @param bid_price Best bid price
-     * @param ask_price Best ask price
-     * @param window_name Name of the ImGui window to render in
-     */
-    void bindMarketTable(double bid_volume, double ask_volume, double last_price,
-                        double bid_price, double ask_price, const char* window_name = "Market Table");
-
-    /**
-     * @brief Bind order book data with USD/COIN toggle functionality
-     * @param bid_volume Volume at the best bid price
-     * @param ask_volume Volume at the best ask price
-     * @param last_price Last traded price
-     * @param bid_price Best bid price
-     * @param ask_price Best ask price
-     * @param window_name Name of the ImGui window to render in
-     */
-    void bindOrderBookWithToggle(double bid_volume, double ask_volume, double last_price,
-                                double bid_price, double ask_price, const char* window_name = "Order Book");
+    void bindLockFreeSnapshotPipeline(const BTQuant::RenderEngine::LockFreeSnapshotPipeline& pipeline, const char* window_name = "Market Data");
 
     /**
      * @brief Render all bound visualizations
@@ -104,22 +76,6 @@ public:
      */
     void update();
 
-    /**
-     * @brief Bind horizontal bars visualization to ImGui
-     * @param values Vector of values to represent as horizontal bars
-     * @param colors Vector of colors for each bar
-     * @param window_name Name of the ImGui window to render in
-     */
-    void bindHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors,
-                          const char* window_name = "Horizontal Bars");
-
-    /**
-     * @brief Bind Raw Trade Table data to ImGui visualization
-     * @param trade_table Reference to the Raw Trade Table instance
-     * @param window_name Name of the ImGui window to render in
-     */
-    void bindRawTradeTable(const RawTradeTable& trade_table, const char* window_name = "Raw Trade Table");
-
 private:
     struct BoundVisualization {
         std::string window_name;
@@ -127,30 +83,12 @@ private:
         bool is_visible;
     };
 
-    struct OrderBookData {
-        double bid_volume;
-        double ask_volume;
-        double last_price;
-        double bid_price;
-        double ask_price;
-        bool usd_display_mode;
-    };
-
-    struct OrderBookVisualization {
-        std::string window_name;
-        OrderBookData data;
-        bool is_visible;
-        bool usd_display_mode;
-    };
-
     std::vector<BoundVisualization> m_visualizations;
-    std::vector<OrderBookVisualization> m_order_book_visualizations;
 
     // References to compute modules (stored as weak references)
     const TPOEngine* m_tpo_engine;
     const LiquiditySweepDetector* m_liquidity_detector;
-    const LockFreeSnapshotPipeline* m_snapshot_pipeline;
-    const RawTradeTable* m_raw_trade_table;
+    const BTQuant::RenderEngine::LockFreeSnapshotPipeline* m_snapshot_pipeline;
 
     // Internal state
     bool m_initialized;
@@ -179,7 +117,7 @@ void visualizeLiquiditySweeps(const LiquiditySweepDetector& detector, float widt
  * @param width Width of the visualization
  * @param height Height of the visualization
  */
-void visualizeMarketData(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, 
+void visualizeMarketData(const BTQuant::RenderEngine::LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0,
                         float width = 400.0f, float height = 300.0f);
 
 /**
@@ -213,7 +151,7 @@ void renderSweepMarkers(const LiquiditySweepDetector& detector, float width = 40
  * @param width Width of the visualization
  * @param height Height of the visualization
  */
-void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0,
+void visualizeMarketDepthTable(const BTQuant::RenderEngine::LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0,
                               float width = 400.0f, float height = 300.0f);
 
 /**
@@ -226,27 +164,8 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
  * @param width Width of the visualization
  * @param height Height of the visualization
  */
-void renderMarketTable(double bid_volume, double ask_volume, double last_price,
+void renderMarketTable(double bid_volume, double ask_volume, double last_price, 
                       double bid_price, double ask_price, float width = 400.0f, float height = 300.0f);
-
-/**
- * @brief Helper function to render horizontal bars using DrawList->AddRectFilled
- * @param values Vector of values to represent as horizontal bars
- * @param colors Vector of colors for each bar
- * @param width Width of the visualization
- * @param height Height of the visualization
- * @param label Label for the visualization
- */
-void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors,
-                         float width = 400.0f, float height = 300.0f, const char* label = "Horizontal Bars");
-
-/**
- * @brief Helper function to visualize Raw Trade Table in ImGui
- * @param trade_table Reference to the Raw Trade Table instance
- * @param width Width of the visualization
- * @param height Height of the visualization
- */
-void visualizeRawTradeTable(const RawTradeTable& trade_table, float width = 600.0f, float height = 400.0f);
 
 } // namespace UI
 } // namespace BTQuant

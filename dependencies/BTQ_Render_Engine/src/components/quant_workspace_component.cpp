@@ -36,8 +36,9 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 }
 
 void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore* core) {
-  (void)core;  // Suppress unused parameter warning
-  // Panel system handles its own Vulkan resources
+  if (panel_manager_ && core) {
+    panel_manager_->initialize_vulkan_resources(core);
+  }
 }
 
 void QuantWorkspaceComponent::update(float dt) {

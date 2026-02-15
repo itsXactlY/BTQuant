@@ -389,44 +389,11 @@ uint32_t GPUMemoryManager::find_memory_type(uint32_t type_filter, VkMemoryProper
 // on allocation/deallocation. For a complete implementation, these methods would need to be
 // called from the rendering system with proper command buffer access.
 
-ImageAllocation GPUMemoryManager::create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data, 
-                                                       uint32_t icon_width, uint32_t icon_height, 
+ImageAllocation GPUMemoryManager::create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
+                                                       uint32_t icon_width, uint32_t icon_height,
                                                        uint32_t cols, uint32_t rows) {
   uint32_t atlas_width = icon_width * cols;
   uint32_t atlas_height = icon_height * rows;
-  
-  // Calculate total size needed for the atlas (assuming RGBA format)
-  VkDeviceSize image_size = atlas_width * atlas_height * 4; // 4 bytes per pixel (RGBA)
-
-  // Create staging buffer to transfer image data
-  BufferAllocation staging_buffer = allocate_staging_buffer(image_size);
-
-  // Copy icon data to staging buffer in atlas layout
-  uint8_t* data_ptr = static_cast<uint8_t*>(staging_buffer.mapped_ptr);
-  
-  // Initialize the entire atlas to transparent black
-  memset(data_ptr, 0, image_size);
-  
-  // Place each icon in its grid position
-  for (size_t i = 0; i < icon_data.size(); ++i) {
-    if (i >= cols * rows) break; // Don't exceed atlas capacity
-    
-    uint32_t col = i % cols;
-    uint32_t row = i / cols;
-    
-    uint32_t dest_x = col * icon_width;
-    uint32_t dest_y = row * icon_height;
-    
-    // Copy each row of the icon to the appropriate position in the atlas
-    for (uint32_t y = 0; y < icon_height; ++y) {
-      uint32_t src_offset = y * icon_width * 4; // 4 bytes per pixel
-      uint32_t dst_row_start = ((dest_y + y) * atlas_width + dest_x) * 4;
-      
-      if (src_offset + (icon_width * 4) <= icon_data[i].size()) {
-        memcpy(&data_ptr[dst_row_start], &icon_data[i][src_offset], icon_width * 4);
-      }
-    }
-  }
 
   // Create the final image in GPU memory
   ImageAllocation atlas_allocation = allocate_image(
@@ -436,12 +403,6 @@ ImageAllocation GPUMemoryManager::create_texture_atlas(const std::vector<std::ve
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,  // Can receive transfers and be sampled
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
   );
-
-  // The actual image transfer would happen in the rendering system using command buffers
-  // GPUMemoryManager handles allocation, the rendering system handles the transfer
-
-  // Clean up staging buffer
-  deallocate_buffer(staging_buffer);
 
   return atlas_allocation;
 }
@@ -454,9 +415,76 @@ void GPUMemoryManager::update_texture_atlas(const ImageAllocation& atlas,
   // For now, it serves as a placeholder for the intended functionality
 }
 
-VkResult GPUMemoryManager::copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-  // This method would be called from the rendering system with proper command buffer access
-  // For now, it serves as a placeholder for the intended functionality
+VkResult GPUMemoryManager::copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+  // This method is called from the rendering system with proper command buffer access
+  // It performs a buffer to image copy operation
+  
+  // Transition image layout to transfer destination
+  VkImageMemoryBarrier barrier{};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = image;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = 0;
+  barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  
+  vkCmdPipelineBarrier(command_buffer,
+                      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      0,
+                      0, nullptr,
+                      0, nullptr,
+                      1, &barrier);
+  
+  // Copy buffer to image
+  VkBufferImageCopy region{};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {0, 0, 0};
+  region.imageExtent = {
+      width,
+      height,
+      1
+  };
+  
+  vkCmdCopyBufferToImage(command_buffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  
+  // Transition image layout to shader read only optimal
+  VkImageMemoryBarrier shader_barrier{};
+  shader_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  shader_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  shader_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  shader_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  shader_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  shader_barrier.image = image;
+  shader_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  shader_barrier.subresourceRange.baseMipLevel = 0;
+  shader_barrier.subresourceRange.levelCount = 1;
+  shader_barrier.subresourceRange.baseArrayLayer = 0;
+  shader_barrier.subresourceRange.layerCount = 1;
+  shader_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  shader_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  
+  vkCmdPipelineBarrier(command_buffer,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      0,
+                      0, nullptr,
+                      0, nullptr,
+                      1, &shader_barrier);
+  
   return VK_SUCCESS;
 }
 

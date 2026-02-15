@@ -101,6 +101,9 @@ class PanelManager {
 
   // Get panel by ID
   PanelBase* get_panel_by_id(uint32_t panel_id) const;
+  
+  // Vulkan resource initialization
+  void initialize_vulkan_resources(VulkanCore* core);
 
 
   // Serialization

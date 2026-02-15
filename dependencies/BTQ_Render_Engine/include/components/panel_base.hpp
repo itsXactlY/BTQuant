@@ -115,6 +115,9 @@ class PanelBase {
   virtual void render_context_menu() {}  // Virtual method for context menu
   virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
 
+  // Virtual method for initializing Vulkan resources
+  virtual void initialize_vulkan_resources(class VulkanCore* core) {}
+
  protected:
   PanelConfig config_;
 

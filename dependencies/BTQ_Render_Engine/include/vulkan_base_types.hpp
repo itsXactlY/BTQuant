@@ -198,7 +198,7 @@ class GPUMemoryManager {
   uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
   
   // Internal helper for texture operations
-  VkResult copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+  VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
 
 class VulkanCore {
@@ -369,6 +369,7 @@ class VulkanCore {
 
   VkSampler default_sampler_ = VK_NULL_HANDLE;
   void create_default_sampler();
+  VkSampler get_default_sampler() const { return default_sampler_; }
 
   // Command buffer recycling
   VkCommandBuffer acquire_command_buffer();

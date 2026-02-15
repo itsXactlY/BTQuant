@@ -155,9 +155,11 @@ class ChartPanel : public PanelBase {
 
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-             ChartManager* chart_manager, 
+             ChartManager* chart_manager,
              std::shared_ptr<ChartSuperNode> super_node = nullptr,
              PanelManager* panel_manager = nullptr);
+  
+  ~ChartPanel();
 
   void update(float dt) override;
   void render() override;

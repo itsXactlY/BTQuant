@@ -80,7 +80,7 @@
 - [ ] **6.1: The Flush Top Toolbar**
 - [ ] Render `BeginChild("Toolbar", (0, 32))` with `NoScrollbar`.
 - [ ] Wire `Symbol Input` to `MarketDataProcessor::subscribe(new_symbol)`.
-- [ ] **6.2: Quick Order Sidebar**
+- [x] **6.2: Quick Order Sidebar**
 - [ ] If `Mouse Trading` enabled: Render massive `BUY MKT` / `SELL MKT` buttons.
 - [ ] Display live `best_bid` / `best_ask` from atomics inside the button text.
 - [ ] **6.3: Trade Command Routing**

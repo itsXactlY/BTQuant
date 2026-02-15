@@ -1,5 +1,5 @@
-#ifndef BTQRENDERENGINE_TPOENGINE_H
-#define BTQRENDERENGINE_TPOENGINE_H
+#ifndef PUBBTQUANT_TPOENGINE_H
+#define PUBBTQUANT_TPOENGINE_H
 
 #include <vector>
 #include <map>
@@ -9,6 +9,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+
+// Forward declaration for integration
+class LiquiditySweepDetector;
 
 // Structure to represent a single price tick
 struct PriceTick {
@@ -54,6 +57,13 @@ struct TPOProfile {
 
     // Counter to assign letters A-Z, then a-z (total 52 unique letters)
     int letter_counter;
+
+    // Cached POC and Value Area for performance
+    mutable bool poc_cached;
+    mutable double cached_poc;
+    mutable bool value_area_cached;
+    mutable std::pair<double, double> cached_value_area;
+    mutable double cached_value_area_percent;
 
     TPOProfile();
 
@@ -101,6 +111,15 @@ struct TPOProfile {
 
     // Print the profile for debugging
     void print_profile() const;
+
+    // Check if a price level is within the current value area
+    bool is_in_value_area(double price_level, double percent = 70.0) const;
+
+    // Get the current value area boundaries
+    std::pair<double, double> get_current_value_area_bounds() const;
+
+    // Get the current POC price
+    double get_current_poc() const;
 };
 
 class TPOEngine {
@@ -147,6 +166,22 @@ public:
     // Get mutable reference to TPO profile for modification
     TPOProfile& get_tpo_profile() { return tpo_profile; }
 
+    // Check if a price level is within the current value area
+    bool is_price_in_value_area(double price_level, double percent = 70.0) const;
+
+    // Get the current Point of Control (POC)
+    double get_current_poc() const;
+
+    // Get the current Value Area boundaries
+    std::pair<double, double> get_current_value_area_bounds(double percent = 70.0) const;
+
+    // Get TPO data with opacity information for visualization
+    // Returns pairs of (TPONode, opacity) where opacity is 1.0 inside VA and 0.3 outside
+    std::vector<std::pair<TPONode, float>> get_tpo_data_with_opacity(double va_percent = 70.0) const;
+
+    // Get POC line data for visualization (returns the POC price level)
+    double get_poc_line_data() const;
+
     // Clear all stored data
     void clear();
 
@@ -172,6 +207,13 @@ public:
 
     // Print TPO profile for debugging purposes
     void print_tpo_profile() const;
+    
+    // Integration with LiquiditySweepDetector
+    // Methods to support liquidity sweep detection alongside TPO analysis
+    void integrate_with_liquidity_detector(LiquiditySweepDetector& detector);
+    
+    // Get price-volume data that can be used by liquidity detectors
+    std::vector<std::pair<double, double>> get_price_volume_profile() const;
 };
 
-#endif // BTQRENDERENGINE_TPOENGINE_H
+#endif // PUBBTQUANT_TPOENGINE_H

@@ -1439,4 +1439,11 @@ void PanelManager::split_right_dom_orderbook_panels() {
   add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // Right-bottom
 }
 
+void PanelManager::initialize_vulkan_resources(VulkanCore* core) {
+  for (auto& [panel_id, panel] : panels_) {
+    // Call the virtual method which will be overridden by panels that need Vulkan resources
+    panel->initialize_vulkan_resources(core);
+  }
+}
+
 }  // namespace BTQuant

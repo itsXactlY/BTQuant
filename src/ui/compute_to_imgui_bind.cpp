@@ -19,6 +19,7 @@ ComputeToImGuiBind::ComputeToImGuiBind()
     : m_tpo_engine(nullptr)
     , m_liquidity_detector(nullptr)
     , m_snapshot_pipeline(nullptr)
+    , m_raw_trade_table(nullptr)
     , m_initialized(false)
 {
     m_initialized = true;
@@ -115,6 +116,120 @@ void ComputeToImGuiBind::bindMarketTable(double bid_volume, double ask_volume, d
         if (ImGui::Begin(window_name)) {
             // Render the market table with [Buys | Asks | Price | Bids | Sells] format
             renderMarketTable(bid_volume, ask_volume, last_price, bid_price, ask_price);
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::bindOrderBookWithToggle(double bid_volume, double ask_volume, double last_price,
+                                                double bid_price, double ask_price, const char* window_name) {
+    // Create a visualization entry for order book with toggle
+    OrderBookVisualization order_viz;
+    order_viz.window_name = window_name;
+    order_viz.data = {bid_volume, ask_volume, last_price, bid_price, ask_price};
+    order_viz.is_visible = true;
+    order_viz.usd_display_mode = true; // Default to USD mode
+
+    // Create a regular visualization with a render callback that accesses the order book data
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+    
+    // Store the order book visualization to maintain state
+    size_t viz_idx = m_order_book_visualizations.size();
+    m_order_book_visualizations.push_back(order_viz);
+
+    // Set up the render callback with toggle functionality
+    viz.render_callback = [this, viz_idx, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Access the stored order book data and toggle state
+            auto& order_book_data = m_order_book_visualizations[viz_idx];
+            
+            ImGui::Text("Order Book");
+            ImGui::SameLine(ImGui::GetWindowWidth() - 150); // Align to right
+            
+            // Toggle button for USD/COIN
+            if (ImGui::RadioButton("USD", order_book_data.usd_display_mode)) {
+                order_book_data.usd_display_mode = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("COIN", !order_book_data.usd_display_mode)) {
+                order_book_data.usd_display_mode = false;
+            }
+            
+            ImGui::Separator();
+            
+            // Render the order book with the selected display mode
+            if (order_book_data.usd_display_mode) {
+                // If USD: Multiply atomic_size (volume) by atomic_last_price (price) during render pass
+                double usd_bid_value = order_book_data.data.bid_volume * order_book_data.data.last_price;
+                double usd_ask_value = order_book_data.data.ask_volume * order_book_data.data.last_price;
+                
+                // Render market table with USD values
+                if (ImGui::BeginTable("OrderBookTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui::TableSetupColumn("Buys (USD)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Asks (USD)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Bids (USD)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Sells (USD)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableHeadersRow();
+
+                    ImGui::TableNextRow();
+
+                    // Buys column (represents buy-side volume at best bid in USD)
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%.2f", order_book_data.data.bid_volume * order_book_data.data.bid_price);
+
+                    // Asks column (represents sell-side volume at best ask in USD)
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.2f", order_book_data.data.ask_volume * order_book_data.data.ask_price);
+
+                    // Price column (last traded price)
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%.2f", order_book_data.data.last_price);
+
+                    // Bids column (best bid price)
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%.2f", order_book_data.data.bid_price * order_book_data.data.bid_volume); // USD value
+
+                    // Sells column (represents sell-side volume at best ask in USD)
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%.2f", order_book_data.data.ask_volume * order_book_data.data.ask_price);
+
+                    ImGui::EndTable();
+                }
+                
+                ImGui::Text("USD Notional Values Displayed");
+            } else {
+                // COIN mode - display raw values
+                renderMarketTable(order_book_data.data.bid_volume, order_book_data.data.ask_volume, 
+                                 order_book_data.data.last_price, order_book_data.data.bid_price, 
+                                 order_book_data.data.ask_price);
+                ImGui::Text("Coin Values Displayed");
+            }
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::bindRawTradeTable(const RawTradeTable& trade_table, const char* window_name) {
+    m_raw_trade_table = &trade_table;
+
+    // Create a visualization entry for raw trade table
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback
+    viz.render_callback = [this, &trade_table, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Visualize raw trade table
+            visualizeRawTradeTable(trade_table);
         }
         ImGui::End();
     };
@@ -601,6 +716,91 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
 
     // Advance the cursor to account for the drawn content
     ImGui::Dummy(canvas_size);
+}
+
+void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float height) {
+    // Get trade statistics
+    auto stats = trade_table.get_trade_statistics();
+    
+    // Display trade statistics at the top
+    ImGui::Text("Trade Statistics:");
+    ImGui::Text("Total Trades: %zu", stats.total_trades);
+    ImGui::Text("Total Volume: %.2f", stats.total_volume);
+    ImGui::Text("Avg Trade Size: %.2f", stats.avg_trade_size);
+    ImGui::Text("Largest Trade: %.2f", stats.largest_trade_size);
+    ImGui::Text("Buy Vol: %.2f (%d trades)", stats.buy_volume, stats.buy_count);
+    ImGui::Text("Sell Vol: %.2f (%d trades)", stats.sell_volume, stats.sell_count);
+    
+    ImGui::Separator();
+    
+    // Get recent trades to display
+    auto recent_trades = trade_table.get_recent_trades(50); // Limit to 50 for performance
+    
+    if (recent_trades.empty()) {
+        ImGui::Text("No trades available");
+        return;
+    }
+    
+    // Create a table to display raw trade data
+    if (ImGui::BeginTable("RawTradeTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Trade ID", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for (const auto& trade : recent_trades) {
+            ImGui::TableNextRow();
+            
+            // Time column
+            ImGui::TableSetColumnIndex(0);
+            auto time_t = std::chrono::system_clock::to_time_t(trade.timestamp);
+            std::tm tm_local;
+            localtime_r(&time_t, &tm_local); // Use thread-safe version
+            char time_str[100];
+            std::strftime(time_str, sizeof(time_str), "%H:%M:%S", &tm_local);
+            ImGui::Text("%s", time_str);
+            
+            // Price column
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%.2f", trade.price);
+            
+            // Volume column
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%.2f", trade.volume);
+            
+            // Side column with color coding
+            ImGui::TableSetColumnIndex(3);
+            if (trade.side == 'B' || trade.side == 'b') {
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "BUY"); // Green for buy
+            } else if (trade.side == 'S' || trade.side == 's') {
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "SELL"); // Red for sell
+            } else {
+                ImGui::Text("N/A");
+            }
+            
+            // Trade ID column
+            ImGui::TableSetColumnIndex(4);
+            ImGui::Text("%s", trade.trade_id.c_str());
+        }
+
+        ImGui::EndTable();
+    }
+    
+    // Show additional controls
+    ImGui::Separator();
+    if (ImGui::SmallButton("Clear All Trades")) {
+        // Note: In a real implementation, you might want to use a command pattern
+        // to avoid modifying data directly from the UI thread
+        // For now, we'll just show a notification
+        ImGui::Text("Clear command sent");
+    }
+    
+    if (ImGui::SmallButton("Export to CSV")) {
+        ImGui::Text("Export command sent");
+    }
 }
 
 } // namespace UI

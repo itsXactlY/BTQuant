@@ -3,6 +3,8 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+
+#include "backends/imgui_impl_vulkan.h"
 #include <sstream>
 
 #ifdef _WIN32
@@ -34,6 +36,45 @@ TimeAndSalesPanel::TimeAndSalesPanel(const PanelConfig& config,
 
   // Subscribe to updates
   subscribe_to_updates();
+}
+
+void TimeAndSalesPanel::initialize_vulkan_resources(VulkanCore* core) {
+  if (!core) return;
+  
+  // Store the VulkanCore reference for later use during rendering
+  vulkan_core_ = core;
+  
+  // Initialize the texture atlas manager with GPU memory manager
+  // For now, we'll create a basic texture atlas with placeholder data
+  // In a real implementation, this would load actual exchange icon data
+  
+  // Create a simple placeholder texture atlas
+  std::vector<std::vector<uint8_t>> icon_data;
+  std::vector<std::string> exchange_names = {"BINANCE", "COINBASE", "FTX", "BYBIT"};
+  
+  // Create simple 16x16 pixel icons (RGBA format) - placeholder data
+  for (size_t i = 0; i < exchange_names.size(); ++i) {
+    std::vector<uint8_t> icon_bytes(16 * 16 * 4); // 16x16 RGBA
+    
+    // Fill with a simple pattern based on index
+    for (size_t j = 0; j < icon_bytes.size(); j += 4) {
+      icon_bytes[j] = static_cast<uint8_t>((i * 50) % 255);     // R
+      icon_bytes[j + 1] = static_cast<uint8_t>((i * 75) % 255); // G
+      icon_bytes[j + 2] = static_cast<uint8_t>((i * 100) % 255); // B
+      icon_bytes[j + 3] = 255; // A
+    }
+    
+    icon_data.push_back(icon_bytes);
+  }
+  
+  // Create the texture atlas manager
+  texture_atlas_manager_ = std::make_unique<TextureAtlasManager>(core->get_memory_manager());
+  
+  // Initialize the exchange icon atlas
+  texture_atlas_manager_->initializeExchangeIconAtlas(icon_data, 16, 16, exchange_names);
+  
+  // Upload the texture data to GPU
+  texture_atlas_manager_->uploadTextureData(core);
 }
 
 TimeAndSalesPanel::~TimeAndSalesPanel() {
@@ -979,7 +1020,7 @@ void TimeAndSalesPanel::render_trade_table() {
                 auto uv_coords = texture_atlas_manager_->getExchangeIconUV(exchange);
                 
                 // Get the texture atlas for rendering
-                ImTextureID texture_id = texture_atlas_manager_->getImGuiTextureID();
+                ImTextureID texture_id = texture_atlas_manager_->getImGuiTextureID(vulkan_core_);
                 
                 // Render the exchange icon using the texture atlas
                 ImVec2 icon_size(16.0f, 16.0f); // Size of the icon to display

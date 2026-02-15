@@ -47,9 +47,16 @@ public:
 
     /**
      * @brief Get the ImTextureID for ImGui rendering
+     * @param vulkan_core Pointer to the VulkanCore for texture registration
      * @return ImTextureID for use with ImGui::Image
      */
-    ImTextureID getImGuiTextureID() const;
+    ImTextureID getImGuiTextureID(VulkanCore* vulkan_core = nullptr) const;
+    
+    /**
+     * @brief Upload the texture atlas data to GPU memory
+     * @param vulkan_core Pointer to the VulkanCore for command buffer operations
+     */
+    void uploadTextureData(VulkanCore* vulkan_core);
 
 private:
     GPUMemoryManager& memory_manager_;
@@ -59,6 +66,10 @@ private:
     uint32_t icon_height_;
     uint32_t atlas_cols_;
     uint32_t atlas_rows_;
+    
+    // Store icon data for upload
+    std::vector<std::vector<uint8_t>> icon_data_;
+    std::vector<std::string> exchange_names_;
 };
 
 } // namespace BTQuant

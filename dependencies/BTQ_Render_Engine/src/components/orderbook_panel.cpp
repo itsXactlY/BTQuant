@@ -561,6 +561,16 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   std::vector<PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
   std::vector<PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
 
+  // Sort asks in descending order (highest price first) to render from top
+  std::sort(aggregated_asks.begin(), aggregated_asks.end(), [](const PriceLevel& a, const PriceLevel& b) {
+      return a.price > b.price; // Descending order (highest price first)
+  });
+
+  // Sort bids in ascending order (lowest price first) to render from bottom
+  std::sort(aggregated_bids.begin(), aggregated_bids.end(), [](const PriceLevel& a, const PriceLevel& b) {
+      return a.price < b.price; // Ascending order (lowest price first)
+  });
+
   // Calculate average order size for large order detection based on selected unit
   size_t total_levels = aggregated_bids.size() + aggregated_asks.size();
   if (total_levels > 0) {
@@ -697,7 +707,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
     // Render Asks (Sell) - Top down, but only to calculate positions
     int ask_count = std::min((int)aggregated_asks.size(), max_levels_to_show);
-    for (int i = ask_count - 1; i >= 0; --i) {
+    for (int i = 0; i < ask_count; ++i) {  // Changed to iterate from 0 to ask_count (top-down rendering)
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
 
@@ -780,8 +790,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     // Now render the actual content in the default channel
     // Render Asks (Sell) - Top down
 
-    // Render Asks (Sell) - Top down
-    for (int i = ask_count - 1; i >= 0; --i) {
+    // Render Asks (Sell) - Top down, displaying highest price first (descending order)
+    for (int i = 0; i < ask_count; ++i) {  // Changed to iterate from 0 to ask_count (top-down rendering)
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
       ImGui::PushID(i);  // Unique ID for this row/side

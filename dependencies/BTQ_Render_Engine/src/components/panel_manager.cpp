@@ -1379,6 +1379,9 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       break;
 
     case LayoutPreset::MODERN_TRADING:
+      // Explicitly clear panels to eradicate duplicate panels before building
+      panels_.clear();
+      
       // MMT programmatic Grid Construction
       // Set up a 100-column grid system to enable percentage-based splits
       set_grid_layout(100, 100);

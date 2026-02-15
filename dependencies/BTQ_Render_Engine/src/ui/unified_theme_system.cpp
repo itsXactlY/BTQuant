@@ -392,10 +392,10 @@ void UnifiedThemeManager::load_builtin_themes() {
   deep_void.colors.background_panel[2] = 0.12f;
   deep_void.colors.background_panel[3] = 1.0f;
 
-  deep_void.colors.text_primary[0] = 0.95f;    // R - Bright white for primary text
-  deep_void.colors.text_primary[1] = 0.95f;    // G
-  deep_void.colors.text_primary[2] = 0.98f;    // B - Slightly blue-white
-  deep_void.colors.text_primary[3] = 1.0f;     // A
+  deep_void.colors.text_primary[0] = 0.95f;  // R - Bright white for primary text
+  deep_void.colors.text_primary[1] = 0.95f;  // G
+  deep_void.colors.text_primary[2] = 0.98f;  // B - Slightly blue-white
+  deep_void.colors.text_primary[3] = 1.0f;   // A
 
   deep_void.colors.text_secondary[0] = 0.75f;
   deep_void.colors.text_secondary[1] = 0.78f;
@@ -612,8 +612,10 @@ void UnifiedThemeManager::apply_to_imgui() const {
   // Convert RGB values from 0-255 to 0-1 range: 94/255 ≈ 0.369, 82/255 ≈ 0.321, 64/255 ≈ 0.251
   style.Colors[ImGuiCol_Separator] = ImVec4(0.369f, 0.321f, 0.251f, 0.2f);
   // Maintain consistent separator colors for hover and active states
-  style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.369f, 0.321f, 0.251f, 0.4f);  // Slightly more opaque when hovered
-  style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.369f, 0.321f, 0.251f, 0.6f);   // More opaque when active
+  style.Colors[ImGuiCol_SeparatorHovered] =
+      ImVec4(0.369f, 0.321f, 0.251f, 0.4f);  // Slightly more opaque when hovered
+  style.Colors[ImGuiCol_SeparatorActive] =
+      ImVec4(0.369f, 0.321f, 0.251f, 0.6f);  // More opaque when active
   style.Colors[ImGuiCol_ResizeGrip] =
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.4f);
@@ -642,28 +644,43 @@ void UnifiedThemeManager::apply_to_imgui() const {
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.3f);
 
-  // Apply spacing and rounding
-  style.WindowPadding = ImVec2(theme.padding_medium, theme.padding_medium);
-  style.FramePadding = ImVec2(theme.padding_small, theme.padding_small);
-  style.ItemSpacing = ImVec2(theme.padding_medium, theme.padding_small);
+  // ========== MMT Institutional Aesthetic Overrides ==========
+  // Sub-pixel FinTech styling: zero-border, tight-spacing, deep-void palette
+  style.WindowPadding = ImVec2(0.0f, 0.0f);  // Zero padding for seamless docked panels
+  style.FramePadding = ImVec2(4.0f, 2.0f);   // Tight frame padding
+  style.ItemSpacing = ImVec2(8.0f, 4.0f);    // Institutional grid spacing
   style.TouchExtraPadding = ImVec2(0.0f, 0.0f);
-  style.IndentSpacing = theme.padding_large;
-  style.ScrollbarSize = 14.0f;
-  style.GrabMinSize = 10.0f;
+  style.IndentSpacing = 16.0f;
+  style.ScrollbarSize = 10.0f;  // Slim scrollbars
+  style.GrabMinSize = 8.0f;
 
-  style.WindowBorderSize = 1.0f;
-  style.ChildBorderSize = 1.0f;
-  style.PopupBorderSize = 1.0f;
-  style.FrameBorderSize = 1.0f;
-  style.TabBorderSize = 1.0f;
+  // Zero borders — seamless panel blending (MMT signature look)
+  style.WindowBorderSize = 0.0f;
+  style.ChildBorderSize = 0.0f;
+  style.PopupBorderSize = 0.0f;
+  style.FrameBorderSize = 0.0f;
+  style.TabBorderSize = 0.0f;
 
-  style.WindowRounding = theme.border_radius_medium;
-  style.ChildRounding = theme.border_radius_small;
-  style.FrameRounding = theme.border_radius_small;
-  style.PopupRounding = theme.border_radius_medium;
-  style.ScrollbarRounding = theme.border_radius_small;
-  style.GrabRounding = theme.border_radius_small;
-  style.TabRounding = theme.border_radius_small;
+  // Zero rounding — sharp institutional corners
+  style.WindowRounding = 0.0f;
+  style.ChildRounding = 0.0f;
+  style.FrameRounding = 0.0f;
+  style.PopupRounding = 0.0f;
+  style.ScrollbarRounding = 0.0f;
+  style.GrabRounding = 0.0f;
+  style.TabRounding = 0.0f;
+
+  // MMT Deep Void color overrides (applied on top of theme colors)
+  style.Colors[ImGuiCol_WindowBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);    // #0B0E11
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);     // #15191E
+  style.Colors[ImGuiCol_PopupBg] = ImVec4(0.059f, 0.071f, 0.090f, 0.96f);    // #0F1217
+  style.Colors[ImGuiCol_Text] = ImVec4(0.820f, 0.831f, 0.863f, 1.0f);        // #D1D4DC
+  style.Colors[ImGuiCol_Border] = ImVec4(0.169f, 0.188f, 0.220f, 0.30f);     // #2B3038 (subtle)
+  // Note: Separator colors are set earlier to rgba(94, 82, 64, 0.2) for MMT aesthetic and should remain unchanged
+  style.Colors[ImGuiCol_TitleBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);
+  style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.059f, 0.071f, 0.090f, 1.0f);
+  style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);
+  style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.043f, 0.055f, 0.067f, 0.10f);
 
 // Apply shadow effects (would need custom rendering for full shadow support)
 // For now, just set the shadow color as a reference

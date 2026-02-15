@@ -168,13 +168,16 @@ class GPUMemoryManager {
   void deallocate_image(const ImageAllocation& allocation);
 
   // Texture atlas methods for exchange icons
-  ImageAllocation create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data, 
-                                       uint32_t icon_width, uint32_t icon_height, 
+  ImageAllocation create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
+                                       uint32_t icon_width, uint32_t icon_height,
                                        uint32_t cols, uint32_t rows);
-  void update_texture_atlas(const ImageAllocation& atlas, 
+  void update_texture_atlas(const ImageAllocation& atlas,
                            const std::vector<std::vector<uint8_t>>& icon_data,
                            uint32_t x_offset, uint32_t y_offset,
                            uint32_t width, uint32_t height);
+
+  // Public access methods for texture atlas operations
+  VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
   // Memory usage statistics
   struct MemoryStats {
@@ -196,9 +199,6 @@ class GPUMemoryManager {
 
   // Helper methods
   uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
-  
-  // Internal helper for texture operations
-  VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
 
 class VulkanCore {
@@ -258,6 +258,9 @@ class VulkanCore {
   void register_snapshot_source(std::atomic<uint64_t>* snapshot_head);
   bool is_new_snapshot_available() const;
   void acknowledge_snapshot_processed();
+
+  // Public access methods for texture atlas operations
+  VkSampler get_default_sampler() const { return default_sampler_; }
 
  private:
   VulkanDashboardConfig config_;
@@ -369,7 +372,6 @@ class VulkanCore {
 
   VkSampler default_sampler_ = VK_NULL_HANDLE;
   void create_default_sampler();
-  VkSampler get_default_sampler() const { return default_sampler_; }
 
   // Command buffer recycling
   VkCommandBuffer acquire_command_buffer();

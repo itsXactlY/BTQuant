@@ -65,17 +65,20 @@ ImTextureID TextureAtlasManager::getImGuiTextureID(VulkanCore* vulkan_core) cons
         // If no VulkanCore provided, return the raw image view as fallback
         return reinterpret_cast<ImTextureID>(exchange_icon_atlas_.view);
     }
-    
+
     // Register the texture with ImGui using ImGui_ImplVulkan_AddTexture
     // This creates an ImTextureID that can be used with ImGui::Image
     VkSampler texture_sampler = vulkan_core->get_default_sampler();
-    
-    ImTextureID texture_id = ImGui_ImplVulkan_AddTexture(
+
+    VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
         texture_sampler,
         exchange_icon_atlas_.view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     );
-    
+
+    // Convert VkDescriptorSet to ImTextureID
+    ImTextureID texture_id = reinterpret_cast<ImTextureID>(descriptor_set);
+
     return texture_id;
 }
 

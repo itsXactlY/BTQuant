@@ -134,12 +134,16 @@ void QuantWorkspaceComponent::render_gui() {
     // Split the remaining space for the right side (DOM/Orderbook column)
     ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, nullptr, &dock_main);
     
+    // Split the center node down for Time Histograms
+    ImGuiID dock_center_bottom = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Down, 0.15f, nullptr, &dock_main);
+
     // Further split the right side into top and bottom sections
     ImGuiID dock_right_bottom = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.40f, nullptr, &dock_right);
-    
+
     // Dock the panels to their respective spaces
     ImGui::DockBuilderDockWindow("Drawing Tools", dock_left);
-    ImGui::DockBuilderDockWindow("Main Chart", dock_main); // Center area
+    ImGui::DockBuilderDockWindow("Main Chart", dock_main); // Center area (top part)
+    ImGui::DockBuilderDockWindow("Time Histogram", dock_center_bottom); // Bottom part of center
     ImGui::DockBuilderDockWindow("DOM Surface", dock_right); // Right-top (will be tabbed with orderbook)
     ImGui::DockBuilderDockWindow("Order Book", dock_right); // Right-top (will be tabbed with DOM)
     ImGui::DockBuilderDockWindow("Time & Sales", dock_right_bottom); // Right-bottom

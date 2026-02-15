@@ -240,8 +240,19 @@ class DomSurfacePanel : public PanelBase {
   double mmt_center_range_ = 0.02; // Range for center mode (default 2%)
   void renderMMTLayout();
   void updateMMTLayoutData();
-  void renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height, 
-                                 double buy_volume, double sell_volume, 
+  
+  /**
+   * @brief Helper function to render horizontal bars using DrawList->AddRectFilled
+   * @param draw_list The ImDrawList to draw on
+   * @param pos Starting position for the bars
+   * @param width Maximum width for the bars
+   * @param height Height of the bars
+   * @param buy_volume Volume for buy bars (extends right, green)
+   * @param sell_volume Volume for sell bars (extends left, red)
+   * @param max_possible_volume Maximum volume for normalization
+   */
+  void renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height,
+                                 double buy_volume, double sell_volume,
                                  double max_possible_volume);
 
   // Vulkan texture methods

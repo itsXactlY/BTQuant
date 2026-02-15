@@ -54,7 +54,7 @@
 
 - [ ] **4.1: Atomic Unit Toggles**
 - [ ] Implement USD / COIN toggle in header.
-- [ ] If USD: Multiply `atomic_size` by `atomic_last_price` during render pass.
+- [x] If USD: Multiply `atomic_size` by `atomic_last_price` during render pass.
 - [ ] **4.2: Depth Rendering**
 - [ ] Render Asks (Red) descending from top; Bids (Green) ascending from bottom.
 - [ ] Read from `MarketDataProcessor::get_atomic_snapshot` array.

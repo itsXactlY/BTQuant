@@ -260,30 +260,35 @@ void visualizeLiquiditySweeps(const LiquiditySweepDetector& detector, float widt
     }
 }
 
-void visualizeMarketData(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index, 
+void visualizeMarketData(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index,
                         float width, float height) {
     AtomicMarketData data;
     bool success = pipeline.read_market_data_snapshot(symbol_index, data);
-    
+
     if (!success) {
         ImGui::Text("No market data available for symbol index %u", symbol_index);
         return;
     }
-    
+
     // Display market data in a simple format
     ImGui::Text("Symbol Index: %u", symbol_index);
     ImGui::Separator();
-    
+
     ImGui::Text("Price: %.2f", data.price.load());
     ImGui::Text("Volume: %.2f", data.volume.load());
+    
+    // If USD: Multiply atomic_size (volume) by atomic_last_price (price) during render pass
+    double usd_notional_value = data.volume.load() * data.price.load();
+    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
+    
     ImGui::Text("Bid: %.2f @ %.2f", data.bid_price.load(), data.bid_volume.load());
     ImGui::Text("Ask: %.2f @ %.2f", data.ask_price.load(), data.ask_volume.load());
-    
+
     // Show timestamp
     auto timestamp = data.timestamp.load();
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     ImGui::Text("Timestamp: %s", std::ctime(&time_t));
-    
+
     // Show pipeline statistics
     auto stats = pipeline.get_stats();
     ImGui::Separator();
@@ -434,6 +439,9 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
     double ask_price = data.ask_price.load();
     double ask_volume = data.ask_volume.load();
 
+    // If USD: Multiply atomic_size (volume) by atomic_last_price (price) during render pass
+    double usd_notional_value = volume * price;
+
     // Create a table to display market depth: Buys | Asks | Price | Bids | Sells
     if (ImGui::BeginTable("MarketDepthTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -475,6 +483,7 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
     ImGui::Text("Additional Market Data:");
     ImGui::Text("Symbol Index: %u", symbol_index);
     ImGui::Text("Volume: %.2f", volume);
+    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
 
     // Show timestamp
     auto timestamp = data.timestamp.load();
@@ -484,6 +493,10 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
 
 void renderMarketTable(double bid_volume, double ask_volume, double last_price,
                       double bid_price, double ask_price, float width, float height) {
+    // If USD: Multiply atomic_size (volume) by atomic_last_price (price) during render pass
+    // Using bid_volume as atomic_size and last_price as atomic_last_price for this context
+    double usd_notional_value = bid_volume * last_price;
+
     // Create a table to display market data: Buys | Asks | Price | Bids | Sells
     if (ImGui::BeginTable("MarketTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -518,6 +531,10 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
 
         ImGui::EndTable();
     }
+
+    // Display the USD notional value
+    ImGui::Separator();
+    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
 }
 
 void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors,

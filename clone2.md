@@ -96,4 +96,4 @@
 - [x] Ensure all numeric data uses the monospaced atlas for perfect column alignment.
 - [x] **7.2: Universal Crosshair Sync**
 - [x] Read/Write to `GlobalCrosshair` atomics defined in `quant_workspace_component.hpp`.
-- [ ] Draw 1px dashed line in all panels when `g_crosshair.active == true`.
+- [x] Draw 1px dashed line in all panels when `g_crosshair.active == true`.

@@ -2,7 +2,6 @@
 
 #include "panel_base.hpp"
 #include "analytics/lockfreesnapshotpipeline.h"
-#include "ui/compute_to_imgui_bind.h"
 #include <memory>
 
 namespace BTQuant {
@@ -20,7 +19,9 @@ public:
     void setSymbolIndex(uint32_t symbol_index);
 
 private:
-    std::unique_ptr<BTQuant::UI::ComputeToImGuiBind> compute_binding_;
+    // Render the market depth table using snapshot pipeline
+    void renderMarketDepthTable();
+    
     std::shared_ptr<BTQuant::RenderEngine::LockFreeSnapshotPipeline> snapshot_pipeline_;
     uint32_t symbol_index_ = 0;
 };

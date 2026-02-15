@@ -155,6 +155,7 @@ set(DASHBOARD_SOURCES
     src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
+    src/components/market_depth_table_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
@@ -301,6 +302,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
+    src/components/market_depth_table_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
@@ -417,8 +419,8 @@ target_link_libraries(BTQuantTerminal PRIVATE
     TBB::tbb
 )
 
-# Define miniaudio implementation
-target_compile_definitions(BTQuantTerminal PRIVATE MINIAUDIO_IMPLEMENTATION=1)
+# Note: MINIAUDIO_IMPLEMENTATION is defined only in market_data_processor.cpp
+# to avoid multiple definition errors. Do not add it here as a global definition.
 
 # Conditionally build tests if BUILD_TESTS is enabled
 if(BUILD_TESTS)

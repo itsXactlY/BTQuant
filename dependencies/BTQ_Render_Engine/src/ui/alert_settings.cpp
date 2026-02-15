@@ -76,7 +76,7 @@ void AlertSettings::initialize_notification_method_settings() {
     sound_enabled_setting.description = "Play sound when alerts trigger";
     sound_enabled_setting.type = SettingType::BOOLEAN;
     sound_enabled_setting.category = SettingCategory::ALERTS;
-    sound_enabled_setting.bool_value = true;
+    sound_enabled_setting.bool_value = false;  // Muted by default
 
     settings_manager_.register_setting(sound_enabled_setting);
 
@@ -342,7 +342,7 @@ void AlertSettings::apply_notification_settings() {
     // This would typically involve updating the alert system with the current settings
     
     bool popup_enabled = settings_manager_.get_bool("alerts.popup_enabled", true);
-    bool sound_enabled = settings_manager_.get_bool("alerts.sound_enabled", true);
+    bool sound_enabled = settings_manager_.get_bool("alerts.sound_enabled", false);  // Muted by default
     bool system_tray_enabled = settings_manager_.get_bool("alerts.system_tray_enabled", true);
     bool email_enabled = settings_manager_.get_bool("alerts.email_enabled", false);
     bool webhook_enabled = settings_manager_.get_bool("alerts.webhook_enabled", false);

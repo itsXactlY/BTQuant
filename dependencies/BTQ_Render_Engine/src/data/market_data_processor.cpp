@@ -13,11 +13,11 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Include miniaudio if available
-#ifdef MINIAUDIO_IMPLEMENTATION
+// Include miniaudio - define implementation before including header
+#ifndef MINIAUDIO_IMPLEMENTATION
 #define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
 #endif
+#include "miniaudio.h"
 
 
 namespace BTQuant {
@@ -56,18 +56,14 @@ static ma_result play_simple_tone(ma_engine* engine, float frequency, float dura
         pAudioData[i] = sample;
     }
     
-    // Create a sound from our generated data
-    ma_sound sound;
-    ma_sound_config config = ma_sound_config_init();
-    config.pUserData = pAudioData; // Store the audio data in user data
-    
     // Create a data source for the generated audio
     ma_audio_buffer buffer;
     ma_audio_buffer_config bufferConfig = ma_audio_buffer_config_init(
         ma_format_f32,    // Format
         channels,         // Channels 
         totalFrames,      // Size in frames
-        pAudioData        // Data pointer
+        pAudioData,       // Data pointer
+        nullptr           // Allocation callbacks (use default)
     );
     
     ma_result result = ma_audio_buffer_init(&bufferConfig, &buffer);
@@ -76,8 +72,10 @@ static ma_result play_simple_tone(ma_engine* engine, float frequency, float dura
         return result;
     }
     
-    // Initialize the sound with the audio buffer
-    result = ma_sound_init_from_data_source(engine, &buffer.data_source, 0, NULL, &sound);
+    // Create a sound from our generated data
+    // Note: ma_audio_buffer itself is a data source, so we pass &buffer directly
+    ma_sound sound;
+    result = ma_sound_init_from_data_source(engine, &buffer, 0, nullptr, &sound);
     if (result != MA_SUCCESS) {
         ma_audio_buffer_uninit(&buffer);
         free(pAudioData);

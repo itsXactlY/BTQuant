@@ -2,49 +2,48 @@
 
 #include <fstream>
 #include <iostream>
-#include <unordered_map>
-
-#include "../../include/components/time_and_sales.hpp"
-#include "../../include/components/historical_time_sales.hpp"
-#include "../../include/rendering/panel_culler.hpp"
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 #include "../../include/components/alerts_panel.hpp"
 #include "../../include/components/chart_panel.hpp"
+#include "../../include/components/chart_replay_panel.hpp"
+#include "../../include/components/correlation_heatmap_panel.hpp"
 #include "../../include/components/depth_chart_panel.hpp"
 #include "../../include/components/dom_surface_panel.hpp"
+#include "../../include/components/drawing_tools_panel.hpp"
 #include "../../include/components/footprint_panel.hpp"
 #include "../../include/components/histogram_panel.hpp"
+#include "../../include/components/historical_time_sales.hpp"
+#include "../../include/components/keyboard_shortcuts_panel.hpp"
 #include "../../include/components/log_panel.hpp"
+#include "../../include/components/market_depth_table_panel.hpp"
 #include "../../include/components/metrics_panel.hpp"
+#include "../../include/components/multi_vwap_panel.hpp"
+#include "../../include/components/option_analytics_panel.hpp"
 #include "../../include/components/orderbook_panel.hpp"
 #include "../../include/components/performance_monitor_panel.hpp"
+#include "../../include/components/risk_analyzer_panel.hpp"
 #include "../../include/components/risk_metrics_panel.hpp"
 #include "../../include/components/scatter_plot_panel.hpp"
 #include "../../include/components/screener_panel.hpp"
 #include "../../include/components/status_bar_panel.hpp"
+#include "../../include/components/strategy_builder.hpp"
 #include "../../include/components/tape_panel.hpp"
+#include "../../include/components/technical_indicators_panel.hpp"
+#include "../../include/components/theme_customization_panel.hpp"
+#include "../../include/components/time_and_sales.hpp"
+#include "../../include/components/time_histogram_panel.hpp"
 #include "../../include/components/time_series_panel.hpp"
 #include "../../include/components/time_statistics_panel.hpp"
-#include "../../include/components/time_histogram_panel.hpp"
 #include "../../include/components/tpo_panel.hpp"
 #include "../../include/components/trading_orders_panel.hpp"
 #include "../../include/components/trading_positions_panel.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/watchlist_panel.hpp"
-#include "../../include/components/chart_replay_panel.hpp"
-#include "../../include/components/risk_analyzer_panel.hpp"
-#include "../../include/components/strategy_builder.hpp"
-#include "../../include/components/option_analytics_panel.hpp"
-#include "../../include/components/correlation_heatmap_panel.hpp"
-#include "../../include/components/multi_vwap_panel.hpp"
-#include "../../include/components/technical_indicators_panel.hpp"
-#include "../../include/components/theme_customization_panel.hpp"
-#include "../../include/components/keyboard_shortcuts_panel.hpp"
-#include "../../include/components/drawing_tools_panel.hpp"
-#include "../../include/components/market_depth_table_panel.hpp"
-#include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
+#include "../../include/rendering/panel_culler.hpp"
+#include "../../include/symbol_registry.hpp"
 
 using json = nlohmann::json;
 
@@ -65,12 +64,13 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
   // See: main_trading_terminal.cpp where workspace->set_layout() is called.
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
-  strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
+  strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(
+      PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
 }
 
 PanelManager::~PanelManager() {
-  context_menu_manager_.reset(); // Explicitly reset context menu manager before other members
-  strategy_builder_.reset(); // Explicitly reset strategy builder before other members
+  context_menu_manager_.reset();  // Explicitly reset context menu manager before other members
+  strategy_builder_.reset();      // Explicitly reset strategy builder before other members
   panels_.clear();
 }
 
@@ -128,7 +128,8 @@ void PanelManager::render() {
 
   // Process context menu for only the visible panels
   for (const auto* panel : visible_panels) {
-    // Cast back to non-const pointer to call handle_context_menu (since handle_context_menu is non-const)
+    // Cast back to non-const pointer to call handle_context_menu (since handle_context_menu is
+    // non-const)
     const_cast<BTQuant::PanelBase*>(panel)->handle_context_menu(*context_menu_manager_);
   }
 
@@ -156,20 +157,22 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), nullptr, this);
+      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(),
+                                           nullptr, this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
-        chart_panel->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
-          // Find the active time statistics panel and adjust its view to match the time range
-          for (auto& [id, panel] : panels_) {
-            if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
-              // Scroll the time statistics panel to show the corresponding time range
-              time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
-              break; // Assuming we want to adjust the first time stats panel we find
-            }
-          }
-        });
+        chart_panel->set_scroll_sync_callback(
+            [this](uint64_t start_timestamp, uint64_t end_timestamp) {
+              // Find the active time statistics panel and adjust its view to match the time range
+              for (auto& [id, panel] : panels_) {
+                if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
+                  // Scroll the time statistics panel to show the corresponding time range
+                  time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
+                  break;  // Assuming we want to adjust the first time stats panel we find
+                }
+              }
+            });
       }
       break;
     case PanelType::TIME_STATISTICS: {
@@ -182,29 +185,31 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
           if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
             // Center the chart on the clicked timestamp
             chart_panel->center_on_timestamp(timestamp);
-            break; // Assuming we want to center the first chart panel we find
+            break;  // Assuming we want to center the first chart panel we find
           }
         }
       });
 
       // Set up scroll synchronization from TimeStats to Chart
-      time_stats->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
-        // Find the active chart panel and adjust its view to match the time range
-        for (auto& [id, panel] : panels_) {
-          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
-            // Convert timestamps to the format used by the chart (seconds)
-            double start_time_seconds = static_cast<double>(start_timestamp) / 1000000.0;
-            double end_time_seconds = static_cast<double>(end_timestamp) / 1000000.0;
+      time_stats->set_scroll_sync_callback(
+          [this](uint64_t start_timestamp, uint64_t end_timestamp) {
+            // Find the active chart panel and adjust its view to match the time range
+            for (auto& [id, panel] : panels_) {
+              if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+                // Convert timestamps to the format used by the chart (seconds)
+                double start_time_seconds = static_cast<double>(start_timestamp) / 1000000.0;
+                double end_time_seconds = static_cast<double>(end_timestamp) / 1000000.0;
 
-            // Update the chart's view range
-            chart_panel->last_view_min_ = start_time_seconds;
-            chart_panel->last_view_max_ = end_time_seconds;
-            chart_panel->follow_latest_ = false; // Disable auto-follow to maintain the synchronized view
+                // Update the chart's view range
+                chart_panel->last_view_min_ = start_time_seconds;
+                chart_panel->last_view_max_ = end_time_seconds;
+                chart_panel->follow_latest_ =
+                    false;  // Disable auto-follow to maintain the synchronized view
 
-            break; // Assuming we want to adjust the first chart panel we find
-          }
-        }
-      });
+                break;  // Assuming we want to adjust the first chart panel we find
+              }
+            }
+          });
 
       panel = std::move(time_stats);
       break;
@@ -261,7 +266,8 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<TpoPanel>(config);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
+      panel =
+          std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -346,7 +352,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
         }
 
         if (watchlist_panel && alerts_panel) {
-          break; // Both found, exit early
+          break;  // Both found, exit early
         }
       }
 
@@ -377,20 +383,22 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), nullptr, this);
+      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(),
+                                           nullptr, this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
-        chart_panel->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
-          // Find the active time statistics panel and adjust its view to match the time range
-          for (auto& [id, panel] : panels_) {
-            if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
-              // Scroll the time statistics panel to show the corresponding time range
-              time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
-              break; // Assuming we want to adjust the first time stats panel we find
-            }
-          }
-        });
+        chart_panel->set_scroll_sync_callback(
+            [this](uint64_t start_timestamp, uint64_t end_timestamp) {
+              // Find the active time statistics panel and adjust its view to match the time range
+              for (auto& [id, panel] : panels_) {
+                if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
+                  // Scroll the time statistics panel to show the corresponding time range
+                  time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
+                  break;  // Assuming we want to adjust the first time stats panel we find
+                }
+              }
+            });
       }
       break;
     case PanelType::TIME_AND_SALES: {
@@ -445,7 +453,8 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<TpoPanel>(config);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
+      panel =
+          std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -530,7 +539,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
         }
 
         if (watchlist_panel && alerts_panel) {
-          break; // Both found, exit early
+          break;  // Both found, exit early
         }
       }
 
@@ -556,7 +565,7 @@ uint32_t PanelManager::find_panel_by_type(PanelType type) const {
       return id;
     }
   }
-  return 0; // Return 0 if no panel of the specified type is found
+  return 0;  // Return 0 if no panel of the specified type is found
 }
 
 PanelBase* PanelManager::get_panel_by_id(uint32_t panel_id) const {
@@ -885,6 +894,7 @@ PanelConfig PanelManager::create_panel_config(PanelType type, const std::string&
   config.grid_y = grid_y;
   config.grid_width = width;
   config.grid_height = height;
+  config.symbol = active_symbol_name_;
 
   // Special handling for status bar
   if (type == PanelType::STATUS_BAR) {
@@ -1075,29 +1085,30 @@ std::string PanelManager::serialize_layout() const {
 
     // Serialize panel-specific settings
     json settings_json;
-    
+
     // TPO Panel specific settings
     if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel.get())) {
-        settings_json["symbol_id"] = tpo_panel->get_symbol_id();
+      settings_json["symbol_id"] = tpo_panel->get_symbol_id();
     }
     // DOM Surface Panel specific settings
     else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel.get())) {
-        settings_json["symbol_id"] = dom_panel->get_symbol_id();
-        settings_json["price_range"] = dom_panel->get_price_range();
-        settings_json["price_bins"] = dom_panel->get_price_bins();
-        settings_json["auto_scale_price"] = dom_panel->get_auto_scale_price();
-        settings_json["large_order_threshold"] = dom_panel->get_large_order_threshold();
-        settings_json["enable_fade_out"] = dom_panel->get_enable_fade_out();
-        settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
+      settings_json["symbol_id"] = dom_panel->get_symbol_id();
+      settings_json["price_range"] = dom_panel->get_price_range();
+      settings_json["price_bins"] = dom_panel->get_price_bins();
+      settings_json["auto_scale_price"] = dom_panel->get_auto_scale_price();
+      settings_json["large_order_threshold"] = dom_panel->get_large_order_threshold();
+      settings_json["enable_fade_out"] = dom_panel->get_enable_fade_out();
+      settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
     }
     // Option Analytics Panel specific settings
-    else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
-        settings_json["active_tab"] = option_panel->get_active_tab();
+    else if (auto* option_panel =
+                 dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
+      settings_json["active_tab"] = option_panel->get_active_tab();
     }
-    
+
     // Add settings if any were captured
     if (!settings_json.empty()) {
-        panel_json["settings"] = settings_json;
+      panel_json["settings"] = settings_json;
     }
 
     panels_json.push_back(panel_json);
@@ -1134,73 +1145,75 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
 
         // Create panel config with position and size
         PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
-        
+
         // Restore position and size if available
         if (p.contains("position")) {
-            auto pos_array = p["position"];
-            config.position = ImVec2(pos_array[0].get<float>(), pos_array[1].get<float>());
+          auto pos_array = p["position"];
+          config.position = ImVec2(pos_array[0].get<float>(), pos_array[1].get<float>());
         }
         if (p.contains("size")) {
-            auto size_array = p["size"];
-            config.size = ImVec2(size_array[0].get<float>(), size_array[1].get<float>());
+          auto size_array = p["size"];
+          config.size = ImVec2(size_array[0].get<float>(), size_array[1].get<float>());
         }
         if (p.contains("symbol")) {
-            config.symbol = p["symbol"].get<std::string>();
+          config.symbol = p["symbol"].get<std::string>();
         }
 
         uint32_t id = add_panel(type, title, grid_x, grid_y, width, height);
-        
+
         // Get the newly created panel to apply specific settings
         auto* panel = get_panel_by_id(id);
         if (panel) {
-            // Update the panel's config with restored position and size
-            auto& panel_config = panel->get_config();
-            panel_config.position = config.position;
-            panel_config.size = config.size;
-            
-            // Apply panel-specific settings if available
-            if (p.contains("settings")) {
-                auto settings = p["settings"];
-                
-                // TPO Panel specific settings
-                if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel)) {
-                    if (settings.contains("symbol_id")) {
-                        tpo_panel->set_symbol_id(settings["symbol_id"].get<uint32_t>());
-                    }
-                }
-                // DOM Surface Panel specific settings
-                else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel)) {
-                    if (settings.contains("symbol_id")) {
-                        dom_panel->setSymbol(settings["symbol_id"].get<uint32_t>());
-                    }
-                    if (settings.contains("price_range")) {
-                        dom_panel->set_price_range(settings["price_range"].get<double>());
-                    }
-                    if (settings.contains("price_bins")) {
-                        dom_panel->set_price_bins(settings["price_bins"].get<int>());
-                    }
-                    if (settings.contains("auto_scale_price")) {
-                        dom_panel->set_auto_scale_price(settings["auto_scale_price"].get<bool>());
-                    }
-                    if (settings.contains("large_order_threshold")) {
-                        dom_panel->set_large_order_threshold(settings["large_order_threshold"].get<double>());
-                    }
-                    if (settings.contains("enable_fade_out")) {
-                        dom_panel->set_enable_fade_out(settings["enable_fade_out"].get<bool>());
-                    }
-                    if (settings.contains("heatmap_intensity")) {
-                        dom_panel->set_heatmap_intensity(settings["heatmap_intensity"].get<float>());
-                    }
-                }
-                // Option Analytics Panel specific settings
-                else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel)) {
-                    if (settings.contains("active_tab")) {
-                        option_panel->set_active_tab(settings["active_tab"].get<int>());
-                    }
-                }
+          // Update the panel's config with restored position and size
+          auto& panel_config = panel->get_config();
+          panel_config.position = config.position;
+          panel_config.size = config.size;
+
+          // Apply panel-specific settings if available
+          if (p.contains("settings")) {
+            auto settings = p["settings"];
+
+            // TPO Panel specific settings
+            if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel)) {
+              if (settings.contains("symbol_id")) {
+                tpo_panel->set_symbol_id(settings["symbol_id"].get<uint32_t>());
+              }
             }
+            // DOM Surface Panel specific settings
+            else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel)) {
+              if (settings.contains("symbol_id")) {
+                dom_panel->setSymbol(settings["symbol_id"].get<uint32_t>());
+              }
+              if (settings.contains("price_range")) {
+                dom_panel->set_price_range(settings["price_range"].get<double>());
+              }
+              if (settings.contains("price_bins")) {
+                dom_panel->set_price_bins(settings["price_bins"].get<int>());
+              }
+              if (settings.contains("auto_scale_price")) {
+                dom_panel->set_auto_scale_price(settings["auto_scale_price"].get<bool>());
+              }
+              if (settings.contains("large_order_threshold")) {
+                dom_panel->set_large_order_threshold(
+                    settings["large_order_threshold"].get<double>());
+              }
+              if (settings.contains("enable_fade_out")) {
+                dom_panel->set_enable_fade_out(settings["enable_fade_out"].get<bool>());
+              }
+              if (settings.contains("heatmap_intensity")) {
+                dom_panel->set_heatmap_intensity(settings["heatmap_intensity"].get<float>());
+              }
+            }
+            // Option Analytics Panel specific settings
+            else if (auto* option_panel =
+                         dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel)) {
+              if (settings.contains("active_tab")) {
+                option_panel->set_active_tab(settings["active_tab"].get<int>());
+              }
+            }
+          }
         }
-        
+
         set_panel_visible(id, visible);
       }
     }
@@ -1298,7 +1311,8 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
         break;
       }
       case PanelType::TIME_STATISTICS: {
-        // Time statistics panels are typically linked to charts and don't need direct symbol updates
+        // Time statistics panels are typically linked to charts and don't need direct symbol
+        // updates
         break;
       }
       case PanelType::TIME_HISTOGRAM: {
@@ -1363,32 +1377,35 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       add_panel(PanelType::ORDERBOOK, "Orderbook", 2, 0, 1, 2);
       add_panel(PanelType::METRICS, "Metrics", 2, 2, 1, 1);
       break;
-      
+
     case LayoutPreset::MODERN_TRADING:
       // MMT programmatic Grid Construction
       // Set up a 100-column grid system to enable percentage-based splits
       set_grid_layout(100, 100);
 
       // Create central ChartSuperNode
-      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 75);  // Central chart taking most space
+      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72,
+                75);  // Central chart taking most space
 
       // Split Left (3%) -> drawing_tools_panel
       add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 75);  // Left side panel
 
       // Split Right (25%) -> dom_surface_panel + orderbook_panel
       add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 37);  // Top-right (37%)
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 37, 25, 38);  // Bottom-right (38%)
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 37, 25, 38);     // Bottom-right (38%)
 
       // Split Right-Bottom (40%) -> time_and_sales (Trades)
-      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 75, 25, 24);  // Bottom-right quadrant (24% height)
+      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 75, 25,
+                24);  // Bottom-right quadrant (24% height)
 
       // Split Center-Bottom (15%) -> time_histogram_panel
-      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 75, 72, 15);  // Bottom-center (15% height)
+      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 75, 72,
+                15);  // Bottom-center (15% height)
 
       // Status bar at the bottom
       add_panel(PanelType::STATUS_BAR, "Status", 0, 99, 100, 1);  // Full width, 1% height
       break;
-      
+
     case LayoutPreset::DASHBOARD_ONLY:
       // Layout with only dashboard elements, no trading panels
       add_panel(PanelType::CHART, "Chart", 0, 0, 2, 2);
@@ -1396,7 +1413,7 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 2, 1, 1, 1);
       add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 3, 1);
       break;
-      
+
     case LayoutPreset::CHART_FOCUS:
       // Layout focused on charting with minimal other panels
       add_panel(PanelType::CHART, "Main Chart", 0, 0, 3, 3);
@@ -1404,7 +1421,7 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       add_panel(PanelType::TIME_AND_SALES, "T&S", 1, 3, 1, 1);
       add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
       break;
-      
+
     case LayoutPreset::RISK_MONITORING:
       // Layout focused on risk monitoring
       add_panel(PanelType::RISK_METRICS, "Risk Metrics", 0, 0, 1, 2);
@@ -1436,7 +1453,7 @@ void PanelManager::split_right_dom_orderbook_panels() {
 
   // Split Right (25%) -> dom_surface_panel + orderbook_panel
   add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // Right-top
-  add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // Right-bottom
+  add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);     // Right-bottom
 }
 
 void PanelManager::initialize_vulkan_resources(VulkanCore* core) {

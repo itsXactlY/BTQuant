@@ -74,15 +74,14 @@ void QuantWorkspaceComponent::update(float dt) {
     if (!active_chart) {
       // If no chart is under the cursor, check if we should keep the global crosshair active
       // based on the global state
-      if (!ImPlot::IsPlotHovered()) { // If no plot is hovered anywhere
-        // Only deactivate if the mouse hasn't moved much (indicating it's not actively being used)
-        if (distance <= mouse_move_threshold) {
-          // Gradually fade out or deactivate the global crosshair after a period of inactivity
-          // For now, we'll just ensure it's properly tracked
-          if (!crosshair_active_) {
-            // If local crosshair is inactive, make sure global crosshair is also inactive
-            g_crosshair.active.store(false);
-          }
+      // Note: IsPlotHovered() cannot be called here in update() as it requires an active plot context
+      // The crosshair deactivation is handled in render() after BeginPlot() instead
+      if (distance <= mouse_move_threshold) {
+        // Gradually fade out or deactivate the global crosshair after a period of inactivity
+        // For now, we'll just ensure it's properly tracked
+        if (!crosshair_active_) {
+          // If local crosshair is inactive, make sure global crosshair is also inactive
+          g_crosshair.active.store(false);
         }
       }
     } else {
@@ -201,7 +200,8 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
         
         // Update the global crosshair atomics for universal sync
         // Convert mouse position to chart time/price coordinates
-        ImPlot::SetNextPlotLimits(0, 1, 0, 1, ImGuiCond_Always); // This is a workaround to access plot coordinates
+        // Note: SetNextPlotLimits was deprecated in favor of SetNextAxisLimits
+        // This workaround is no longer needed for coordinate access
         
         // Since we can't directly access the plot coordinates here, we'll update the global crosshair
         // with the active state and let each chart panel handle the conversion

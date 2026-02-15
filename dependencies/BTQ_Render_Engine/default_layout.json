@@ -1,14 +1,14 @@
 {
     "grid": {
-        "columns": 3,
-        "rows": 4
+        "columns": 100,
+        "rows": 100
     },
     "panels": [
         {
             "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 2,
-            "grid_y": 3,
+            "grid_width": 100,
+            "grid_x": 0,
+            "grid_y": 99,
             "position": [
                 0.0,
                 0.0
@@ -23,43 +23,88 @@
             "visible": true
         },
         {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 1,
-            "grid_y": 3,
+            "grid_height": 15,
+            "grid_width": 72,
+            "grid_x": 3,
+            "grid_y": 75,
             "position": [
-                640.0,
+                57.60000228881836,
                 817.5
             ],
             "size": [
-                640.0,
-                262.5
+                1382.4000244140625,
+                157.5
             ],
             "symbol": "",
-            "title": "T&S",
+            "title": "Time Histogram",
+            "type": 22,
+            "visible": true
+        },
+        {
+            "grid_height": 24,
+            "grid_width": 25,
+            "grid_x": 75,
+            "grid_y": 75,
+            "position": [
+                1440.0,
+                817.5
+            ],
+            "size": [
+                480.0000305175781,
+                252.0
+            ],
+            "symbol": "",
+            "title": "Time & Sales",
             "type": 23,
+            "visible": true
+        },
+        {
+            "grid_height": 38,
+            "grid_width": 25,
+            "grid_x": 75,
+            "grid_y": 37,
+            "position": [
+                1440.0,
+                418.5
+            ],
+            "size": [
+                480.0000305175781,
+                399.0
+            ],
+            "symbol": "",
+            "title": "BTC-USDT Orderbook",
+            "type": 10,
             "visible": true
         },
         {
             "grid_height": 1,
             "grid_width": 1,
             "grid_x": 0,
-            "grid_y": 3,
+            "grid_y": 0,
             "position": [
                 0.0,
-                817.5
+                0.0
             ],
+            "settings": {
+                "auto_scale_price": true,
+                "enable_fade_out": false,
+                "heatmap_intensity": 1.0,
+                "large_order_threshold": 10.0,
+                "price_bins": 100,
+                "price_range": 0.02,
+                "symbol_id": 10010
+            },
             "size": [
-                640.0,
-                262.5
+                400.0,
+                300.0
             ],
             "symbol": "",
-            "title": "SOLUSDT Orderbook",
-            "type": 10,
+            "title": "DOM Surface",
+            "type": 2,
             "visible": true
         },
         {
-            "grid_height": 3,
+            "grid_height": 75,
             "grid_width": 3,
             "grid_x": 0,
             "grid_y": 0,
@@ -68,11 +113,29 @@
                 30.0
             ],
             "size": [
-                1920.0,
+                57.60000228881836,
                 787.5
             ],
             "symbol": "",
-            "title": "BTC-USDT Chart [1m]",
+            "title": "Drawing Tools",
+            "type": 35,
+            "visible": true
+        },
+        {
+            "grid_height": 75,
+            "grid_width": 72,
+            "grid_x": 3,
+            "grid_y": 0,
+            "position": [
+                57.60000228881836,
+                30.0
+            ],
+            "size": [
+                1382.4000244140625,
+                787.5
+            ],
+            "symbol": "",
+            "title": "BTC-USDT Chart [1s]",
             "type": 0,
             "visible": true
         }

@@ -129,6 +129,15 @@ public:
     void bindLiveBidAskButton(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, const char* window_name = "Live Bid/Ask Button");
 
     /**
+     * @brief Render a button with live best bid/ask from atomic data
+     * @param pipeline Reference to the Lock-Free Snapshot Pipeline instance
+     * @param symbol_index Index of the symbol to visualize
+     * @param button_label Custom label for the button (will be overridden with bid/ask data)
+     * @return True if button was clicked, false otherwise
+     */
+    bool renderLiveBidAskButton(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, const char* button_label = "Best Bid/Ask");
+
+    /**
      * @brief Bind mouse trading interface with massive BUY MKT / SELL MKT buttons
      * @param pipeline Reference to the Lock-Free Snapshot Pipeline instance
      * @param symbol_index Index of the symbol to visualize

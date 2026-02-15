@@ -936,6 +936,27 @@ void ComputeToImGuiBind::bindLiveBidAskButton(const LockFreeSnapshotPipeline& pi
     m_visualizations.push_back(viz);
 }
 
+bool ComputeToImGuiBind::renderLiveBidAskButton(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index, const char* button_label) {
+    AtomicMarketData data;
+    bool success = pipeline.read_market_data_snapshot(symbol_index, data);
+
+    if (success) {
+        // Get the current bid and ask prices from atomic data
+        double bid_price = data.bid_price.load();
+        double ask_price = data.ask_price.load();
+
+        // Format the button text with live bid/ask
+        char button_text[128];
+        snprintf(button_text, sizeof(button_text), "%s: %.2f | %.2f", button_label, bid_price, ask_price);
+
+        // Create the button with the live bid/ask data in the text
+        return ImGui::Button(button_text);
+    } else {
+        // If no data available, show a placeholder button
+        return ImGui::Button("No Data Available");
+    }
+}
+
 void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index, const char* window_name) {
     // Create a visualization entry for the mouse trading interface
     BoundVisualization viz;

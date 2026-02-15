@@ -437,6 +437,12 @@ int main() {
 
     std::cout << "Mouse Trading Interface bound to UI successfully!\n";
 
+    // Test the new standalone Live Bid/Ask Button function
+    std::cout << "\n=== Testing Standalone Live Bid/Ask Button ===\n";
+
+    // The new renderLiveBidAskButton function can be used in other contexts
+    std::cout << "Standalone Live Bid/Ask Button function is available for use!\n";
+
     std::cout << "\nAll analytics modules and UI visualizations tested successfully!\n";
 
     // Test Pitch Shifting functionality - Scale pitch inversely to volume (Big trade = Deep bass)

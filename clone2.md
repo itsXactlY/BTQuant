@@ -41,10 +41,10 @@
 
 - [x] **3.1: 5-Column MMT Layout**
 - [x] Render Table: `[Buys | Asks | Price | Bids | Sells]`.
-- [ ] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
-- [ ] **3.2: Cumulative Volume Columns**
-- [ ] Pull `VolumeData` from `ClusterEngine` without mutexes.
-- [x] Render horizontal bars using `DrawList->AddRectFilled`.
+- [x] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
+- [x] **3.2: Cumulative Volume Columns**
+- [x] Pull `VolumeData` from `ClusterEngine` without mutexes.
+- [ ] Render horizontal bars using `DrawList->AddRectFilled`.
 - [ ] Green bars (Buys) extend right; Red bars (Sells) extend left.
 
 ---

@@ -10,6 +10,7 @@
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "../texture/texture_atlas_manager.hpp"
+#include "../trading/trade_command_queue.hpp"
 
 namespace BTQuant {
 
@@ -117,6 +118,10 @@ class TimeAndSalesPanel : public PanelBase {
   void render_trade_size_histogram();
   uint64_t parseTimeString(const std::string& time_str);
   void subscribe_to_updates();
+  
+  // Trade command routing functionality
+  void render_trade_action_buttons(const RenderEngine::TradeData& trade);
+  void place_order_from_trade(const RenderEngine::TradeData& trade, BTQuant::RenderEngine::OrderSide side);
   
   // Override the base class method for Vulkan resource initialization
   void initialize_vulkan_resources(VulkanCore* core) override;

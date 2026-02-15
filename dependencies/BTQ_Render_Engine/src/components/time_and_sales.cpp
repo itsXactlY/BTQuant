@@ -919,13 +919,14 @@ void TimeAndSalesPanel::render_trade_table() {
   double large_trade_threshold = avg_trade_size * 5.0;
   double block_trade_threshold = avg_trade_size * 10.0;
 
-  if (ImGui::BeginTable(table_id, 4,
+  if (ImGui::BeginTable(table_id, 5,  // Changed from 4 to 5 columns to add action buttons
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
     ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 100.0f);  // New Actions column
     ImGui::TableHeadersRow();
 
     // Count filtered trades to determine the total for the clipper
@@ -1010,25 +1011,25 @@ void TimeAndSalesPanel::render_trade_table() {
 
             // Exchange column - render icon from texture atlas
             ImGui::TableSetColumnIndex(0);
-            
+
             // Get exchange name to determine which icon to render
             std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
-            
+
             // If texture atlas manager is available, render exchange icon
             if (texture_atlas_manager_) {
                 // Get UV coordinates for this exchange
                 auto uv_coords = texture_atlas_manager_->getExchangeIconUV(exchange);
-                
+
                 // Get the texture atlas for rendering
                 ImTextureID texture_id = texture_atlas_manager_->getImGuiTextureID(vulkan_core_);
-                
+
                 // Render the exchange icon using the texture atlas
                 ImVec2 icon_size(16.0f, 16.0f); // Size of the icon to display
                 ImVec2 uv_min(uv_coords[0], uv_coords[1]); // UV coordinates for top-left
                 ImVec2 uv_max(uv_coords[2], uv_coords[3]); // UV coordinates for bottom-right
-                
+
                 ImGui::Image(texture_id, icon_size, uv_min, uv_max);
-                
+
                 // Add tooltip with exchange name
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", exchange.c_str());
@@ -1125,6 +1126,10 @@ void TimeAndSalesPanel::render_trade_table() {
             if (is_block_trade_time) {
               ImGui::PopFont();
             }
+
+            // Action buttons column
+            ImGui::TableSetColumnIndex(4);
+            render_trade_action_buttons(trade);
 
             ImGui::PopID();
 
@@ -1454,6 +1459,84 @@ void TimeAndSalesPanel::exportTradesToCSV() {
   }
 
   file.close();
+}
+
+void TimeAndSalesPanel::render_trade_action_buttons(const RenderEngine::TradeData& trade) {
+  // Create buy/sell buttons based on the current trade
+  // If the trade was a buy, offer a sell button to close position
+  // If the trade was a sell, offer a buy button to close position
+  
+  // Buy button - for taking the opposite side of the trade
+  ImVec4 buy_button_color = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);  // Green
+  ImGui::PushStyleColor(ImGuiCol_Button, buy_button_color);
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.6f, 0.0f, 1.0f));
+  
+  if (ImGui::SmallButton("Buy##buy_btn")) {
+    place_order_from_trade(trade, BTQuant::RenderEngine::OrderSide::BUY);
+  }
+  
+  ImGui::PopStyleColor(3);
+  
+  ImGui::SameLine();
+  
+  // Sell button - for taking the opposite side of the trade
+  ImVec4 sell_button_color = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);  // Red
+  ImGui::PushStyleColor(ImGuiCol_Button, sell_button_color);
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+  
+  if (ImGui::SmallButton("Sell##sell_btn")) {
+    place_order_from_trade(trade, BTQuant::RenderEngine::OrderSide::SELL);
+  }
+  
+  ImGui::PopStyleColor(3);
+  
+  // Add tooltip for the buttons
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Click to place an order based on this trade");
+  }
+}
+
+void TimeAndSalesPanel::place_order_from_trade(const RenderEngine::TradeData& trade, BTQuant::RenderEngine::OrderSide side) {
+  // Create a trade command based on the selected trade
+  BTQuant::RenderEngine::TradeCommand cmd;
+  
+  // Set the command properties
+  cmd.command_id = BTQuant::RenderEngine::GlobalTradeQueue::instance().next_command_id();
+  cmd.symbol_id = trade.symbol_id;
+  cmd.symbol = symbol_name_;  // Use the current symbol name
+  cmd.exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+  cmd.side = side;
+  cmd.type = BTQuant::RenderEngine::OrderType::MARKET;  // Default to market order
+  cmd.tif = BTQuant::RenderEngine::TimeInForce::GTC;    // Default to Good Till Cancel
+  cmd.quantity = trade.size;  // Use the same size as the trade
+  cmd.price = trade.price;    // Use the same price as the trade
+  cmd.stop_price = 0.0;       // Not used for market orders
+  
+  // Set timestamp
+  cmd.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch()
+  ).count();
+  
+  // Set client order ID
+  cmd.client_order_id = cmd.command_id;
+  
+  // Add notes about the origin of this order
+  cmd.notes = "Order placed from Time & Sales panel based on trade at " + std::to_string(trade.price);
+  
+  // Push the command to the global trade queue
+  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
+  
+  if (pushed) {
+    std::cout << "[TimeAndSalesPanel] Order queued: "
+              << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
+              << " " << trade.size << " " << symbol_name_
+              << " @ " << trade.price
+              << " based on observed trade" << std::endl;
+  } else {
+    std::cerr << "[TimeAndSalesPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
+  }
 }
 
 }  // namespace BTQuant

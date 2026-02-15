@@ -4395,14 +4395,40 @@ void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size
     color.w *= bubble_opacity_;  // Apply opacity
     ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
 
-    // Draw the bubble as a filled circle
-    draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
+    // For market sells: Draw solid red rectangles extending left
+    if (!trade.is_buy) {  // This is a sell trade
+        // Calculate rectangle dimensions
+        float rect_width = bubble_size * 2.0f;  // Make it wider than the circle
+        float rect_height = bubble_size;        // Make it shorter than the circle diameter
+        float rect_half_height = rect_height / 2.0f;
+        
+        // Define rectangle corners - extending left from the trade position
+        ImVec2 rect_start = ImVec2(bubble_pos.x - rect_width, bubble_pos.y - rect_half_height);
+        ImVec2 rect_end = ImVec2(bubble_pos.x, bubble_pos.y + rect_half_height);
+        
+        // Use solid red color for sell rectangles
+        ImVec4 red_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Pure red
+        red_color.w *= bubble_opacity_;  // Apply opacity
+        ImU32 red_im_color = ImGui::ColorConvertFloat4ToU32(red_color);
+        
+        // Draw the solid red rectangle extending left
+        draw_list->AddRectFilled(rect_start, rect_end, red_im_color);
+        
+        // Draw a subtle border to make the rectangle more visible
+        ImVec4 border_color = red_color;
+        border_color.w = 0.3f;  // Less opaque border
+        ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+        draw_list->AddRect(rect_start, rect_end, border_im_color, 0.0f, ImDrawFlags_RoundCornersNone, 1.0f);
+    } else {  // This is a buy trade - keep the original bubble
+        // Draw the bubble as a filled circle
+        draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
 
-    // Draw a subtle border to make the bubble more visible
-    ImVec4 border_color = color;
-    border_color.w = 0.3f;  // Less opaque border
-    ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
-    draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
+        // Draw a subtle border to make the bubble more visible
+        ImVec4 border_color = color;
+        border_color.w = 0.3f;  // Less opaque border
+        ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+        draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
+    }
   }
 }
 

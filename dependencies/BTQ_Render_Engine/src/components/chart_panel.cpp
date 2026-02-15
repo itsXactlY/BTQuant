@@ -708,6 +708,16 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-follow", &follow_latest_);
 
+  // HD/SD Resolution toggle
+  ImGui::SameLine();
+  if (ImGui::RadioButton("HD", hd_resolution_enabled_)) {
+    hd_resolution_enabled_ = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::RadioButton("SD", !hd_resolution_enabled_)) {
+    hd_resolution_enabled_ = false;
+  }
+
   ImGui::PopStyleVar();
 }
 
@@ -2929,15 +2939,33 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     const float MIN_BODY_WIDTH_PX = 3.0f;
     const float MIN_BODY_HEIGHT_PX = 1.0f;
 
+    // HD/SD Resolution: Adjust rendering based on toggle
+    // HD = 1 tick per row (normal), SD = 10 ticks per row (aggregated)
+    int aggregation_factor = hd_resolution_enabled_ ? 1 : 10;
+
     // Draw ONLY visible candles
-    for (size_t i = render_start_idx; i < render_end_idx; ++i) {
+    for (size_t i = render_start_idx; i < render_end_idx; i += aggregation_factor) {
+      // For SD mode, aggregate multiple ticks into one visual unit
       double x = chart.dates[i];
       if (x == 0) continue;
 
+      // Initialize with first tick values
       float open = chart.opens[i];
       float high = chart.highs[i];
       float low = chart.lows[i];
       float close = chart.closes[i];
+      
+      // Aggregate if in SD mode
+      if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
+        for (int j = 1; j < aggregation_factor; ++j) {
+          size_t idx = i + j;
+          if (idx < chart.dates.size()) {
+            high = std::max(static_cast<float>(high), chart.highs[idx]);
+            low = std::min(static_cast<float>(low), chart.lows[idx]);
+            close = chart.closes[idx]; // Use the last close in the aggregation
+          }
+        }
+      }
 
       // Skip invalid candles
       if (high == 0 || low == 0 || open == 0 || close == 0) continue;
@@ -2999,22 +3027,38 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       std::vector<double> y_coords_high;
       std::vector<double> y_coords_low;
 
-      for (size_t i = render_start_idx; i < render_end_idx; ++i) {
+      for (size_t i = render_start_idx; i < render_end_idx; i += aggregation_factor) {
         RenderEngine::OHLCVCandle candle;
         candle.timestamp =
             static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert back to microseconds
+        
+        // Initialize with first tick values
         candle.open = chart.opens[i];
         candle.high = chart.highs[i];
         candle.low = chart.lows[i];
         candle.close = chart.closes[i];
         candle.volume = chart.volumes[i];
+        
+        // Aggregate if in SD mode
+        if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
+          for (int j = 1; j < aggregation_factor; ++j) {
+            size_t idx = i + j;
+            if (idx < chart.dates.size()) {
+              candle.high = std::max(static_cast<float>(candle.high), chart.highs[idx]);
+              candle.low = std::min(static_cast<float>(candle.low), chart.lows[idx]);
+              candle.close = chart.closes[idx]; // Use the last close in the aggregation
+              candle.volume += chart.volumes[idx]; // Sum the volumes
+            }
+          }
+        }
+        
         candle.trade_count = 1;  // Placeholder
 
         visible_candles.push_back(candle);
 
         // Calculate screen coordinates for this candle
-        ImVec2 wick_top = ImPlot::PlotToPixels(chart.dates[i], chart.highs[i]);
-        ImVec2 wick_bot = ImPlot::PlotToPixels(chart.dates[i], chart.lows[i]);
+        ImVec2 wick_top = ImPlot::PlotToPixels(chart.dates[i], candle.high);
+        ImVec2 wick_bot = ImPlot::PlotToPixels(chart.dates[i], candle.low);
 
         x_coords.push_back(wick_top.x);
         y_coords_high.push_back(wick_top.y);
@@ -3303,7 +3347,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // Render aggressor trade bubbles
     if (show_aggressor_bubbles_) {
-      render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx);
+      render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx, aggregation_factor);
     }
 
     ImPlot::EndPlot();
@@ -4296,7 +4340,7 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
 
 // Method to render aggressor trade bubbles on the chart
 void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx,
-                                                size_t end_idx) {
+                                                size_t end_idx, int aggregation_factor) {
   if (!show_aggressor_bubbles_ || aggressor_trades_.empty() || chart.dates.empty()) {
     return;
   }
@@ -4326,6 +4370,16 @@ void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size
       // Check if it's close enough to the visible range to still be shown
       if (chart_idx < start_idx && (start_idx - chart_idx) > 5) continue;
       if (chart_idx >= end_idx && (chart_idx - end_idx) > 5) continue;
+    }
+
+    // For SD mode, we might want to aggregate or reduce the number of bubbles shown
+    // Only render every nth bubble based on aggregation factor to reduce clutter
+    bool hd_resolution_enabled = (aggregation_factor == 1);  // Determine from aggregation factor
+    if (!hd_resolution_enabled && aggregation_factor > 1) {
+      // Only render every 10th bubble or so to reduce visual clutter in SD mode
+      if ((chart_idx / aggregation_factor) % 2 != 0) {  // Show every other aggregated section
+        continue;
+      }
     }
 
     // Convert the trade timestamp and price to screen coordinates
@@ -4783,10 +4837,34 @@ void ChartPanel::apply_price_scale_mode(const ChartInstance& chart, double last_
   ImPlotRect limits = ImPlot::GetPlotLimits();
 
   switch (price_scale_mode_) {
-    case PriceScaleMode::AUTO:
-      // Standard ImPlot AutoFit - let ImPlot handle it
-      // This is the default behavior, no manual intervention needed
+    case PriceScaleMode::AUTO: {
+      // Auto Mode: Soft-lerp the Y-axis center only if price deviates > 25% from the middle
+      double current_center = (limits.Y.Min + limits.Y.Max) / 2.0;
+      
+      // Calculate percentage deviation - avoid division by zero
+      double denominator = std::abs(current_center) > 1e-10 ? std::abs(current_center) : 1.0;
+      double price_deviation = std::abs(last_price - current_center) / denominator;
+      
+      // Only adjust if deviation is greater than the threshold (25% by default)
+      if (price_deviation > auto_mode_deviation_threshold_) {
+        // Calculate soft interpolation factor (lerp) - adjust gradually
+        double lerp_factor = auto_mode_lerp_factor_; // Configurable adjustment factor for smooth transition
+        double target_center = last_price;
+        
+        // Interpolate the center towards the target
+        double new_center = current_center + lerp_factor * (target_center - current_center);
+        
+        // Maintain the same range but shift the center
+        double y_range = limits.Y.Max - limits.Y.Min;
+        double half_range = y_range / 2.0;
+        
+        double new_y_min = new_center - half_range;
+        double new_y_max = new_center + half_range;
+        
+        ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
+      }
       break;
+    }
 
     case PriceScaleMode::AUTO_CENTERED: {
       // Center on last price: (Y_max + Y_min)/2 == last_price
@@ -4900,6 +4978,30 @@ void ChartPanel::handle_y_axis_context_menu() {
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Range percentage of current price for Y-axis limits");
+      }
+    }
+    
+    // If Auto Mode is selected, show lerp factor and deviation threshold controls
+    if (price_scale_mode_ == PriceScaleMode::AUTO) {
+      ImGui::Separator();
+      ImGui::Text("Auto Mode Adjustments:");
+      
+      // Control for lerp factor
+      float lerp_factor_pct = static_cast<float>(auto_mode_lerp_factor_ * 100.0);
+      if (ImGui::SliderFloat("Lerp Factor##AutoMode", &lerp_factor_pct, 1.0f, 50.0f, "%.1f%%")) {
+        auto_mode_lerp_factor_ = static_cast<double>(lerp_factor_pct / 100.0);
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Adjustment speed factor when centering (higher = faster)");
+      }
+      
+      // Control for deviation threshold
+      float threshold_pct = static_cast<float>(auto_mode_deviation_threshold_ * 100.0);
+      if (ImGui::SliderFloat("Deviation Threshold##AutoMode", &threshold_pct, 1.0f, 100.0f, "%.1f%%")) {
+        auto_mode_deviation_threshold_ = static_cast<double>(threshold_pct / 100.0);
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Threshold for triggering center adjustment (25%% = default)");
       }
     }
 

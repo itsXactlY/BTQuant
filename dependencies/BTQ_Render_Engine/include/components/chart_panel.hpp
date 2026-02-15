@@ -500,7 +500,7 @@ class ChartPanel : public PanelBase {
         : timestamp(ts), price(p), volume(v), is_buy(buy), trade_id(id) {}
   };
 
-  void render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx);
+  void render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx, int aggregation_factor = 1);
   void update_aggressor_trades_data();
   
   // Configuration for aggressor trade bubbles
@@ -511,6 +511,9 @@ class ChartPanel : public PanelBase {
   ImVec4 bubble_buy_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.8f);  // Green for buy trades
   ImVec4 bubble_sell_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.8f); // Red for sell trades
   std::vector<TradeBubble> aggressor_trades_;
+
+  // HD/SD Resolution toggle configuration
+  bool hd_resolution_enabled_ = true;  // HD = 1 tick per row, SD = 10 ticks per row
 
   // ========================================================================
   // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
@@ -541,6 +544,8 @@ class ChartPanel : public PanelBase {
   double manual_y_min_ = 0.0;
   double manual_y_max_ = 0.0;
   double center_mode_range_percentage_ = 0.01;  // 1% range for CENTER (configurable)
+  double auto_mode_lerp_factor_ = 0.1;          // Lerp factor for AUTO mode adjustment
+  double auto_mode_deviation_threshold_ = 0.25; // 25% deviation threshold for AUTO mode adjustment
   bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
   bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
   

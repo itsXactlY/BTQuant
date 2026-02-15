@@ -537,6 +537,7 @@ class ChartPanel : public PanelBase {
   PriceCenteringMode price_centering_mode_ = PriceCenteringMode::AUTO;
   double manual_y_min_ = 0.0;
   double manual_y_max_ = 0.0;
+  double center_mode_range_percentage_ = 0.01;  // 1% range for CENTER_MODE (configurable)
   bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
   bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
   

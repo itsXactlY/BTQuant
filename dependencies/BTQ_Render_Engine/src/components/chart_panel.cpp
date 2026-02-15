@@ -2604,18 +2604,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     switch (price_centering_mode_) {
       case PriceCenteringMode::CENTER_MODE: {
         // Center Mode: Mathematically lock Y-limits: y_min = current_price - range
-        // Calculate a range based on the current visible data or a fixed percentage
-        double current_range = y_axis_max_pre - y_axis_min_pre;
+        // Calculate range as a percentage of current price to maintain consistent scaling
+        double range = current_price * center_mode_range_percentage_;
+
+        // Apply the mathematical formula: y_min = current_price - range
+        y_axis_min_pre = current_price - range;
         
-        // If the range is too small, use a percentage of the current price
-        if (current_range < current_price * 0.01) {  // 1% of current price as minimum range
-          current_range = current_price * 0.01;
-        }
-        
-        // Apply the center mode formula: y_min = current_price - range
-        // This means the current price will be at y_min + range
-        y_axis_min_pre = current_price - current_range;
-        y_axis_max_pre = current_price + current_range;  // Symmetric around current price
+        // For y_max, maintain symmetry around current price to keep it centered
+        // This ensures: y_max = current_price + range
+        y_axis_max_pre = current_price + range;
         break;
       }
       default:
@@ -4496,6 +4493,22 @@ void ChartPanel::handle_y_axis_context_menu() {
       price_centering_mode_ = PriceCenteringMode::CENTER_MODE;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mathematically lock Y-limits: y_min = current_price - range");
+
+    // If Center Mode is selected, show range percentage control
+    if (price_centering_mode_ == PriceCenteringMode::CENTER_MODE) {
+      ImGui::Separator();
+      ImGui::Text("Center Mode Range:");
+      
+      // Convert to percentage for display (multiply by 100)
+      float range_pct = static_cast<float>(center_mode_range_percentage_ * 100.0);
+      if (ImGui::SliderFloat("##RangePercentage", &range_pct, 0.1f, 10.0f, "%.2f%%")) {
+        // Convert back to decimal
+        center_mode_range_percentage_ = static_cast<double>(range_pct / 100.0);
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Range percentage of current price for Y-axis limits");
+      }
+    }
 
     ImGui::EndPopup();
   }

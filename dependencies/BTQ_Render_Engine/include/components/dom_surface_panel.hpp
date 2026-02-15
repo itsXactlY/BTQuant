@@ -232,6 +232,9 @@ class DomSurfacePanel : public PanelBase {
   // SSBO snapshot buffer update
   void updateSSBOSnapshotBuffer();
 
+  // Vulkan resource initialization
+  void initialize_vulkan_resources(VulkanCore* core) override;
+
   // Flush DOM Ruler functionality
   void renderFlushDOMRuler();
   void updateFlushDOMRulerData();
@@ -284,7 +287,7 @@ class DomSurfacePanel : public PanelBase {
   std::unique_ptr<SSBOSnapshotUpdater> ssbo_snapshot_updater_;
 
   // LOB Heatmap Compute Pipeline for Viridis/Magma gradient
-  std::unique_ptr<LOBHeatmapComputePipeline> lob_heatmap_pipeline_;
+  std::unique_ptr<btq::vulkan::LOBHeatmapComputePipeline> lob_heatmap_pipeline_;
 };
 
 }  // namespace BTQuant

@@ -780,7 +780,7 @@ void DomSurfacePanel::render() {
       
       // Initialize the LOB heatmap compute pipeline
       try {
-        lob_heatmap_pipeline_ = std::make_unique<LOBHeatmapComputePipeline>(vulkan_core_.get());
+        lob_heatmap_pipeline_ = std::make_unique<btq::vulkan::LOBHeatmapComputePipeline>(vulkan_core_.get());
         lob_heatmap_pipeline_->initialize(1024, 1024); // Default size, can be adjusted based on needs
       } catch (const std::exception& e) {
         std::cerr << "[DomSurfacePanel] Failed to initialize LOB heatmap compute pipeline: " << e.what() << std::endl;
@@ -800,8 +800,39 @@ void DomSurfacePanel::render() {
 
   begin_panel_window();
 
+  // Render background image if enabled using channel splitting to ensure it's behind other content
+  if (get_use_background_image() && get_background_image() != 0) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    // Split the draw list into channels: 0 for background, 1 for foreground
+    draw_list->ChannelsSplit(2);
+
+    // Switch to background channel (0)
+    draw_list->ChannelsSetCurrent(0);
+
+    // Get the current window position and size
+    ImVec2 window_pos = ImGui::GetWindowPos();
+    ImVec2 window_size = ImGui::GetWindowSize();
+
+    // Define the rectangle for the background image spanning the entire window
+    ImVec2 bg_min = window_pos;
+    ImVec2 bg_max = ImVec2(window_pos.x + window_size.x, window_pos.y + window_size.y);
+
+    // Add the image to the draw list, spanning the entire panel background
+    draw_list->AddImage(get_background_image(), bg_min, bg_max,
+                       ImVec2(0, 0), ImVec2(1, 1));  // UV coordinates default to full texture
+
+    // Switch back to foreground channel (1) for normal rendering
+    draw_list->ChannelsSetCurrent(1);
+  }
+
   if (current_symbol_id_ == 0) {
     ImGui::Text("No Data / Select Symbol");
+    // Merge channels back together if we were using background image
+    if (get_use_background_image() && get_background_image() != 0) {
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+      draw_list->ChannelsMerge();
+    }
     end_panel_window();
     return;
   }
@@ -887,33 +918,26 @@ void DomSurfacePanel::render() {
         }
       }
 
-      // Demonstrate retrieving ImTextureID from GPUMemoryManager and rendering with ImGui::GetWindowDrawList()->AddImage()
-      // This showcases the new functionality added to GPUMemoryManager
-      if (texture_initialized_ && heatmap_texture_id_ && vulkan_core_) {
+      // Retrieve the ImTextureID from GPUMemoryManager and set it as the background image
+      // This implements the functionality requested in task #32
+      if (texture_initialized_ && vulkan_core_) {
         try {
           // Get the memory manager from the vulkan core
           GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-          
+
           // Retrieve the ImTextureID using the new method in GPUMemoryManager
-          // This demonstrates the new functionality we added
           ImTextureID texture_id_from_manager = memory_manager.getImTextureID(
-              heatmap_sampler_, 
-              heatmap_texture_, 
+              heatmap_sampler_,
+              heatmap_texture_,
               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
           );
-          
-          // Render the texture using ImGui::GetWindowDrawList()->AddImage()
-          // Position it in the top-right corner of the window as a small preview
-          ImVec2 window_pos = ImGui::GetWindowPos();
-          ImVec2 window_size = ImGui::GetWindowSize();
-          ImVec2 texture_pos = ImVec2(window_pos.x + window_size.x - 100.0f, window_pos.y + 20.0f);
-          
-          // Draw the texture as a small preview
-          ImDrawList* draw_list = ImGui::GetWindowDrawList();
-          draw_list->AddImage(texture_id_from_manager, texture_pos, ImVec2(texture_pos.x + 80.0f, texture_pos.y + 80.0f));
+
+          // Set the retrieved texture as the background image for the panel
+          set_background_image(texture_id_from_manager);
+          set_use_background_image(true);
         } catch (const std::exception& e) {
           // Handle any exceptions gracefully
-          std::cerr << "[DomSurfacePanel] Error demonstrating new GPUMemoryManager texture functionality: " << e.what() << std::endl;
+          std::cerr << "[DomSurfacePanel] Error retrieving ImTextureID from GPUMemoryManager: " << e.what() << std::endl;
         }
       }
 
@@ -1025,6 +1049,12 @@ void DomSurfacePanel::render() {
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
   }
 
+  // Merge channels back together if we were using background image
+  if (get_use_background_image() && get_background_image() != 0) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->ChannelsMerge();
+  }
+  
   end_panel_window();
 }
 
@@ -1345,7 +1375,15 @@ void DomSurfacePanel::initializeVulkanTexture() {
     // If we have the LOB heatmap compute pipeline, use its output texture
     if (lob_heatmap_pipeline_) {
       // Get the output image from the compute pipeline
-      heatmap_texture_ = lob_heatmap_pipeline_->get_output_image_allocation();
+      // Create an ImageAllocation struct with the appropriate values
+      heatmap_texture_.image = lob_heatmap_pipeline_->get_output_image();
+      heatmap_texture_.memory = lob_heatmap_pipeline_->get_output_image_memory();
+      heatmap_texture_.view = lob_heatmap_pipeline_->get_output_image_view();
+      heatmap_texture_.format = VK_FORMAT_R32G32B32A32_SFLOAT; // Same as used in the pipeline
+      heatmap_texture_.width = 1024; // Default size, should match pipeline initialization
+      heatmap_texture_.height = 1024;
+      heatmap_texture_.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+      
       heatmap_image_view_ = lob_heatmap_pipeline_->get_output_image_view();
       heatmap_sampler_ = lob_heatmap_pipeline_->get_output_sampler();
     } else {
@@ -1458,10 +1496,7 @@ void DomSurfacePanel::updateVulkanTexture() {
       // The pipeline handles its own output image descriptor set internally
       
       // Dispatch the compute pipeline to generate the heatmap
-      lob_heatmap_pipeline_->dispatch(command_buffer,
-                                    orderbook_descriptor_set,
-                                    atomic_depth_descriptor_set,
-                                    output_image_descriptor_set);
+      lob_heatmap_pipeline_->dispatch(command_buffer, cols, rows);
       
       // End the command buffer
       vulkan_core_->end_single_time_commands(command_buffer);
@@ -1589,6 +1624,15 @@ void DomSurfacePanel::updateSSBOSnapshotBuffer() {
   } catch (const std::exception& e) {
     std::cerr << "[DomSurfacePanel] Failed to update SSBO snapshot buffer: " << e.what() << std::endl;
   }
+}
+
+void DomSurfacePanel::initialize_vulkan_resources(VulkanCore* core) {
+  if (!core) return;
+
+  // Store the VulkanCore reference for SSBO updates and other Vulkan operations
+  vulkan_core_ = std::shared_ptr<VulkanCore>(core, [](VulkanCore*){});
+
+  std::cout << "[DomSurfacePanel] Vulkan resources initialized successfully" << std::endl;
 }
 
 void DomSurfacePanel::updateMMTLayoutData() {

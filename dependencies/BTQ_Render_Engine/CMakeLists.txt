@@ -166,6 +166,7 @@ set(DASHBOARD_SOURCES
     src/system/GPUMemoryManager.cpp
     src/texture/texture_atlas_manager.cpp
     src/vulkan/ssbo_snapshot_updater.cpp
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -314,6 +315,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/system/GPUMemoryManager.cpp
     src/texture/texture_atlas_manager.cpp
     src/vulkan/ssbo_snapshot_updater.cpp
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp

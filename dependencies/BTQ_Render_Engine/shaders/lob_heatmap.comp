@@ -71,23 +71,51 @@ const vec3 NEUTRAL_COLOR = vec3(0.2, 0.2, 0.2); // Dark gray for no liquidity
 // Helper Functions
 // ========================================
 
-// Get color based on liquidity density (Professional multi-stop gradient)
+// Viridis color map function
+vec3 viridis(float t) {
+    t = clamp(t, 0.0, 1.0);
+    vec3 c1 = vec3(0.28060584, 0.26988463, 0.95260712);
+    vec3 c2 = vec3(0.22346425, 0.54647529, 0.76245248);
+    vec3 c3 = vec3(0.26317638, 0.81350462, 0.56800201);
+    vec3 c4 = vec3(0.63192486, 0.94836608, 0.24299267);
+    vec3 c5 = vec3(0.99999634, 0.99999941, 0.00000000);
+    
+    vec3 p1 = c1 + t * (-2.44438001 * c1 + t * (5.79533848 * c1 + t * (-4.22790439 * c1 + t * (1.07643645 * c1))));
+    vec3 p2 = t * (3.76932192 * c2 + t * (-9.52183893 * c2 + t * (7.94427756 * c2 - 2.33625653 * c2 * t)));
+    vec3 p3 = t * t * (2.34985503 * c3 + t * (-3.95423610 * c3 + 1.68213585 * c3 * t));
+    vec3 p4 = t * t * t * (0.77600082 * c4 - 0.31583335 * c4 * t);
+    vec3 p5 = t * t * t * t * c5;
+    
+    return p1 + p2 + p3 + p4 + p5;
+}
+
+// Magma color map function
+vec3 magma(float t) {
+    t = clamp(t, 0.0, 1.0);
+    vec3 c1 = vec3(0.00127585, 0.00015310, 0.00001441);
+    vec3 c2 = vec3(0.27954233, 0.07684357, 0.20122631);
+    vec3 c3 = vec3(0.73303821, 0.22644686, 0.29406445);
+    vec3 c4 = vec3(0.98474783, 0.52943025, 0.23284661);
+    vec3 c5 = vec3(0.99998435, 0.99998751, 0.99998005);
+    
+    vec3 p1 = c1 + t * (-0.42365615 * c1 + t * (1.05555221 * c1 + t * (-1.01235666 * c1 + t * (0.32694771 * c1))));
+    vec3 p2 = t * (2.07331622 * c2 + t * (-3.09211013 * c2 + t * (2.34184658 * c2 - 0.69462501 * c2 * t)));
+    vec3 p3 = t * t * (0.71406097 * c3 + t * (-0.67176724 * c3 + 0.24395332 * c3 * t));
+    vec3 p4 = t * t * t * (0.21087338 * c4 - 0.04549240 * c4 * t);
+    vec3 p5 = t * t * t * t * c5;
+    
+    return p1 + p2 + p3 + p4 + p5;
+}
+
+// Get color based on liquidity density using Viridis/Magma gradient
 vec3 liquidityToColor(float liquidity) {
     float normalized = clamp(liquidity / params.maxLiquidity, 0.0, 1.0);
-
-    // 0.0: Deep Blue (Low) -> 0.2: Cyan -> 0.4: Green -> 0.6: Yellow -> 0.8: Orange -> 1.0: Fire Red (High)
-    vec3 c1 = vec3(0.02, 0.02, 0.15); // Deep Blue/Black
-    vec3 c2 = vec3(0.0, 0.6, 1.0);   // Bright Cyan
-    vec3 c3 = vec3(0.0, 1.0, 0.4);   // Vibrant Green
-    vec3 c4 = vec3(1.0, 1.0, 0.0);   // Pure Yellow
-    vec3 c5 = vec3(1.0, 0.4, 0.0);   // Deep Orange
-    vec3 c6 = vec3(1.0, 0.05, 0.0);  // Fire Red
-
-    if (normalized < 0.2) return mix(c1, c2, normalized / 0.2);
-    if (normalized < 0.4) return mix(c2, c3, (normalized - 0.2) / 0.2);
-    if (normalized < 0.6) return mix(c3, c4, (normalized - 0.4) / 0.2);
-    if (normalized < 0.8) return mix(c4, c5, (normalized - 0.6) / 0.2);
-    return mix(c5, c6, (normalized - 0.8) / 0.2);
+    
+    // Option 1: Use Viridis color map
+    return viridis(normalized);
+    
+    // Option 2: Uncomment the next line to use Magma color map instead
+    // return magma(normalized);
 }
 
 // ========================================

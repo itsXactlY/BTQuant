@@ -55,12 +55,12 @@
 **Target Files:** `src/components/dom_surface_panel.cpp`, `shaders/lob_heatmap.comp`, `src/system/GPUMemoryManager.cpp`
 
 - [x] **29.** Read the rolling 100-level `OrderBookSnapshot` from the lock-free ring buffer.
-- [ ] **30.** Push snapshot buffer to Vulkan SSBO.
-- [ ] **31.** Dispatch `lob_heatmap.comp` to map liquidity to a Viridis/Magma color gradient into a `VkImage`.
+- [x] **30.** Push snapshot buffer to Vulkan SSBO.
+- [x] **31.** Dispatch `lob_heatmap.comp` to map liquidity to a Viridis/Magma color gradient into a `VkImage`.
 - [ ] **32.** Retrieve the `ImTextureID` from `GPUMemoryManager` and render it via `ImGui::GetWindowDrawList()->AddImage()`.
 - [ ] **33.** Add "HD/SD" resolution toggle (1 tick vs 10 ticks per row aggregation).
 - [ ] **34.** Render the 5-column ImGui table: `[Buys | Asks | Price | Bids | Sells]`.
-- [ ] **35.** Implement `PriceScaleMode::Center`: Mathematically lock Y-axis so `current_price` is always `(y_max + y_min) / 2`.
+- [x] **35.** Implement `PriceScaleMode::Center`: Mathematically lock Y-axis so `current_price` is always `(y_max + y_min) / 2`.
 - [ ] **36.** Implement `PriceScaleMode::Auto`: Soft-lerp the Y-axis center only if price deviates > 25% from the middle.
 - [ ] **37.** Pull `VolumeData` from `ClusterEngine` and draw solid Green rectangles extending Right for market buys.
 - [ ] **38.** Draw solid Red rectangles extending Left for market sells.

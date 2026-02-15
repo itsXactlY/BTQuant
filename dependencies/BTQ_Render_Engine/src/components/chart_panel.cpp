@@ -20,6 +20,7 @@
 #include "../../include/indicators/session_vwap.hpp"
 #include "../../include/components/drawing_tools.hpp"
 #include "../../include/components/chart_panel_settings.hpp"
+#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
 
 namespace BTQuant {
 
@@ -2503,11 +2504,16 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
 
   ImGui::TextColored(ImVec4(1, 1, 0, 1), "Candle Info:");
   ImGui::Separator();
-  ImGui::Text("Open:  %.2f", open);
-  ImGui::Text("High:  %.2f", high);
-  ImGui::Text("Low:   %.2f", low);
-  ImGui::Text("Close: %.2f", close);
-  ImGui::Text("Volume: %.2f", volume);
+  ImGui::Text("Open:  "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(open, "%.2f");
+  ImGui::Text("High:  "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(high, "%.2f");
+  ImGui::Text("Low:   "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(low, "%.2f");
+  ImGui::Text("Close: "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(close, "%.2f");
+  ImGui::Text("Volume: "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume, "%.2f");
 
   // Calculate change
   if (closest_idx > 0) {
@@ -2516,8 +2522,15 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
     double change_pct = (change / prev_close) * 100.0;
 
     ImGui::Separator();
-    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-                       "Change: %.2f (%.2f%%)", change, change_pct);
+    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), "Change: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(change, "%.2f");
+    ImGui::SameLine();
+    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), " (");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(change_pct, "%.2f");
+    ImGui::SameLine();
+    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), "%%)");
   }
 
   ImGui::End();

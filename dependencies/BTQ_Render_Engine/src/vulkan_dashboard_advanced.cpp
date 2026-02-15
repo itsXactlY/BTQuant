@@ -15,6 +15,7 @@
 #include "performance_monitor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "ui/layout_manager.hpp"
+#include "ui/font_manager.hpp"  // Include font manager for monospaced font
 
 namespace BTQuant {
 
@@ -386,14 +387,19 @@ void VulkanDashboard::render_performance_overlay() {
     double fps = g_performance_monitor.get_fps();
     double frame_time = g_performance_monitor.get_frame_time_ms();
 
-    ImGui::Text("FPS: %.1f", fps);
-    ImGui::Text("Frame Time: %.2f ms", frame_time);
+    ImGui::Text("FPS: "); ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(fps, "%.1f");
+    ImGui::Text("Frame Time: "); ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(frame_time, "%.2f");
+    ImGui::Text(" ms");
 
     ImGui::Separator();
 
     auto metrics = g_performance_monitor.get_metrics();
     for (const auto& m : metrics) {
-      ImGui::Text("%s: %.2f %s", m.name.c_str(), m.value, m.unit.c_str());
+      ImGui::Text("%s: ", m.name.c_str()); ImGui::SameLine();
+      BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(m.value, "%.2f");
+      ImGui::Text(" %s", m.unit.c_str());
     }
 
     ImGui::Separator();
@@ -401,8 +407,10 @@ void VulkanDashboard::render_performance_overlay() {
 
     if (market_data_processor_) {
       auto stats = market_data_processor_->getPerformanceMetrics();
-      ImGui::Text("Trades/sec: %.0f", stats.trades_per_second);
-      ImGui::Text("Orderbook Updates/sec: %.0f", stats.orderbooks_per_second);
+      ImGui::Text("Trades/sec: "); ImGui::SameLine();
+      BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.trades_per_second, "%.0f");
+      ImGui::Text("Orderbook Updates/sec: "); ImGui::SameLine();
+      BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.orderbooks_per_second, "%.0f");
     }
   }
 

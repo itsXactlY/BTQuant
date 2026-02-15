@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
 
 namespace BTQuant {
 
@@ -500,21 +501,26 @@ void OrderbookPanel::render() {
 
   // Statistics Header
   ImGui::Columns(3, "Stats", false);
-  ImGui::Text("Spread: %.4f", orderbook.spread);
+  ImGui::Text("Spread: "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(orderbook.spread, "%.4f");
   ImGui::NextColumn();
-  ImGui::Text("Imbalance: %.2f", orderbook.imbalance);
+  ImGui::Text("Imbalance: "); ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(orderbook.imbalance, "%.2f");
   ImGui::NextColumn();
 
   // Display bid/ask ratio with colored arrow
   if (bid_ask_ratio > 1.0) {
     // Bid heavy - green arrow pointing up
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "▲ Ratio: %.2f", bid_ask_ratio);
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "▲ Ratio: "); ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
   } else if (bid_ask_ratio < 1.0) {
     // Ask heavy - red arrow pointing down
-    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "▼ Ratio: %.2f", bid_ask_ratio);
+    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "▼ Ratio: "); ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
   } else {
     // Balanced - white arrow
-    ImGui::Text("■ Ratio: %.2f", bid_ask_ratio);
+    ImGui::Text("■ Ratio: "); ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
   }
 
   ImGui::Columns(1);
@@ -844,10 +850,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
           }
         }
       }
@@ -918,7 +924,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                         ImGuiSelectableFlags_SpanAllColumns);
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
         ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-        ImGui::Text("Price: %.2f", level.price);
+        ImGui::Text("Price: "); ImGui::SameLine();
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
         ImGui::EndDragDropSource();
       }
 
@@ -956,10 +963,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
         // Draw text with increased weight effect
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-        ImGui::TextColored(colors.accent_red, "%.2f", level.price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
         ImGui::PopStyleColor();
       } else {
-        ImGui::TextColored(colors.accent_red, "%.2f", level.price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
       }
 
       // 4. Bought (Accumulated)
@@ -978,10 +985,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
           }
         }
       }
@@ -1029,10 +1036,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           // Draw text with increased weight effect by drawing it multiple times slightly offset
           // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-          ImGui::Text("%.4f", display_size);
+          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(display_size, "%.4f");
           ImGui::PopStyleColor();
         } else {
-          ImGui::Text("%.4f", display_size);
+          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(display_size, "%.4f");
         }
       }
 
@@ -1054,10 +1061,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(color, "%+.0f", delta);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(color, "%+.0f", delta);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
           }
         }
       }
@@ -1089,10 +1096,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
               // Draw text with increased weight effect
               ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-              ImGui::TextColored(color, "%+.2f", volume_delta);
+              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
               ImGui::PopStyleColor();
             } else {
-              ImGui::TextColored(color, "%+.2f", volume_delta);
+              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
             }
           }
         }
@@ -1115,10 +1122,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::Text("%.0f", total);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::Text("%.0f", total);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
           }
         }
       }
@@ -1246,10 +1253,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
           }
         }
       }
@@ -1319,7 +1326,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                         ImGuiSelectableFlags_SpanAllColumns);
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
         ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-        ImGui::Text("Price: %.2f", level.price);
+        ImGui::Text("Price: "); ImGui::SameLine();
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
         ImGui::EndDragDropSource();
       }
 
@@ -1357,12 +1365,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
         // Draw text with increased weight effect
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-        ImGui::TextColored(colors.accent_green, "%.2f",
-                           level.price);  // Green for Bid Price
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
         ImGui::PopStyleColor();
       } else {
-        ImGui::TextColored(colors.accent_green, "%.2f",
-                           level.price);  // Green for Bid Price
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
       }
 
       // 4. Bought
@@ -1381,10 +1387,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
           }
         }
       }
@@ -1410,10 +1416,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(color, "%+.0f", delta);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::TextColored(color, "%+.0f", delta);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
           }
         }
       }
@@ -1445,10 +1451,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
               // Draw text with increased weight effect
               ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-              ImGui::TextColored(color, "%+.2f", volume_delta);
+              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
               ImGui::PopStyleColor();
             } else {
-              ImGui::TextColored(color, "%+.2f", volume_delta);
+              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
             }
           }
         }
@@ -1471,10 +1477,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::Text("%.0f", total);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
             ImGui::PopStyleColor();
           } else {
-            ImGui::Text("%.0f", total);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
           }
         }
       }

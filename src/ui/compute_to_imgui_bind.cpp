@@ -616,24 +616,24 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
 
         // Buys column (represents buy-side volume at best bid)
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%.2f", bid_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_volume, "%.2f");
 
         // Asks column (represents sell-side volume at best ask)
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%.2f", ask_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_volume, "%.2f");
 
         // Price column (last traded price)
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%.2f", price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(price, "%.2f");
 
         // Bids column (best bid price)
         ImGui::TableSetColumnIndex(3);
-        ImGui::Text("%.2f", bid_price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_price, "%.2f");
 
         // Sells column (represents sell-side volume at best ask - equivalent to Asks)
         // In trading context, "Sells" could mean the same as "Asks" - volume available for selling
         ImGui::TableSetColumnIndex(4);
-        ImGui::Text("%.2f", ask_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_volume, "%.2f");
 
         ImGui::EndTable();
     }
@@ -702,7 +702,9 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
 
     // Display the USD notional value
     ImGui::Separator();
-    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
+    ImGui::Text("USD Notional Value: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(usd_notional_value, "%.2f");
 }
 
 void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors,
@@ -1074,11 +1076,21 @@ void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipelin
 
                 // Show current market data
                 ImGui::Text("Current Market Data:");
-                ImGui::Text("Best Bid: %.2f", bid_price);
-                ImGui::Text("Best Ask: %.2f", ask_price);
-                ImGui::Text("Last Price: %.2f", data.price.load());
-                ImGui::Text("Bid Volume: %.2f", data.bid_volume.load());
-                ImGui::Text("Ask Volume: %.2f", data.ask_volume.load());
+                ImGui::Text("Best Bid: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_price, "%.2f");
+                ImGui::Text("Best Ask: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_price, "%.2f");
+                ImGui::Text("Last Price: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.price.load(), "%.2f");
+                ImGui::Text("Bid Volume: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.bid_volume.load(), "%.2f");
+                ImGui::Text("Ask Volume: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.ask_volume.load(), "%.2f");
             } else {
                 // If no data available, show a placeholder
                 ImGui::Text("No market data available");

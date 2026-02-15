@@ -12,14 +12,20 @@ namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
-      processor_(processor) {
-  // Vulkan compute removed - using CPU-based heatmap rendering
+      processor_(processor),
+      heatmap_texture_{} {
+  // Initialize Vulkan texture if Vulkan core is available
+  // Vulkan compute removed - using CPU-based heatmap rendering initially
+  // But we'll prepare for Vulkan-accelerated texture rendering
 }
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
     processor_->unsubscribe(subscription_id_);
   }
+  
+  // Clean up Vulkan texture if initialized
+  destroyVulkanTexture();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -552,6 +558,11 @@ void DomSurfacePanel::render() {
     if (orderbook_opt) {
       updatePersistentLevels(*orderbook_opt);
     }
+    
+    // Update Vulkan texture if available
+    if (texture_initialized_) {
+      updateVulkanTexture();
+    }
   }
 
   begin_panel_window();
@@ -588,11 +599,12 @@ void DomSurfacePanel::render() {
                             ImPlotCond_Once);
 
     // Use Vulkan-accelerated heatmap texture if available
-    // CPU-based heatmap rendering
     int rows = price_bins_;
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
     if (cols > 0 && rows > 0) {
+      // If Vulkan texture is available, we could use it here
+      // For now, continue with CPU-based heatmap rendering
       ImPlot::PushColormap(ImPlotColormap_Viridis);
       // Apply heatmap intensity to adjust color mapping sensitivity
       double adjusted_scale_max = scale_max_ / heatmap_intensity_;
@@ -825,6 +837,60 @@ void DomSurfacePanel::renderFlushDOMRuler() {
   // TODO: Implement Flush DOM Ruler rendering
   // This function should render the live orderbook at the right edge of the heatmap panel
   // For now, this is a stub implementation
+}
+
+void DomSurfacePanel::initializeVulkanTexture() {
+  // This method would be called when we have access to the VulkanCore
+  // For now, we'll implement it assuming we have access to vulkan_core_
+  if (!vulkan_core_ || texture_initialized_) {
+    return;
+  }
+
+  try {
+    // Get reference to GPUMemoryManager
+    GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+    
+    // Allocate a texture for the heatmap (initial size, will be resized as needed)
+    uint32_t width = 1024;  // Default width
+    uint32_t height = 1024; // Default height
+    
+    heatmap_texture_ = memory_manager.allocate_image(
+        width, height, 
+        VK_FORMAT_R32G32B32A32_SFLOAT,  // Format for heatmap data
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    );
+    
+    texture_initialized_ = true;
+    std::cout << "[DomSurfacePanel] Vulkan texture initialized successfully" << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[DomSurfacePanel] Failed to initialize Vulkan texture: " << e.what() << std::endl;
+    texture_initialized_ = false;
+  }
+}
+
+void DomSurfacePanel::updateVulkanTexture() {
+  if (!texture_initialized_) {
+    return;
+  }
+  
+  // This method would update the texture with new heatmap data
+  // Implementation would involve copying heatmap data to the GPU texture
+  // For now, this is a placeholder
+}
+
+void DomSurfacePanel::destroyVulkanTexture() {
+  if (texture_initialized_ && vulkan_core_) {
+    try {
+      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+      memory_manager.deallocate_image(heatmap_texture_);
+      texture_initialized_ = false;
+      std::cout << "[DomSurfacePanel] Vulkan texture destroyed successfully" << std::endl;
+    } catch (const std::exception& e) {
+      std::cerr << "[DomSurfacePanel] Failed to destroy Vulkan texture: " << e.what() << std::endl;
+    }
+  }
 }
 
 }  // namespace BTQuant

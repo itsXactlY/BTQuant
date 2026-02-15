@@ -134,6 +134,18 @@ class MemoryPool {
                             VkMemoryPropertyFlags properties);
 };
 
+struct ImageAllocation {
+  VkImage image = VK_NULL_HANDLE;
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  VkImageView view = VK_NULL_HANDLE;
+  VkDeviceSize size = 0;
+  VkFormat format = VK_FORMAT_UNDEFINED;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t mip_levels = 1;
+  VkImageUsageFlags usage = 0;
+};
+
 class GPUMemoryManager {
  public:
   GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
@@ -148,6 +160,12 @@ class GPUMemoryManager {
   BufferAllocation allocate_staging_buffer(VkDeviceSize size);
 
   void deallocate_buffer(const BufferAllocation& allocation);
+
+  // Image allocation methods
+  ImageAllocation allocate_image(uint32_t width, uint32_t height, VkFormat format, 
+                                VkImageTiling tiling, VkImageUsageFlags usage, 
+                                VkMemoryPropertyFlags properties, uint32_t mip_levels = 1);
+  void deallocate_image(const ImageAllocation& allocation);
 
   // Memory usage statistics
   struct MemoryStats {
@@ -166,6 +184,9 @@ class GPUMemoryManager {
   std::unique_ptr<MemoryPool> vertex_pool_;
   std::unique_ptr<MemoryPool> uniform_pool_;
   std::unique_ptr<MemoryPool> storage_pool_;
+  
+  // Helper methods
+  uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 };
 
 class VulkanCore {
@@ -220,6 +241,11 @@ class VulkanCore {
   // Frame timing metrics
   float get_frame_time_ms() const { return frame_time_ms_; }
   float get_fps() const { return fps_; }
+
+  // Methods for monitoring snapshot data readiness
+  void register_snapshot_source(std::atomic<uint64_t>* snapshot_head);
+  bool is_new_snapshot_available() const;
+  void acknowledge_snapshot_processed();
 
  private:
   VulkanDashboardConfig config_;
@@ -291,6 +317,10 @@ class VulkanCore {
   // Performance monitoring
   std::vector<float> frame_time_history_;
   static constexpr size_t FRAME_TIME_HISTORY_SIZE = 100;
+
+  // Snapshot data monitoring
+  std::atomic<uint64_t>* monitored_snapshot_head_ = nullptr;
+  std::atomic<uint64_t> last_processed_snapshot_{0};
 
   // Private initialization methods
   void create_instance();

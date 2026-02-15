@@ -285,4 +285,102 @@ GPUMemoryManager::MemoryStats GPUMemoryManager::get_memory_stats() const {
   return stats;
 }
 
+ImageAllocation GPUMemoryManager::allocate_image(uint32_t width, uint32_t height, VkFormat format, 
+                                               VkImageTiling tiling, VkImageUsageFlags usage, 
+                                               VkMemoryPropertyFlags properties, uint32_t mip_levels) {
+  ImageAllocation allocation{};
+  
+  // Create the image
+  VkImageCreateInfo imageInfo{};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = width;
+  imageInfo.extent.height = height;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = mip_levels;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = format;
+  imageInfo.tiling = tiling;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = usage;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.flags = 0;
+
+  if (vkCreateImage(device_, &imageInfo, nullptr, &allocation.image) != VK_SUCCESS) {
+    throw std::runtime_error("failed to create image!");
+  }
+
+  // Get memory requirements
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device_, allocation.image, &memRequirements);
+
+  // Allocate memory
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
+
+  if (vkAllocateMemory(device_, &allocInfo, nullptr, &allocation.memory) != VK_SUCCESS) {
+    vkDestroyImage(device_, allocation.image, nullptr);
+    throw std::runtime_error("failed to allocate image memory!");
+  }
+
+  // Bind memory to image
+  vkBindImageMemory(device_, allocation.image, allocation.memory, 0);
+
+  // Create image view
+  VkImageViewCreateInfo viewInfo{};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  viewInfo.image = allocation.image;
+  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.format = format;
+  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  viewInfo.subresourceRange.baseMipLevel = 0;
+  viewInfo.subresourceRange.levelCount = mip_levels;
+  viewInfo.subresourceRange.baseArrayLayer = 0;
+  viewInfo.subresourceRange.layerCount = 1;
+
+  if (vkCreateImageView(device_, &viewInfo, nullptr, &allocation.view) != VK_SUCCESS) {
+    vkDestroyImage(device_, allocation.image, nullptr);
+    vkFreeMemory(device_, allocation.memory, nullptr);
+    throw std::runtime_error("failed to create image view!");
+  }
+
+  // Store additional information
+  allocation.size = memRequirements.size;
+  allocation.format = format;
+  allocation.width = width;
+  allocation.height = height;
+  allocation.mip_levels = mip_levels;
+  allocation.usage = usage;
+
+  return allocation;
+}
+
+void GPUMemoryManager::deallocate_image(const ImageAllocation& allocation) {
+  if (allocation.view != VK_NULL_HANDLE) {
+    vkDestroyImageView(device_, allocation.view, nullptr);
+  }
+  if (allocation.image != VK_NULL_HANDLE) {
+    vkDestroyImage(device_, allocation.image, nullptr);
+  }
+  if (allocation.memory != VK_NULL_HANDLE) {
+    vkFreeMemory(device_, allocation.memory, nullptr);
+  }
+}
+
+uint32_t GPUMemoryManager::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vkGetPhysicalDeviceMemoryProperties(physical_device_, &memProperties);
+
+  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+    if ((type_filter & (1 << i)) &&
+        (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+      return i;
+    }
+  }
+  throw std::runtime_error("failed to find suitable memory type!");
+}
+
 }  // namespace BTQuant

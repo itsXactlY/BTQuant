@@ -10,6 +10,7 @@
 
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "vulkan_base_types.hpp"
 
 namespace BTQuant {
 
@@ -216,6 +217,16 @@ class DomSurfacePanel : public PanelBase {
   void updateFlushDOMRulerData();
   bool show_flush_dom_ruler_ = true;  // Toggle for flush DOM ruler display
   float flush_dom_ruler_width_ = 0.05f;  // Width as fraction of plot (5%)
+
+  // Vulkan texture methods
+  void initializeVulkanTexture();
+  void updateVulkanTexture();
+  void destroyVulkanTexture();
+  
+  // Vulkan texture members
+  ImageAllocation heatmap_texture_;
+  bool texture_initialized_ = false;
+  std::shared_ptr<VulkanCore> vulkan_core_;
 };
 
 }  // namespace BTQuant

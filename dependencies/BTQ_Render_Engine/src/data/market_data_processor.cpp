@@ -17,7 +17,8 @@ MarketDataProcessor::MarketDataProcessor()
       momentum_window_size_(50),
       volatility_window_size_(100),
       spread_analysis_window_(50),
-      parallel_processing_enabled_(true) {
+      parallel_processing_enabled_(true),
+      orderbook_snapshot_buffer_(ORDERBOOK_SNAPSHOT_BUFFER_SIZE) {
   // Initialize shards
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     shards_.emplace_back(std::make_unique<Shard>());
@@ -866,6 +867,53 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
       symbol_data.recent_orderbooks.erase(symbol_data.recent_orderbooks.begin());
     }
     symbol_data.recent_orderbooks.push_back(orderbook);
+    
+    // Create and add OrderBookSnapshot to the ring buffer
+    OrderBookSnapshot snapshot;
+    snapshot.timestamp = update.timestamp;
+    snapshot.symbol_id = update.symbol_id;
+    
+    // Set best bid/ask
+    if (!update.bids.empty()) {
+      snapshot.best_bid = update.bids.front().price;
+      snapshot.best_bid_size = update.bids.front().size;
+    }
+    if (!update.asks.empty()) {
+      snapshot.best_ask = update.asks.front().price;
+      snapshot.best_ask_size = update.asks.front().size;
+    }
+    
+    // Calculate spread
+    if (snapshot.best_bid > 0.0 && snapshot.best_ask > 0.0) {
+      snapshot.spread = snapshot.best_ask - snapshot.best_bid;
+    }
+    
+    // Calculate total volumes
+    for (const auto& bid : update.bids) {
+      snapshot.total_bid_volume += bid.size;
+    }
+    for (const auto& ask : update.asks) {
+      snapshot.total_ask_volume += ask.size;
+    }
+    
+    // Copy top levels to snapshot
+    snapshot.bid_levels_count = std::min(static_cast<uint32_t>(update.bids.size()), 
+                                        static_cast<uint32_t>(OrderBookSnapshot::MAX_LEVELS));
+    snapshot.ask_levels_count = std::min(static_cast<uint32_t>(update.asks.size()), 
+                                        static_cast<uint32_t>(OrderBookSnapshot::MAX_LEVELS));
+    
+    for (uint32_t i = 0; i < snapshot.bid_levels_count; ++i) {
+      snapshot.bids[i].price = update.bids[i].price;
+      snapshot.bids[i].size = update.bids[i].size;
+    }
+    
+    for (uint32_t i = 0; i < snapshot.ask_levels_count; ++i) {
+      snapshot.asks[i].price = update.asks[i].price;
+      snapshot.asks[i].size = update.asks[i].size;
+    }
+    
+    // Add the snapshot to the ring buffer
+    addOrderBookSnapshot(snapshot);
   }
 
   // Invalidate cache for this symbol and all timeframes when new data arrives
@@ -942,6 +990,66 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
       now - std::chrono::high_resolution_clock::time_point(
                std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
   symbol_data.last_update_time = now.time_since_epoch().count();
+}
+
+// Ring buffer methods for OrderBookSnapshot
+void MarketDataProcessor::addOrderBookSnapshot(const OrderBookSnapshot& snapshot) {
+  std::lock_guard<std::mutex> lock(snapshot_buffer_mutex_);
+  
+  size_t write_idx = snapshot_write_index_.load(std::memory_order_relaxed);
+  orderbook_snapshot_buffer_[write_idx] = snapshot;
+  
+  // Update indices atomically
+  size_t next_write_idx = (write_idx + 1) % ORDERBOOK_SNAPSHOT_BUFFER_SIZE;
+  snapshot_write_index_.store(next_write_idx, std::memory_order_release);
+  
+  // Update count (but don't exceed buffer size)
+  size_t current_count = snapshot_count_.load(std::memory_order_relaxed);
+  if (current_count < ORDERBOOK_SNAPSHOT_BUFFER_SIZE) {
+    snapshot_count_.store(current_count + 1, std::memory_order_release);
+  }
+}
+
+std::vector<OrderBookSnapshot> MarketDataProcessor::getOrderBookSnapshots(size_t count) const {
+  std::lock_guard<std::mutex> lock(snapshot_buffer_mutex_);
+  
+  size_t actual_count = std::min(count, static_cast<size_t>(snapshot_count_.load(std::memory_order_acquire)));
+  std::vector<OrderBookSnapshot> result;
+  result.reserve(actual_count);
+  
+  if (actual_count == 0) {
+    return result;
+  }
+  
+  // Calculate the starting index to get the most recent snapshots
+  size_t current_write_idx = snapshot_write_index_.load(std::memory_order_acquire);
+  size_t start_idx = (current_write_idx - actual_count + ORDERBOOK_SNAPSHOT_BUFFER_SIZE) % ORDERBOOK_SNAPSHOT_BUFFER_SIZE;
+  
+  // Retrieve snapshots from start_idx to current_write_idx
+  for (size_t i = 0; i < actual_count; ++i) {
+    size_t idx = (start_idx + i) % ORDERBOOK_SNAPSHOT_BUFFER_SIZE;
+    result.push_back(orderbook_snapshot_buffer_[idx]);
+  }
+  
+  return result;
+}
+
+std::optional<OrderBookSnapshot> MarketDataProcessor::getLatestOrderBookSnapshot() const {
+  std::lock_guard<std::mutex> lock(snapshot_buffer_mutex_);
+  
+  if (snapshot_count_.load(std::memory_order_acquire) == 0) {
+    return std::nullopt;
+  }
+  
+  // Get the index of the most recent snapshot
+  size_t current_write_idx = snapshot_write_index_.load(std::memory_order_acquire);
+  size_t latest_idx = (current_write_idx == 0) ? ORDERBOOK_SNAPSHOT_BUFFER_SIZE - 1 : current_write_idx - 1;
+  
+  return orderbook_snapshot_buffer_[latest_idx];
+}
+
+size_t MarketDataProcessor::getOrderBookSnapshotCount() const {
+  return snapshot_count_.load(std::memory_order_acquire);
 }
 
 }  // namespace RenderEngine

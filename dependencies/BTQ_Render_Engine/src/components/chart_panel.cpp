@@ -120,8 +120,10 @@ static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
 ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                        ChartManager* chart_manager,
+                       std::shared_ptr<ChartSuperNode> super_node,
                        PanelManager* panel_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
+    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), 
+      super_node_(super_node), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 

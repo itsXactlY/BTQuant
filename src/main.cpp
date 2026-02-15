@@ -1,5 +1,6 @@
 #include "analytics/tpoengine.h"
 #include "analytics/liquiditysweepdetector.h"
+#include "analytics/lockfreesnapshotpipeline.h"
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -206,6 +207,60 @@ int main() {
     }
     
     std::cout << "\nTPO Engine and Liquidity Sweep Detector test completed successfully!\n";
+
+    // Test Lock-Free Snapshot Pipeline
+    std::cout << "\n=== Testing Lock-Free Snapshot Pipeline ===\n";
+
+    // Create a lock-free snapshot pipeline for 1000 symbols
+    LockFreeSnapshotPipeline lf_pipeline(1000);
+
+    // Test single symbol write and read
+    AtomicMarketData test_data(100.5, 1000.0, 100.4, 100.6, 500.0, 600.0);
+    test_data.timestamp.store(std::chrono::system_clock::now());
+
+    bool write_result = lf_pipeline.write_market_data(0, test_data);
+    std::cout << "Write result: " << (write_result ? "Success" : "Failed") << std::endl;
+
+    AtomicMarketData read_data;
+    bool read_result = lf_pipeline.read_market_data_snapshot(0, read_data);
+    std::cout << "Read result: " << (read_result ? "Success" : "Failed") << std::endl;
+
+    if (read_result) {
+        std::cout << "Price: " << read_data.price.load() << std::endl;
+        std::cout << "Volume: " << read_data.volume.load() << std::endl;
+        std::cout << "Bid: " << read_data.bid_price.load() << "@" << read_data.bid_volume.load() << std::endl;
+        std::cout << "Ask: " << read_data.ask_price.load() << "@" << read_data.ask_volume.load() << std::endl;
+    }
+
+    // Test batch read
+    std::cout << "\nTesting batch read...\n";
+
+    // Write data to multiple symbols
+    for (int i = 1; i <= 5; ++i) {
+        AtomicMarketData data(100.0 + i*0.1, 1000.0 + i*100,
+                             99.9 + i*0.1, 100.1 + i*0.1,
+                             500.0 + i*50, 600.0 + i*50);
+        lf_pipeline.write_market_data(i, data);
+    }
+
+    uint32_t symbols[] = {1, 2, 3, 4, 5};
+    AtomicMarketData batch_results[5];
+
+    size_t batch_count = lf_pipeline.read_batch_snapshot(symbols, batch_results, 5);
+    std::cout << "Batch read count: " << batch_count << std::endl;
+
+    for (size_t i = 0; i < batch_count; ++i) {
+        std::cout << "Symbol " << symbols[i] << " - Price: " << batch_results[i].price.load()
+                  << ", Volume: " << batch_results[i].volume.load() << std::endl;
+    }
+
+    // Print pipeline statistics
+    auto pipeline_stats = lf_pipeline.get_stats();
+    std::cout << "\nPipeline Statistics:" << std::endl;
+    std::cout << "Total updates: " << pipeline_stats.total_updates << std::endl;
+    std::cout << "Dropped updates: " << pipeline_stats.dropped_updates << std::endl;
+
+    std::cout << "\nLock-Free Snapshot Pipeline test completed successfully!\n";
 
     return 0;
 }

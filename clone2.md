@@ -13,8 +13,8 @@
 - [x] Create central `ChartSuperNode`.
 - [x] Split Left (3%) -> `drawing_tools_panel`.
 - [x] Split Right (25%) -> `dom_surface_panel` + `orderbook_panel`.
-- [ ] Split Right-Bottom (40%) -> `time_and_sales` (Trades).
-- [ ] Split Center-Bottom (15%) -> `time_histogram_panel`.
+- [x] Split Right-Bottom (40%) -> `time_and_sales` (Trades).
+- [x] Split Center-Bottom (15%) -> `time_histogram_panel`.
 - [ ] Globally set `ImGuiStyleVar_WindowPadding` to `(0,0)` in `QuantWorkspaceComponent::render_gui`.
 - [ ] Set `ImGuiCol_Separator` to `rgba(94, 82, 64, 0.2)` in `unified_theme_system.cpp`.
 

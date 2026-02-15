@@ -73,6 +73,44 @@ struct OrderbookData {
   double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
+// Standard Layout POD OrderBookSnapshot for ring buffer
+struct OrderBookSnapshot {
+  uint64_t timestamp;
+  uint32_t symbol_id;
+  double best_bid;
+  double best_ask;
+  double best_bid_size;
+  double best_ask_size;
+  double spread;
+  double total_bid_volume;
+  double total_ask_volume;
+  uint32_t bid_levels_count;
+  uint32_t ask_levels_count;
+  
+  // Fixed-size arrays for top N price levels (Standard Layout POD)
+  static constexpr size_t MAX_LEVELS = 20;  // Top 20 levels per side
+  
+  struct Level {
+    double price;
+    double size;
+  };
+  
+  Level bids[MAX_LEVELS];
+  Level asks[MAX_LEVELS];
+  
+  // Constructor to initialize the struct
+  OrderBookSnapshot() : timestamp(0), symbol_id(0), best_bid(0.0), best_ask(0.0), 
+                        best_bid_size(0.0), best_ask_size(0.0), spread(0.0),
+                        total_bid_volume(0.0), total_ask_volume(0.0),
+                        bid_levels_count(0), ask_levels_count(0) {
+    // Initialize arrays to zero
+    for (size_t i = 0; i < MAX_LEVELS; ++i) {
+      bids[i] = Level{0.0, 0.0};
+      asks[i] = Level{0.0, 0.0};
+    }
+  }
+};
+
 // Atomic L2 Snapshot for lock-free UI reads (Phase 4.1)
 // This structure is designed for single-read atomic access from UI threads
 struct AtomicL2Snapshot {
@@ -349,6 +387,12 @@ class MarketDataProcessor {
    */
   std::optional<AtomicL2Snapshot> get_atomic_snapshot(uint32_t symbol_id) const;
 
+  // Ring buffer methods for OrderBookSnapshot
+  void addOrderBookSnapshot(const OrderBookSnapshot& snapshot);
+  std::vector<OrderBookSnapshot> getOrderBookSnapshots(size_t count) const;
+  std::optional<OrderBookSnapshot> getLatestOrderBookSnapshot() const;
+  size_t getOrderBookSnapshotCount() const;
+  
   // Methods required by multi_vwap_panel
   bool hasData() const {
     // Check if we have any active symbols with data
@@ -542,6 +586,13 @@ class MarketDataProcessor {
   mutable std::mutex subscribers_mutex_;
   std::shared_ptr<SubscriberList> subscribers_{std::make_shared<SubscriberList>()};
   std::atomic<uint64_t> next_subscription_id_{1};
+
+  // Ring buffer for OrderBookSnapshot (Standard Layout POD)
+  static constexpr size_t ORDERBOOK_SNAPSHOT_BUFFER_SIZE = 10000;  // Buffer for 10,000 snapshots
+  std::vector<OrderBookSnapshot> orderbook_snapshot_buffer_;
+  mutable std::mutex snapshot_buffer_mutex_;  // Mutex to protect concurrent access
+  std::atomic<size_t> snapshot_write_index_{0};
+  std::atomic<size_t> snapshot_count_{0};
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;

@@ -12,6 +12,7 @@
 #include "../market_data_processor.hpp"
 #include "chart_manager.hpp"
 #include "chart_panel_settings.hpp"
+#include "chart_super_node.hpp"  // Include the central chart node
 #include "drawing_tools.hpp"  // Include drawing tools header
 #include "historical_time_sales.hpp"
 #include "indicator_renderer.hpp"
@@ -153,7 +154,9 @@ class ChartPanel : public PanelBase {
 
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-             ChartManager* chart_manager, PanelManager* panel_manager = nullptr);
+             ChartManager* chart_manager, 
+             std::shared_ptr<ChartSuperNode> super_node = nullptr,
+             PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
   void render() override;
@@ -205,6 +208,7 @@ class ChartPanel : public PanelBase {
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   ChartManager* chart_manager_;
   IndicatorRenderer* indicator_renderer_;
+  std::shared_ptr<ChartSuperNode> super_node_;  // Reference to central chart node
 
   std::string symbol_ = "BTC-USDT";
   std::string exchange_ = "Binance";

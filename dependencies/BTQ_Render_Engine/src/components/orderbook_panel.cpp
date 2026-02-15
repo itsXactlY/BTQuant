@@ -754,9 +754,9 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     // Spread Row - also need to account for this in positioning
     ImGui::TableNextRow();
 
-    // Render Bids (Buy) - but only to calculate positions
+    // Render Bids (Buy) - but only to calculate positions - in reverse order for ascending from bottom
     int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
-    for (int i = 0; i < bid_count; ++i) {
+    for (int i = bid_count - 1; i >= 0; --i) {
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
 
@@ -1143,8 +1143,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TableSetColumnIndex(2);
     ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "--- %.1f ---", orderbook.spread);
 
-    // Render Bids (Buy)
-    for (int i = 0; i < bid_count; ++i) {
+    // Render Bids (Buy) - Bottom up (reverse order to show ascending from bottom)
+    for (int i = bid_count - 1; i >= 0; --i) {
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
       ImGui::PushID(i + 1000);  // Offset to ensure uniqueness from Asks
@@ -1335,7 +1335,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       // Draw cumulative volume bar extending from price column to the left (for bids)
       if (i < static_cast<int>(cumulative_bids.size())) {
           float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
+          float bar_width = width * (float)(cumulative_bids[bid_count - 1 - i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Position the bar to start from the right edge of the price column and extend left
@@ -1345,7 +1345,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
               ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
               ImGui::GetColorU32(
                   ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
-          
+
           // Add a subtle border to make the depth bar more visible
           ImGui::GetWindowDrawList()->AddRect(
               ImVec2(pos.x + width - bar_width, pos.y),

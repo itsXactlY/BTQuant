@@ -16,52 +16,210 @@ namespace Analytics {
 
 struct ClusterCell {
   // Atomic values to replace mutex-protected data
-  std::atomic<double> total_volume{0.0};
-  std::atomic<double> buy_volume{0.0};
-  std::atomic<double> sell_volume{0.0};
+  // Note: std::atomic<double> doesn't support fetch_add in C++17, so we use std::atomic<uint64_t> 
+  // and reinterpret_cast to handle double values for atomic operations
+  std::atomic<uint64_t> total_volume_raw{0};  // reinterpret_cast<double> of the bit representation
+  std::atomic<uint64_t> buy_volume_raw{0};
+  std::atomic<uint64_t> sell_volume_raw{0};
   std::atomic<int> trade_count{0};
   std::atomic<int> buy_trade_count{0};
   std::atomic<int> sell_trade_count{0};
-  std::atomic<double> max_single_trade_volume{0.0};
-  std::atomic<double> sum_of_volumes{0.0};  // for average calculations
+  std::atomic<uint64_t> max_single_trade_volume_raw{0};
+  std::atomic<uint64_t> sum_of_volumes_raw{0};  // for average calculations
 
   // Fields for statistical calculations - using atomic operations for sums
   // For the vector of prices, we'll use a different approach since there's no atomic vector
   // We'll store the count of prices separately and use atomic operations for sums
-  std::atomic<double> sum_of_prices{0.0};   // Sum of all prices for mean calculation
-  std::atomic<double> sum_of_squared_prices{0.0};  // Sum of squared prices for variance calculation
+  std::atomic<uint64_t> sum_of_prices_raw{0};   // Sum of all prices for mean calculation
+  std::atomic<uint64_t> sum_of_squared_prices_raw{0};  // Sum of squared prices for variance calculation
   std::atomic<int> price_count{0};  // Count of prices added
+
+  // Helper methods to safely access double values
+  double getTotalVolume() const {
+    uint64_t raw_val = total_volume_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setTotalVolume(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    total_volume_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getBuyVolume() const {
+    uint64_t raw_val = buy_volume_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setBuyVolume(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    buy_volume_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getSellVolume() const {
+    uint64_t raw_val = sell_volume_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setSellVolume(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    sell_volume_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getMaxSingleTradeVolume() const {
+    uint64_t raw_val = max_single_trade_volume_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setMaxSingleTradeVolume(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    max_single_trade_volume_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getSumOfVolumes() const {
+    uint64_t raw_val = sum_of_volumes_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setSumOfVolumes(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    sum_of_volumes_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getSumOfPrices() const {
+    uint64_t raw_val = sum_of_prices_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setSumOfPrices(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    sum_of_prices_raw.store(raw_val, std::memory_order_release);
+  }
+  
+  double getSumOfSquaredPrices() const {
+    uint64_t raw_val = sum_of_squared_prices_raw.load(std::memory_order_acquire);
+    return *reinterpret_cast<const double*>(&raw_val);
+  }
+  
+  void setSumOfSquaredPrices(double val) {
+    uint64_t raw_val = *reinterpret_cast<const uint64_t*>(&val);
+    sum_of_squared_prices_raw.store(raw_val, std::memory_order_release);
+  }
+
+  // Atomic add operations for doubles using CAS loop
+  void addTotalVolume(double increment) {
+    uint64_t expected = total_volume_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!total_volume_raw.compare_exchange_weak(expected, new_val, 
+                                                     std::memory_order_release, 
+                                                     std::memory_order_acquire));
+  }
+  
+  void addBuyVolume(double increment) {
+    uint64_t expected = buy_volume_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!buy_volume_raw.compare_exchange_weak(expected, new_val, 
+                                                   std::memory_order_release, 
+                                                   std::memory_order_acquire));
+  }
+  
+  void addSellVolume(double increment) {
+    uint64_t expected = sell_volume_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!sell_volume_raw.compare_exchange_weak(expected, new_val, 
+                                                    std::memory_order_release, 
+                                                    std::memory_order_acquire));
+  }
+  
+  void addSumOfVolumes(double increment) {
+    uint64_t expected = sum_of_volumes_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!sum_of_volumes_raw.compare_exchange_weak(expected, new_val, 
+                                                       std::memory_order_release, 
+                                                       std::memory_order_acquire));
+  }
+  
+  void addSumOfPrices(double increment) {
+    uint64_t expected = sum_of_prices_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!sum_of_prices_raw.compare_exchange_weak(expected, new_val, 
+                                                      std::memory_order_release, 
+                                                      std::memory_order_acquire));
+  }
+  
+  void addSumOfSquaredPrices(double increment) {
+    uint64_t expected = sum_of_squared_prices_raw.load(std::memory_order_acquire);
+    uint64_t new_val;
+    double expected_dbl, new_dbl;
+    
+    do {
+      expected_dbl = *reinterpret_cast<double*>(&expected);
+      new_dbl = expected_dbl + increment;
+      new_val = *reinterpret_cast<uint64_t*>(&new_dbl);
+    } while (!sum_of_squared_prices_raw.compare_exchange_weak(expected, new_val, 
+                                                              std::memory_order_release, 
+                                                              std::memory_order_acquire));
+  }
 
   // Define copy constructor and assignment operator
   ClusterCell() = default;
 
   // Copy constructor - only copies the data values
   ClusterCell(const ClusterCell& other)
-      : total_volume(other.total_volume.load()),
-        buy_volume(other.buy_volume.load()),
-        sell_volume(other.sell_volume.load()),
+      : total_volume_raw(other.total_volume_raw.load()),
+        buy_volume_raw(other.buy_volume_raw.load()),
+        sell_volume_raw(other.sell_volume_raw.load()),
         trade_count(other.trade_count.load()),
         buy_trade_count(other.buy_trade_count.load()),
         sell_trade_count(other.sell_trade_count.load()),
-        max_single_trade_volume(other.max_single_trade_volume.load()),
-        sum_of_volumes(other.sum_of_volumes.load()),
-        sum_of_prices(other.sum_of_prices.load()),
-        sum_of_squared_prices(other.sum_of_squared_prices.load()),
+        max_single_trade_volume_raw(other.max_single_trade_volume_raw.load()),
+        sum_of_volumes_raw(other.sum_of_volumes_raw.load()),
+        sum_of_prices_raw(other.sum_of_prices_raw.load()),
+        sum_of_squared_prices_raw(other.sum_of_squared_prices_raw.load()),
         price_count(other.price_count.load()) {}
 
   // Assignment operator
   ClusterCell& operator=(const ClusterCell& other) {
     if (this != &other) {
-      total_volume.store(other.total_volume.load());
-      buy_volume.store(other.buy_volume.load());
-      sell_volume.store(other.sell_volume.load());
+      total_volume_raw.store(other.total_volume_raw.load());
+      buy_volume_raw.store(other.buy_volume_raw.load());
+      sell_volume_raw.store(other.sell_volume_raw.load());
       trade_count.store(other.trade_count.load());
       buy_trade_count.store(other.buy_trade_count.load());
       sell_trade_count.store(other.sell_trade_count.load());
-      max_single_trade_volume.store(other.max_single_trade_volume.load());
-      sum_of_volumes.store(other.sum_of_volumes.load());
-      sum_of_prices.store(other.sum_of_prices.load());
-      sum_of_squared_prices.store(other.sum_of_squared_prices.load());
+      max_single_trade_volume_raw.store(other.max_single_trade_volume_raw.load());
+      sum_of_volumes_raw.store(other.sum_of_volumes_raw.load());
+      sum_of_prices_raw.store(other.sum_of_prices_raw.load());
+      sum_of_squared_prices_raw.store(other.sum_of_squared_prices_raw.load());
       price_count.store(other.price_count.load());
     }
     return *this;
@@ -162,6 +320,13 @@ class ClusterEngine {
 
   // Getter method to access the cluster canvas for visualization
   const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
+
+  // Method to pull VolumeData from ClusterEngine without mutexes using atomic operations
+  double getVolumeDataAt(int64_t price_level, int time_bucket, BTQuant::Data::VolumeAnalysisType vol_type) const;
+
+  // Getter methods for accessing internal properties
+  double get_tick_size() const { return tick_size_; }
+  int64_t get_min_tick_index() const { return min_tick_index_; }
 
   // Calculate standard deviation for a specific price level and time bucket
   double calculateStandardDeviation(int64_t price_level, int time_bucket) const;

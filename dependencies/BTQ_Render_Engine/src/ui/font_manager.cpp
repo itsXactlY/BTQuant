@@ -68,22 +68,43 @@ bool FontManager::initialize() {
     mono_config.PixelSnapH = true;
     strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
-    // Attempt to load JetBrains Mono font (try multiple possible locations)
+    // Attempt to load JetBrains Mono font with specific weights and styles (try multiple possible locations)
     // Prioritize system-wide installations first
     monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     
+    // Try common variations of JetBrains Mono filename
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Medium.ttf", scaled_mono_size, &mono_config);
+    }
+
     // If not in system fonts, try common Linux installation paths
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     }
     
     if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
+    }
+
+    if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
     }
 
     // If not in system locations, try project resources
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
     }
 
     // If not in project resources, try user-specific locations
@@ -91,6 +112,14 @@ bool FontManager::initialize() {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
             std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+    
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Bold.ttf";
             monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
         }
     }
@@ -103,21 +132,45 @@ bool FontManager::initialize() {
             monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
         }
     }
+    
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.fonts/JetBrainsMono-Bold.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
 
     // If JetBrains Mono isn't available, try other popular monospace fonts with high oversampling
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DejaVuSansMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &fallback_config);
     }
-    
+
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DejaVuSansMono-Bold##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", scaled_mono_size, &fallback_config);
+    }
+
+    if (!monospace_font_) {
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "UbuntuMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", scaled_mono_size, &fallback_config);
+    }
+
+    if (!monospace_font_) {
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "LiberationMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", scaled_mono_size, &fallback_config);
     }
 
     // If JetBrains Mono isn't available, fall back to default monospace font with same high oversampling
     if (!monospace_font_) {
-        mono_config.OversampleH = 4;  // Maintain high oversampling even for fallback
-        mono_config.OversampleV = 4;
-        monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DefaultMonospace##Custom");
+        monospace_font_ = io.Fonts->AddFontDefault(&fallback_config);
         std::cout << "Warning: JetBrains Mono font not found, using default monospace font with oversampling H=4, V=4" << std::endl;
     }
 
@@ -246,22 +299,43 @@ void FontManager::updateFontScaling(float dpi_scale) {
     mono_config.PixelSnapH = true;
     strcpy(mono_config.Name, "JetBrainsMono##Custom");
 
-    // Attempt to load JetBrains Mono font (try multiple possible locations)
+    // Attempt to load JetBrains Mono font with specific weights and styles (try multiple possible locations)
     // Prioritize system-wide installations first
     monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     
+    // Try common variations of JetBrains Mono filename
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Medium.ttf", scaled_mono_size, &mono_config);
+    }
+
     // If not in system fonts, try common Linux installation paths
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
     }
     
     if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
+    }
+
+    if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/local/share/fonts/TTF/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
     }
 
     // If not in system locations, try project resources
     if (!monospace_font_) {
         monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Regular.ttf", scaled_mono_size, &mono_config);
+    }
+    
+    if (!monospace_font_) {
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("./resources/fonts/JetBrainsMono-Bold.ttf", scaled_mono_size, &mono_config);
     }
 
     // If not in project resources, try user-specific locations
@@ -269,6 +343,14 @@ void FontManager::updateFontScaling(float dpi_scale) {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
             std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Regular.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
+    
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.local/share/fonts/JetBrainsMono-Bold.ttf";
             monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
         }
     }
@@ -281,21 +363,45 @@ void FontManager::updateFontScaling(float dpi_scale) {
             monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
         }
     }
+    
+    if (!monospace_font_) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir) {
+            std::string user_font_path = std::string(home_dir) + "/.fonts/JetBrainsMono-Bold.ttf";
+            monospace_font_ = io.Fonts->AddFontFromFileTTF(user_font_path.c_str(), scaled_mono_size, &mono_config);
+        }
+    }
 
     // If JetBrains Mono isn't available, try other popular monospace fonts with high oversampling
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DejaVuSansMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", scaled_mono_size, &fallback_config);
     }
-    
+
     if (!monospace_font_) {
-        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/DejaVuSansMono.ttf", scaled_mono_size, &mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DejaVuSansMono-Bold##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", scaled_mono_size, &fallback_config);
+    }
+
+    if (!monospace_font_) {
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "UbuntuMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", scaled_mono_size, &fallback_config);
+    }
+
+    if (!monospace_font_) {
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "LiberationMono##Custom");
+        monospace_font_ = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", scaled_mono_size, &fallback_config);
     }
 
     // If JetBrains Mono isn't available, fall back to default monospace font with same high oversampling
     if (!monospace_font_) {
-        mono_config.OversampleH = 4;  // Maintain high oversampling even for fallback
-        mono_config.OversampleV = 4;
-        monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
+        ImFontConfig fallback_config = mono_config;
+        strcpy(fallback_config.Name, "DefaultMonospace##Custom");
+        monospace_font_ = io.Fonts->AddFontDefault(&fallback_config);
         std::cout << "Warning: JetBrains Mono font not found (during font scaling update), using default monospace font with oversampling H=4, V=4" << std::endl;
     }
 
@@ -366,12 +472,8 @@ void FontManager::updateFontScaling(float dpi_scale) {
         icons_font_ = icons_font;
     }
 
-    // Rebuild the font atlas and upload to GPU
+    // Rebuild the font atlas
     io.Fonts->Build();
-
-    // For Vulkan backend, we need to manually rebuild and upload the font texture
-    // This is typically done in the render loop, but we force it here
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
 ImFont* FontManager::getMainFont() const {

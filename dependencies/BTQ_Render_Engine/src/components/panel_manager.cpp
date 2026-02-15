@@ -1361,20 +1361,20 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       set_grid_layout(100, 100);
 
       // Create central ChartSuperNode
-      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 85);  // Central chart taking most space
+      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72, 60);  // Central chart taking most space
 
       // Split Left (3%) -> drawing_tools_panel
-      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 85);  // Left side panel
+      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 60);  // Left side panel
 
-      // Split Right (25%) -> dom_surface_panel + orderbook_panel
-      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 42);  // Top-right
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 42, 25, 43);  // Bottom-right
+      // Split Right (25%) -> dom_surface_panel + orderbook_panel (adjusting to fit 40% for time_and_sales)
+      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 20);  // Top-right (20%)
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 20, 25, 20);  // Middle-right (20%)
 
       // Split Right-Bottom (40%) -> time_and_sales (Trades)
-      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 85, 25, 15);  // Bottom-right quadrant
+      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 60, 25, 40);  // Bottom-right quadrant (40% height)
 
-      // Split Center-Bottom (15%) -> time_histogram_panel
-      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 85, 72, 15);  // Bottom-center
+      // Split Center-Bottom (40%) -> time_histogram_panel (aligning with time_and_sales)
+      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 60, 72, 40);  // Bottom-center (40%)
 
       // Status bar at the bottom
       add_panel(PanelType::STATUS_BAR, "Status", 0, 99, 100, 1);  // Full width, 1% height

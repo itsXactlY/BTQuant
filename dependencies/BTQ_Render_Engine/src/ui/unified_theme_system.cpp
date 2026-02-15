@@ -548,9 +548,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.Colors[ImGuiCol_WindowBg] =
       ImVec4(theme.colors.background_panel[0], theme.colors.background_panel[1],
              theme.colors.background_panel[2], theme.colors.background_panel[3]);
-  style.Colors[ImGuiCol_ChildBg] =
-      ImVec4(theme.colors.background_secondary[0], theme.colors.background_secondary[1],
-             theme.colors.background_secondary[2], theme.colors.background_secondary[3]);
+  // ImGuiCol_ChildBg will be set to #15191E via MMT Deep Void aesthetic override below
   style.Colors[ImGuiCol_PopupBg] =
       ImVec4(theme.colors.background_primary[0], theme.colors.background_primary[1],
              theme.colors.background_primary[2], theme.colors.background_primary[3]);
@@ -672,7 +670,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
 
   // MMT Deep Void color overrides (applied on top of theme colors)
   style.Colors[ImGuiCol_WindowBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);    // #0B0E11
-  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);     // #15191E
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);     // #15191E (Panel Surface - as required by task #05)
   style.Colors[ImGuiCol_PopupBg] = ImVec4(0.059f, 0.071f, 0.090f, 0.96f);    // #0F1217
   style.Colors[ImGuiCol_Text] = ImVec4(0.820f, 0.831f, 0.863f, 1.0f);        // #D1D4DC
   style.Colors[ImGuiCol_Border] = ImVec4(0.169f, 0.188f, 0.220f, 0.30f);     // #2B3038 (subtle)

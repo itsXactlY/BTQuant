@@ -77,7 +77,8 @@ void ThemeManager::updateImGuiStyle() {
   style.Colors[ImGuiCol_Text] = c.text;
   style.Colors[ImGuiCol_TextDisabled] = c.text_dim;
   style.Colors[ImGuiCol_WindowBg] = c.panel_bg;
-  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.09f, 0.11f, 0.15f, 0.0f);  // Transparent child bg matching panel with enhanced contrast
+  // ImGuiCol_ChildBg is set by the unified theme system to #15191E (Panel Surface)
+  // Do not override it here to maintain consistency
   style.Colors[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.11f, 0.15f, 0.97f);  // Popup background matching panel with enhanced contrast
   style.Colors[ImGuiCol_Border] = c.border;
   style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);

@@ -1404,6 +1404,33 @@ void DomSurfacePanel::updateMMTLayoutData() {
   // The MMT layout will render the orderbook data in 5 columns: [Buys | Asks | Price | Bids | Sells]
 }
 
+void DomSurfacePanel::renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height, 
+                                                 double buy_volume, double sell_volume, 
+                                                 double max_possible_volume) {
+  // Calculate normalized bar widths based on volumes
+  float normalized_buy_width = 0.0f;
+  float normalized_sell_width = 0.0f;
+  
+  if (max_possible_volume > 0.0) {
+    normalized_buy_width = static_cast<float>(buy_volume / max_possible_volume) * width;
+    normalized_sell_width = static_cast<float>(sell_volume / max_possible_volume) * width;
+  }
+  
+  // Draw buy volume bar (green, extending right from the left side)
+  ImVec2 buy_bar_start = ImVec2(pos.x, pos.y);
+  ImVec2 buy_bar_end = ImVec2(pos.x + normalized_buy_width, pos.y + height);
+  if (normalized_buy_width > 0) {
+    draw_list->AddRectFilled(buy_bar_start, buy_bar_end, IM_COL32(0, 255, 0, 100)); // Green with transparency
+  }
+  
+  // Draw sell volume bar (red, extending left from the right side)
+  ImVec2 sell_bar_start = ImVec2(pos.x + width - normalized_sell_width, pos.y);
+  ImVec2 sell_bar_end = ImVec2(pos.x + width, pos.y + height);
+  if (normalized_sell_width > 0) {
+    draw_list->AddRectFilled(sell_bar_start, sell_bar_end, IM_COL32(255, 0, 0, 100)); // Red with transparency
+  }
+}
+
 void DomSurfacePanel::renderMMTLayout() {
   // Render the 5-column MMT layout as a table
   if (current_symbol_id_ == 0 || !processor_) return;
@@ -1440,6 +1467,17 @@ void DomSurfacePanel::renderMMTLayout() {
       mid_price = orderbook.asks.front().price;
     }
 
+    // Find maximum volume for normalization across all displayed levels
+    double max_volume = 0.0;
+    for (int i = 0; i < display_levels; ++i) {
+      if (i < orderbook.bids.size()) {
+        max_volume = std::max(max_volume, orderbook.bids[i].size);
+      }
+      if (i < orderbook.asks.size()) {
+        max_volume = std::max(max_volume, orderbook.asks[i].size);
+      }
+    }
+
     // Render the orderbook levels in the 5-column format
     for (int i = 0; i < display_levels; ++i) {
       ImGui::TableNextRow();
@@ -1452,21 +1490,16 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
         ImGui::Text("%.4f", buy_pressure);
         ImGui::PopStyleColor();
-        
+
         // Render cumulative volume bar extending right for buys
         ImVec2 pos = ImGui::GetCursorScreenPos();
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
-        
+
         // Calculate normalized volume for the bar width
-        double max_size = 0.0;
-        for (const auto& bid : orderbook.bids) {
-            if (bid.size > max_size) max_size = bid.size;
-        }
-        
-        if (max_size > 0) {
-            float bar_width = (buy_pressure / max_size) * max_bar_width;
-            
+        if (max_volume > 0) {
+            float bar_width = static_cast<float>((buy_pressure / max_volume) * max_bar_width);
+
             // Draw the cumulative volume bar
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 bar_start = ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
@@ -1484,21 +1517,15 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
         ImGui::Text("%.4f", orderbook.asks[i].size);
         ImGui::PopStyleColor();
-        
+
         // Render cumulative volume bar extending left for sells
         ImVec2 pos = ImGui::GetCursorScreenPos();
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
-        
-        // Calculate normalized volume for the bar width
-        double max_size = 0.0;
-        for (const auto& ask : orderbook.asks) {
-            if (ask.size > max_size) max_size = ask.size;
-        }
-        
-        if (max_size > 0) {
-            float bar_width = (orderbook.asks[i].size / max_size) * max_bar_width;
-            
+
+        if (max_volume > 0) {
+            float bar_width = static_cast<float>((orderbook.asks[i].size / max_volume) * max_bar_width);
+
             // Draw the cumulative volume bar extending to the left
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 bar_start = ImVec2(pos.x - bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
@@ -1544,21 +1571,15 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
         ImGui::Text("%.4f", orderbook.bids[i].size);
         ImGui::PopStyleColor();
-        
+
         // Render cumulative volume bar extending right for bids
         ImVec2 pos = ImGui::GetCursorScreenPos();
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
-        
-        // Calculate normalized volume for the bar width
-        double max_size = 0.0;
-        for (const auto& bid : orderbook.bids) {
-            if (bid.size > max_size) max_size = bid.size;
-        }
-        
-        if (max_size > 0) {
-            float bar_width = (orderbook.bids[i].size / max_size) * max_bar_width;
-            
+
+        if (max_volume > 0) {
+            float bar_width = static_cast<float>((orderbook.bids[i].size / max_volume) * max_bar_width);
+
             // Draw the cumulative volume bar
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 bar_start = ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
@@ -1577,21 +1598,15 @@ void DomSurfacePanel::renderMMTLayout() {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
         ImGui::Text("%.4f", sell_pressure);
         ImGui::PopStyleColor();
-        
+
         // Render cumulative volume bar extending left for sells
         ImVec2 pos = ImGui::GetCursorScreenPos();
         float bar_height = ImGui::GetTextLineHeight() * 0.8f;
         float max_bar_width = 100.0f; // Maximum width for the bar
-        
-        // Calculate normalized volume for the bar width
-        double max_size = 0.0;
-        for (const auto& ask : orderbook.asks) {
-            if (ask.size > max_size) max_size = ask.size;
-        }
-        
-        if (max_size > 0) {
-            float bar_width = (sell_pressure / max_size) * max_bar_width;
-            
+
+        if (max_volume > 0) {
+            float bar_width = static_cast<float>((sell_pressure / max_volume) * max_bar_width);
+
             // Draw the cumulative volume bar extending to the left
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 bar_start = ImVec2(pos.x - bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2);
@@ -1631,30 +1646,145 @@ void DomSurfacePanel::renderMMTLayout() {
     ImGui::SameLine();
     ImGui::Text("(%.2f%%)", mmt_center_range_ * 100);
   }
-  
+
   // Display cumulative volume information from ClusterEngine if available
   if (cluster_engine_) {
     ImGui::Separator();
     ImGui::Text("Cumulative Volume Data:");
-    
+
     // Show a simple representation of cumulative volume data
     const auto& cluster_canvas = cluster_engine_->getClusterCanvas();
     if (!cluster_canvas.empty()) {
       // Show some summary statistics
       double total_buy_volume = 0.0;
       double total_sell_volume = 0.0;
-      
+
       for (const auto& price_level : cluster_canvas) {
         for (const auto& time_bucket : price_level) {
           // Access the data without mutex since we're just reading
-          total_buy_volume += time_bucket.buy_volume;
-          total_sell_volume += time_bucket.sell_volume;
+          total_buy_volume += time_bucket.buy_volume_raw.load();
+          total_sell_volume += time_bucket.sell_volume_raw.load();
         }
       }
-      
+
       ImGui::Text("Total Buy Volume: %.2f", total_buy_volume);
       ImGui::Text("Total Sell Volume: %.2f", total_sell_volume);
       ImGui::Text("Net Delta: %.2f", total_buy_volume - total_sell_volume);
+    }
+
+    // Enhanced cumulative volume columns rendering
+    ImGui::Separator();
+    ImGui::Text("Cumulative Volume Columns:");
+
+    // Render cumulative volume bars for each price level
+    if (!cluster_canvas.empty()) {
+      // Calculate the current viewport to determine which price levels to display
+      // Get the current orderbook to determine the price range
+      auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+      if (orderbook_opt) {
+        const auto& orderbook = *orderbook_opt;
+
+        // Determine the price range to display
+        double min_price = std::numeric_limits<double>::max();
+        double max_price = std::numeric_limits<double>::lowest();
+
+        for (const auto& bid : orderbook.bids) {
+          min_price = std::min(min_price, bid.price);
+          max_price = std::max(max_price, bid.price);
+        }
+        for (const auto& ask : orderbook.asks) {
+          min_price = std::min(min_price, ask.price);
+          max_price = std::max(max_price, ask.price);
+        }
+
+        // Add some padding to the range
+        double price_range = max_price - min_price;
+        if (price_range > 0) {
+          min_price -= price_range * 0.1;
+          max_price += price_range * 0.1;
+        } else {
+          // Fallback if no price range
+          if (!orderbook.bids.empty()) {
+            min_price = orderbook.bids.front().price * 0.99;
+            max_price = orderbook.bids.front().price * 1.01;
+          } else if (!orderbook.asks.empty()) {
+            min_price = orderbook.asks.front().price * 0.99;
+            max_price = orderbook.asks.front().price * 1.01;
+          }
+        }
+
+        // Calculate the conversion factor from price to index
+        int64_t min_tick_index = static_cast<int64_t>(std::round(min_price / cluster_engine_->get_tick_size()));
+        int64_t max_tick_index = static_cast<int64_t>(std::round(max_price / cluster_engine_->get_tick_size()));
+
+        // Calculate cumulative volumes for the displayed price levels
+        std::vector<std::pair<double, std::pair<double, double>>> cumulative_data; // {price, {cumulative_buy, cumulative_sell}}
+
+        // Iterate through the price levels in the cluster canvas that correspond to our display range
+        for (int64_t tick_idx = min_tick_index; tick_idx <= max_tick_index; ++tick_idx) {
+          int64_t relative_idx = tick_idx - cluster_engine_->get_min_tick_index();
+
+          if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < cluster_canvas.size()) {
+            // Calculate cumulative volumes for this price level across all time buckets
+            double level_buy_volume = 0.0;
+            double level_sell_volume = 0.0;
+
+            for (const auto& time_bucket : cluster_canvas[relative_idx]) {
+              level_buy_volume += time_bucket.buy_volume_raw.load();
+              level_sell_volume += time_bucket.sell_volume_raw.load();
+            }
+
+            double price = tick_idx * cluster_engine_->get_tick_size();
+            cumulative_data.push_back({price, {level_buy_volume, level_sell_volume}});
+          }
+        }
+
+        // Render the cumulative volume bars
+        if (!cumulative_data.empty()) {
+          // Find the maximum cumulative volume for normalization
+          double max_volume = 0.0;
+          for (const auto& data : cumulative_data) {
+            max_volume = std::max(max_volume, std::max(data.second.first, data.second.second));
+          }
+
+          if (max_volume > 0.0) {
+            // Create a child window to contain the cumulative volume visualization
+            ImGui::BeginChild("CumulativeVolumeVisualization", ImVec2(0, 200), true);
+
+            // Draw the cumulative volume bars
+            for (const auto& data : cumulative_data) {
+              double price = data.first;
+              double buy_vol = data.second.first;
+              double sell_vol = data.second.second;
+
+              // Calculate bar widths based on volumes
+              float bar_width = 200.0f; // Maximum width for both bars
+
+              // Draw the price label
+              ImGui::Text("%.2f", price);
+              ImGui::SameLine();
+
+              // Draw buy and sell volume bars using the new helper function
+              ImVec2 pos = ImGui::GetCursorScreenPos();
+              ImDrawList* draw_list = ImGui::GetWindowDrawList();
+              
+              // Call the new function to render horizontal bars
+              renderHorizontalVolumeBars(draw_list, 
+                                        ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - ImGui::GetTextLineHeight() * 0.6f) / 2),
+                                        bar_width, 
+                                        ImGui::GetTextLineHeight() * 0.6f,
+                                        buy_vol, 
+                                        sell_vol, 
+                                        max_volume);
+
+              // Add some spacing
+              ImGui::Dummy(ImVec2(0, ImGui::GetTextLineHeight() * 0.2f));
+            }
+
+            ImGui::EndChild();
+          }
+        }
+      }
     }
   }
 }

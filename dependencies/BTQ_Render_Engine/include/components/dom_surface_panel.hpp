@@ -240,6 +240,9 @@ class DomSurfacePanel : public PanelBase {
   double mmt_center_range_ = 0.02; // Range for center mode (default 2%)
   void renderMMTLayout();
   void updateMMTLayoutData();
+  void renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height, 
+                                 double buy_volume, double sell_volume, 
+                                 double max_possible_volume);
 
   // Vulkan texture methods
   void initializeVulkanTexture();

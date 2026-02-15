@@ -17,17 +17,17 @@
 - [x] **07.** Define `ImGuiCol_Separator` as `rgba(94, 82, 64, 0.2)` (Subtle grid lines).
 - [x] **08.** In `font_manager.cpp`, load *JetBrains Mono* or *Berkeley Mono* as the primary numeric font.
 - [x] **09.** Configure `ImFontConfig::OversampleH = 4` and `OversampleV = 4` for sub-pixel anti-aliasing on numbers.
-- [ ] **10.** Merge *FontAwesome 6* into the font atlas for textless, icon-driven sidebars.
+- [x] **10.** Merge *FontAwesome 6* into the font atlas for textless, icon-driven sidebars.
 
 ---
 
 ## Phase 2: The Master Docking Matrix
 **Target Files:** `src/ui/layout_manager.cpp`, `src/components/quant_workspace_component.cpp`
 
-- [ ] **11.** In `apply_layout_preset(MODERN_TRADING)`, call `panels_.clear()` to eradicate duplicate panels before building.
-- [ ] **12.** Generate a new `ImGuiID dock_main = ImGui::GetID("WorkspaceDockSpace");`.
-- [ ] **13.** Apply `ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_PassthruCentralNode`.
-- [ ] **14.** Execute `DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.03f)` for the Drawing Tools sidebar.
+- [x] **11.** In `apply_layout_preset(MODERN_TRADING)`, call `panels_.clear()` to eradicate duplicate panels before building.
+- [x] **12.** Generate a new `ImGuiID dock_main = ImGui::GetID("WorkspaceDockSpace");`.
+- [x] **13.** Apply `ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_PassthruCentralNode`.
+- [x] **14.** Execute `DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.03f)` for the Drawing Tools sidebar.
 - [ ] **15.** Execute `DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f)` for the right DOM/Orderbook column.
 - [ ] **16.** Split the right column down (`ImGuiDir_Down, 0.40f`) to create the Time & Sales area.
 - [ ] **17.** Split the center node down (`ImGuiDir_Down, 0.15f`) for Time Histograms.

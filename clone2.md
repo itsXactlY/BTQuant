@@ -40,11 +40,11 @@
 **Target:** `src/components/dom_surface_panel.cpp` & `src/analytics/cluster_engine.cpp`
 
 - [x] **3.1: 5-Column MMT Layout**
-- [ ] Render Table: `[Buys | Asks | Price | Bids | Sells]`.
+- [x] Render Table: `[Buys | Asks | Price | Bids | Sells]`.
 - [ ] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
 - [ ] **3.2: Cumulative Volume Columns**
 - [ ] Pull `VolumeData` from `ClusterEngine` without mutexes.
-- [ ] Render horizontal bars using `DrawList->AddRectFilled`.
+- [x] Render horizontal bars using `DrawList->AddRectFilled`.
 - [ ] Green bars (Buys) extend right; Red bars (Sells) extend left.
 
 ---

@@ -12,6 +12,9 @@ namespace BTQuant {
 // Define the static global crosshair instance
 GlobalCrosshair QuantWorkspaceComponent::g_crosshair;
 
+// Define the static global crosshair price variable
+std::atomic<double> QuantWorkspaceComponent::g_crosshair_price{0.0};
+
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

@@ -46,7 +46,10 @@ class QuantWorkspaceComponent : public UIComponent {
 
   // Public access to global crosshair
   static GlobalCrosshair g_crosshair;
-  
+
+  // Additional global crosshair price variable
+  static std::atomic<double> g_crosshair_price;
+
   // Helper methods for accessing global crosshair state
   static double get_global_crosshair_price() { return g_crosshair.price.load(); }
   static uint64_t get_global_crosshair_time() { return g_crosshair.time.load(); }

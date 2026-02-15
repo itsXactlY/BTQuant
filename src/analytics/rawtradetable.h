@@ -7,6 +7,7 @@
 #include <chrono>
 #include <string>
 #include <functional>
+#include <memory>
 
 // Structure to represent a single raw trade
 struct RawTrade {
@@ -36,14 +37,20 @@ struct TradeStats {
 // Function type for trade notification callbacks
 typedef std::function<void(const RawTrade&)> TradeNotificationCallback;
 
+// Forward declaration
+class TradeRingBuffer;
+
 class RawTradeTable {
 private:
     std::deque<RawTrade> trades_;
     size_t max_capacity_;
     mutable std::mutex trades_mutex_;
-    
+
     // Callback for when new trades are added
     TradeNotificationCallback trade_callback_;
+
+    // Trade ring buffer for high-frequency atomic access
+    std::unique_ptr<TradeRingBuffer> trade_ring_buffer_;
 
 public:
     explicit RawTradeTable(size_t max_capacity = 10000); // Default to 10k trades
@@ -79,11 +86,15 @@ public:
 
     // Get all trades (for UI rendering - use carefully with large datasets)
     std::vector<RawTrade> get_all_trades() const;
-    
+
     // Set callback function to be called when a new trade is added
     void set_trade_notification_callback(TradeNotificationCallback callback) {
         trade_callback_ = callback;
     }
+
+    // Access to the trade ring buffer for atomic tail reading
+    TradeRingBuffer* get_trade_ring_buffer() { return trade_ring_buffer_.get(); }
+    const TradeRingBuffer* get_trade_ring_buffer() const { return trade_ring_buffer_.get(); }
 };
 
 #endif // PUBBTQUANT_RAWTRADETABLE_H

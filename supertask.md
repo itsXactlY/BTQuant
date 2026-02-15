@@ -57,25 +57,25 @@
 - [x] **29.** Read the rolling 100-level `OrderBookSnapshot` from the lock-free ring buffer.
 - [x] **30.** Push snapshot buffer to Vulkan SSBO.
 - [x] **31.** Dispatch `lob_heatmap.comp` to map liquidity to a Viridis/Magma color gradient into a `VkImage`.
-- [ ] **32.** Retrieve the `ImTextureID` from `GPUMemoryManager` and render it via `ImGui::GetWindowDrawList()->AddImage()`.
-- [ ] **33.** Add "HD/SD" resolution toggle (1 tick vs 10 ticks per row aggregation).
-- [ ] **34.** Render the 5-column ImGui table: `[Buys | Asks | Price | Bids | Sells]`.
+- [x] **32.** Retrieve the `ImTextureID` from `GPUMemoryManager` and render it via `ImGui::GetWindowDrawList()->AddImage()`.
+- [x] **33.** Add "HD/SD" resolution toggle (1 tick vs 10 ticks per row aggregation).
+- [x] **34.** Render the 5-column ImGui table: `[Buys | Asks | Price | Bids | Sells]`.
 - [x] **35.** Implement `PriceScaleMode::Center`: Mathematically lock Y-axis so `current_price` is always `(y_max + y_min) / 2`.
-- [ ] **36.** Implement `PriceScaleMode::Auto`: Soft-lerp the Y-axis center only if price deviates > 25% from the middle.
-- [ ] **37.** Pull `VolumeData` from `ClusterEngine` and draw solid Green rectangles extending Right for market buys.
-- [ ] **38.** Draw solid Red rectangles extending Left for market sells.
-- [ ] **39.** Add a right-click context menu to aggregate multiple exchange order books into one SSBO feed.
+- [x] **36.** Implement `PriceScaleMode::Auto`: Soft-lerp the Y-axis center only if price deviates > 25% from the middle.
+- [x] **37.** Pull `VolumeData` from `ClusterEngine` and draw solid Green rectangles extending Right for market buys.
+- [x] **38.** Draw solid Red rectangles extending Left for market sells.
+- [x] **39.** Add a right-click context menu to aggregate multiple exchange order books into one SSBO feed.
 
 ---
 
 ## Phase 5: Time & Sales (Trades) & Acoustics
 **Target Files:** `src/components/time_and_sales.cpp`, `src/data/market_data_processor.cpp`
 
-- [ ] **40.** Render a 4-column table: `[Exchange Logo] | Price | Qty | Time`.
-- [ ] **41.** Read strictly from the atomic tail of `trade_ring_buffer_`. Do not copy the vector.
-- [ ] **42.** Color code the Price column: `#00E676` (Neon Mint) for Ask hits, `#FF3B69` (Crimson) for Bid hits.
-- [ ] **43.** Slippage Bracket: Calculate time delta between consecutive trades. If `< 50ms` and price changed, draw a 1px vertical white bracket linking the rows.
-- [ ] **44.** Add `Filter` input in the header. Skip rendering any trade with `size < filter_val`.
+- [x] **40.** Render a 4-column table: `[Exchange Logo] | Price | Qty | Time`.
+- [x] **41.** Read strictly from the atomic tail of `trade_ring_buffer_`. Do not copy the vector.
+- [x] **42.** Color code the Price column: `#00E676` (Neon Mint) for Ask hits, `#FF3B69` (Crimson) for Bid hits.
+- [x] **43.** Slippage Bracket: Calculate time delta between consecutive trades. If `< 50ms` and price changed, draw a 1px vertical white bracket linking the rows.
+- [x] **44.** Add `Filter` input in the header. Skip rendering any trade with `size < filter_val`.
 - [ ] **45.** Integrate `miniaudio` into the data processor.
 - [ ] **46.** Trigger `ma_engine_play_sound("buy.wav")` or `"sell.wav"` on incoming trades.
 - [ ] **47.** Calculate audio pitch: `pitch = 1.0f - (log10(size) * scalar)`. Massive trades sound like a heavy bass thud.

@@ -1,4 +1,5 @@
 #include "rawtradetable.h"
+#include "traderingbuffer.h"
 #include <algorithm>
 #include <numeric>
 #include <cmath>
@@ -6,6 +7,9 @@
 RawTradeTable::RawTradeTable(size_t max_capacity) : max_capacity_(max_capacity) {
     // Note: std::deque doesn't have a reserve method like std::vector
     // We can optionally set a max size hint, but it's not necessary
+    
+    // Initialize the trade ring buffer for high-frequency atomic access
+    trade_ring_buffer_ = std::make_unique<TradeRingBuffer>();
 }
 
 void RawTradeTable::add_trade(const RawTrade& trade) {
@@ -17,10 +21,15 @@ void RawTradeTable::add_trade(const RawTrade& trade) {
     if (trades_.size() > max_capacity_) {
         trades_.pop_back();
     }
-    
+
     // Call the trade notification callback if set
     if (trade_callback_) {
         trade_callback_(trade);
+    }
+    
+    // Write to the trade ring buffer for atomic access
+    if (trade_ring_buffer_) {
+        trade_ring_buffer_->write_trade(trade);
     }
 }
 
@@ -30,7 +39,7 @@ void RawTradeTable::add_trades(const std::vector<RawTrade>& trades) {
     // Add trades in reverse order to maintain chronological order in the front
     for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
         trades_.push_front(*it);
-        
+
         // Call the trade notification callback for each trade if set
         if (trade_callback_) {
             trade_callback_(*it);
@@ -40,6 +49,13 @@ void RawTradeTable::add_trades(const std::vector<RawTrade>& trades) {
     // Trim if we exceed capacity
     while (trades_.size() > max_capacity_) {
         trades_.pop_back();
+    }
+    
+    // Write all trades to the ring buffer for atomic access
+    if (trade_ring_buffer_) {
+        for (const auto& trade : trades) {
+            trade_ring_buffer_->write_trade(trade);
+        }
     }
 }
 

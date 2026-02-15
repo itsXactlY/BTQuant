@@ -169,8 +169,14 @@ class FootprintPanel : public PanelBase {
   // Zoom sensitivity for cell size adjustment
   float zoom_sensitivity_ = 1.0f;  // Default: normal sensitivity
 
+  // Flag to control display of market buy indicators
+  bool show_market_buys_ = true;   // Default: show market buy indicators
+
   // Data dirty flag for immediate rendering updates
   std::atomic<bool> data_dirty_{true};
+
+  // Method to feed trade data to the ClusterEngine for analysis
+  void feedTradeToClusterEngine(const MarketData::Trade& trade);
 
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;

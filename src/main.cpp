@@ -3,6 +3,8 @@
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
 #include "analytics/rawtradetable.h"
+#include "analytics/traderingbuffer.h"
+#include "analytics/orderbook_snapshot_100level.h"
 #include "ui/compute_to_imgui_bind.h"
 #include "audio/pitch_shifter.h"
 #include "audio/audio_engine_integration.h"
@@ -510,6 +512,94 @@ int main() {
     }
 
     std::cout << "\nPitch shifting functionality (Big trade = Deep bass) implemented and tested successfully!\n";
+
+    // Test SSBO Aggregator for Multiple Exchange Order Book Aggregation
+    std::cout << "\n=== Testing SSBO Order Book Aggregator ===\n";
+
+    // Create sample order book snapshots from different exchanges
+    OrderBookSnapshot100Level exchange1_snapshot;
+    exchange1_snapshot.symbol_id = 1;
+    exchange1_snapshot.best_bid = 100.50;
+    exchange1_snapshot.best_ask = 100.55;
+    exchange1_snapshot.bid_levels_count = 3;
+    exchange1_snapshot.ask_levels_count = 3;
+
+    // Set up some sample bid levels
+    exchange1_snapshot.bids[0] = {100.50, 100.0};
+    exchange1_snapshot.bids[1] = {100.45, 150.0};
+    exchange1_snapshot.bids[2] = {100.40, 200.0};
+
+    // Set up some sample ask levels
+    exchange1_snapshot.asks[0] = {100.55, 80.0};
+    exchange1_snapshot.asks[1] = {100.60, 120.0};
+    exchange1_snapshot.asks[2] = {100.65, 180.0};
+
+    OrderBookSnapshot100Level exchange2_snapshot;
+    exchange2_snapshot.symbol_id = 2;
+    exchange2_snapshot.best_bid = 100.48;
+    exchange2_snapshot.best_ask = 100.53;
+    exchange2_snapshot.bid_levels_count = 2;
+    exchange2_snapshot.ask_levels_count = 2;
+
+    // Set up some sample bid levels
+    exchange2_snapshot.bids[0] = {100.48, 90.0};
+    exchange2_snapshot.bids[1] = {100.43, 110.0};
+
+    // Set up some sample ask levels
+    exchange2_snapshot.asks[0] = {100.53, 75.0};
+    exchange2_snapshot.asks[1] = {100.58, 130.0};
+
+    // Add the snapshots to the UI binding system
+    ui_bind.bindSSBOAggregator("SSBO Order Book Aggregator");
+
+    // Add exchange snapshots to the aggregator
+    ui_bind.addExchangeSnapshotToSSBOAggregator("Exchange1", exchange1_snapshot);
+    ui_bind.addExchangeSnapshotToSSBOAggregator("Exchange2", exchange2_snapshot);
+
+    std::cout << "SSBO Aggregator bound to UI successfully!\n";
+    std::cout << "Added sample snapshots from Exchange 1 and Exchange 2\n";
+
+    // Test the new Exchange Trade Table
+    std::cout << "\n=== Testing Exchange Trade Table [Exchange Logo | Price | Qty | Time] ===\n";
+
+    // Create sample trades for different exchanges
+    std::vector<RawTrade> exchange_trades;
+    std::vector<std::string> exchange_names;
+
+    auto exchange_base_time = std::chrono::system_clock::now();
+    
+    // Create sample trades from different exchanges
+    for (int i = 0; i < 10; ++i) {
+        RawTrade trade;
+        trade.timestamp = exchange_base_time + std::chrono::milliseconds(i * 200); // 200ms intervals
+        trade.price = 100.0 + (i % 5) * 0.25; // Prices between 100.0 and 101.0
+        trade.volume = 5.0 + (i % 10); // Volumes between 5 and 14
+        trade.side = (i % 2 == 0) ? 'B' : 'S';
+        trade.trade_id = "EXCH_T" + std::to_string(100 + i);
+
+        exchange_trades.push_back(trade);
+        
+        // Assign exchange names
+        if (i % 3 == 0) {
+            exchange_names.push_back("Binance");
+        } else if (i % 3 == 1) {
+            exchange_names.push_back("Coinbase");
+        } else {
+            exchange_names.push_back("Kraken");
+        }
+    }
+
+    std::cout << "Created " << exchange_trades.size() << " sample trades from multiple exchanges\n";
+    std::cout << "Exchange names: ";
+    for (const auto& name : exchange_names) {
+        std::cout << name << " ";
+    }
+    std::cout << "\n";
+
+    // Bind the exchange trade table to the UI
+    ui_bind.bindExchangeTradeTable(exchange_trades, exchange_names, "Exchange Trade Table [Logo | Price | Qty | Time]");
+
+    std::cout << "Exchange Trade Table bound to UI successfully!\n";
 
     // Clean up audio resources
     audio_notifier.shutdownAudio();

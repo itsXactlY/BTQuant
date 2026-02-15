@@ -30,8 +30,10 @@ set(PUBBTQUANT_SOURCES
     src/analytics/liquiditysweepdetector.cpp
     src/analytics/rawtradetable.cpp
     src/ui/compute_to_imgui_bind.cpp
+    src/ui/ssbo_aggregator.cpp
     src/audio/pitch_shifter.cpp
     src/audio/audio_engine_integration.cpp
+    dependencies/BTQ_Render_Engine/src/trading/trade_command_queue.cpp
 )
 
 # Find Dependencies
@@ -55,6 +57,12 @@ if(PUBBTQUANT_SOURCES)
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/imgui-src/backends
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/_deps/implot-src
         ${CMAKE_CURRENT_SOURCE_DIR}/_deps/readerwriterqueue-src
+        ${CMAKE_CURRENT_SOURCE_DIR}/_deps/miniaudio-src
+    )
+
+    # Define preprocessor definitions
+    target_compile_definitions(pubbtquant PRIVATE
+        MINIAUDIO_IMPLEMENTATION
     )
 
     # Link against the necessary libraries

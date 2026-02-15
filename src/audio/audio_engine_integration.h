@@ -6,9 +6,7 @@
 #include <memory>
 
 // Forward declaration of miniaudio types
-#ifdef MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
-#endif
+// #include "miniaudio.h"  // Only include if needed elsewhere
 
 namespace AudioIntegration {
 
@@ -19,13 +17,8 @@ namespace AudioIntegration {
 class TradeAudioNotifier {
 private:
     PitchShifter pitch_shifter_;
-#ifdef MINIAUDIO_IMPLEMENTATION
-    ma_engine* audio_engine_;
-    bool audio_initialized_;
-#else
     void* audio_engine_;  // Placeholder when miniaudio is not available
     bool audio_initialized_;
-#endif
 
 public:
     TradeAudioNotifier();

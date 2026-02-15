@@ -520,7 +520,7 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
     }
 }
 
-void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors, 
+void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors,
                          float width, float height, const char* label) {
     if (values.empty()) {
         ImGui::Text("No data to display");
@@ -529,43 +529,63 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
 
     // Create a canvas for drawing the horizontal bars
     ImGui::Text("%s", label);
-    
+
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     ImVec2 canvas_size(width, height);
-    
+
     // Draw a background rectangle
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), 
+    draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
                             IM_COL32(30, 30, 30, 200));
 
     // Calculate dimensions for each bar
     float bar_height = canvas_size.y / values.size();
     float max_value = 0.0f;
-    
+
     // Find the maximum value to normalize the bars
     for (float val : values) {
-        if (val > max_value) max_value = val;
+        if (std::abs(val) > max_value) max_value = std::abs(val);
     }
-    
+
     if (max_value == 0.0f) max_value = 1.0f; // Prevent division by zero
-    
+
     // Draw each horizontal bar
     for (size_t i = 0; i < values.size(); ++i) {
-        float bar_width = (values[i] / max_value) * canvas_size.x;
-        
-        ImVec2 bar_start = ImVec2(canvas_pos.x, canvas_pos.y + i * bar_height);
-        ImVec2 bar_end = ImVec2(canvas_pos.x + bar_width, canvas_pos.y + (i + 1) * bar_height);
-        
-        // Use the provided color or default to white if not enough colors provided
+        float normalized_value = std::abs(values[i]) / max_value;
+        float bar_width = normalized_value * canvas_size.x;
+
+        // Determine if this is a buy (green, extends right) or sell (red, extends left)
         ImU32 color = (i < colors.size()) ? colors[i] : IM_COL32(255, 255, 255, 255);
         
+        // Extract RGB components to determine if it's a green (buy) or red (sell) bar
+        bool is_buy = ((color >> 16) & 0xFF) < ((color >> 8) & 0xFF); // Red channel < Green channel = likely green (buy)
+        bool is_sell = ((color >> 8) & 0xFF) < ((color >> 16) & 0xFF); // Green channel < Red channel = likely red (sell)
+        
+        ImVec2 bar_start, bar_end;
+        
+        if (is_buy) {
+            // Green bars (Buys) extend right from the center
+            float center_x = canvas_pos.x + canvas_size.x / 2.0f;
+            bar_start = ImVec2(center_x, canvas_pos.y + i * bar_height);
+            bar_end = ImVec2(center_x + bar_width, canvas_pos.y + (i + 1) * bar_height);
+        } else if (is_sell) {
+            // Red bars (Sells) extend left from the center
+            float center_x = canvas_pos.x + canvas_size.x / 2.0f;
+            bar_start = ImVec2(center_x - bar_width, canvas_pos.y + i * bar_height);
+            bar_end = ImVec2(center_x, canvas_pos.y + (i + 1) * bar_height);
+        } else {
+            // For other colors, use the original behavior (extend right from left edge)
+            bar_start = ImVec2(canvas_pos.x, canvas_pos.y + i * bar_height);
+            bar_end = ImVec2(canvas_pos.x + bar_width, canvas_pos.y + (i + 1) * bar_height);
+        }
+
         // Draw the filled rectangle for the bar
         draw_list->AddRectFilled(bar_start, bar_end, color);
-        
+
         // Draw a border around the bar for better visibility
         draw_list->AddRect(bar_start, bar_end, IM_COL32(200, 200, 200, 100));
     }
-    
+
     // Advance the cursor to account for the drawn content
     ImGui::Dummy(canvas_size);
 }

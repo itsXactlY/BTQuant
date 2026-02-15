@@ -4602,22 +4602,26 @@ void ChartPanel::render_right_sidebar_order_entry() {
 
   // If Mouse Trading enabled: Render massive BUY MKT / SELL MKT buttons with live quotes
   if (trading_mode_ == TradingMode::MOUSE_TRADING) {
-    // Market Buy button with Best Ask
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+    // Market Buy button with Best Ask - MASSIVE BUTTONS
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.8f, 0.0f, 1.0f)); // Brighter green
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15, 15)); // Increase padding
     std::string buy_label = "BUY MKT\n" + std::to_string(cached_best_ask_);
-    if (ImGui::Button(buy_label.c_str(), ImVec2(100, 60))) {  // Larger button size
+    if (ImGui::Button(buy_label.c_str(), ImVec2(150, 80))) {  // MASSIVE button size
       execute_market_order(true);  // Buy
     }
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 
     ImGui::Spacing();
 
-    // Market Sell button with Best Bid
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+    // Market Sell button with Best Bid - MASSIVE BUTTONS
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.0f, 0.0f, 1.0f)); // Brighter red
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15, 15)); // Increase padding
     std::string sell_label = "SELL MKT\n" + std::to_string(cached_best_bid_);
-    if (ImGui::Button(sell_label.c_str(), ImVec2(100, 60))) {  // Larger button size
+    if (ImGui::Button(sell_label.c_str(), ImVec2(150, 80))) {  // MASSIVE button size
       execute_market_order(false);  // Sell
     }
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 
     ImGui::Separator();

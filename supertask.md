@@ -12,9 +12,9 @@
 - [x] **02.** Set `style.ChildBorderSize = 0.0f` and `style.FrameBorderSize = 0.0f`.
 - [x] **03.** Set `style.WindowPadding = ImVec2(0, 0)` globally so docked panels blend seamlessly.
 - [x] **04.** Define `ImGuiCol_WindowBg` as `#0B0E11` (MMT True Void).
-- [ ] **05.** Define `ImGuiCol_ChildBg` as `#15191E` (Panel Surface).
-- [ ] **06.** Define `ImGuiCol_Text` as `#D1D4DC` (Off-white anti-glare).
-- [ ] **07.** Define `ImGuiCol_Separator` as `rgba(94, 82, 64, 0.2)` (Subtle grid lines).
+- [x] **05.** Define `ImGuiCol_ChildBg` as `#15191E` (Panel Surface).
+- [x] **06.** Define `ImGuiCol_Text` as `#D1D4DC` (Off-white anti-glare).
+- [x] **07.** Define `ImGuiCol_Separator` as `rgba(94, 82, 64, 0.2)` (Subtle grid lines).
 - [ ] **08.** In `font_manager.cpp`, load *JetBrains Mono* or *Berkeley Mono* as the primary numeric font.
 - [ ] **09.** Configure `ImFontConfig::OversampleH = 4` and `OversampleV = 4` for sub-pixel anti-aliasing on numbers.
 - [ ] **10.** Merge *FontAwesome 6* into the font atlas for textless, icon-driven sidebars.

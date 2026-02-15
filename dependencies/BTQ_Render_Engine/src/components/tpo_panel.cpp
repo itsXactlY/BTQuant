@@ -6,8 +6,10 @@
 #include <format>
 #include <vector>
 #include <unordered_map>
+#include <memory>
 
 #include "components/theme_manager.hpp"
+#include "components/quant_workspace_component.hpp"
 #include "imgui.h"
 #include "implot.h"
 
@@ -186,6 +188,9 @@ void TpoPanel::render() {
 
     auto* draw_list = ImPlot::GetPlotDrawList();
 
+    // Get the crosshair price for highlighting
+    double crosshair_price = QuantWorkspaceComponent::g_crosshair_price.load(std::memory_order_relaxed);
+
     for (const auto& cluster : clusters) {
       int delta = static_cast<int>(cluster.askVolume) - static_cast<int>(cluster.bidVolume);
 
@@ -206,7 +211,18 @@ void TpoPanel::render() {
       ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
 
       draw_list->AddRectFilled(p1, p2, color);
-      draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+      
+      // Check if this cluster corresponds to the crosshair price
+      // We'll consider it a match if the crosshair price falls within the cluster's vertical range
+      bool is_highlighted = crosshair_price >= y1 && crosshair_price <= y2;
+      
+      if (is_highlighted) {
+        // Draw a highlighted border around the TPO block
+        draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 0.0f, 1.0f), 0.0f, ImDrawFlags_RoundCornersAll, 2.0f); // Yellow highlight with 2px thickness
+      } else {
+        // Draw the normal border
+        draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+      }
 
       if (show_text && (std::abs(p2.y - p1.y) > 18)) {
         std::string label = std::format("{}", delta);

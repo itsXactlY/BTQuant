@@ -4510,13 +4510,18 @@ void ChartPanel::render_top_toolbar() {
 
 // 3.2 Left Sidebar (Tools & Objects) - called within ChartLeftSidebar child
 void ChartPanel::render_left_sidebar() {
+  // Get the font manager instance to access the icons font
+  auto& font_manager = BTQuant::UI::FontManager::getInstance();
+  
   // Crosshair button
   ImVec4 crosshair_color =
       show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  if (ImGui::Button("+", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf05b", ImVec2(32, 32))) { // Crosshairs icon
     show_crosshair_ = !show_crosshair_;
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
 
@@ -4525,12 +4530,14 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 drawing_color =
       show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  if (ImGui::Button("D", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf14b", ImVec2(32, 32))) { // Pencil icon
     show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
     if (show_drawing_tools_sidebar_) {
       ImGui::OpenPopup("DrawingToolsPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
 
@@ -4539,12 +4546,14 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 overlays_color =
       show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  if (ImGui::Button("O", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf0ab", ImVec2(32, 32))) { // Filter icon
     show_overlays_menu_ = !show_overlays_menu_;
     if (show_overlays_menu_) {
       ImGui::OpenPopup("OverlaysPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
 
@@ -4553,12 +4562,14 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 indicators_color =
       show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  if (ImGui::Button("I", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf080", ImVec2(32, 32))) { // Bar chart icon
     show_indicators_menu_ = !show_indicators_menu_;
     if (show_indicators_menu_) {
       ImGui::OpenPopup("IndicatorsPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
@@ -4567,9 +4578,11 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 bubbles_color =
       show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  if (ImGui::Button("B", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf247", ImVec2(32, 32))) { // USD icon (for trades)
     show_aggressor_bubbles_ = !show_aggressor_bubbles_;
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
 
@@ -4579,15 +4592,17 @@ void ChartPanel::render_left_sidebar() {
   ImGui::Spacing();
 
   // Favorite tools section
-  ImGui::Text("Fav");
+  font_manager.pushIconsFont();
+  ImGui::Text("\uf005"); // Star icon
+  ImGui::PopFont(); // Pop icons font
   ImGui::Spacing();
 
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "H", false);
-    favorite_tools_.emplace_back("Trend Line", "T", false);
-    favorite_tools_.emplace_back("Fibonacci", "F", true);
-    favorite_tools_.emplace_back("Rectangle", "R", false);
+    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false); // Horizontal line icon
+    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false); // Trend line icon
+    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true); // Chevron down icon
+    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false); // Check square icon
   }
 
   // Render favorite tools
@@ -4597,9 +4612,11 @@ void ChartPanel::render_left_sidebar() {
         tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
+    font_manager.pushIconsFont();
     if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
       selected_drawing_tool_ = static_cast<int>(i);
     }
+    ImGui::PopFont(); // Pop icons font
     ImGui::PopID();
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());
@@ -5250,13 +5267,18 @@ void ChartPanel::render_floating_left_sidebar() {
                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                    ImGuiWindowFlags_AlwaysAutoResize);
 
+  // Get the font manager instance to access the icons font
+  auto& font_manager = BTQuant::UI::FontManager::getInstance();
+  
   // Crosshair button
   ImVec4 crosshair_color =
       show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  if (ImGui::Button("+", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf05b", ImVec2(32, 32))) { // Crosshairs icon
     show_crosshair_ = !show_crosshair_;
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
 
@@ -5265,12 +5287,14 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 drawing_color =
       show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  if (ImGui::Button("D", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf14b", ImVec2(32, 32))) { // Pencil icon
     show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
     if (show_drawing_tools_sidebar_) {
       ImGui::OpenPopup("DrawingToolsPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
 
@@ -5279,12 +5303,14 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 overlays_color =
       show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  if (ImGui::Button("O", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf0ab", ImVec2(32, 32))) { // Filter icon
     show_overlays_menu_ = !show_overlays_menu_;
     if (show_overlays_menu_) {
       ImGui::OpenPopup("OverlaysPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
 
@@ -5293,12 +5319,14 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 indicators_color =
       show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  if (ImGui::Button("I", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf080", ImVec2(32, 32))) { // Bar chart icon
     show_indicators_menu_ = !show_indicators_menu_;
     if (show_indicators_menu_) {
       ImGui::OpenPopup("IndicatorsPopup");
     }
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
@@ -5307,9 +5335,11 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 bubbles_color =
       show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  if (ImGui::Button("B", ImVec2(32, 32))) {
+  font_manager.pushIconsFont();
+  if (ImGui::Button("\uf247", ImVec2(32, 32))) { // USD icon (for trades)
     show_aggressor_bubbles_ = !show_aggressor_bubbles_;
   }
+  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
 
@@ -5319,15 +5349,17 @@ void ChartPanel::render_floating_left_sidebar() {
   ImGui::Spacing();
 
   // Favorite tools section
-  ImGui::Text("Fav");
+  font_manager.pushIconsFont();
+  ImGui::Text("\uf005"); // Star icon
+  ImGui::PopFont(); // Pop icons font
   ImGui::Spacing();
 
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "H", false);
-    favorite_tools_.emplace_back("Trend Line", "T", false);
-    favorite_tools_.emplace_back("Fibonacci", "F", true);
-    favorite_tools_.emplace_back("Rectangle", "R", false);
+    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false); // Horizontal line icon
+    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false); // Trend line icon
+    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true); // Chevron down icon
+    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false); // Check square icon
   }
 
   // Render favorite tools
@@ -5337,9 +5369,11 @@ void ChartPanel::render_floating_left_sidebar() {
         tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
+    font_manager.pushIconsFont();
     if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
       selected_drawing_tool_ = static_cast<int>(i);
     }
+    ImGui::PopFont(); // Pop icons font
     ImGui::PopID();
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());

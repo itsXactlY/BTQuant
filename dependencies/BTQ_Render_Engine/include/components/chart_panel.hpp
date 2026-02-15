@@ -19,6 +19,7 @@
 #include "panel_base.hpp"
 #include "panel_manager.hpp"
 #include "panel_settings_interface.hpp"
+#include "../ui/font_manager.hpp"
 
 namespace BTQuant {
 

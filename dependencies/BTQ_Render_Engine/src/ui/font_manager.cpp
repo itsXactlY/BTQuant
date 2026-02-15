@@ -390,39 +390,38 @@ bool FontManager::initialize() {
         header_font_ = main_font_;
     }
 
-    // Configure FontAwesome 6 font configuration for UI iconography
+    // Configure FontAwesome 6 font configuration for merging into main font
     ImFontConfig icons_config;
-    icons_config.SizePixels = scaled_main_size;  // Same size as main font for consistency
+    icons_config.MergeMode = true;  // Merge icons into the main font
+    icons_config.PixelSnapH = true;
     icons_config.OversampleH = 4;  // High oversampling for crisp icons on high-DPI displays
     icons_config.OversampleV = 4;  // High oversampling for crisp icons on high-DPI displays
-    icons_config.PixelSnapH = true;
-    strcpy(icons_config.Name, "FontAwesome6##Icons");
-
-    // Define the range of icons to include
-    static const ImWchar icons_ranges[] = { 
-        0xE000, 0xF8FF, // FontAwesome icons range
+    
+    // Define the range of icons to include - using the standard FontAwesome 6 ranges
+    static const ImWchar icons_ranges[] = {
+        0xF000, 0xF9FF, // FontAwesome 6 icons range
         0
     };
 
-    // Attempt to load FontAwesome 6 font (try multiple possible locations)
+    // Attempt to load FontAwesome 6 font and merge it into the main font (try multiple possible locations)
     ImFont* icons_font = nullptr;
-    
+
     // Try common system locations for FontAwesome 6
     icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
-    
+
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font-Awesome-6-Free-Solid-900.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/Font Awesome 6 Brands-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     // Try common alternative locations
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("./resources/fonts/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     if (!icons_font) {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
@@ -430,7 +429,7 @@ bool FontManager::initialize() {
             icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
         }
     }
-    
+
     if (!icons_font) {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
@@ -438,13 +437,13 @@ bool FontManager::initialize() {
             icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
         }
     }
-    
+
     // If FontAwesome 6 is not available, log a warning but continue
     if (!icons_font) {
         std::cout << "Warning: FontAwesome 6 font not found, UI iconography may not be available" << std::endl;
     } else {
-        // Assign the loaded icons font to our member variable
-        icons_font_ = icons_font;
+        // Assign the main font (which now contains merged icons) to our icons font variable
+        icons_font_ = main_font_;  // The icons are now merged into the main font
     }
 
     // Build the font atlas
@@ -807,39 +806,38 @@ void FontManager::updateFontScaling(float dpi_scale) {
 
     header_font_ = io.Fonts->AddFontDefault(&header_config);
 
-    // Configure FontAwesome 6 font configuration for UI iconography
+    // Configure FontAwesome 6 font configuration for merging into main font
     ImFontConfig icons_config;
-    icons_config.SizePixels = scaled_main_size;  // Same size as main font for consistency
+    icons_config.MergeMode = true;  // Merge icons into the main font
+    icons_config.PixelSnapH = true;
     icons_config.OversampleH = 4;  // High oversampling for crisp icons on high-DPI displays
     icons_config.OversampleV = 4;  // High oversampling for crisp icons on high-DPI displays
-    icons_config.PixelSnapH = true;
-    strcpy(icons_config.Name, "FontAwesome6##Icons");
-
-    // Define the range of icons to include
-    static const ImWchar icons_ranges[] = { 
-        0xE000, 0xF8FF, // FontAwesome icons range
+    
+    // Define the range of icons to include - using the standard FontAwesome 6 ranges
+    static const ImWchar icons_ranges[] = {
+        0xF000, 0xF9FF, // FontAwesome 6 icons range
         0
     };
 
-    // Attempt to load FontAwesome 6 font (try multiple possible locations)
+    // Attempt to load FontAwesome 6 font and merge it into the main font (try multiple possible locations)
     ImFont* icons_font = nullptr;
-    
+
     // Try common system locations for FontAwesome 6
     icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
-    
+
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/fontawesome/Font-Awesome-6-Free-Solid-900.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("/usr/share/fonts/TTF/Font Awesome 6 Brands-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     // Try common alternative locations
     if (!icons_font) {
         icons_font = io.Fonts->AddFontFromFileTTF("./resources/fonts/Font Awesome 6 Free-Regular-400.otf", scaled_main_size, &icons_config, icons_ranges);
     }
-    
+
     if (!icons_font) {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
@@ -847,7 +845,7 @@ void FontManager::updateFontScaling(float dpi_scale) {
             icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
         }
     }
-    
+
     if (!icons_font) {
         const char* home_dir = getenv("HOME");
         if (home_dir) {
@@ -855,13 +853,13 @@ void FontManager::updateFontScaling(float dpi_scale) {
             icons_font = io.Fonts->AddFontFromFileTTF(icons_font_path.c_str(), scaled_main_size, &icons_config, icons_ranges);
         }
     }
-    
+
     // If FontAwesome 6 is not available, log a warning but continue
     if (!icons_font) {
         std::cout << "Warning: FontAwesome 6 font not found (during font scaling update), UI iconography may not be available" << std::endl;
     } else {
-        // Assign the loaded icons font to our member variable
-        icons_font_ = icons_font;
+        // Assign the main font (which now contains merged icons) to our icons font variable
+        icons_font_ = main_font_;  // The icons are now merged into the main font
     }
 
     // Rebuild the font atlas

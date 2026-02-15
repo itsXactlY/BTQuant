@@ -15,8 +15,8 @@
 - [x] **05.** Define `ImGuiCol_ChildBg` as `#15191E` (Panel Surface).
 - [x] **06.** Define `ImGuiCol_Text` as `#D1D4DC` (Off-white anti-glare).
 - [x] **07.** Define `ImGuiCol_Separator` as `rgba(94, 82, 64, 0.2)` (Subtle grid lines).
-- [ ] **08.** In `font_manager.cpp`, load *JetBrains Mono* or *Berkeley Mono* as the primary numeric font.
-- [ ] **09.** Configure `ImFontConfig::OversampleH = 4` and `OversampleV = 4` for sub-pixel anti-aliasing on numbers.
+- [x] **08.** In `font_manager.cpp`, load *JetBrains Mono* or *Berkeley Mono* as the primary numeric font.
+- [x] **09.** Configure `ImFontConfig::OversampleH = 4` and `OversampleV = 4` for sub-pixel anti-aliasing on numbers.
 - [ ] **10.** Merge *FontAwesome 6* into the font atlas for textless, icon-driven sidebars.
 
 ---

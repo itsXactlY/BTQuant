@@ -126,18 +126,23 @@ void MarketDataProcessor::initializeAudioEngine() {
 #ifdef MINIAUDIO_IMPLEMENTATION
   ma_result result;
   ma_engine_config config = ma_engine_config_init();
-  
+
   // Initialize the audio engine
-  g_engine = new ma_engine;
+  if (g_engine == nullptr) {
+      g_engine = new ma_engine;
+  }
+  
   result = ma_engine_init(&config, g_engine);
   if (result != MA_SUCCESS) {
       std::cerr << "[MarketDataProcessor] Failed to initialize audio engine: " << result << std::endl;
-      delete g_engine;
-      g_engine = nullptr;
+      if (g_engine) {
+          delete g_engine;
+          g_engine = nullptr;
+      }
       audio_enabled_ = false;
       return;
   }
-  
+
   audio_engine_ = g_engine;
   audio_enabled_ = true;
   std::cout << "[MarketDataProcessor] Audio engine initialized for order flow acoustics" << std::endl;
@@ -191,17 +196,20 @@ void MarketDataProcessor::processAudioEvents() {
     double volume = audio_event.first;
     bool is_buy = audio_event.second;
 
-    if (!audio_enabled_) return;
+    // Only process if audio is enabled
+    if (!audio_enabled_) {
+        continue; // Continue processing other events instead of returning
+    }
 
     // Calculate pitch based on volume (inverse relationship - large trades = low pitch)
     // Normalize volume to a range for pitch calculation
     // Use logarithmic scaling to handle the wide range of trade volumes
     double log_volume = std::log10(std::max(volume, 1.0)); // Prevent log(0)
-    
+
     // Define reference values for normalization
     double min_log_volume = 0.0; // log10(1) = 0
     double max_log_volume = 6.0; // log10(1000000) = 6 (for very large trades)
-    
+
     // Normalize the log volume to 0-1 range
     double normalized_volume = std::min(1.0, std::max(0.0, (log_volume - min_log_volume) / (max_log_volume - min_log_volume)));
 
@@ -224,7 +232,7 @@ void MarketDataProcessor::processAudioEvents() {
     if (g_engine) {
       // Calculate amplitude based on volume as well
       float amplitude = std::min(1.0f, static_cast<float>(normalized_volume * 0.8f + 0.2f)); // Range 0.2 to 1.0
-      
+
       // Play a tone with the calculated frequency and amplitude
       ma_result result = play_beep_sound(g_engine, static_cast<float>(pitch), 0.1f, amplitude);
 
@@ -249,6 +257,30 @@ void MarketDataProcessor::processAudioEvents() {
               << ", Side: " << (is_buy ? "BUY" : "SELL") << std::endl;
 #endif
   }
+}
+
+void MarketDataProcessor::setAudioEnabled(bool enabled) { 
+  audio_enabled_ = enabled; 
+}
+
+bool MarketDataProcessor::isAudioEnabled() const { 
+  return audio_enabled_; 
+}
+
+void MarketDataProcessor::setBasePitch(double pitch) { 
+  base_pitch_ = pitch; 
+}
+
+void MarketDataProcessor::setMinPitch(double pitch) { 
+  min_pitch_ = pitch; 
+}
+
+void MarketDataProcessor::setMaxPitch(double pitch) { 
+  max_pitch_ = pitch; 
+}
+
+size_t MarketDataProcessor::getAudioEventQueueSize() const {
+  return audio_event_queue_.size_approx();
 }
 
 void MarketDataProcessor::processTradeUpdate(const MarketDataUpdate& update) {

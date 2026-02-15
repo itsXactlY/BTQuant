@@ -325,6 +325,16 @@ class MarketDataProcessor {
   MarketDataProcessor(MarketDataProcessor&&) = delete;
   MarketDataProcessor& operator=(MarketDataProcessor&&) = delete;
 
+  // Audio control methods for order flow acoustics
+  void setAudioEnabled(bool enabled);
+  bool isAudioEnabled() const;
+  void setBasePitch(double pitch);
+  void setMinPitch(double pitch);
+  void setMaxPitch(double pitch);
+  
+  // Audio statistics
+  size_t getAudioEventQueueSize() const;
+
   /**
    * Process a trade update (asynchronous)
    * @param update Market data update containing trade information
@@ -632,8 +642,6 @@ class MarketDataProcessor {
   void initializeAudioEngine();
   void shutdownAudioEngine();
   void playTradeSound(double volume, bool is_buy);  // Core method for triggering trade sounds
-  void setAudioEnabled(bool enabled) { audio_enabled_ = enabled; }
-  bool isAudioEnabled() const { return audio_enabled_; }
 
  private:
   // Audio helper methods

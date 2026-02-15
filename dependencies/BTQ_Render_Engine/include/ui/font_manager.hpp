@@ -95,9 +95,15 @@ public:
      */
     bool isInitialized() const;
 
+    /**
+     * @brief Update font scaling based on current DPI settings
+     * @param dpi_scale The DPI scaling factor to apply
+     */
+    void updateFontScaling(float dpi_scale = 0.0f);
+
 private:
     FontManager();  // Private constructor for singleton
-    
+
     ImFont* main_font_;
     ImFont* monospace_font_;
     ImFont* header_font_;

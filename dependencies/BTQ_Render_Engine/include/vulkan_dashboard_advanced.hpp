@@ -327,6 +327,7 @@ class VulkanDashboard {
   uint32_t current_image_index_ = 0;
   bool is_running_ = true;
   bool window_resized_ = false;
+  float last_dpi_scale_ = 0.0f;  // Track DPI scale to detect changes
 
   /**
    * @brief Callback for when the window framebuffer is resized

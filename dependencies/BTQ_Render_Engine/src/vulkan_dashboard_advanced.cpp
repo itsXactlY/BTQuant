@@ -61,6 +61,16 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   ImGui_ImplGlfw_InitForVulkan(window_, true);
   std::println("[VulkanDashboard] ImGui GLFW Backend initialized.");
 
+  // Initialize font manager after window creation to ensure proper DPI detection
+  auto& font_manager = UI::FontManager::getInstance();
+  font_manager.initialize();
+  
+  // Update font scaling based on actual DPI after initialization
+  float xscale, yscale;
+  glfwGetWindowContentScale(window_, &xscale, &yscale);
+  float dpi_scale = xscale;
+  font_manager.updateFontScaling(dpi_scale);
+
   init_components();
   return {};
 }
@@ -273,6 +283,16 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
+  // Check for DPI changes and update font scaling if needed
+  float xscale, yscale;
+  glfwGetWindowContentScale(window_, &xscale, &yscale);
+  float current_dpi_scale = xscale;
+  
+  if (current_dpi_scale != last_dpi_scale_) {
+      last_dpi_scale_ = current_dpi_scale;
+      UI::FontManager::getInstance().updateFontScaling(current_dpi_scale);
+  }
+
   // Process updates and UI - ONLY workspace_->render_gui() (panel_manager is handled internally)
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
@@ -336,6 +356,19 @@ void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, i
   app->window_resized_ = true;
   app->width_ = width;
   app->height_ = height;
+  
+  // Update font scaling based on new DPI
+  float xscale, yscale;
+  glfwGetWindowContentScale(window, &xscale, &yscale);
+  
+  // Use the average of x and y scale, or just x scale if they're similar
+  float dpi_scale = xscale;
+  
+  // Update font scaling when DPI changes
+  BTQuant::UI::FontManager::getInstance().updateFontScaling(dpi_scale);
+  
+  // Also update the stored DPI scale to prevent duplicate updates
+  app->last_dpi_scale_ = dpi_scale;
 }
 
 

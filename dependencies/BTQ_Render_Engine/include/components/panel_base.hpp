@@ -146,8 +146,19 @@ class PanelBase {
   void push_glass_style();
   void pop_glass_style();
 
+  // Background image functionality
+  void set_background_image(ImTextureID texture_id) { background_texture_ = texture_id; }
+  ImTextureID get_background_image() const { return background_texture_; }
+  void set_use_background_image(bool use_bg) { use_background_image_ = use_bg; }
+  bool get_use_background_image() const { return use_background_image_; }
+
   // Utility functions
   static const char* get_panel_type_name(PanelType type);
+
+ private:
+  // Background image properties
+  ImTextureID background_texture_ = nullptr;
+  bool use_background_image_ = false;
 };
 
 }  // namespace BTQuant

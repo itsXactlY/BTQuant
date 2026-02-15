@@ -40,11 +40,43 @@ void PanelBase::render() {
     return;
   }
 
+  // Render background image if enabled using channel splitting to ensure it's behind other content
+  if (use_background_image_ && background_texture_ != nullptr) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    
+    // Split the draw list into channels: 0 for background, 1 for foreground
+    draw_list->ChannelsSplit(2);
+    
+    // Switch to background channel (0)
+    draw_list->ChannelsSetCurrent(0);
+    
+    // Get the current window position and size
+    ImVec2 window_pos = ImGui::GetWindowPos();
+    ImVec2 window_size = ImGui::GetWindowSize();
+    
+    // Define the rectangle for the background image spanning the entire window
+    ImVec2 bg_min = window_pos;
+    ImVec2 bg_max = ImVec2(window_pos.x + window_size.x, window_pos.y + window_size.y);
+    
+    // Add the image to the draw list, spanning the entire panel background
+    draw_list->AddImage(background_texture_, bg_min, bg_max, 
+                       ImVec2(0, 0), ImVec2(1, 1));  // UV coordinates default to full texture
+    
+    // Switch back to foreground channel (1) for normal rendering
+    draw_list->ChannelsSetCurrent(1);
+  }
+
   render_panel_header();
 
   // Default content for placeholder panels
   ImGui::Text("Panel Type: %s", get_panel_type_name(config_.type));
   ImGui::Text("Implementation coming soon...");
+
+  // Merge channels back together if we were using background image
+  if (use_background_image_ && background_texture_ != nullptr) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->ChannelsMerge();
+  }
 
   end_panel_window();
 

@@ -3350,6 +3350,80 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx, aggregation_factor);
     }
 
+    // "Snap to Last" functionality: If X-axis max < latest data time, show a button to jump to live edge
+    if (!chart.dates.empty()) {
+      ImPlotRect current_limits = ImPlot::GetPlotLimits();
+      double latest_atomic_time = chart.dates.back(); // Latest data point in the chart
+      
+      if (current_limits.X.Max < latest_atomic_time) {
+        // Calculate position for the button - top-right corner of the plot
+        ImVec2 plot_pos = ImPlot::GetPlotPos();
+        ImVec2 plot_size = ImPlot::GetPlotSize();
+        
+        // Position the button in the top-right corner of the plot area
+        ImVec2 button_pos = ImVec2(plot_pos.x + plot_size.x - 30, plot_pos.y + 5);
+        
+        // Draw a hovering arrow button
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        
+        // Draw a semi-transparent background for the button
+        draw_list->AddRectFilled(
+            ImVec2(button_pos.x - 2, button_pos.y - 2), 
+            ImVec2(button_pos.x + 28, button_pos.y + 22), 
+            IM_COL32(0, 0, 0, 180), // Dark semi-transparent background
+            4.0f // Rounded corners
+        );
+        
+        // Draw an arrow pointing right (>) to indicate "snap to latest"
+        ImVec2 center = ImVec2(button_pos.x + 12, button_pos.y + 10);
+        ImVec2 arrow_points[3] = {
+            ImVec2(center.x - 3, center.y - 4),  // Top left of arrow
+            ImVec2(center.x + 5, center.y),      // Tip of arrow
+            ImVec2(center.x - 3, center.y + 4)   // Bottom left of arrow
+        };
+        
+        // Draw the arrow
+        draw_list->AddTriangleFilled(
+            arrow_points[0], 
+            arrow_points[1], 
+            arrow_points[2], 
+            IM_COL32(255, 255, 255, 220) // White arrow
+        );
+        
+        // Handle button click
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        if (mouse_pos.x >= button_pos.x - 2 && mouse_pos.x <= button_pos.x + 28 &&
+            mouse_pos.y >= button_pos.y - 2 && mouse_pos.y <= button_pos.y + 22) {
+            
+            // Draw highlight when hovered
+            draw_list->AddRect(
+                ImVec2(button_pos.x - 2, button_pos.y - 2), 
+                ImVec2(button_pos.x + 28, button_pos.y + 22), 
+                IM_COL32(255, 255, 255, 200), // Highlight border
+                4.0f // Rounded corners
+            );
+            
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                // Jump to the live edge by setting follow_latest_ to true
+                follow_latest_ = true;
+                
+                // Reset the view to show the latest data
+                double time_max = latest_atomic_time;
+                double duration_raw = RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
+                double duration_sec = duration_raw / 1000000.0;
+                double window_size = duration_sec * auto_follow_window_;
+                double padding = window_size * 0.05;
+
+                last_view_min_ = time_max - window_size;
+                last_view_max_ = time_max + padding;
+                
+                // Force the axis limits to update immediately
+                ImPlot::SetNextAxisLimits(ImAxis_X1, last_view_min_, last_view_max_, ImPlotCond_Always);
+            }
+        }
+      }
+    }
+
     ImPlot::EndPlot();
   }
 

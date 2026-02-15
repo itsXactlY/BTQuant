@@ -915,11 +915,11 @@ void ComputeToImGuiBind::bindLiveBidAskButton(const LockFreeSnapshotPipeline& pi
                 ImGui::Text("Last Price: ");
                 ImGui::SameLine();
                 BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.price.load(), "%.2f");
-                
+
                 ImGui::Text("Bid Volume: ");
                 ImGui::SameLine();
                 BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.bid_volume.load(), "%.2f");
-                
+
                 ImGui::Text("Ask Volume: ");
                 ImGui::SameLine();
                 BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.ask_volume.load(), "%.2f");
@@ -928,6 +928,88 @@ void ComputeToImGuiBind::bindLiveBidAskButton(const LockFreeSnapshotPipeline& pi
                 if (ImGui::Button("No Data Available")) {
                     // Button click handler
                 }
+            }
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index, const char* window_name) {
+    // Create a visualization entry for the mouse trading interface
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback that fetches live atomic data and creates massive trading buttons
+    viz.render_callback = [&pipeline, symbol_index, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            AtomicMarketData data;
+            bool success = pipeline.read_market_data_snapshot(symbol_index, data);
+
+            if (success) {
+                // Get the current bid and ask prices from atomic data
+                double bid_price = data.bid_price.load();
+                double ask_price = data.ask_price.load();
+                
+                // Create a toggle for mouse trading mode
+                static bool mouse_trading_enabled = true; // Default to enabled
+                
+                // Toggle button for mouse trading
+                if (ImGui::Checkbox("Enable Mouse Trading", &mouse_trading_enabled)) {
+                    // Toggle state changed
+                }
+                
+                ImGui::Separator();
+                
+                // If Mouse Trading enabled: Render massive BUY MKT / SELL MKT buttons
+                if (mouse_trading_enabled) {
+                    // Market Buy button with Best Ask - MASSIVE BUTTONS
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.8f, 0.0f, 1.0f)); // Brighter green
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 20)); // Increase padding
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10)); // Adjust spacing
+                    
+                    char buy_label[64];
+                    snprintf(buy_label, sizeof(buy_label), "BUY MKT\n%.2f", ask_price);
+                    if (ImGui::Button(buy_label, ImVec2(200, 100))) {  // MASSIVE button size
+                        // Execute market buy order - in a real implementation this would connect to trading interface
+                        printf("Executing BUY MKT order at price: %.2f\n", ask_price);
+                    }
+                    
+                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleColor();
+
+                    ImGui::Spacing();
+
+                    // Market Sell button with Best Bid - MASSIVE BUTTONS
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.0f, 0.0f, 1.0f)); // Brighter red
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 20)); // Increase padding
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10)); // Adjust spacing
+                    
+                    char sell_label[64];
+                    snprintf(sell_label, sizeof(sell_label), "SELL MKT\n%.2f", bid_price);
+                    if (ImGui::Button(sell_label, ImVec2(200, 100))) {  // MASSIVE button size
+                        // Execute market sell order - in a real implementation this would connect to trading interface
+                        printf("Executing SELL MKT order at price: %.2f\n", bid_price);
+                    }
+                    
+                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleColor();
+
+                    ImGui::Separator();
+                }
+                
+                // Show current market data
+                ImGui::Text("Current Market Data:");
+                ImGui::Text("Best Bid: %.2f", bid_price);
+                ImGui::Text("Best Ask: %.2f", ask_price);
+                ImGui::Text("Last Price: %.2f", data.price.load());
+                ImGui::Text("Bid Volume: %.2f", data.bid_volume.load());
+                ImGui::Text("Ask Volume: %.2f", data.ask_volume.load());
+            } else {
+                // If no data available, show a placeholder
+                ImGui::Text("No market data available");
             }
         }
         ImGui::End();

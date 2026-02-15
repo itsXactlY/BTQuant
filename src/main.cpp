@@ -421,6 +421,22 @@ int main() {
 
     std::cout << "Raw Trade Table bound to UI successfully!\n";
 
+    // Test the new Live Bid/Ask Button
+    std::cout << "\n=== Testing Live Bid/Ask Button ===\n";
+
+    // Bind the live bid/ask button to the UI using the existing lock-free pipeline
+    ui_bind.bindLiveBidAskButton(lf_pipeline, 0, "Live Bid/Ask Button");
+
+    std::cout << "Live Bid/Ask Button bound to UI successfully!\n";
+
+    // Test the new Mouse Trading Interface with massive BUY MKT / SELL MKT buttons
+    std::cout << "\n=== Testing Mouse Trading Interface ===\n";
+
+    // Bind the mouse trading interface to the UI using the existing lock-free pipeline
+    ui_bind.bindMouseTradingInterface(lf_pipeline, 0, "Mouse Trading Interface");
+
+    std::cout << "Mouse Trading Interface bound to UI successfully!\n";
+
     std::cout << "\nAll analytics modules and UI visualizations tested successfully!\n";
 
     // Test Pitch Shifting functionality - Scale pitch inversely to volume (Big trade = Deep bass)

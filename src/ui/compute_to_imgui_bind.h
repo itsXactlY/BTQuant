@@ -120,11 +120,34 @@ public:
      */
     void bindRawTradeTable(const RawTradeTable& trade_table, const char* window_name = "Raw Trade Table");
 
+    /**
+     * @brief Bind live best bid/ask display button to ImGui
+     * @param pipeline Reference to the Lock-Free Snapshot Pipeline instance
+     * @param symbol_index Index of the symbol to visualize
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindLiveBidAskButton(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, const char* window_name = "Live Bid/Ask Button");
+
+    /**
+     * @brief Bind mouse trading interface with massive BUY MKT / SELL MKT buttons
+     * @param pipeline Reference to the Lock-Free Snapshot Pipeline instance
+     * @param symbol_index Index of the symbol to visualize
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindMouseTradingInterface(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0, const char* window_name = "Mouse Trading Interface");
+
 private:
     struct BoundVisualization {
         std::string window_name;
         std::function<void()> render_callback;
         bool is_visible;
+    };
+
+    struct MouseTradingData {
+        bool mouse_trading_enabled;
+        double bid_price;
+        double ask_price;
+        double order_quantity;
     };
 
     struct OrderBookData {

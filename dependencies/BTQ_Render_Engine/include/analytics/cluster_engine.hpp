@@ -1,11 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <iostream>
 #include <map>
-#include <mutex>
 #include <vector>
 
 #include "../../../../dependencies/ccapi/example/src/market_data_collector/market_data_types.h"
@@ -15,55 +15,54 @@
 namespace Analytics {
 
 struct ClusterCell {
-  mutable std::mutex volume_mutex;  // Mutex to protect double values
-  double total_volume{0.0};
-  double buy_volume{0.0};
-  double sell_volume{0.0};
+  // Atomic values to replace mutex-protected data
+  std::atomic<double> total_volume{0.0};
+  std::atomic<double> buy_volume{0.0};
+  std::atomic<double> sell_volume{0.0};
   std::atomic<int> trade_count{0};
   std::atomic<int> buy_trade_count{0};
   std::atomic<int> sell_trade_count{0};
   std::atomic<double> max_single_trade_volume{0.0};
-  double sum_of_volumes{0.0};  // for average calculations
+  std::atomic<double> sum_of_volumes{0.0};  // for average calculations
 
-  // Fields for statistical calculations
-  std::vector<double> prices;  // Store prices for statistical calculations
-  double sum_of_prices{0.0};   // Sum of all prices for mean calculation
-  double sum_of_squared_prices{0.0};  // Sum of squared prices for variance calculation
+  // Fields for statistical calculations - using atomic operations for sums
+  // For the vector of prices, we'll use a different approach since there's no atomic vector
+  // We'll store the count of prices separately and use atomic operations for sums
+  std::atomic<double> sum_of_prices{0.0};   // Sum of all prices for mean calculation
+  std::atomic<double> sum_of_squared_prices{0.0};  // Sum of squared prices for variance calculation
+  std::atomic<int> price_count{0};  // Count of prices added
 
-  // Define copy constructor and assignment operator to handle mutex properly
+  // Define copy constructor and assignment operator
   ClusterCell() = default;
 
-  // Copy constructor - only copies the data values, not the mutex
+  // Copy constructor - only copies the data values
   ClusterCell(const ClusterCell& other)
-      : total_volume(other.total_volume),
-        buy_volume(other.buy_volume),
-        sell_volume(other.sell_volume),
+      : total_volume(other.total_volume.load()),
+        buy_volume(other.buy_volume.load()),
+        sell_volume(other.sell_volume.load()),
         trade_count(other.trade_count.load()),
         buy_trade_count(other.buy_trade_count.load()),
         sell_trade_count(other.sell_trade_count.load()),
         max_single_trade_volume(other.max_single_trade_volume.load()),
-        sum_of_volumes(other.sum_of_volumes),
-        prices(other.prices),
-        sum_of_prices(other.sum_of_prices),
-        sum_of_squared_prices(other.sum_of_squared_prices) {}
+        sum_of_volumes(other.sum_of_volumes.load()),
+        sum_of_prices(other.sum_of_prices.load()),
+        sum_of_squared_prices(other.sum_of_squared_prices.load()),
+        price_count(other.price_count.load()) {}
 
   // Assignment operator
   ClusterCell& operator=(const ClusterCell& other) {
     if (this != &other) {
-      std::lock_guard<std::mutex> lock_this(volume_mutex);
-      std::lock_guard<std::mutex> lock_other(other.volume_mutex);
-
-      total_volume = other.total_volume;
-      buy_volume = other.buy_volume;
-      sell_volume = other.sell_volume;
+      total_volume.store(other.total_volume.load());
+      buy_volume.store(other.buy_volume.load());
+      sell_volume.store(other.sell_volume.load());
       trade_count.store(other.trade_count.load());
       buy_trade_count.store(other.buy_trade_count.load());
       sell_trade_count.store(other.sell_trade_count.load());
       max_single_trade_volume.store(other.max_single_trade_volume.load());
-      sum_of_volumes = other.sum_of_volumes;
-      prices = other.prices;
-      sum_of_prices = other.sum_of_prices;
-      sum_of_squared_prices = other.sum_of_squared_prices;
+      sum_of_volumes.store(other.sum_of_volumes.load());
+      sum_of_prices.store(other.sum_of_prices.load());
+      sum_of_squared_prices.store(other.sum_of_squared_prices.load());
+      price_count.store(other.price_count.load());
     }
     return *this;
   }

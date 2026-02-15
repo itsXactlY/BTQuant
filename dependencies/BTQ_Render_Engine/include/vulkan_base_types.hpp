@@ -18,6 +18,7 @@
 #include <vulkan/vulkan.h>
 
 struct ImDrawData;
+typedef unsigned long long ImTextureID;  // Forward declaration for ImTextureID
 
 namespace BTQuant {
 
@@ -186,6 +187,9 @@ class GPUMemoryManager {
 
   // Public access methods for texture atlas operations
   VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+
+  // Method to retrieve ImTextureID from an ImageAllocation for ImGui rendering
+  ImTextureID getImTextureID(VkSampler sampler, const ImageAllocation& allocation, VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) const;
 
   // Memory usage statistics
   struct MemoryStats {

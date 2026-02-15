@@ -12,6 +12,7 @@
 #include "panel_base.hpp"
 #include "vulkan_base_types.hpp"
 #include "vulkan/ssbo_snapshot_updater.h"
+#include "vulkan/lob_heatmap_compute_pipeline.h"
 
 // Forward declaration for ClusterEngine
 namespace Analytics {
@@ -281,6 +282,9 @@ class DomSurfacePanel : public PanelBase {
 
   // SSBO Snapshot Updater for GPU compute
   std::unique_ptr<SSBOSnapshotUpdater> ssbo_snapshot_updater_;
+
+  // LOB Heatmap Compute Pipeline for Viridis/Magma gradient
+  std::unique_ptr<LOBHeatmapComputePipeline> lob_heatmap_pipeline_;
 };
 
 }  // namespace BTQuant

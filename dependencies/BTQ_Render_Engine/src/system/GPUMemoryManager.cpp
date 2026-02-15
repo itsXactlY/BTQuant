@@ -6,6 +6,8 @@
 #include <cstring> // For memcpy
 
 #include "../../include/vulkan_base_types.hpp"
+#include "imgui.h"
+#include "backends/imgui_impl_vulkan.h"
 
 namespace BTQuant {
 
@@ -556,6 +558,21 @@ VkResult GPUMemoryManager::copy_buffer_to_image(VkCommandBuffer command_buffer, 
                       1, &shader_barrier);
   
   return VK_SUCCESS;
+}
+
+ImTextureID GPUMemoryManager::getImTextureID(VkSampler sampler, const ImageAllocation& allocation, VkImageLayout image_layout) const {
+  // Register the texture with ImGui using ImGui_ImplVulkan_AddTexture
+  // This creates a descriptor set that can be used with ImGui
+  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
+      sampler,
+      allocation.view,  // Using the ImageView from the ImageAllocation
+      image_layout
+  );
+
+  // Convert the descriptor set to ImTextureID (they are typically the same in newer ImGui versions)
+  ImTextureID texture_id = reinterpret_cast<ImTextureID>(descriptor_set);
+
+  return texture_id;
 }
 
 }  // namespace BTQuant

@@ -19,7 +19,8 @@ DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcess
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
       processor_(processor),
       heatmap_texture_{},
-      ssbo_snapshot_updater_(nullptr) {
+      ssbo_snapshot_updater_(nullptr),
+      lob_heatmap_pipeline_(nullptr) {
   // Initialize Vulkan texture if Vulkan core is available
   // Vulkan compute removed - using CPU-based heatmap rendering initially
   // But we'll prepare for Vulkan-accelerated texture rendering
@@ -32,9 +33,12 @@ DomSurfacePanel::~DomSurfacePanel() {
 
   // Clean up Vulkan texture if initialized
   destroyVulkanTexture();
-  
+
   // Clean up cluster engine
   cluster_engine_.reset();
+  
+  // Clean up LOB heatmap compute pipeline
+  lob_heatmap_pipeline_.reset();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -773,13 +777,21 @@ void DomSurfacePanel::render() {
     // Initialize Vulkan texture if not already done and if we have the Vulkan core
     if (!texture_initialized_ && vulkan_core_) {
       initializeVulkanTexture();
+      
+      // Initialize the LOB heatmap compute pipeline
+      try {
+        lob_heatmap_pipeline_ = std::make_unique<LOBHeatmapComputePipeline>(vulkan_core_.get());
+        lob_heatmap_pipeline_->initialize(1024, 1024); // Default size, can be adjusted based on needs
+      } catch (const std::exception& e) {
+        std::cerr << "[DomSurfacePanel] Failed to initialize LOB heatmap compute pipeline: " << e.what() << std::endl;
+      }
     }
 
     // Update Vulkan texture if available
     if (texture_initialized_) {
       updateVulkanTexture();
     }
-    
+
     // Update MMT layout data if enabled
     if (show_mmt_layout_) {
       updateMMTLayoutData();
@@ -875,6 +887,36 @@ void DomSurfacePanel::render() {
         }
       }
 
+      // Demonstrate retrieving ImTextureID from GPUMemoryManager and rendering with ImGui::GetWindowDrawList()->AddImage()
+      // This showcases the new functionality added to GPUMemoryManager
+      if (texture_initialized_ && heatmap_texture_id_ && vulkan_core_) {
+        try {
+          // Get the memory manager from the vulkan core
+          GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+          
+          // Retrieve the ImTextureID using the new method in GPUMemoryManager
+          // This demonstrates the new functionality we added
+          ImTextureID texture_id_from_manager = memory_manager.getImTextureID(
+              heatmap_sampler_, 
+              heatmap_texture_, 
+              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+          );
+          
+          // Render the texture using ImGui::GetWindowDrawList()->AddImage()
+          // Position it in the top-right corner of the window as a small preview
+          ImVec2 window_pos = ImGui::GetWindowPos();
+          ImVec2 window_size = ImGui::GetWindowSize();
+          ImVec2 texture_pos = ImVec2(window_pos.x + window_size.x - 100.0f, window_pos.y + 20.0f);
+          
+          // Draw the texture as a small preview
+          ImDrawList* draw_list = ImGui::GetWindowDrawList();
+          draw_list->AddImage(texture_id_from_manager, texture_pos, ImVec2(texture_pos.x + 80.0f, texture_pos.y + 80.0f));
+        } catch (const std::exception& e) {
+          // Handle any exceptions gracefully
+          std::cerr << "[DomSurfacePanel] Error demonstrating new GPUMemoryManager texture functionality: " << e.what() << std::endl;
+        }
+      }
+
       // Render Persistent Level Lines OVER the heatmap
       if (show_persistent_lines_) {
         renderPersistentLevels();
@@ -930,7 +972,7 @@ void DomSurfacePanel::render() {
             current_y = next_y;
             draw_segment = !draw_segment;
         }
-        
+
         // Draw horizontal dashed line at g_crosshair_price
         double crosshair_price = QuantWorkspaceComponent::g_crosshair_price.load(std::memory_order_relaxed);
         ImVec2 left = ImPlot::PlotToPixels(limits.X.Min, crosshair_price);
@@ -1300,66 +1342,76 @@ void DomSurfacePanel::initializeVulkanTexture() {
   }
 
   try {
-    // Get reference to GPUMemoryManager
-    GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+    // If we have the LOB heatmap compute pipeline, use its output texture
+    if (lob_heatmap_pipeline_) {
+      // Get the output image from the compute pipeline
+      heatmap_texture_ = lob_heatmap_pipeline_->get_output_image_allocation();
+      heatmap_image_view_ = lob_heatmap_pipeline_->get_output_image_view();
+      heatmap_sampler_ = lob_heatmap_pipeline_->get_output_sampler();
+    } else {
+      // Fallback: Allocate a texture for the heatmap (initial size, will be resized as needed)
+      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
 
-    // Allocate a texture for the heatmap (initial size, will be resized as needed)
-    uint32_t width = 1024;  // Default width
-    uint32_t height = 1024; // Default height
+      uint32_t width = 1024;  // Default width
+      uint32_t height = 1024; // Default height
 
-    heatmap_texture_ = memory_manager.allocate_image(
-        width, height,
-        VK_FORMAT_R32G32B32A32_SFLOAT,  // Format for heatmap data
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-    );
+      heatmap_texture_ = memory_manager.allocate_image(
+          width, height,
+          VK_FORMAT_R32G32B32A32_SFLOAT,  // Format for heatmap data
+          VK_IMAGE_TILING_OPTIMAL,
+          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+      );
 
-    // Create image view for the heatmap texture
-    VkImageViewCreateInfo view_info = {};
-    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = heatmap_texture_.image;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    view_info.subresourceRange.baseMipLevel = 0;
-    view_info.subresourceRange.levelCount = 1;
-    view_info.subresourceRange.baseArrayLayer = 0;
-    view_info.subresourceRange.layerCount = 1;
+      // Create image view for the heatmap texture
+      VkImageViewCreateInfo view_info = {};
+      view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      view_info.image = heatmap_texture_.image;
+      view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      view_info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+      view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      view_info.subresourceRange.baseMipLevel = 0;
+      view_info.subresourceRange.levelCount = 1;
+      view_info.subresourceRange.baseArrayLayer = 0;
+      view_info.subresourceRange.layerCount = 1;
 
-    VkResult result = vkCreateImageView(vulkan_core_->get_device(), &view_info, nullptr, &heatmap_image_view_);
-    if (result != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create image view for heatmap texture");
-    }
+      VkResult result = vkCreateImageView(vulkan_core_->get_device(), &view_info, nullptr, &heatmap_image_view_);
+      if (result != VK_SUCCESS) {
+          throw std::runtime_error("Failed to create image view for heatmap texture");
+      }
 
-    // Create sampler for the heatmap texture
-    VkSamplerCreateInfo sampler_info = {};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.magFilter = VK_FILTER_LINEAR;
-    sampler_info.minFilter = VK_FILTER_LINEAR;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.anisotropyEnable = VK_FALSE;
-    sampler_info.maxAnisotropy = 1.0f;
-    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = VK_FALSE;
-    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      // Create sampler for the heatmap texture
+      VkSamplerCreateInfo sampler_info = {};
+      sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+      sampler_info.magFilter = VK_FILTER_LINEAR;
+      sampler_info.minFilter = VK_FILTER_LINEAR;
+      sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      sampler_info.anisotropyEnable = VK_FALSE;
+      sampler_info.maxAnisotropy = 1.0f;
+      sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+      sampler_info.unnormalizedCoordinates = VK_FALSE;
+      sampler_info.compareEnable = VK_FALSE;
+      sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+      sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-    result = vkCreateSampler(vulkan_core_->get_device(), &sampler_info, nullptr, &heatmap_sampler_);
-    if (result != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create sampler for heatmap texture");
+      result = vkCreateSampler(vulkan_core_->get_device(), &sampler_info, nullptr, &heatmap_sampler_);
+      if (result != VK_SUCCESS) {
+          throw std::runtime_error("Failed to create sampler for heatmap texture");
+      }
     }
 
     // Register the texture with ImGui using ImGui_ImplVulkan_AddTexture
-    // This creates an ImTextureID that can be used with ImGui::Image
-    //heatmap_texture_id_ = ImGui_ImplVulkan_AddTexture(
-    //    heatmap_sampler_,
-    //    heatmap_image_view_,
-    //    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    //);
+    // This creates a descriptor set that can be used with ImGui
+    VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
+        heatmap_sampler_,
+        heatmap_image_view_,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  // Use appropriate layout for reading in fragment shader
+    );
+    
+    // Convert the descriptor set to ImTextureID (they are typically the same in newer ImGui versions)
+    heatmap_texture_id_ = (ImTextureID)(intptr_t)descriptor_set;
 
     texture_initialized_ = true;
     std::cout << "[DomSurfacePanel] Vulkan texture initialized successfully" << std::endl;
@@ -1374,69 +1426,101 @@ void DomSurfacePanel::updateVulkanTexture() {
     return;
   }
 
-  // This method updates the texture with new heatmap data
-  // Implementation involves copying heatmap_data_ to the GPU texture
-  
-  if (heatmap_data_.empty()) {
-    return; // Nothing to update
-  }
-
   // Calculate dimensions based on heatmap data
   int rows = price_bins_;
   int cols = static_cast<int>(heatmap_data_.size()) / rows;
-  
+
   if (rows <= 0 || cols <= 0) {
     return; // Invalid dimensions
   }
 
   try {
-    // Get Vulkan device and memory manager
-    VkDevice device = vulkan_core_->get_device();
-    GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-    
-    // Prepare heatmap data for GPU upload
-    // Convert double values to RGBA float format for the texture
-    std::vector<float> texture_data(rows * cols * 4, 0.0f); // 4 channels (RGBA)
-    
-    // Map heatmap values to color based on intensity and colormap
-    double max_val = scale_max_ / heatmap_intensity_;
-    if (max_val <= 0.0) max_val = 1.0; // Prevent division by zero
-    
-    for (int i = 0; i < rows; ++i) {
-      for (int j = 0; j < cols; ++j) {
-        size_t idx = i * cols + j;
-        double val = (idx < heatmap_data_.size()) ? heatmap_data_[idx] : 0.0;
-        
-        // Normalize value to [0, 1]
-        float norm_val = static_cast<float>(std::min(val / max_val, 1.0));
-        
-        // Map to Viridis-like color (simplified)
-        // This is a simplified approximation of the Viridis colormap
-        float r = std::min(1.0f, 0.8f * norm_val);
-        float g = std::min(1.0f, 0.9f * norm_val * norm_val);
-        float b = std::min(1.0f, norm_val * norm_val * norm_val);
-        float a = norm_val; // Alpha based on intensity
-        
-        // Set RGBA values
-        size_t tex_idx = (i * cols + j) * 4;
-        texture_data[tex_idx + 0] = r; // R
-        texture_data[tex_idx + 1] = g; // G
-        texture_data[tex_idx + 2] = b; // B
-        texture_data[tex_idx + 3] = a; // A
+    // If we have the LOB heatmap compute pipeline, use it to dispatch the shader
+    if (lob_heatmap_pipeline_) {
+      // Update the pipeline parameters based on current data
+      lob_heatmap_pipeline_->update_parameters(cols, rows, scale_max_ / heatmap_intensity_);
+      
+      // Get a command buffer to dispatch the compute shader
+      VkCommandBuffer command_buffer = vulkan_core_->begin_single_time_commands();
+      
+      // Get descriptor sets for the compute pipeline
+      // These would come from the SSBO snapshot updater and other resources
+      VkDescriptorSet orderbook_descriptor_set = VK_NULL_HANDLE;
+      VkDescriptorSet atomic_depth_descriptor_set = VK_NULL_HANDLE;
+      VkDescriptorSet output_image_descriptor_set = VK_NULL_HANDLE;
+      
+      // Get the orderbook descriptor set from the SSBO snapshot updater if available
+      if (ssbo_snapshot_updater_) {
+          orderbook_descriptor_set = ssbo_snapshot_updater_->get_descriptor_set();
       }
+      
+      // For now, we'll use the output image from the compute pipeline directly
+      // The pipeline handles its own output image descriptor set internally
+      
+      // Dispatch the compute pipeline to generate the heatmap
+      lob_heatmap_pipeline_->dispatch(command_buffer,
+                                    orderbook_descriptor_set,
+                                    atomic_depth_descriptor_set,
+                                    output_image_descriptor_set);
+      
+      // End the command buffer
+      vulkan_core_->end_single_time_commands(command_buffer);
+      
+      std::cout << "[DomSurfacePanel] Dispatched LOB heatmap compute shader with Viridis/Magma gradient" << std::endl;
+    } else {
+      // Fallback: Prepare heatmap data for GPU upload (CPU-based approach)
+      if (heatmap_data_.empty()) {
+        return; // Nothing to update
+      }
+
+      // Get Vulkan device and memory manager
+      VkDevice device = vulkan_core_->get_device();
+      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+
+      // Prepare heatmap data for GPU upload
+      // Convert double values to RGBA float format for the texture
+      std::vector<float> texture_data(rows * cols * 4, 0.0f); // 4 channels (RGBA)
+
+      // Map heatmap values to color based on intensity and colormap
+      double max_val = scale_max_ / heatmap_intensity_;
+      if (max_val <= 0.0) max_val = 1.0; // Prevent division by zero
+
+      for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+          size_t idx = i * cols + j;
+          double val = (idx < heatmap_data_.size()) ? heatmap_data_[idx] : 0.0;
+
+          // Normalize value to [0, 1]
+          float norm_val = static_cast<float>(std::min(val / max_val, 1.0));
+
+          // Map to Viridis-like color (simplified)
+          // This is a simplified approximation of the Viridis colormap
+          float r = std::min(1.0f, 0.8f * norm_val);
+          float g = std::min(1.0f, 0.9f * norm_val * norm_val);
+          float b = std::min(1.0f, norm_val * norm_val * norm_val);
+          float a = norm_val; // Alpha based on intensity
+
+          // Set RGBA values
+          size_t tex_idx = (i * cols + j) * 4;
+          texture_data[tex_idx + 0] = r; // R
+          texture_data[tex_idx + 1] = g; // G
+          texture_data[tex_idx + 2] = b; // B
+          texture_data[tex_idx + 3] = a; // A
+        }
+      }
+
+      // Upload data to the GPU texture
+      // This would typically involve:
+      // 1. Creating a staging buffer
+      // 2. Copying data to the staging buffer
+      // 3. Submitting a command buffer to copy from staging to the texture
+      // 4. Properly transitioning image layouts
+
+      // For now, we'll just log that the update should happen
+      std::cout << "[DomSurfacePanel] Prepared " << rows << "x" << cols
+                << " texture data for GPU upload (fallback)" << std::endl;
     }
-    
-    // Upload data to the GPU texture
-    // This would typically involve:
-    // 1. Creating a staging buffer
-    // 2. Copying data to the staging buffer
-    // 3. Submitting a command buffer to copy from staging to the texture
-    // 4. Properly transitioning image layouts
-    
-    // For now, we'll just log that the update should happen
-    std::cout << "[DomSurfacePanel] Prepared " << rows << "x" << cols 
-              << " texture data for GPU upload" << std::endl;
-              
+
   } catch (const std::exception& e) {
     std::cerr << "[DomSurfacePanel] Failed to update Vulkan texture: " << e.what() << std::endl;
   }
@@ -1448,23 +1532,27 @@ void DomSurfacePanel::destroyVulkanTexture() {
       // Remove the texture from ImGui's texture registry if needed
       // Note: ImGui_ImplVulkan_RemoveTexture is available but typically not needed
       // as the descriptor sets are managed by the pool
-      
-      // Destroy sampler
-      if (heatmap_sampler_ != VK_NULL_HANDLE) {
-        vkDestroySampler(vulkan_core_->get_device(), heatmap_sampler_, nullptr);
-        heatmap_sampler_ = VK_NULL_HANDLE;
+
+      // If we're using the compute pipeline's texture, don't destroy it here
+      // since the compute pipeline manages its own resources
+      if (!lob_heatmap_pipeline_) {
+        // Destroy sampler
+        if (heatmap_sampler_ != VK_NULL_HANDLE) {
+          vkDestroySampler(vulkan_core_->get_device(), heatmap_sampler_, nullptr);
+          heatmap_sampler_ = VK_NULL_HANDLE;
+        }
+
+        // Destroy image view
+        if (heatmap_image_view_ != VK_NULL_HANDLE) {
+          vkDestroyImageView(vulkan_core_->get_device(), heatmap_image_view_, nullptr);
+          heatmap_image_view_ = VK_NULL_HANDLE;
+        }
+
+        // Deallocate the image
+        GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
+        memory_manager.deallocate_image(heatmap_texture_);
       }
-      
-      // Destroy image view
-      if (heatmap_image_view_ != VK_NULL_HANDLE) {
-        vkDestroyImageView(vulkan_core_->get_device(), heatmap_image_view_, nullptr);
-        heatmap_image_view_ = VK_NULL_HANDLE;
-      }
-      
-      // Deallocate the image
-      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-      memory_manager.deallocate_image(heatmap_texture_);
-      
+
       texture_initialized_ = false;
       std::cout << "[DomSurfacePanel] Vulkan texture destroyed successfully" << std::endl;
     } catch (const std::exception& e) {

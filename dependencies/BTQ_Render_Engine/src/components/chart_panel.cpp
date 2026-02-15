@@ -12,6 +12,7 @@
 #include "../../include/components/interaction_manager.hpp"
 #include "../../include/components/historical_time_sales.hpp"
 #include "../../include/trading/trade_command_queue.hpp"
+#include "../../include/symbol_registry.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include "implot_internal.h"
@@ -462,13 +463,25 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
   // Subscribe to the new symbol in the MarketDataProcessor
   if (processor_) {
     auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+    
+    // If symbol doesn't exist in registry, register it first
+    if (!symbol_id_opt) {
+      // Register the symbol with SymbolRegistry to get a valid ID
+      uint32_t new_symbol_id = BTQuant::SymbolRegistry::instance().register_symbol(exchange, symbol);
+      std::cout << "[ChartPanel] Registered new symbol: " << exchange << "/" << symbol 
+                << " with ID: " << new_symbol_id << std::endl;
+      
+      // Update the chart manager's cache with the new symbol ID
+      symbol_id_opt = new_symbol_id;
+    }
+    
     if (symbol_id_opt) {
       // Unsubscribe from previous symbol if we had a subscription
       if (subscription_id_ != 0) {
         processor_->unsubscribe(subscription_id_);
         subscription_id_ = 0;
       }
-      
+
       // Subscribe to the new symbol for CANDLE updates
       subscription_id_ = processor_->subscribe(
           *symbol_id_opt, RenderEngine::NotificationType::CANDLE,

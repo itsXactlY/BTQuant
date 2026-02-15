@@ -167,6 +167,15 @@ class GPUMemoryManager {
                                 VkMemoryPropertyFlags properties, uint32_t mip_levels = 1);
   void deallocate_image(const ImageAllocation& allocation);
 
+  // Texture atlas methods for exchange icons
+  ImageAllocation create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data, 
+                                       uint32_t icon_width, uint32_t icon_height, 
+                                       uint32_t cols, uint32_t rows);
+  void update_texture_atlas(const ImageAllocation& atlas, 
+                           const std::vector<std::vector<uint8_t>>& icon_data,
+                           uint32_t x_offset, uint32_t y_offset,
+                           uint32_t width, uint32_t height);
+
   // Memory usage statistics
   struct MemoryStats {
     VkDeviceSize vertex_pool_used;
@@ -184,9 +193,12 @@ class GPUMemoryManager {
   std::unique_ptr<MemoryPool> vertex_pool_;
   std::unique_ptr<MemoryPool> uniform_pool_;
   std::unique_ptr<MemoryPool> storage_pool_;
-  
+
   // Helper methods
   uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
+  
+  // Internal helper for texture operations
+  VkResult copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 };
 
 class VulkanCore {

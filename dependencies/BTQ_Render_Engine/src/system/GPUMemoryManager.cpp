@@ -3,6 +3,7 @@
 #include <mutex>  // For std::lock_guard
 #include <stdexcept>
 #include <vector>
+#include <cstring> // For memcpy
 
 #include "../../include/vulkan_base_types.hpp"
 
@@ -381,6 +382,82 @@ uint32_t GPUMemoryManager::find_memory_type(uint32_t type_filter, VkMemoryProper
     }
   }
   throw std::runtime_error("failed to find suitable memory type!");
+}
+
+// Note: The actual implementation of texture transfers would require access to command buffers
+// and is typically handled by the rendering system (VulkanCore). The GPUMemoryManager focuses
+// on allocation/deallocation. For a complete implementation, these methods would need to be
+// called from the rendering system with proper command buffer access.
+
+ImageAllocation GPUMemoryManager::create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data, 
+                                                       uint32_t icon_width, uint32_t icon_height, 
+                                                       uint32_t cols, uint32_t rows) {
+  uint32_t atlas_width = icon_width * cols;
+  uint32_t atlas_height = icon_height * rows;
+  
+  // Calculate total size needed for the atlas (assuming RGBA format)
+  VkDeviceSize image_size = atlas_width * atlas_height * 4; // 4 bytes per pixel (RGBA)
+
+  // Create staging buffer to transfer image data
+  BufferAllocation staging_buffer = allocate_staging_buffer(image_size);
+
+  // Copy icon data to staging buffer in atlas layout
+  uint8_t* data_ptr = static_cast<uint8_t*>(staging_buffer.mapped_ptr);
+  
+  // Initialize the entire atlas to transparent black
+  memset(data_ptr, 0, image_size);
+  
+  // Place each icon in its grid position
+  for (size_t i = 0; i < icon_data.size(); ++i) {
+    if (i >= cols * rows) break; // Don't exceed atlas capacity
+    
+    uint32_t col = i % cols;
+    uint32_t row = i / cols;
+    
+    uint32_t dest_x = col * icon_width;
+    uint32_t dest_y = row * icon_height;
+    
+    // Copy each row of the icon to the appropriate position in the atlas
+    for (uint32_t y = 0; y < icon_height; ++y) {
+      uint32_t src_offset = y * icon_width * 4; // 4 bytes per pixel
+      uint32_t dst_row_start = ((dest_y + y) * atlas_width + dest_x) * 4;
+      
+      if (src_offset + (icon_width * 4) <= icon_data[i].size()) {
+        memcpy(&data_ptr[dst_row_start], &icon_data[i][src_offset], icon_width * 4);
+      }
+    }
+  }
+
+  // Create the final image in GPU memory
+  ImageAllocation atlas_allocation = allocate_image(
+      atlas_width, atlas_height,
+      VK_FORMAT_R8G8B8A8_UNORM,  // Standard RGBA format
+      VK_IMAGE_TILING_OPTIMAL,
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,  // Can receive transfers and be sampled
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+  );
+
+  // The actual image transfer would happen in the rendering system using command buffers
+  // GPUMemoryManager handles allocation, the rendering system handles the transfer
+
+  // Clean up staging buffer
+  deallocate_buffer(staging_buffer);
+
+  return atlas_allocation;
+}
+
+void GPUMemoryManager::update_texture_atlas(const ImageAllocation& atlas, 
+                                           const std::vector<std::vector<uint8_t>>& icon_data,
+                                           uint32_t x_offset, uint32_t y_offset,
+                                           uint32_t width, uint32_t height) {
+  // This method would be called from the rendering system with proper command buffer access
+  // For now, it serves as a placeholder for the intended functionality
+}
+
+VkResult GPUMemoryManager::copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+  // This method would be called from the rendering system with proper command buffer access
+  // For now, it serves as a placeholder for the intended functionality
+  return VK_SUCCESS;
 }
 
 }  // namespace BTQuant

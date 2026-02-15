@@ -9,6 +9,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "../texture/texture_atlas_manager.hpp"
 
 namespace BTQuant {
 
@@ -38,6 +39,7 @@ class TimeAndSalesPanel : public PanelBase {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  std::unique_ptr<TextureAtlasManager> texture_atlas_manager_;
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";

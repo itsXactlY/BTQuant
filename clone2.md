@@ -44,28 +44,28 @@
 - [x] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
 - [x] **3.2: Cumulative Volume Columns**
 - [x] Pull `VolumeData` from `ClusterEngine` without mutexes.
-- [ ] Render horizontal bars using `DrawList->AddRectFilled`.
-- [ ] Green bars (Buys) extend right; Red bars (Sells) extend left.
+- [x] Render horizontal bars using `DrawList->AddRectFilled`.
+- [x] Green bars (Buys) extend right; Red bars (Sells) extend left.
 
 ---
 
 ## Phase 4: The Order Book Widget (Liquidity Ladder)
 **Target:** `src/components/orderbook_panel.cpp`
 
-- [ ] **4.1: Atomic Unit Toggles**
-- [ ] Implement USD / COIN toggle in header.
+- [x] **4.1: Atomic Unit Toggles**
+- [x] Implement USD / COIN toggle in header.
 - [x] If USD: Multiply `atomic_size` by `atomic_last_price` during render pass.
-- [ ] **4.2: Depth Rendering**
-- [ ] Render Asks (Red) descending from top; Bids (Green) ascending from bottom.
-- [ ] Read from `MarketDataProcessor::get_atomic_snapshot` array.
+- [x] **4.2: Depth Rendering**
+- [x] Render Asks (Red) descending from top; Bids (Green) ascending from bottom.
+- [x] Read from `MarketDataProcessor::get_atomic_snapshot` array.
 
 ---
 
 ## Phase 5: The Trades Feed (Acoustic Order Flow)
 **Target:** `src/components/time_and_sales.cpp` & `src/trading/trade_command_queue.cpp`
 
-- [ ] **5.1: Raw Trade Table**
-- [ ] Columns: `[Exchange Logo] | Price | Qty | Time`.
+- [x] **5.1: Raw Trade Table**
+- [x] Columns: `[Exchange Logo] | Price | Qty | Time`.
 - [ ] Render exchange icons from the pre-loaded texture atlas in `GPUMemoryManager`.
 - [ ] **5.2: Order Flow Acoustics**
 - [ ] Integrate `miniaudio` into the `MarketDataProcessor` poll loop.

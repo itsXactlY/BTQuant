@@ -41,6 +41,9 @@ TimeAndSalesPanel::~TimeAndSalesPanel() {
   if (processor_ && subscription_id_ != 0) {
     processor_->unsubscribe(subscription_id_);
   }
+  
+  // Clean up texture atlas manager
+  texture_atlas_manager_.reset();
 }
 
 void TimeAndSalesPanel::subscribe_to_updates() {
@@ -964,10 +967,35 @@ void TimeAndSalesPanel::render_trade_table() {
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
             }
 
-            // Exchange column
+            // Exchange column - render icon from texture atlas
             ImGui::TableSetColumnIndex(0);
+            
+            // Get exchange name to determine which icon to render
             std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
-            ImGui::Text("%s", exchange.c_str());
+            
+            // If texture atlas manager is available, render exchange icon
+            if (texture_atlas_manager_) {
+                // Get UV coordinates for this exchange
+                auto uv_coords = texture_atlas_manager_->getExchangeIconUV(exchange);
+                
+                // Get the texture atlas for rendering
+                ImTextureID texture_id = texture_atlas_manager_->getImGuiTextureID();
+                
+                // Render the exchange icon using the texture atlas
+                ImVec2 icon_size(16.0f, 16.0f); // Size of the icon to display
+                ImVec2 uv_min(uv_coords[0], uv_coords[1]); // UV coordinates for top-left
+                ImVec2 uv_max(uv_coords[2], uv_coords[3]); // UV coordinates for bottom-right
+                
+                ImGui::Image(texture_id, icon_size, uv_min, uv_max);
+                
+                // Add tooltip with exchange name
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", exchange.c_str());
+                }
+            } else {
+                // Fallback to text if texture atlas is not available
+                ImGui::Text("%s", exchange.c_str());
+            }
 
             // Price column - Enhanced coloring based on trade size
             ImGui::TableSetColumnIndex(1);

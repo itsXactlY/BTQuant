@@ -160,6 +160,7 @@ set(DASHBOARD_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
+    src/texture/texture_atlas_manager.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -305,6 +306,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
+    src/texture/texture_atlas_manager.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp

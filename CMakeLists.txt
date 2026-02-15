@@ -28,7 +28,9 @@ set(PUBBTQUANT_SOURCES
     src/main.cpp
     src/analytics/tpoengine.cpp
     src/analytics/liquiditysweepdetector.cpp
+    src/analytics/rawtradetable.cpp
     src/ui/compute_to_imgui_bind.cpp
+    src/audio/pitch_shifter.cpp
 )
 
 # Find Dependencies

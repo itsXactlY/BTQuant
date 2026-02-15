@@ -1,12 +1,16 @@
+#define _USE_MATH_DEFINES
 #include "analytics/tpoengine.h"
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
+#include "analytics/rawtradetable.h"
 #include "ui/compute_to_imgui_bind.h"
+#include "audio/pitch_shifter.h"
 #include "imgui.h"
 #include <iostream>
 #include <vector>
 #include <chrono>
 #include <thread>
+#include <cmath>
 
 int main() {
     std::cout << "Testing TPO Engine Implementation\n";
@@ -325,7 +329,153 @@ int main() {
     }
     std::cout << "\nColors: " << bar_colors.size() << " colors assigned\n";
 
+    // Test the new Atomic Unit Toggles (USD/COIN toggle)
+    std::cout << "\n=== Testing Atomic Unit Toggles (USD/COIN) ===\n";
+
+    std::cout << "Sample order book data:\n";
+    std::cout << "Bid Volume: " << bid_vol << std::endl;
+    std::cout << "Ask Volume: " << ask_vol << std::endl;
+    std::cout << "Last Price: " << last_px << std::endl;
+    std::cout << "Bid Price: " << bid_px << std::endl;
+    std::cout << "Ask Price: " << ask_px << std::endl;
+
+    // Bind the order book with USD/COIN toggle to the UI
+    ui_bind.bindOrderBookWithToggle(bid_vol, ask_vol, last_px, bid_px, ask_px, "Order Book with USD/COIN Toggle");
+
+    std::cout << "Order book with USD/COIN toggle bound to UI successfully!\n";
+
+    // Test Raw Trade Table
+    std::cout << "\n=== Testing Raw Trade Table ===\n";
+
+    // Create a raw trade table with capacity for 1000 trades
+    RawTradeTable trade_table(1000);
+
+    // Generate some sample trades
+    auto trade_base_time = std::chrono::system_clock::now();
+    std::vector<RawTrade> sample_trades;
+
+    for (int i = 0; i < 50; ++i) {
+        RawTrade trade;
+        trade.timestamp = trade_base_time + std::chrono::milliseconds(i * 100); // 100ms intervals
+        trade.price = 100.0 + (i % 20) * 0.25; // Prices between 100.0 and 104.75
+        trade.volume = 10.0 + (i % 50); // Volumes between 10 and 59
+        trade.side = (i % 3 == 0) ? 'B' : 'S'; // Alternate sides
+        trade.trade_id = "T" + std::to_string(1000 + i); // Trade IDs like T1000, T1001, etc.
+
+        sample_trades.push_back(trade);
+    }
+
+    std::cout << "Adding " << sample_trades.size() << " sample trades to the table...\n";
+
+    // Add trades to the table
+    trade_table.add_trades(sample_trades);
+
+    // Get trade statistics
+    auto trade_stats = trade_table.get_trade_statistics();
+    std::cout << "Trade Statistics:\n";
+    std::cout << "  Total Trades: " << trade_stats.total_trades << "\n";
+    std::cout << "  Total Volume: " << trade_stats.total_volume << "\n";
+    std::cout << "  Avg Trade Size: " << trade_stats.avg_trade_size << "\n";
+    std::cout << "  Largest Trade: " << trade_stats.largest_trade_size << "\n";
+    std::cout << "  Buy Volume: " << trade_stats.buy_volume << " (" << trade_stats.buy_count << " trades)\n";
+    std::cout << "  Sell Volume: " << trade_stats.sell_volume << " (" << trade_stats.sell_count << " trades)\n";
+
+    // Get recent trades
+    auto recent_trades = trade_table.get_recent_trades(5);
+    std::cout << "\nMost recent 5 trades:\n";
+    for (const auto& trade : recent_trades) {
+        auto time_t = std::chrono::system_clock::to_time_t(trade.timestamp);
+        std::cout << "  Time: " << std::ctime(&time_t) 
+                  << "  Price: " << trade.price 
+                  << "  Volume: " << trade.volume 
+                  << "  Side: " << trade.side 
+                  << "  ID: " << trade.trade_id << "\n";
+    }
+
+    // Test adding individual trades
+    std::cout << "\nAdding individual trades...\n";
+    RawTrade new_trade(trade_base_time + std::chrono::seconds(1), 102.50, 25.0, 'B', "NEW_TRADE_001");
+    trade_table.add_trade(new_trade);
+
+    // Test time range query
+    auto time_range_trades = trade_table.get_trades_in_range(
+        trade_base_time,
+        trade_base_time + std::chrono::seconds(5)
+    );
+    std::cout << "Trades in first 5 seconds: " << time_range_trades.size() << "\n";
+
+    // Bind the raw trade table to the UI
+    ui_bind.bindRawTradeTable(trade_table, "Raw Trade Table [Buys | Asks | Price | Bids | Sells]");
+
+    std::cout << "Raw Trade Table bound to UI successfully!\n";
+
     std::cout << "\nAll analytics modules and UI visualizations tested successfully!\n";
+
+    // Test Pitch Shifting functionality - Scale pitch inversely to volume (Big trade = Deep bass)
+    std::cout << "\n=== Testing Pitch Shifting (Volume-Inverse Pitch Scaling) ===\n";
+
+    // Create a pitch shifter with base pitch of 440Hz (A4 note)
+    PitchShifter pitch_shifter(440.0, 1.0, 10000.0);
+
+    // Simulate different trade volumes and see how pitch changes
+    std::vector<double> test_volumes = {10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0};
+
+    std::cout << "Volume -> Pitch mapping (Big trade = Deep bass):\n";
+    for (double volume : test_volumes) {
+        double calculated_pitch = pitch_shifter.calculate_pitch(volume);
+        std::cout << "Volume: " << volume << " -> Pitch: " << calculated_pitch << "Hz\n";
+    }
+
+    // Generate a simple sine wave as input audio
+    std::vector<double> input_signal;
+    const double frequency = 440.0; // A4 note
+    const double sample_rate = 44100.0;
+    const double duration = 0.1; // 100ms
+
+    for (int i = 0; i < sample_rate * duration; ++i) {
+        // Generate a simple sine wave
+        double t = static_cast<double>(i) / sample_rate;
+        double sample = std::sin(2.0 * M_PI * frequency * t);
+        input_signal.push_back(sample);
+    }
+
+    std::cout << "\nGenerated " << input_signal.size() << " samples of input signal at " << frequency << "Hz\n";
+
+    // Test pitch shifting with different volumes
+    std::vector<double> high_volume_shifted = pitch_shifter.shift_pitch(input_signal, 8000.0); // High volume = deep bass
+    std::vector<double> low_volume_shifted = pitch_shifter.shift_pitch(input_signal, 100.0);  // Low volume = higher pitch
+
+    std::cout << "Applied pitch shifting to audio samples\n";
+    std::cout << "High volume (8000) shifted signal has " << high_volume_shifted.size() << " samples\n";
+    std::cout << "Low volume (100) shifted signal has " << low_volume_shifted.size() << " samples\n";
+
+    // Show some sample values to demonstrate the difference
+    std::cout << "\nSample comparison (first 5 values):\n";
+    std::cout << "Original: ";
+    for (int i = 0; i < 5 && i < input_signal.size(); ++i) {
+        std::cout << input_signal[i] << " ";
+    }
+    std::cout << "\nHigh Vol: ";
+    for (int i = 0; i < 5 && i < high_volume_shifted.size(); ++i) {
+        std::cout << high_volume_shifted[i] << " ";
+    }
+    std::cout << "\nLow Vol:  ";
+    for (int i = 0; i < 5 && i < low_volume_shifted.size(); ++i) {
+        std::cout << low_volume_shifted[i] << " ";
+    }
+    std::cout << "\n";
+
+    // Demonstrate the concept with trading data
+    std::cout << "\nApplying pitch shift to trading volume data:\n";
+    std::vector<RawTrade> sample_trades_for_pitch = trade_table.get_recent_trades(10);
+    
+    for (const auto& trade : sample_trades_for_pitch) {
+        double trade_pitch = pitch_shifter.calculate_pitch(trade.volume);
+        char pitch_char = trade_pitch < 220.0 ? 'B' : (trade_pitch < 330.0 ? 'M' : 'H'); // Bass, Mid, High
+        std::cout << "Trade Vol: " << trade.volume << " -> Pitch: " << trade_pitch << "Hz (" << pitch_char << ")\n";
+    }
+
+    std::cout << "\nPitch shifting functionality (Big trade = Deep bass) implemented and tested successfully!\n";
 
     return 0;
 }

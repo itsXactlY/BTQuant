@@ -1,19 +1,19 @@
 [
 {
   "directory": "/home/alca/projects/PubBTQuant",
-  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/main.cpp.o -c /home/alca/projects/PubBTQuant/src/main.cpp",
+  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/src/ui -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/main.cpp.o -c /home/alca/projects/PubBTQuant/src/main.cpp",
   "file": "/home/alca/projects/PubBTQuant/src/main.cpp",
   "output": "CMakeFiles/pubbtquant.dir/src/main.cpp.o"
 },
 {
   "directory": "/home/alca/projects/PubBTQuant",
-  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/analytics/tpoengine.cpp.o -c /home/alca/projects/PubBTQuant/src/analytics/tpoengine.cpp",
+  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/src/ui -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/analytics/tpoengine.cpp.o -c /home/alca/projects/PubBTQuant/src/analytics/tpoengine.cpp",
   "file": "/home/alca/projects/PubBTQuant/src/analytics/tpoengine.cpp",
   "output": "CMakeFiles/pubbtquant.dir/src/analytics/tpoengine.cpp.o"
 },
 {
   "directory": "/home/alca/projects/PubBTQuant",
-  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/analytics/liquiditysweepdetector.cpp.o -c /home/alca/projects/PubBTQuant/src/analytics/liquiditysweepdetector.cpp",
+  "command": "/usr/bin/c++  -I/home/alca/projects/PubBTQuant/src -I/home/alca/projects/PubBTQuant/src/ui -I/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include -O3 -DNDEBUG -O3 -march=native -flto -g -std=c++26 -fPIE -o CMakeFiles/pubbtquant.dir/src/analytics/liquiditysweepdetector.cpp.o -c /home/alca/projects/PubBTQuant/src/analytics/liquiditysweepdetector.cpp",
   "file": "/home/alca/projects/PubBTQuant/src/analytics/liquiditysweepdetector.cpp",
   "output": "CMakeFiles/pubbtquant.dir/src/analytics/liquiditysweepdetector.cpp.o"
 },

@@ -293,6 +293,10 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Screener")) {
         panel_manager_->add_panel(PanelType::SCREENER);
       }
+
+      if (ImGui::Button("Market Depth")) {
+        panel_manager_->add_panel(PanelType::MARKET_DEPTH_TABLE);
+      }
     }
 
     // Panel management - Trading (reorganized per requirements)

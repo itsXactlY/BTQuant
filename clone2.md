@@ -15,31 +15,31 @@
 - [x] Split Right (25%) -> `dom_surface_panel` + `orderbook_panel`.
 - [x] Split Right-Bottom (40%) -> `time_and_sales` (Trades).
 - [x] Split Center-Bottom (15%) -> `time_histogram_panel`.
-- [ ] Globally set `ImGuiStyleVar_WindowPadding` to `(0,0)` in `QuantWorkspaceComponent::render_gui`.
-- [ ] Set `ImGuiCol_Separator` to `rgba(94, 82, 64, 0.2)` in `unified_theme_system.cpp`.
+- [x] Globally set `ImGuiStyleVar_WindowPadding` to `(0,0)` in `QuantWorkspaceComponent::render_gui`.
+- [x] Set `ImGuiCol_Separator` to `rgba(94, 82, 64, 0.2)` in `unified_theme_system.cpp`.
 
 ---
 
 ## Phase 2: The GPU Heatmap Spine (LOB Engine)
 **Target:** `src/components/dom_surface_panel.cpp` & `shaders/lob_heatmap.comp`
 
-- [ ] **2.1: Lock-Free Snapshot Pipeline**
-- [ ] In `MarketDataProcessor`, implement a ring buffer of `OrderBookSnapshot` structs (Standard Layout POD).
-- [ ] Use `std::atomic<uint64_t> snapshot_head` to signal `VulkanCore` that new data is ready for the Compute Shader.
-- [ ] **2.2: Compute-to-ImGui Bind**
-- [ ] Update `DomSurfacePanel` to retrieve the `VkImage` descriptor from `GPUMemoryManager`.
-- [ ] Use `ImGui_ImplVulkan_AddTexture` to map the heatmap to an `ImTextureID`.
-- [ ] Render via `ImGui::GetWindowDrawList()->AddImage()` spanning the panel background.
-- [ ] **2.3: Multi-Exchange Aggregation**
-- [ ] Add "Aggregated Heatmap" options in the right-click context menu of the DOM header.
-- [ ] Update the Compute Shader to sum multiple atomic depth buffers before colormapping.
+- [x] **2.1: Lock-Free Snapshot Pipeline**
+- [x] In `MarketDataProcessor`, implement a ring buffer of `OrderBookSnapshot` structs (Standard Layout POD).
+- [x] Use `std::atomic<uint64_t> snapshot_head` to signal `VulkanCore` that new data is ready for the Compute Shader.
+- [x] **2.2: Compute-to-ImGui Bind**
+- [x] Update `DomSurfacePanel` to retrieve the `VkImage` descriptor from `GPUMemoryManager`.
+- [x] Use `ImGui_ImplVulkan_AddTexture` to map the heatmap to an `ImTextureID`.
+- [x] Render via `ImGui::GetWindowDrawList()->AddImage()` spanning the panel background.
+- [x] **2.3: Multi-Exchange Aggregation**
+- [x] Add "Aggregated Heatmap" options in the right-click context menu of the DOM header.
+- [x] Update the Compute Shader to sum multiple atomic depth buffers before colormapping.
 
 ---
 
 ## Phase 3: The DOM & Market Volume Profiles
 **Target:** `src/components/dom_surface_panel.cpp` & `src/analytics/cluster_engine.cpp`
 
-- [ ] **3.1: 5-Column MMT Layout**
+- [x] **3.1: 5-Column MMT Layout**
 - [ ] Render Table: `[Buys | Asks | Price | Bids | Sells]`.
 - [ ] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
 - [ ] **3.2: Cumulative Volume Columns**

@@ -36,12 +36,14 @@ add_subdirectory(dependencies/BTQ_Render_Engine)
 # Create main executable if there are sources
 if(PUBBTQUANT_SOURCES)
     add_executable(pubbtquant ${PUBBTQUANT_SOURCES})
-    
+
     # Include directories
     target_include_directories(pubbtquant PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/include
     )
+    
 endif()
 
 # Documentation target

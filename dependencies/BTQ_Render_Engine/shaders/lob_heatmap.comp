@@ -35,6 +35,11 @@ layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshots {
     ExchangeOrderBookSnapshot snapshots[];     // Array of exchange snapshots
 } orderBooks;
 
+// Atomic depth buffer for aggregating liquidity from multiple sources
+layout(std430, set = 2, binding = 2) restrict buffer AtomicDepthBuffer {
+    uint atomicDepthData[];
+} atomicDepth;
+
 // Heatmap Texture Output (Image2D)
 layout(binding = 1, rgba32f) uniform image2D heatmapOutput;
 
@@ -108,7 +113,7 @@ void main() {
     ivec2 targetCoords = ivec2(currentCol, yIndex);
 
     // Calculate target price for this Y coordinate
-    float targetPrice = orderBooks.snapshots[0].basePrice + 
+    float targetPrice = orderBooks.snapshots[0].basePrice +
                        (float(yIndex) / float(params.height)) * orderBooks.snapshots[0].priceRange;
 
     float totalLiquidity = 0.0;
@@ -142,9 +147,23 @@ void main() {
 
         // Add liquidity from this exchange if the match is within the pixel's price bin
         if (closestIdx != -1 && minDistance < (orderBooks.snapshots[ex].priceRange / float(params.height))) {
-            totalLiquidity += float(orderBooks.snapshots[ex].levels[closestIdx].askQuantity + 
+            totalLiquidity += float(orderBooks.snapshots[ex].levels[closestIdx].askQuantity +
                                    orderBooks.snapshots[ex].levels[closestIdx].bidQuantity);
         }
+    }
+
+    // Sum multiple atomic depth buffers before colormapping
+    // Calculate index in the atomic depth buffer based on current position
+    uint depthBufferIndex = yIndex * params.width + currentCol;
+
+    // Ensure we don't exceed the buffer bounds
+    if (depthBufferIndex < params.width * params.height) {
+        // Use atomic operation to safely accumulate liquidity from multiple sources
+        uint previousValue = atomicAdd(atomicDepth.atomicDepthData[depthBufferIndex], uint(totalLiquidity));
+        
+        // The total liquidity at this position is now the previous value + the added amount
+        // which equals the value that's currently in the buffer
+        totalLiquidity = float(previousValue + uint(totalLiquidity));
     }
 
     // Compute pixel color based on aggregated liquidity

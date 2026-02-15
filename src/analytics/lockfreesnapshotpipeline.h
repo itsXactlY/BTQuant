@@ -8,6 +8,7 @@
 #include <cstring>
 #include <thread>
 #include <functional>
+#include <algorithm>
 
 // Structure representing market data that can be atomically updated
 struct alignas(64) AtomicMarketData {
@@ -72,7 +73,7 @@ public:
     explicit AtomicDoubleBuffer(size_t capacity) : capacity_(capacity) {
         buffers_[0] = std::make_unique<T[]>(capacity_);
         buffers_[1] = std::make_unique<T[]>(capacity_);
-        
+
         // Initialize with default values
         for (size_t i = 0; i < capacity_; ++i) {
             new (&buffers_[0][i]) T();
@@ -84,12 +85,14 @@ public:
 
     // Atomically swap read/write buffers
     void swap_buffers() {
+        // Atomically swap the read and write buffer indices
         int old_write = current_write_buffer_.load(std::memory_order_acquire);
         int new_read = old_write;
         int new_write = 1 - old_write;
-        
+
         // Update write buffer first
         current_write_buffer_.store(new_write, std::memory_order_release);
+        // Memory fence to ensure visibility of the write buffer update
         std::atomic_thread_fence(std::memory_order_seq_cst);
         // Then update read buffer
         current_read_buffer_.store(new_read, std::memory_order_release);
@@ -106,27 +109,37 @@ public:
     size_t get_capacity() const { return capacity_; }
 };
 
+// Structure to hold ring buffer entries with symbol information
+struct alignas(64) RingBufferEntry {
+    std::atomic<uint32_t> symbol_id;
+    AtomicMarketData data;
+    
+    RingBufferEntry() : symbol_id(UINT32_MAX) {}
+};
+
 // Lock-free snapshot pipeline for market data
 class LockFreeSnapshotPipeline {
 private:
     std::unique_ptr<AtomicDoubleBuffer<AtomicMarketData>> data_buffer_;
     std::atomic<bool> initialized_{false};
     std::atomic<uint32_t> symbol_count_{0};
-    
+
     // Ring buffer for high-frequency updates
     static constexpr size_t RING_BUFFER_SIZE = 1048576; // 2^20
-    std::unique_ptr<AtomicMarketData[]> ring_buffer_;
+    static constexpr size_t RING_BUFFER_MASK = RING_BUFFER_SIZE - 1;
+    std::unique_ptr<RingBufferEntry[]> ring_buffer_;
     std::atomic<uint64_t> write_head_{0};
     std::atomic<uint64_t> read_tail_{0};
-    
+    std::atomic<uint64_t> snapshot_head_{0};  // Signals when new data is ready for compute shader
+
     // Statistics
     std::atomic<uint64_t> total_updates_{0};
     std::atomic<uint64_t> dropped_updates_{0};
 
 public:
-    explicit LockFreeSnapshotPipeline(uint32_t max_symbols = 100000) 
+    explicit LockFreeSnapshotPipeline(uint32_t max_symbols = 100000)
         : data_buffer_(std::make_unique<AtomicDoubleBuffer<AtomicMarketData>>(max_symbols)),
-          ring_buffer_(std::make_unique<AtomicMarketData[]>(RING_BUFFER_SIZE)) {
+          ring_buffer_(std::make_unique<RingBufferEntry[]>(RING_BUFFER_SIZE)) {
         symbol_count_.store(max_symbols);
         initialized_.store(true);
     }
@@ -135,43 +148,80 @@ public:
 
     // Write market data to the pipeline (non-blocking)
     bool write_market_data(uint32_t symbol_id, const AtomicMarketData& data) {
-        if (!initialized_.load(std::memory_order_acquire) || 
+        if (!initialized_.load(std::memory_order_acquire) ||
             symbol_id >= symbol_count_.load(std::memory_order_acquire)) {
             return false;
         }
 
-        // Try to write to ring buffer
+        // Write directly to the current write buffer for immediate availability
+        data_buffer_->get_write_buffer()[symbol_id] = data;
+        data_buffer_->get_write_buffer()[symbol_id].sequence_number.fetch_add(1, std::memory_order_relaxed);
+
+        // Also write to ring buffer for high-frequency updates
         uint64_t current_write = write_head_.load(std::memory_order_acquire);
         uint64_t current_read = read_tail_.load(std::memory_order_acquire);
-        
+
         // Check if buffer is full
         if ((current_write - current_read) >= RING_BUFFER_SIZE) {
             dropped_updates_.fetch_add(1, std::memory_order_relaxed);
-            return false; // Buffer full, drop the update
+            // Still return true since we wrote to the main buffer
+        } else {
+            // Attempt to advance write head
+            uint64_t new_write;
+            do {
+                new_write = current_write + 1;
+            } while (!write_head_.compare_exchange_weak(current_write, new_write,
+                                                       std::memory_order_acq_rel,
+                                                       std::memory_order_acquire));
+
+            // Successfully acquired slot, write data to ring buffer
+            size_t index = new_write & RING_BUFFER_MASK;
+            ring_buffer_[index].data = data;
+            ring_buffer_[index].symbol_id.store(symbol_id, std::memory_order_release);
         }
 
-        // Attempt to advance write head
-        if (write_head_.compare_exchange_weak(current_write, current_write + 1, 
-                                             std::memory_order_acq_rel)) {
-            // Successfully acquired slot, write data
-            size_t index = current_write & (RING_BUFFER_SIZE - 1);
-            data_buffer_->get_write_buffer()[symbol_id] = data;
-            data_buffer_->get_write_buffer()[symbol_id].sequence_number.fetch_add(1);
-            
-            total_updates_.fetch_add(1, std::memory_order_relaxed);
-            return true;
-        }
-
-        return false; // Failed to acquire slot
+        total_updates_.fetch_add(1, std::memory_order_relaxed);
+        return true;
     }
 
     // Read market data snapshot (non-blocking)
     bool read_market_data_snapshot(uint32_t symbol_id, AtomicMarketData& out_data) const {
-        if (!initialized_.load(std::memory_order_acquire) || 
+        if (!initialized_.load(std::memory_order_acquire) ||
             symbol_id >= symbol_count_.load(std::memory_order_acquire)) {
             return false;
         }
 
+        // Search the ring buffer for the most recent update for this symbol
+        // We need to scan from the most recent position backward to find the latest update
+        uint64_t current_write = write_head_.load(std::memory_order_acquire);
+        uint64_t current_read = read_tail_.load(std::memory_order_acquire);
+
+        // Look for the most recent update for this symbol in the ring buffer
+        uint64_t scan_limit = current_write > RING_BUFFER_SIZE ? current_write - RING_BUFFER_SIZE : 0;
+        for (uint64_t pos = current_write; pos > current_read && pos > scan_limit; ) {
+            --pos;  // Decrement first to avoid underflow
+            size_t index = pos & RING_BUFFER_MASK;
+            uint32_t entry_symbol = ring_buffer_[index].symbol_id.load(std::memory_order_acquire);
+            
+            if (entry_symbol == symbol_id) {
+                // Found the most recent update for this symbol
+                const AtomicMarketData& ring_data = ring_buffer_[index].data;
+                
+                // Perform atomic reads of all fields
+                out_data.price.store(ring_data.price.load(std::memory_order_acquire));
+                out_data.volume.store(ring_data.volume.load(std::memory_order_acquire));
+                out_data.bid_price.store(ring_data.bid_price.load(std::memory_order_acquire));
+                out_data.ask_price.store(ring_data.ask_price.load(std::memory_order_acquire));
+                out_data.bid_volume.store(ring_data.bid_volume.load(std::memory_order_acquire));
+                out_data.ask_volume.store(ring_data.ask_volume.load(std::memory_order_acquire));
+                out_data.sequence_number.store(ring_data.sequence_number.load(std::memory_order_acquire));
+                out_data.timestamp.store(ring_data.timestamp.load(std::memory_order_acquire));
+
+                return true;
+            }
+        }
+
+        // Fallback to the double buffer if no ring buffer entry exists
         const AtomicMarketData* buffer = data_buffer_->get_read_buffer();
         if (buffer) {
             // Perform atomic reads of all fields
@@ -183,10 +233,10 @@ public:
             out_data.ask_volume.store(buffer[symbol_id].ask_volume.load(std::memory_order_acquire));
             out_data.sequence_number.store(buffer[symbol_id].sequence_number.load(std::memory_order_acquire));
             out_data.timestamp.store(buffer[symbol_id].timestamp.load(std::memory_order_acquire));
-            
+
             return true;
         }
-        
+
         return false;
     }
 
@@ -196,36 +246,55 @@ public:
             return 0;
         }
 
-        const AtomicMarketData* buffer = data_buffer_->get_read_buffer();
-        if (!buffer) {
-            return 0;
-        }
-
         size_t successful_reads = 0;
         for (size_t i = 0; i < count; ++i) {
             uint32_t symbol_id = symbol_ids[i];
             if (symbol_id < symbol_count_.load(std::memory_order_acquire)) {
-                // Perform atomic reads of all fields
-                out_data[i].price.store(buffer[symbol_id].price.load(std::memory_order_acquire));
-                out_data[i].volume.store(buffer[symbol_id].volume.load(std::memory_order_acquire));
-                out_data[i].bid_price.store(buffer[symbol_id].bid_price.load(std::memory_order_acquire));
-                out_data[i].ask_price.store(buffer[symbol_id].ask_price.load(std::memory_order_acquire));
-                out_data[i].bid_volume.store(buffer[symbol_id].bid_volume.load(std::memory_order_acquire));
-                out_data[i].ask_volume.store(buffer[symbol_id].ask_volume.load(std::memory_order_acquire));
-                out_data[i].sequence_number.store(buffer[symbol_id].sequence_number.load(std::memory_order_acquire));
-                out_data[i].timestamp.store(buffer[symbol_id].timestamp.load(std::memory_order_acquire));
-                
-                successful_reads++;
+                // Use the single read method which handles both ring buffer and double buffer
+                if (read_market_data_snapshot(symbol_id, out_data[i])) {
+                    successful_reads++;
+                }
             }
         }
-        
+
         return successful_reads;
+    }
+
+    // Flush ring buffer to the current write buffer
+    void flush_ring_buffer() {
+        if (!initialized_.load(std::memory_order_acquire)) {
+            return;
+        }
+
+        uint64_t current_read = read_tail_.load(std::memory_order_acquire);
+        uint64_t current_write = write_head_.load(std::memory_order_acquire);
+
+        // Process all pending updates in the ring buffer
+        while (current_read < current_write) {
+            size_t index = current_read & RING_BUFFER_MASK;
+            
+            // Get the symbol ID that was updated
+            uint32_t symbol_id = ring_buffer_[index].symbol_id.load(std::memory_order_acquire);
+            
+            // Only process if this is a valid symbol update
+            if (symbol_id < symbol_count_.load(std::memory_order_acquire)) {
+                // Copy data from ring buffer to the current write buffer
+                data_buffer_->get_write_buffer()[symbol_id] = ring_buffer_[index].data;
+            }
+            
+            // Advance read tail
+            read_tail_.store(++current_read, std::memory_order_release);
+        }
     }
 
     // Swap buffers to make new data available for readers
     void commit_snapshot() {
         if (initialized_.load(std::memory_order_acquire)) {
+            flush_ring_buffer();  // Flush ring buffer to main buffer first
             data_buffer_->swap_buffers();
+            
+            // Signal that new data is ready for compute shader by incrementing snapshot_head
+            snapshot_head_.fetch_add(1, std::memory_order_release);
         }
     }
 
@@ -237,7 +306,14 @@ public:
         uint64_t read_tail;
         size_t buffer_capacity;
     };
+
+    // Getter for snapshot_head to signal VulkanCore when new data is ready
+    std::atomic<uint64_t>& get_snapshot_head() { return snapshot_head_; }
+    const std::atomic<uint64_t>& get_snapshot_head() const { return snapshot_head_; }
     
+    // Get current value of snapshot_head
+    uint64_t get_current_snapshot_head() const { return snapshot_head_.load(std::memory_order_acquire); }
+
     PipelineStats get_stats() const {
         PipelineStats stats;
         stats.total_updates = total_updates_.load(std::memory_order_acquire);
@@ -252,17 +328,6 @@ public:
     void reset_stats() {
         total_updates_.store(0, std::memory_order_release);
         dropped_updates_.store(0, std::memory_order_release);
-    }
-
-    // Yield if the ring buffer is getting full
-    void yield_if_needed() const {
-        uint64_t current_write = write_head_.load(std::memory_order_acquire);
-        uint64_t current_read = read_tail_.load(std::memory_order_acquire);
-        
-        // If buffer is more than 80% full, yield to allow consumers to catch up
-        if ((current_write - current_read) > (RING_BUFFER_SIZE * 0.8)) {
-            std::this_thread::yield();
-        }
     }
 };
 

@@ -221,6 +221,9 @@ int main() {
     bool write_result = lf_pipeline.write_market_data(0, test_data);
     std::cout << "Write result: " << (write_result ? "Success" : "Failed") << std::endl;
 
+    // Commit the snapshot to make the data available for reading
+    lf_pipeline.commit_snapshot();
+
     AtomicMarketData read_data;
     bool read_result = lf_pipeline.read_market_data_snapshot(0, read_data);
     std::cout << "Read result: " << (read_result ? "Success" : "Failed") << std::endl;
@@ -243,6 +246,9 @@ int main() {
         lf_pipeline.write_market_data(i, data);
     }
 
+    // Commit the snapshot to make the data available for reading
+    lf_pipeline.commit_snapshot();
+
     uint32_t symbols[] = {1, 2, 3, 4, 5};
     AtomicMarketData batch_results[5];
 
@@ -259,8 +265,12 @@ int main() {
     std::cout << "\nPipeline Statistics:" << std::endl;
     std::cout << "Total updates: " << pipeline_stats.total_updates << std::endl;
     std::cout << "Dropped updates: " << pipeline_stats.dropped_updates << std::endl;
+    std::cout << "Write head: " << pipeline_stats.write_head << std::endl;
+    std::cout << "Read tail: " << pipeline_stats.read_tail << std::endl;
 
     std::cout << "\nLock-Free Snapshot Pipeline test completed successfully!\n";
+
+    std::cout << "\nAll analytics modules tested successfully!\n";
 
     return 0;
 }

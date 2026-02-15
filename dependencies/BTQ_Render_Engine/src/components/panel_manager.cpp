@@ -42,6 +42,7 @@
 #include "../../include/components/theme_customization_panel.hpp"
 #include "../../include/components/keyboard_shortcuts_panel.hpp"
 #include "../../include/components/drawing_tools_panel.hpp"
+#include "../../include/components/market_depth_table_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
 
@@ -319,6 +320,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::DRAWING_TOOLS:
       panel = std::make_unique<DrawingToolsPanel>(config);
       break;
+    case PanelType::MARKET_DEPTH_TABLE:
+      panel = std::make_unique<MarketDepthTablePanel>(config);
+      break;
     default:
       return 0;
   }
@@ -499,6 +503,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::DRAWING_TOOLS:
       panel = std::make_unique<DrawingToolsPanel>(config);
+      break;
+    case PanelType::MARKET_DEPTH_TABLE:
+      panel = std::make_unique<MarketDepthTablePanel>(config);
       break;
     default:
       return 0;
@@ -982,6 +989,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Shortcuts";
     case PanelType::DRAWING_TOOLS:
       return "Drawing Tools";
+    case PanelType::MARKET_DEPTH_TABLE:
+      return "Market Depth Table";
     default:
       return "Panel";
   }

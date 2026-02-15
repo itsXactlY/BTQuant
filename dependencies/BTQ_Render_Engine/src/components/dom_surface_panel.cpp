@@ -11,13 +11,15 @@
 #include "symbol_registry.hpp"
 #include "../../include/analytics/cluster_engine.hpp"
 #include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
+#include "vulkan/ssbo_snapshot_updater.h"  // Include for SSBO snapshot updater
 
 namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
       processor_(processor),
-      heatmap_texture_{} {
+      heatmap_texture_{},
+      ssbo_snapshot_updater_(nullptr) {
   // Initialize Vulkan texture if Vulkan core is available
   // Vulkan compute removed - using CPU-based heatmap rendering initially
   // But we'll prepare for Vulkan-accelerated texture rendering
@@ -82,17 +84,20 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
 void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type) {
   if (symbol_id == current_symbol_id_) {
+    // Update SSBO with latest snapshot buffer data
+    updateSSBOSnapshotBuffer();
+    
     if (type == RenderEngine::NotificationType::TRADE) {
       // For trade updates, we'll update trade bubbles specifically
       updateTradeBubbles();
-      
+
       // Process trade through cluster engine for cumulative volume data
       if (cluster_engine_ && processor_) {
         auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
         // Process the most recent trade through the cluster engine
         if (!analytics.recent_trades.empty()) {
           const auto& latest_trade = analytics.recent_trades.back();
-          
+
           // Convert RenderEngine::TradeData to MarketData::Trade for cluster engine
           MarketData::Trade converted_trade;
           converted_trade.price = latest_trade.price;
@@ -1465,6 +1470,36 @@ void DomSurfacePanel::destroyVulkanTexture() {
     } catch (const std::exception& e) {
       std::cerr << "[DomSurfacePanel] Failed to destroy Vulkan texture: " << e.what() << std::endl;
     }
+  }
+}
+
+void DomSurfacePanel::updateSSBOSnapshotBuffer() {
+  if (!processor_ || !vulkan_core_) {
+    return; // Cannot update without processor or Vulkan core
+  }
+
+  try {
+    // Get the latest snapshots from the market data processor
+    size_t snapshot_count = 100; // Get up to 100 most recent snapshots
+    std::vector<RenderEngine::OrderBookSnapshot> snapshots = processor_->getOrderBookSnapshots(snapshot_count);
+    
+    if (snapshots.empty()) {
+      return; // Nothing to update
+    }
+
+    // Initialize the SSBO snapshot updater if not already done
+    if (!ssbo_snapshot_updater_) {
+      ssbo_snapshot_updater_ = std::make_unique<SSBOSnapshotUpdater>(vulkan_core_.get());
+      ssbo_snapshot_updater_->initialize(snapshot_count); // Initialize with capacity for snapshot_count snapshots
+    }
+
+    // Update the SSBO with the latest snapshots
+    ssbo_snapshot_updater_->updateSSBO(snapshots);
+    
+    std::cout << "[DomSurfacePanel] SSBO updated with " << snapshots.size() << " snapshots" << std::endl;
+    
+  } catch (const std::exception& e) {
+    std::cerr << "[DomSurfacePanel] Failed to update SSBO snapshot buffer: " << e.what() << std::endl;
   }
 }
 

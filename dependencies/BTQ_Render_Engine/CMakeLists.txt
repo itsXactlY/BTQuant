@@ -165,6 +165,7 @@ set(DASHBOARD_SOURCES
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
     src/texture/texture_atlas_manager.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -312,6 +313,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
     src/texture/texture_atlas_manager.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -379,6 +381,7 @@ add_library(btq_render_lib STATIC
 
 target_include_directories(btq_render_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/vulkan
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}

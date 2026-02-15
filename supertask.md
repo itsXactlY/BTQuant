@@ -44,17 +44,17 @@
 - [x] **22.** Ensure `AtomicSymbolInfo` struct is marked `alignas(64)` to prevent cache-line false sharing.
 - [x] **23.** Declare `std::atomic<double> g_crosshair_price` in the workspace component.
 - [x] **24.** Declare `std::atomic<uint64_t> g_crosshair_time` in the workspace component.
-- [ ] **25.** In `chart_panel.cpp`, if `ImPlot::IsPlotHovered()`, write mouse Y/X to `g_crosshair_price` and `g_crosshair_time` via `memory_order_relaxed`.
-- [ ] **26.** In `dom_surface_panel.cpp`, read `g_crosshair_price` and draw a 1px dashed horizontal line (`ImGuiCol_TextDisabled`) across the heatmap.
-- [ ] **27.** In `tpo_panel.cpp`, read `g_crosshair_price` and highlight the corresponding TPO letter block.
-- [ ] **28.** Wire the global `SymbolSelector` to atomic `active_symbol_id`. All panels must seamlessly swap data feeds when this atomic changes.
+- [x] **25.** In `chart_panel.cpp`, if `ImPlot::IsPlotHovered()`, write mouse Y/X to `g_crosshair_price` and `g_crosshair_time` via `memory_order_relaxed`.
+- [x] **26.** In `dom_surface_panel.cpp`, read `g_crosshair_price` and draw a 1px dashed horizontal line (`ImGuiCol_TextDisabled`) across the heatmap.
+- [x] **27.** In `tpo_panel.cpp`, read `g_crosshair_price` and highlight the corresponding TPO letter block.
+- [x] **28.** Wire the global `SymbolSelector` to atomic `active_symbol_id`. All panels must seamlessly swap data feeds when this atomic changes.
 
 ---
 
 ## Phase 4: DOM Surface & GPU Heatmap
 **Target Files:** `src/components/dom_surface_panel.cpp`, `shaders/lob_heatmap.comp`, `src/system/GPUMemoryManager.cpp`
 
-- [ ] **29.** Read the rolling 100-level `OrderBookSnapshot` from the lock-free ring buffer.
+- [x] **29.** Read the rolling 100-level `OrderBookSnapshot` from the lock-free ring buffer.
 - [ ] **30.** Push snapshot buffer to Vulkan SSBO.
 - [ ] **31.** Dispatch `lob_heatmap.comp` to map liquidity to a Viridis/Magma color gradient into a `VkImage`.
 - [ ] **32.** Retrieve the `ImTextureID` from `GPUMemoryManager` and render it via `ImGui::GetWindowDrawList()->AddImage()`.

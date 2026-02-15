@@ -11,6 +11,7 @@
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "vulkan_base_types.hpp"
+#include "vulkan/ssbo_snapshot_updater.h"
 
 // Forward declaration for ClusterEngine
 namespace Analytics {
@@ -227,6 +228,9 @@ class DomSurfacePanel : public PanelBase {
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type);
 
+  // SSBO snapshot buffer update
+  void updateSSBOSnapshotBuffer();
+
   // Flush DOM Ruler functionality
   void renderFlushDOMRuler();
   void updateFlushDOMRulerData();
@@ -274,6 +278,9 @@ class DomSurfacePanel : public PanelBase {
 
   // Cluster Engine for cumulative volume data
   std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+
+  // SSBO Snapshot Updater for GPU compute
+  std::unique_ptr<SSBOSnapshotUpdater> ssbo_snapshot_updater_;
 };
 
 }  // namespace BTQuant

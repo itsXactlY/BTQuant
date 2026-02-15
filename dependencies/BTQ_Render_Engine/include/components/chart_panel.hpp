@@ -88,13 +88,13 @@ struct IndicatorConfig {
   int atr_period = 14;
 };
 
-// Price centering modes for Y-axis
-enum class PriceCenteringMode {
+// Price scale modes for Y-axis
+enum class PriceScaleMode {
   AUTO,           // Standard ImPlot AutoFit
   AUTO_CENTERED,  // Center on last price: (Y_max + Y_min)/2 == last_price
   KEEP_IN_VIEW,   // Only adjust if last_price exceeds bounds
   MANUAL,         // Disable auto-fitting, triggered on drag
-  CENTER_MODE     // Center Mode: Mathematically lock Y-limits: y_min = current_price - range
+  CENTER          // Center Mode: Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2
 };
 
 // Chart style options
@@ -536,11 +536,11 @@ class ChartPanel : public PanelBase {
   std::vector<FavoriteTool> favorite_tools_;
   int selected_drawing_tool_ = -1;  // -1 = no tool selected
   
-  // --- 3.3 Price Centering Modes ---
-  PriceCenteringMode price_centering_mode_ = PriceCenteringMode::AUTO;
+  // --- 3.3 Price Scale Modes ---
+  PriceScaleMode price_scale_mode_ = PriceScaleMode::AUTO;
   double manual_y_min_ = 0.0;
   double manual_y_max_ = 0.0;
-  double center_mode_range_percentage_ = 0.01;  // 1% range for CENTER_MODE (configurable)
+  double center_mode_range_percentage_ = 0.01;  // 1% range for CENTER (configurable)
   bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
   bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
   
@@ -585,8 +585,8 @@ class ChartPanel : public PanelBase {
   void render_indicators_popup();
   void toggle_favorite_tool(const std::string& tool_name);
   
-  // 3.3 Price Centering Implementation
-  void apply_price_centering_mode(const ChartInstance& chart, double last_price);
+  // 3.3 Price Scale Implementation
+  void apply_price_scale_mode(const ChartInstance& chart, double last_price);
   void handle_y_axis_context_menu();  // Right-click on Y-axis for mode selection
   void render_snap_to_last_button();  // Only visible when X-axis max < current time
   

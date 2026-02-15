@@ -69,7 +69,7 @@
 - [x] Render exchange icons from the pre-loaded texture atlas in `GPUMemoryManager`.
 - [x] **5.2: Order Flow Acoustics**
 - [x] Integrate `miniaudio` into the `MarketDataProcessor` poll loop.
-- [ ] Trigger `ma_engine_play_sound` on new trade detection.
+- [x] Trigger `ma_engine_play_sound` on new trade detection.
 - [x] Pitch Shift: Scale pitch inversely to volume (Big trade = Deep bass).
 
 ---
@@ -77,8 +77,8 @@
 ## Phase 6: Chart Anatomy & Toolbar
 **Target:** `src/components/chart_panel.cpp`
 
-- [ ] **6.1: The Flush Top Toolbar**
-- [ ] Render `BeginChild("Toolbar", (0, 32))` with `NoScrollbar`.
+- [x] **6.1: The Flush Top Toolbar**
+- [x] Render `BeginChild("Toolbar", (0, 32))` with `NoScrollbar`.
 - [ ] Wire `Symbol Input` to `MarketDataProcessor::subscribe(new_symbol)`.
 - [x] **6.2: Quick Order Sidebar**
 - [ ] If `Mouse Trading` enabled: Render massive `BUY MKT` / `SELL MKT` buttons.

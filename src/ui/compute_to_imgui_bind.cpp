@@ -571,32 +571,28 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
         float normalized_value = std::abs(values[i]) / max_value;
         float bar_width = normalized_value * canvas_size.x;
 
-        // Determine if this is a buy (green, extends right) or sell (red, extends left)
+        // Determine color for this bar
         ImU32 color = (i < colors.size()) ? colors[i] : IM_COL32(255, 255, 255, 255);
-        
-        // Extract RGB components to determine if it's a green (buy) or red (sell) bar
-        bool is_buy = ((color >> 16) & 0xFF) < ((color >> 8) & 0xFF); // Red channel < Green channel = likely green (buy)
-        bool is_sell = ((color >> 8) & 0xFF) < ((color >> 16) & 0xFF); // Green channel < Red channel = likely red (sell)
-        
+
+        // Calculate position for the bar
         ImVec2 bar_start, bar_end;
-        
-        if (is_buy) {
-            // Green bars (Buys) extend right from the center
-            float center_x = canvas_pos.x + canvas_size.x / 2.0f;
-            bar_start = ImVec2(center_x, canvas_pos.y + i * bar_height);
-            bar_end = ImVec2(center_x + bar_width, canvas_pos.y + (i + 1) * bar_height);
-        } else if (is_sell) {
-            // Red bars (Sells) extend left from the center
-            float center_x = canvas_pos.x + canvas_size.x / 2.0f;
-            bar_start = ImVec2(center_x - bar_width, canvas_pos.y + i * bar_height);
-            bar_end = ImVec2(center_x, canvas_pos.y + (i + 1) * bar_height);
+
+        // Center the bars in the canvas vertically
+        float y_start = canvas_pos.y + i * bar_height;
+        float y_end = canvas_pos.y + (i + 1) * bar_height;
+
+        // For positive values, extend right from left edge; for negative values, extend left from right edge
+        if (values[i] >= 0) {
+            // Positive values: extend right from left edge
+            bar_start = ImVec2(canvas_pos.x, y_start);
+            bar_end = ImVec2(canvas_pos.x + bar_width, y_end);
         } else {
-            // For other colors, use the original behavior (extend right from left edge)
-            bar_start = ImVec2(canvas_pos.x, canvas_pos.y + i * bar_height);
-            bar_end = ImVec2(canvas_pos.x + bar_width, canvas_pos.y + (i + 1) * bar_height);
+            // Negative values: extend left from right edge
+            bar_start = ImVec2(canvas_pos.x + canvas_size.x - bar_width, y_start);
+            bar_end = ImVec2(canvas_pos.x + canvas_size.x, y_end);
         }
 
-        // Draw the filled rectangle for the bar
+        // Draw the filled rectangle for the bar using DrawList->AddRectFilled as requested
         draw_list->AddRectFilled(bar_start, bar_end, color);
 
         // Draw a border around the bar for better visibility

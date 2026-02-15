@@ -96,13 +96,63 @@ void QuantWorkspaceComponent::update(float dt) {
 }
 
 void QuantWorkspaceComponent::render_gui() {
-  // Docking not supported in this branch of ImGui.
-  // We'll just render the panels normally.
+  // Generate the main dock space ID
+  ImGuiID dock_main = ImGui::GetID("WorkspaceDockSpace");
 
   // Apply seamless visual blending: remove window padding for seamless look
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
-  // Render dashboard controls
+  // Create the main dockspace
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  
+  // Position the window to cover the entire viewport
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  // Create the main dockspace window
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  
+  static bool p_open = true; // We don't actually use this since we're creating a main dockspace
+  
+  ImGui::Begin("WorkspaceDockSpace", &p_open, window_flags);
+  
+  ImGui::PopStyleVar(2); // Pop rounded and border size
+
+  // Check if the dockspace needs to be created
+  if (!ImGui::DockBuilderGetNode(dock_main)) {
+    ImGui::DockBuilderRemoveNode(dock_main); // Clear out any existing setup
+    ImGui::DockBuilderAddNode(dock_main); // Add empty node
+    ImGui::DockBuilderSetNodeSize(dock_main, viewport->WorkSize);
+
+    // Apply docking flags
+    ImGuiDockNodeFlags dock_flags = ImGuiDockNodeFlags_NoTabBar;
+    dock_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
+    
+    // Split the main dock for the drawing tools sidebar (left)
+    ImGuiID dock_left = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.03f, nullptr, &dock_main);
+    
+    // Split the remaining space for the right side (DOM/Orderbook column)
+    ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, nullptr, &dock_main);
+    
+    // Further split the right side into top and bottom sections
+    ImGuiID dock_right_bottom = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.3f, nullptr, &dock_right);
+    
+    // Dock the panels to their respective spaces
+    ImGui::DockBuilderDockWindow("Drawing Tools", dock_left);
+    ImGui::DockBuilderDockWindow("Main Chart", dock_main); // Center area
+    ImGui::DockBuilderDockWindow("DOM Surface", dock_right); // Right-top (will be tabbed with orderbook)
+    ImGui::DockBuilderDockWindow("Order Book", dock_right); // Right-top (will be tabbed with DOM)
+    ImGui::DockBuilderDockWindow("Time & Sales", dock_right_bottom); // Right-bottom
+  }
+
+  // Create the actual dockspace
+  ImGuiDockNodeFlags dockspace_flags = static_cast<ImGuiDockNodeFlags>(ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_PassthruCentralNode);
+  ImGui::DockSpace(dock_main, ImVec2(0.0f, 0.0f), dockspace_flags);
+
+  // Render dashboard controls if enabled
   if (show_dashboard_controls_) {
     render_dashboard_controls();
   }
@@ -114,6 +164,8 @@ void QuantWorkspaceComponent::render_gui() {
   if (global_crosshair_enabled_) {
     handle_global_crosshair_sync();
   }
+
+  ImGui::End(); // End the main dockspace window
 
   // Restore the original style
   ImGui::PopStyleVar();

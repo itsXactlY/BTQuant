@@ -403,40 +403,79 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
         ImGui::TableHeadersRow();
 
         ImGui::TableNextRow();
-        
-        // Buys column (typically represents buy orders/volume)
+
+        // Buys column (represents buy-side volume at best bid)
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%.2f", bid_volume); // Using bid volume as "Buys"
-        
-        // Asks column (typically represents ask orders/volume)
+        ImGui::Text("%.2f", bid_volume);
+
+        // Asks column (represents sell-side volume at best ask)
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%.2f", ask_volume); // Using ask volume as "Asks"
-        
-        // Price column (current traded price)
+        ImGui::Text("%.2f", ask_volume);
+
+        // Price column (last traded price)
         ImGui::TableSetColumnIndex(2);
         ImGui::Text("%.2f", price);
-        
-        // Bids column (bid price)
+
+        // Bids column (best bid price)
         ImGui::TableSetColumnIndex(3);
         ImGui::Text("%.2f", bid_price);
-        
-        // Sells column (typically represents sell orders/volume)
+
+        // Sells column (represents sell-side volume at best ask - equivalent to Asks)
+        // In trading context, "Sells" could mean the same as "Asks" - volume available for selling
         ImGui::TableSetColumnIndex(4);
-        ImGui::Text("%.2f", ask_volume); // Using ask volume as "Sells"
+        ImGui::Text("%.2f", ask_volume);
 
         ImGui::EndTable();
     }
-    
+
     // Show additional market data information
     ImGui::Separator();
     ImGui::Text("Additional Market Data:");
     ImGui::Text("Symbol Index: %u", symbol_index);
     ImGui::Text("Volume: %.2f", volume);
-    
+
     // Show timestamp
     auto timestamp = data.timestamp.load();
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
     ImGui::Text("Timestamp: %s", std::ctime(&time_t));
+}
+
+void renderMarketTable(double bid_volume, double ask_volume, double last_price, 
+                      double bid_price, double ask_price, float width, float height) {
+    // Create a table to display market data: Buys | Asks | Price | Bids | Sells
+    if (ImGui::BeginTable("MarketTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+        ImGui::TableSetupColumn("Buys", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Asks", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Bids", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Sells", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+
+        // Buys column (represents buy-side volume at best bid)
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("%.2f", bid_volume);
+
+        // Asks column (represents sell-side volume at best ask)
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.2f", ask_volume);
+
+        // Price column (last traded price)
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("%.2f", last_price);
+
+        // Bids column (best bid price)
+        ImGui::TableSetColumnIndex(3);
+        ImGui::Text("%.2f", bid_price);
+
+        // Sells column (represents sell-side volume at best ask)
+        ImGui::TableSetColumnIndex(4);
+        ImGui::Text("%.2f", ask_volume);
+
+        ImGui::EndTable();
+    }
 }
 
 } // namespace UI

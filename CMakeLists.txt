@@ -28,6 +28,7 @@ set(PUBBTQUANT_SOURCES
     src/main.cpp
     src/analytics/tpoengine.cpp
     src/analytics/liquiditysweepdetector.cpp
+    src/ui/compute_to_imgui_bind.cpp
 )
 
 # Add subdirectories
@@ -42,6 +43,7 @@ if(PUBBTQUANT_SOURCES)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/src/imgui
     )
     
 endif()

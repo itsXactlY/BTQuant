@@ -154,5 +154,18 @@ void renderSweepMarkers(const LiquiditySweepDetector& detector, float width = 40
 void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index = 0,
                               float width = 400.0f, float height = 300.0f);
 
+/**
+ * @brief Helper function to render a specific market table with [Buys | Asks | Price | Bids | Sells] format
+ * @param bid_volume Volume at the best bid price
+ * @param ask_volume Volume at the best ask price
+ * @param last_price Last traded price
+ * @param bid_price Best bid price
+ * @param ask_price Best ask price
+ * @param width Width of the visualization
+ * @param height Height of the visualization
+ */
+void renderMarketTable(double bid_volume, double ask_volume, double last_price, 
+                      double bid_price, double ask_price, float width = 400.0f, float height = 300.0f);
+
 } // namespace UI
 } // namespace BTQuant

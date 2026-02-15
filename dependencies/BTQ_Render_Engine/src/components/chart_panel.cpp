@@ -2686,7 +2686,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
   ImPlot::PushStyleColor(ImPlotCol_PlotBg,
                          colors.panel_bg);  // Use panel bg or specific dark
   ImPlot::PushStyleColor(ImPlotCol_PlotBorder, colors.border);
-  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
+  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
 
   // Initialize chart configuration
   // Ensure we start with auto-follow enabled to show recent action

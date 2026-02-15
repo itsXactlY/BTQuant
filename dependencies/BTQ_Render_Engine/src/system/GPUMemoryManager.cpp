@@ -407,6 +407,76 @@ ImageAllocation GPUMemoryManager::create_texture_atlas(const std::vector<std::ve
   return atlas_allocation;
 }
 
+ImageAllocation GPUMemoryManager::create_exchange_icon_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
+                                                           uint32_t icon_width, uint32_t icon_height,
+                                                           const std::vector<std::string>& exchange_names) {
+  if (icon_data.empty() || exchange_names.empty() || icon_data.size() != exchange_names.size()) {
+    throw std::invalid_argument("Invalid input: icon_data and exchange_names must be non-empty and equal in size");
+  }
+
+  // Calculate grid dimensions (square layout)
+  size_t num_icons = icon_data.size();
+  uint32_t cols = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<float>(num_icons))));
+  uint32_t rows = static_cast<uint32_t>(std::ceil(static_cast<float>(num_icons) / cols));
+
+  // Create the texture atlas (this creates the image but doesn't upload data yet)
+  ImageAllocation atlas_allocation = create_texture_atlas(icon_data, icon_width, icon_height, cols, rows);
+
+  return atlas_allocation;
+}
+
+VkDescriptorSet GPUMemoryManager::create_exchange_icon_descriptor_set(VkDescriptorPool descriptor_pool, 
+                                                                    VkSampler sampler, 
+                                                                    const ImageAllocation& atlas) {
+  // Create descriptor set layout for sampled image
+  VkDescriptorSetLayoutBinding sampler_layout_binding{};
+  sampler_layout_binding.binding = 0;
+  sampler_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  sampler_layout_binding.descriptorCount = 1;
+  sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  sampler_layout_binding.pImmutableSamplers = nullptr;
+
+  VkDescriptorSetLayoutCreateInfo layout_info{};
+  layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  layout_info.bindingCount = 1;
+  layout_info.pBindings = &sampler_layout_binding;
+
+  VkDescriptorSetLayout descriptor_set_layout;
+  vkCreateDescriptorSetLayout(device_, &layout_info, nullptr, &descriptor_set_layout);
+
+  // Allocate descriptor set
+  VkDescriptorSetAllocateInfo alloc_info{};
+  alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  alloc_info.descriptorPool = descriptor_pool;
+  alloc_info.descriptorSetCount = 1;
+  alloc_info.pSetLayouts = &descriptor_set_layout;
+
+  VkDescriptorSet descriptor_set;
+  vkAllocateDescriptorSets(device_, &alloc_info, &descriptor_set);
+
+  // Update descriptor set
+  VkDescriptorImageInfo image_info{};
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image_info.imageView = atlas.view;
+  image_info.sampler = sampler;
+
+  VkWriteDescriptorSet descriptor_write{};
+  descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  descriptor_write.dstSet = descriptor_set;
+  descriptor_write.dstBinding = 0;
+  descriptor_write.dstArrayElement = 0;
+  descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  descriptor_write.descriptorCount = 1;
+  descriptor_write.pImageInfo = &image_info;
+
+  vkUpdateDescriptorSets(device_, 1, &descriptor_write, 0, nullptr);
+
+  // Clean up temporary layout
+  vkDestroyDescriptorSetLayout(device_, descriptor_set_layout, nullptr);
+
+  return descriptor_set;
+}
+
 void GPUMemoryManager::update_texture_atlas(const ImageAllocation& atlas, 
                                            const std::vector<std::vector<uint8_t>>& icon_data,
                                            uint32_t x_offset, uint32_t y_offset,

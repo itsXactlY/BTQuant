@@ -175,6 +175,14 @@ class GPUMemoryManager {
                            const std::vector<std::vector<uint8_t>>& icon_data,
                            uint32_t x_offset, uint32_t y_offset,
                            uint32_t width, uint32_t height);
+  
+  // Exchange-specific texture atlas methods
+  ImageAllocation create_exchange_icon_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
+                                           uint32_t icon_width, uint32_t icon_height,
+                                           const std::vector<std::string>& exchange_names);
+  VkDescriptorSet create_exchange_icon_descriptor_set(VkDescriptorPool descriptor_pool, 
+                                                     VkSampler sampler, 
+                                                     const ImageAllocation& atlas);
 
   // Public access methods for texture atlas operations
   VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);

@@ -41,9 +41,9 @@
 ## Phase 3: Lock-Free State & Global Sync
 **Target Files:** `include/market_data_processor.hpp`, `include/quant_workspace_component.hpp`
 
-- [ ] **22.** Ensure `AtomicSymbolInfo` struct is marked `alignas(64)` to prevent cache-line false sharing.
+- [x] **22.** Ensure `AtomicSymbolInfo` struct is marked `alignas(64)` to prevent cache-line false sharing.
 - [ ] **23.** Declare `std::atomic<double> g_crosshair_price` in the workspace component.
-- [ ] **24.** Declare `std::atomic<uint64_t> g_crosshair_time` in the workspace component.
+- [x] **24.** Declare `std::atomic<uint64_t> g_crosshair_time` in the workspace component.
 - [ ] **25.** In `chart_panel.cpp`, if `ImPlot::IsPlotHovered()`, write mouse Y/X to `g_crosshair_price` and `g_crosshair_time` via `memory_order_relaxed`.
 - [ ] **26.** In `dom_surface_panel.cpp`, read `g_crosshair_price` and draw a 1px dashed horizontal line (`ImGuiCol_TextDisabled`) across the heatmap.
 - [ ] **27.** In `tpo_panel.cpp`, read `g_crosshair_price` and highlight the corresponding TPO letter block.

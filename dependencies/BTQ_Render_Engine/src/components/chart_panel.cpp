@@ -4596,38 +4596,41 @@ void ChartPanel::render_snap_to_last_button() {
 void ChartPanel::render_right_sidebar_order_entry() {
   ImGui::Text("Quick Order");
   ImGui::Separator();
-  
+
   // Update cached quotes from atomic snapshot
   update_cached_quotes();
-  
-  // Market Buy button with Best Ask
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
-  std::string buy_label = "BUY\n" + std::to_string(cached_best_ask_);
-  if (ImGui::Button(buy_label.c_str(), ImVec2(100, 40))) {
-    execute_market_order(true);  // Buy
+
+  // If Mouse Trading enabled: Render massive BUY MKT / SELL MKT buttons with live quotes
+  if (trading_mode_ == TradingMode::MOUSE_TRADING) {
+    // Market Buy button with Best Ask
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+    std::string buy_label = "BUY MKT\n" + std::to_string(cached_best_ask_);
+    if (ImGui::Button(buy_label.c_str(), ImVec2(100, 60))) {  // Larger button size
+      execute_market_order(true);  // Buy
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+
+    // Market Sell button with Best Bid
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+    std::string sell_label = "SELL MKT\n" + std::to_string(cached_best_bid_);
+    if (ImGui::Button(sell_label.c_str(), ImVec2(100, 60))) {  // Larger button size
+      execute_market_order(false);  // Sell
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Separator();
   }
-  ImGui::PopStyleColor();
-  
-  ImGui::Spacing();
-  
-  // Market Sell button with Best Bid
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
-  std::string sell_label = "SELL\n" + std::to_string(cached_best_bid_);
-  if (ImGui::Button(sell_label.c_str(), ImVec2(100, 40))) {
-    execute_market_order(false);  // Sell
-  }
-  ImGui::PopStyleColor();
-  
-  ImGui::Separator();
-  
+
   // Order Quantity input
   ImGui::Text("Quantity:");
   ImGui::PushItemWidth(90);
   ImGui::InputDouble("##Qty", &order_quantity_, 0.1, 1.0, "%.4f");
   ImGui::PopItemWidth();
-  
+
   ImGui::Spacing();
-  
+
   // Time In Force selector
   ImGui::Text("TIF:");
   const char* tif_options[] = {"GTC", "IOC", "FOK", "DAY"};
@@ -4637,9 +4640,9 @@ void ChartPanel::render_right_sidebar_order_entry() {
     selected_tif_ = static_cast<TimeInForce>(tif_index);
   }
   ImGui::PopItemWidth();
-  
+
   ImGui::Separator();
-  
+
   // Display current quotes
   ImGui::Text("Best Bid: %.2f", cached_best_bid_);
   ImGui::Text("Best Ask: %.2f", cached_best_ask_);

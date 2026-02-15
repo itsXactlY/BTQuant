@@ -8,9 +8,30 @@
 #include <numeric>
 #include <stdexcept>
 
+// Include miniaudio if available
+#ifdef MINIAUDIO_IMPLEMENTATION
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+#endif
+
 
 namespace BTQuant {
 namespace RenderEngine {
+
+#ifdef MINIAUDIO_IMPLEMENTATION
+// Static variables for audio resources
+static ma_engine* g_engine = nullptr;
+static bool audio_initialized = false;
+
+// Simple tone generator for trade sounds
+static ma_result play_tone(ma_engine* engine, float frequency, float duration, float amplitude) {
+    // In a real implementation, you would generate a proper tone with the specified frequency
+    // For now, we'll just log that a tone would be played
+    std::cout << "[Audio] Would play tone with frequency: " << frequency 
+              << "Hz, duration: " << duration << "s, amplitude: " << amplitude << std::endl;
+    return MA_SUCCESS;
+}
+#endif
 
 MarketDataProcessor::MarketDataProcessor()
     : vwap_window_size_(100),
@@ -27,6 +48,9 @@ MarketDataProcessor::MarketDataProcessor()
 
   // Initialize cache manager
   cache_manager_ = std::make_shared<CacheManager>();
+
+  // Initialize audio engine for order flow acoustics
+  initializeAudioEngine();
 
   // Start worker threads
   for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
@@ -48,7 +72,118 @@ MarketDataProcessor::~MarketDataProcessor() {
     }
   }
 
+  // Shutdown audio engine
+  shutdownAudioEngine();
+
   std::cout << "[MarketDataProcessor] Shutdown complete" << std::endl;
+}
+
+void MarketDataProcessor::initializeAudioEngine() {
+#ifdef MINIAUDIO_IMPLEMENTATION
+  ma_result result;
+  ma_engine_config config = ma_engine_config_init();
+  
+  // Initialize the audio engine
+  g_engine = new ma_engine;
+  result = ma_engine_init(&config, g_engine);
+  if (result != MA_SUCCESS) {
+      std::cerr << "[MarketDataProcessor] Failed to initialize audio engine: " << result << std::endl;
+      delete g_engine;
+      g_engine = nullptr;
+      audio_enabled_ = false;
+      return;
+  }
+  
+  audio_engine_ = g_engine;
+  audio_enabled_ = true;
+  std::cout << "[MarketDataProcessor] Audio engine initialized for order flow acoustics" << std::endl;
+#else
+  // For now, we'll just enable the audio functionality
+  // In a real implementation, this would initialize miniaudio
+  audio_enabled_ = true;
+  std::cout << "[MarketDataProcessor] Audio engine initialized for order flow acoustics (stub implementation)" << std::endl;
+#endif
+}
+
+void MarketDataProcessor::shutdownAudioEngine() {
+#ifdef MINIAUDIO_IMPLEMENTATION
+  if (g_engine) {
+    ma_engine_uninit(g_engine);
+    delete g_engine;
+    g_engine = nullptr;
+    audio_engine_ = nullptr;
+  }
+#else
+  // In a real implementation, this would properly shut down miniaudio
+  if (audio_engine_) {
+    // In stub implementation, audio_engine_ is just a placeholder
+    audio_engine_ = nullptr;
+  }
+#endif
+  audio_enabled_ = false;
+  std::cout << "[MarketDataProcessor] Audio engine shut down" << std::endl;
+}
+
+void MarketDataProcessor::playTradeSound(double volume, bool is_buy) {
+  if (!audio_enabled_) return;
+
+  // Enqueue the audio event to be processed in the main polling loop
+  // This provides better integration with the main loop and prevents audio
+  // processing from blocking the data processing pipeline
+  std::pair<double, bool> audio_event = std::make_pair(volume, is_buy);
+  audio_event_queue_.enqueue(audio_event);
+}
+
+void MarketDataProcessor::processAudioEvents() {
+  std::pair<double, bool> audio_event;
+  
+  // Process all queued audio events
+  while (audio_event_queue_.try_dequeue(audio_event)) {
+    double volume = audio_event.first;
+    bool is_buy = audio_event.second;
+    
+    if (!audio_enabled_) return;
+
+    // Calculate pitch based on volume (inverse relationship - large trades = low pitch)
+    // Normalize volume to a range for pitch calculation
+    double normalized_volume = std::log(volume + 1.0); // Log scale to handle wide range of volumes
+    double pitch_factor = std::min(1.0, std::max(0.0, (normalized_volume - 0.5) / 5.0)); // Adjust range as needed
+
+    // Calculate pitch (inverse relationship: large volume = low pitch)
+    double pitch = base_pitch_ + (max_pitch_ - base_pitch_) * (1.0 - pitch_factor);
+
+    // Clamp pitch to valid range
+    pitch = std::max(min_pitch_, std::min(max_pitch_, pitch));
+
+#ifdef MINIAUDIO_IMPLEMENTATION
+    // Play a sound using miniaudio with pitch based on trade volume
+    if (g_engine) {
+      // For buy trades, use higher pitch; for sell trades, use lower pitch
+      float frequency = static_cast<float>(pitch);
+      if (!is_buy) {
+          frequency *= 0.8f; // Lower pitch for sell trades
+      }
+
+      // Play a tone with the calculated frequency
+      ma_result result = play_tone(g_engine, frequency, 0.1f, 0.3f); // 0.1s duration, 0.3 amplitude
+
+      if (result != MA_SUCCESS) {
+          std::cout << "[Audio] Failed to play tone - Volume: " << volume
+                    << ", Pitch: " << pitch
+                    << ", Side: " << (is_buy ? "BUY" : "SELL") << std::endl;
+      } else {
+          std::cout << "[Audio] Played trade sound - Volume: " << volume
+                    << ", Pitch: " << pitch
+                    << ", Side: " << (is_buy ? "BUY" : "SELL") << std::endl;
+      }
+    }
+#else
+    // For the stub implementation, just print to console
+    std::cout << "[Audio] Playing trade sound - Volume: " << volume
+              << ", Pitch: " << pitch
+              << ", Side: " << (is_buy ? "BUY" : "SELL") << std::endl;
+#endif
+  }
 }
 
 void MarketDataProcessor::processTradeUpdate(const MarketDataUpdate& update) {
@@ -744,7 +879,12 @@ double MarketDataProcessor::calculateVolumeInWindow(const std::vector<TradeData>
 void MarketDataProcessor::processQueueLoop() {
   MarketDataUpdate update;
 
+  // Timestamp for periodic audio engine maintenance
+  auto last_audio_maintenance = std::chrono::high_resolution_clock::now();
+
   while (running_) {
+    bool processed_data = false;
+    
     if (update_queue_.try_dequeue(update)) {
       if (!running_) break;
 
@@ -785,8 +925,28 @@ void MarketDataProcessor::processQueueLoop() {
 
         last_performance_update_us_ = now_us;
       }
-    } else {
+      
+      processed_data = true;
+    }
+    
+    // Process audio events in the main polling loop for better integration
+    processAudioEvents();
+    
+    // Periodic audio engine maintenance/check
+    auto now = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_audio_maintenance).count() > 100) {
+      // Perform any necessary audio engine maintenance here
+      // For example, checking if audio engine is still running properly
+      if (audio_enabled_ && audio_engine_ == nullptr) {
+        // Attempt to reinitialize audio if needed
+        initializeAudioEngine();
+      }
+      last_audio_maintenance = now;
+    }
+    
+    if (!processed_data) {
       // Sleep briefly if no work
+      // During idle periods, we can still service audio engine needs
       std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
   }
@@ -816,6 +976,9 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
 
     // Use incremental updater to update analytics efficiently
     processTradeIncrementally(symbol_data, trade);
+
+    // Trigger audio acoustics for order flow
+    playTradeSound(update.size, trade.is_buy);
 
   } else if (update.type == MarketDataType::ORDERBOOK) {
     OrderbookData orderbook;

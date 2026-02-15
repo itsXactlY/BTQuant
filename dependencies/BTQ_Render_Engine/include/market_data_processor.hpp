@@ -625,6 +625,27 @@ class MarketDataProcessor {
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
+
+  // Audio acoustics functionality for order flow
+  void initializeAudioEngine();
+  void shutdownAudioEngine();
+  void playTradeSound(double volume, bool is_buy);
+  void setAudioEnabled(bool enabled) { audio_enabled_ = enabled; }
+  bool isAudioEnabled() const { return audio_enabled_; }
+
+ private:
+  // Audio helper methods
+  void processAudioEvents();
+  
+  // Audio engine variables
+  bool audio_enabled_ = false;
+  void* audio_engine_ = nullptr;  // Placeholder for miniaudio engine
+  double base_pitch_ = 440.0;     // Base pitch (A4 note)
+  double min_pitch_ = 220.0;      // Minimum pitch for large trades
+  double max_pitch_ = 880.0;      // Maximum pitch for small trades (inverse relationship)
+  
+  // Audio event queue for batch processing in the main loop
+  moodycamel::ConcurrentQueue<std::pair<double, bool>> audio_event_queue_; // Queue of (volume, is_buy) pairs
 };
 
 }  // namespace RenderEngine

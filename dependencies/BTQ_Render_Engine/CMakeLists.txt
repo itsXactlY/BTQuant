@@ -36,7 +36,10 @@ FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git G
 # ImPlot
 FetchContent_Declare(implot GIT_REPOSITORY https://github.com/epezent/implot.git GIT_TAG master)
 
-FetchContent_MakeAvailable(glm json concurrentqueue readerwriterqueue imgui implot)
+# MiniAudio for audio acoustics
+FetchContent_Declare(miniaudio GIT_REPOSITORY https://github.com/mackron/miniaudio.git GIT_TAG 0.11.22)
+
+FetchContent_MakeAvailable(glm json concurrentqueue readerwriterqueue imgui implot miniaudio)
 
 # Path Configuration
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
@@ -400,6 +403,7 @@ target_include_directories(BTQuantTerminal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
     ${readerwriterqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/readerwriterqueue-src
+    ${miniaudio_SOURCE_DIR}
 )
 
 find_package(TBB REQUIRED)
@@ -412,6 +416,9 @@ target_link_libraries(BTQuantTerminal PRIVATE
     pthread
     TBB::tbb
 )
+
+# Define miniaudio implementation
+target_compile_definitions(BTQuantTerminal PRIVATE MINIAUDIO_IMPLEMENTATION=1)
 
 # Conditionally build tests if BUILD_TESTS is enabled
 if(BUILD_TESTS)

@@ -53,12 +53,14 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                            std::shared_ptr<OrderManager> order_manager,
                            std::shared_ptr<PositionManager> position_manager,
-                           std::shared_ptr<RiskAssessment> risk_assessment)
+                           std::shared_ptr<RiskAssessment> risk_assessment,
+                           std::atomic<uint32_t>* global_active_symbol_id_ptr)
     : bridge_(bridge),
       processor_(processor),
       order_manager_(order_manager),
       position_manager_(position_manager),
-      risk_assessment_(risk_assessment) {
+      risk_assessment_(risk_assessment),
+      global_active_symbol_id_ptr_(global_active_symbol_id_ptr) {
   // NOTE: Do NOT call apply_layout_preset() or add default panels in constructor.
   // Panel instantiation should be controlled by the layout system externally.
   // See: main_trading_terminal.cpp where workspace->set_layout() is called.
@@ -85,6 +87,9 @@ void PanelManager::initialize() {
 
 void PanelManager::update(float dt) {
   chart_manager_->update();
+
+  // Check for global symbol changes and propagate to panels
+  check_global_symbol_changes();
 
   for (auto& [id, panel] : panels_) {
     panel->update(dt);
@@ -1232,6 +1237,11 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
   active_symbol_id_ = symbol_id;
   active_symbol_name_ = symbol_name;
 
+  // Update the global atomic active symbol ID if pointer is available
+  if (global_active_symbol_id_ptr_) {
+    global_active_symbol_id_ptr_->store(symbol_id);
+  }
+
   // Propagate symbol to all relevant panel types
   for (auto& [id, panel] : panels_) {
     switch (panel->get_config().type) {
@@ -1361,6 +1371,106 @@ void PanelManager::load_all_panel_configs(const std::string& config_file) {
     // Check if the panel is a WatchlistPanel and load its configuration
     if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
       watchlist->load_watchlist_order_from_config(config_file);
+    }
+  }
+}
+
+// Check for global symbol changes and propagate to panels
+void PanelManager::check_global_symbol_changes() {
+  // Check if we have a valid global atomic pointer
+  if (!global_active_symbol_id_ptr_) {
+    return; // Skip if no global atomic pointer provided
+  }
+  
+  // Get the current global active symbol ID
+  uint32_t global_symbol_id = global_active_symbol_id_ptr_->load();
+  
+  // If the global symbol ID has changed compared to our local tracking, update all panels
+  if (global_symbol_id != active_symbol_id_ && global_symbol_id != 0) {
+    // Update our local tracking
+    active_symbol_id_ = global_symbol_id;
+    
+    // Get the symbol name from the bridge
+    std::string symbol_name = bridge_ ? bridge_->getSymbolName(global_symbol_id) : "";
+    if (!symbol_name.empty()) {
+      active_symbol_name_ = symbol_name;
+      
+      // Propagate symbol to all relevant panel types
+      for (auto& [id, panel] : panels_) {
+        switch (panel->get_config().type) {
+          case PanelType::ORDERBOOK: {
+            if (auto* orderbook = dynamic_cast<OrderbookPanel*>(panel.get())) {
+              orderbook->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          case PanelType::CHART: {
+            if (auto* chart = dynamic_cast<ChartPanel*>(panel.get())) {
+              std::string exchange_name = bridge_ ? bridge_->getExchangeName(global_symbol_id) : "";
+              chart->set_symbol(symbol_name, exchange_name);
+            }
+            break;
+          }
+          case PanelType::WATCHLIST: {
+            // Update the symbol for all watchlist panels
+            if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
+              std::string exchange_name = bridge_ ? bridge_->getExchangeName(global_symbol_id) : "";
+              watchlist->add_symbol(global_symbol_id, symbol_name, exchange_name);
+            }
+            break;
+          }
+          case PanelType::TAPE: {
+            if (auto* tape = dynamic_cast<TapePanel*>(panel.get())) {
+              tape->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          case PanelType::VOLUME_PROFILE: {
+            if (auto* vp = dynamic_cast<VolumeProfilePanel*>(panel.get())) {
+              vp->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          case PanelType::DEPTH_CHART: {
+            if (auto* dc = dynamic_cast<DepthChartPanel*>(panel.get())) {
+              dc->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          case PanelType::FOOTPRINT_CHART: {
+            if (auto* fp = dynamic_cast<FootprintPanel*>(panel.get())) {
+              fp->set_symbol_id(global_symbol_id);
+            }
+            break;
+          }
+          case PanelType::TPO_PROFILE: {
+            if (auto* tpo = dynamic_cast<TpoPanel*>(panel.get())) {
+              tpo->set_symbol_id(global_symbol_id);
+            }
+            break;
+          }
+          case PanelType::HEATMAP: {
+            if (auto* dom = dynamic_cast<DomSurfacePanel*>(panel.get())) {
+              dom->setSymbol(global_symbol_id);
+            }
+            break;
+          }
+          case PanelType::TIME_AND_SALES: {
+            if (auto* tas = dynamic_cast<TimeAndSalesPanel*>(panel.get())) {
+              tas->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          case PanelType::HISTORICAL_TIME_SALES: {
+            if (auto* hts = dynamic_cast<HistoricalTimeSalesPanel*>(panel.get())) {
+              hts->set_symbol(global_symbol_id, symbol_name);
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      }
     }
   }
 }

@@ -14,6 +14,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "panel_manager.hpp"
+#include "symbol_selector.hpp"
 
 namespace BTQuant {
 
@@ -60,6 +61,17 @@ class QuantWorkspaceComponent : public UIComponent {
   static void set_global_crosshair_price(double price) { g_crosshair.price.store(price); }
   static void set_global_crosshair_time(uint64_t time) { g_crosshair.time.store(time); }
   static void set_global_crosshair_active(bool active) { g_crosshair.active.store(active); }
+
+  // Global atomic active symbol ID for cross-panel synchronization
+  static std::atomic<uint32_t> g_active_symbol_id;
+
+  // Helper methods for accessing global active symbol ID
+  static uint32_t get_global_active_symbol_id() { return g_active_symbol_id.load(); }
+  static void set_global_active_symbol_id(uint32_t symbol_id) { g_active_symbol_id.store(symbol_id); }
+
+  // Global SymbolSelector instance
+  static BTQuant::SymbolSelector g_symbol_selector;
+  static BTQuant::SymbolSelectorState g_symbol_selector_state;
 
  private:
   // Core systems

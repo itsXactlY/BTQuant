@@ -48,7 +48,8 @@ class PanelManager {
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                std::shared_ptr<OrderManager> order_manager,
                std::shared_ptr<PositionManager> position_manager,
-               std::shared_ptr<RiskAssessment> risk_assessment);
+               std::shared_ptr<RiskAssessment> risk_assessment,
+               std::atomic<uint32_t>* global_active_symbol_id_ptr = nullptr);
 
   ~PanelManager();
 
@@ -137,6 +138,12 @@ class PanelManager {
   // Active symbol tracking for cross-panel propagation
   uint32_t active_symbol_id_ = 0;
   std::string active_symbol_name_;
+
+  // Pointer to global atomic active symbol ID
+  std::atomic<uint32_t>* global_active_symbol_id_ptr_;
+
+  // Method to check for global symbol changes and propagate to panels
+  void check_global_symbol_changes();
 
   // Current layout tracking
   std::string current_layout_name_ = "default";

@@ -18,6 +18,13 @@ std::atomic<double> QuantWorkspaceComponent::g_crosshair_price{0.0};
 // Define the static global crosshair time variable
 std::atomic<uint64_t> QuantWorkspaceComponent::g_crosshair_time{0};
 
+// Define the static global active symbol ID variable
+std::atomic<uint32_t> QuantWorkspaceComponent::g_active_symbol_id{0};
+
+// Define the static global SymbolSelector instance
+BTQuant::SymbolSelector QuantWorkspaceComponent::g_symbol_selector;
+BTQuant::SymbolSelectorState QuantWorkspaceComponent::g_symbol_selector_state;
+
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
@@ -34,7 +41,7 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 
   // Initialize the new panel-based system
   panel_manager_ = std::make_unique<PanelManager>(
-      bridge_, processor_, order_manager_, position_manager_, risk_assessment_);
+      bridge_, processor_, order_manager_, position_manager_, risk_assessment_, &g_active_symbol_id);
   panel_manager_->initialize();
 
   // Load symbols from shared memory for hierarchical selector
@@ -533,27 +540,42 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       }
     }
 
-    // Hierarchical Selector (Exchange -> Symbol -> Chart)
+    // Global Symbol Selector (Exchange -> Symbol -> Timeframe)
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Symbol Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
-      // Render the hierarchical selector
-      bool selection_changed = hierarchical_selector_.render(selector_state_);
+      // Refresh symbols from data bridge periodically
+      g_symbol_selector.refresh_symbols(g_symbol_selector_state, bridge_, processor_);
 
-      if (selection_changed && !selector_state_.selected_symbol.empty()) {
+      // Render the global symbol selector
+      bool selection_changed = g_symbol_selector.render(g_symbol_selector_state);
+
+      if (selection_changed && !g_symbol_selector_state.selected_symbol.empty()) {
+        // Find the symbol ID for the selected symbol
+        uint32_t symbol_id = 0;
+        auto active_symbols = bridge_->getActiveSymbols();
+        for (auto id : active_symbols) {
+          if (bridge_->getSymbolName(id) == g_symbol_selector_state.selected_symbol) {
+            symbol_id = id;
+            break;
+          }
+        }
+
+        // Update the global atomic active symbol ID
+        g_active_symbol_id.store(symbol_id);
+
         // CRITICAL: Propagate symbol to all panels (orderbook, etc.)
-        panel_manager_->set_active_symbol(selector_state_.selected_symbol_id,
-                                          selector_state_.selected_symbol);
+        panel_manager_->set_active_symbol(symbol_id, g_symbol_selector_state.selected_symbol);
 
         // Create or switch to chart for selected symbol/timeframe
         auto* chart_manager = panel_manager_->get_chart_manager();
         if (chart_manager) {
           // Check if chart already exists for this symbol/timeframe
-          auto charts = chart_manager->get_charts_for_symbol(selector_state_.selected_symbol);
+          auto charts = chart_manager->get_charts_for_symbol(g_symbol_selector_state.selected_symbol);
 
           bool found = false;
           for (const auto& chart : charts) {
-            if (chart.timeframe == selector_state_.selected_timeframe) {
-              selector_state_.selected_chart_id = chart.chart_id;
+            if (chart.timeframe == g_symbol_selector_state.selected_timeframe) {
+              // selector_state_.selected_chart_id = chart.chart_id; // Not using hierarchical selector anymore
               found = true;
               break;
             }
@@ -561,12 +583,8 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
 
           // Create new chart if doesn't exist
           if (!found) {
-            selector_state_.selected_chart_id = chart_manager->create_chart(
-                selector_state_.selected_symbol, selector_state_.selected_exchange,
-                selector_state_.selected_symbol_id, selector_state_.selected_timeframe);
-
-            // Add chart panel to display it
-            panel_manager_->add_panel(PanelType::CHART);
+            // chart_manager->create_chart(...) // Create chart with selected timeframe
+            // For now, we'll just ensure the chart gets updated with the new symbol
           }
         }
       }
@@ -574,7 +592,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       // Refresh button
       if (ImGui::Button("Refresh Symbols")) {
         SymbolRegistry::instance().load_from_file("/dev/shm/btquant_symbols.json");
-        hierarchical_selector_.refresh_data(selector_state_, panel_manager_->get_chart_manager());
+        g_symbol_selector.refresh_symbols(g_symbol_selector_state, bridge_, processor_);
       }
     }
 

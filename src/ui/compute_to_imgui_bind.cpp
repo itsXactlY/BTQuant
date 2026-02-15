@@ -7,6 +7,7 @@
  */
 
 #include "ui/compute_to_imgui_bind.h"
+#include "ui/ssbo_aggregator.h"
 #include "rendering/imgui_optimizer.hpp"
 #include "imgui.h"
 #include "ui/font_manager.hpp"  // Include font manager for monospaced font
@@ -17,13 +18,14 @@
 namespace BTQuant {
 namespace UI {
 
-ComputeToImGuiBind::ComputeToImGuiBind() 
+ComputeToImGuiBind::ComputeToImGuiBind()
     : m_tpo_engine(nullptr)
     , m_liquidity_detector(nullptr)
     , m_snapshot_pipeline(nullptr)
     , m_raw_trade_table(nullptr)
     , m_initialized(false)
 {
+    m_ssbo_aggregator = std::make_unique<BTQuant::UI::SSBOAggregator>();
     m_initialized = true;
 }
 
@@ -784,19 +786,19 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
     ImGui::Text("Total Trades: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.total_trades));
-    
+
     ImGui::Text("Total Volume: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.total_volume, "%.2f");
-    
+
     ImGui::Text("Avg Trade Size: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.avg_trade_size, "%.2f");
-    
+
     ImGui::Text("Largest Trade: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.largest_trade_size, "%.2f");
-    
+
     ImGui::Text("Buy Vol: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.buy_volume, "%.2f");
@@ -804,7 +806,7 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderNumericalValue(stats.buy_count);
     ImGui::Text(" trades)");
-    
+
     ImGui::Text("Sell Vol: ");
     ImGui::SameLine();
     BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.sell_volume, "%.2f");
@@ -833,8 +835,33 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
         ImGui::TableSetupColumn("Trade ID", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
-        for (const auto& trade : recent_trades) {
+        // Store positions of rows where brackets should be drawn
+        std::vector<std::pair<ImVec2, ImVec2>> bracket_positions; // Top and bottom positions for each bracket
+        
+        // Process trades to identify slippage brackets
+        for (size_t i = 0; i < recent_trades.size(); ++i) {
+            const auto& trade = recent_trades[i];
+            
             ImGui::TableNextRow();
+
+            // Calculate time delta with next trade if it exists
+            if (i < recent_trades.size() - 1) {
+                const auto& next_trade = recent_trades[i + 1];
+                
+                // Calculate time difference in milliseconds
+                auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    trade.timestamp - next_trade.timestamp
+                ).count();
+                
+                // Use absolute value since we're comparing consecutive trades chronologically
+                time_diff = std::abs(time_diff);
+                
+                // Check if time delta < 50ms and price changed
+                if (time_diff < 50 && std::abs(trade.price - next_trade.price) > 0.000001) { // Small epsilon for floating point comparison
+                    // Store the positions for drawing the bracket after the table is rendered
+                    // We'll get the actual positions after the row is rendered
+                }
+            }
 
             // Time column
             ImGui::TableSetColumnIndex(0);
@@ -869,6 +896,62 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
         }
 
         ImGui::EndTable();
+        
+        // Now draw the slippage brackets after the table is rendered
+        // We need to recalculate positions based on the table layout
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        
+        // Get the table's position and dimensions to calculate where to draw brackets
+        ImVec2 table_pos = ImGui::GetItemRectMin();
+        
+        // Calculate the row height more accurately by getting the actual row height from ImGui
+        float row_height = ImGui::GetTextLineHeightWithSpacing(); // More accurate row height
+        
+        for (size_t i = 0; i < recent_trades.size() - 1; ++i) {
+            const auto& current_trade = recent_trades[i];
+            const auto& next_trade = recent_trades[i + 1];
+            
+            // Calculate time difference in milliseconds
+            auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+                current_trade.timestamp - next_trade.timestamp
+            ).count();
+            
+            // Use absolute value since we're comparing consecutive trades chronologically
+            time_diff = std::abs(time_diff);
+            
+            // Check if time delta < 50ms and price changed
+            if (time_diff < 50 && std::abs(current_trade.price - next_trade.price) > 0.000001) { // Small epsilon for floating point comparison
+                // Calculate positions for the bracket
+                // The bracket should connect the current row and the next row
+                float top_y = table_pos.y + ImGui::GetFrameHeight() + (i * row_height) + (row_height * 0.2f); // Skip header row and add some offset
+                float bottom_y = table_pos.y + ImGui::GetFrameHeight() + ((i + 1) * row_height) + (row_height * 0.8f); // Position for next row with offset
+                float bracket_x = table_pos.x + 5; // Position on the left side of the table
+                
+                // Draw a 1px vertical white bracket connecting the rows
+                // Draw the vertical line
+                draw_list->AddLine(
+                    ImVec2(bracket_x, top_y),
+                    ImVec2(bracket_x, bottom_y),
+                    IM_COL32_WHITE, // White color
+                    1.0f // 1px thickness
+                );
+                
+                // Draw small horizontal lines at the top and bottom to form the bracket shape
+                draw_list->AddLine(
+                    ImVec2(bracket_x - 3, top_y),
+                    ImVec2(bracket_x + 3, top_y),
+                    IM_COL32_WHITE, // White color
+                    1.0f // 1px thickness
+                );
+                
+                draw_list->AddLine(
+                    ImVec2(bracket_x - 3, bottom_y),
+                    ImVec2(bracket_x + 3, bottom_y),
+                    IM_COL32_WHITE, // White color
+                    1.0f // 1px thickness
+                );
+            }
+        }
     }
 
     // Show additional controls
@@ -1102,6 +1185,158 @@ void ComputeToImGuiBind::bindMouseTradingInterface(const LockFreeSnapshotPipelin
     };
 
     m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::bindSSBOAggregator(const char* window_name) {
+    // Create a visualization entry for SSBO aggregator
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback
+    viz.render_callback = [this, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            ImGui::Text("SSBO Order Book Aggregator");
+            ImGui::Separator();
+            
+            if (!m_ssbo_aggregator) {
+                ImGui::Text("SSBO Aggregator not initialized");
+                ImGui::End();
+                return;
+            }
+            
+            // Show available exchanges
+            auto exchanges = m_ssbo_aggregator->getAvailableExchanges();
+            if (exchanges.empty()) {
+                ImGui::Text("No exchange data loaded");
+            } else {
+                ImGui::Text("Loaded Exchanges:");
+                for (const auto& exchange : exchanges) {
+                    ImGui::BulletText("%s", exchange.c_str());
+                }
+            }
+            
+            // Right-click context menu trigger on the entire window
+            if (ImGui::BeginPopupContextWindow("##SSBO_Context_Menu", ImGuiPopupFlags_MouseButtonRight)) {
+                if (ImGui::MenuItem("Aggregate to SSBO")) {
+                    // Trigger aggregation
+                    auto ssbo_data = m_ssbo_aggregator->aggregateToSSBO();
+                    ImGui::Text("Aggregation completed with %u exchanges", ssbo_data.num_exchanges);
+                }
+                
+                if (ImGui::MenuItem("Clear Snapshots")) {
+                    m_ssbo_aggregator->clearSnapshots();
+                }
+                
+                ImGui::EndPopup();
+            }
+            
+            // Button to trigger context menu manually
+            if (ImGui::Button("Show SSBO Aggregation Menu")) {
+                ImVec2 pos = ImGui::GetCursorScreenPos();
+                pos.x += ImGui::GetWindowPos().x;
+                pos.y += ImGui::GetWindowPos().y;
+                
+                // This would normally be triggered by right-click, but we'll show it via button for demo
+                if (m_ssbo_aggregator->renderContextMenu(pos)) {
+                    // Aggregation was triggered
+                    auto ssbo_data = m_ssbo_aggregator->aggregateToSSBO();
+                    ImGui::Text("Aggregated %u exchanges to SSBO", ssbo_data.num_exchanges);
+                }
+            }
+            
+            ImGui::SameLine();
+            
+            if (ImGui::Button("Aggregate Now")) {
+                auto ssbo_data = m_ssbo_aggregator->aggregateToSSBO();
+                ImGui::Text("Aggregated %u exchanges to SSBO", ssbo_data.num_exchanges);
+            }
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
+void ComputeToImGuiBind::addExchangeSnapshotToSSBOAggregator(const std::string& exchange_name,
+                                                          const OrderBookSnapshot100Level& snapshot) {
+    if (m_ssbo_aggregator) {
+        m_ssbo_aggregator->addExchangeSnapshot(exchange_name, snapshot);
+    }
+}
+
+void ComputeToImGuiBind::bindExchangeTradeTable(const std::vector<RawTrade>& trades,
+                                               const std::vector<std::string>& exchange_names,
+                                               const char* window_name) {
+    // Create a visualization entry for exchange trade table
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback - make copies of the vectors to capture in lambda
+    std::vector<RawTrade> trades_copy = trades;
+    std::vector<std::string> exchange_names_copy = exchange_names;
+
+    // Set up the render callback
+    viz.render_callback = [trades_copy, exchange_names_copy, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Visualize exchange trade table
+            renderExchangeTradeTable(trades_copy, exchange_names_copy, 600.0f, 400.0f);
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
+void renderExchangeTradeTable(const std::vector<RawTrade>& trades, const std::vector<std::string>& exchange_names, float width, float height) {
+    if (trades.empty()) {
+        ImGui::Text("No trades available");
+        return;
+    }
+
+    // Create a table to display exchange trade data: [Exchange Logo] | Price | Qty | Time
+    if (ImGui::BeginTable("ExchangeTradeTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+        ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for (size_t i = 0; i < trades.size(); ++i) {
+            ImGui::TableNextRow();
+
+            // Exchange Logo column (using exchange name as placeholder since we don't have actual logos)
+            ImGui::TableSetColumnIndex(0);
+            if (i < exchange_names.size()) {
+                // For now, we'll just show the exchange name as a placeholder for the logo
+                ImGui::Text("%s", exchange_names[i].c_str());
+            } else {
+                // If no exchange name provided, show a generic label
+                ImGui::Text("EXCH%d", static_cast<int>(i));
+            }
+
+            // Price column
+            ImGui::TableSetColumnIndex(1);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trades[i].price, "%.2f");
+
+            // Qty (Volume) column
+            ImGui::TableSetColumnIndex(2);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trades[i].volume, "%.2f");
+
+            // Time column
+            ImGui::TableSetColumnIndex(3);
+            auto time_t = std::chrono::system_clock::to_time_t(trades[i].timestamp);
+            std::tm tm_local;
+            localtime_r(&time_t, &tm_local); // Use thread-safe version
+            char time_str[100];
+            std::strftime(time_str, sizeof(time_str), "%H:%M:%S", &tm_local);
+            ImGui::Text("%s", time_str);
+        }
+
+        ImGui::EndTable();
+    }
 }
 
 } // namespace UI

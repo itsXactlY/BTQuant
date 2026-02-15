@@ -9,6 +9,7 @@
 #include "ui/compute_to_imgui_bind.h"
 #include "rendering/imgui_optimizer.hpp"
 #include "imgui.h"
+#include "ui/font_manager.hpp"  // Include font manager for monospaced font
 #include <algorithm>
 #include <cmath>
 
@@ -181,23 +182,23 @@ void ComputeToImGuiBind::bindOrderBookWithToggle(double bid_volume, double ask_v
 
                     // Buys column (represents buy-side volume at best bid in USD)
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%.2f", order_book_data.data.bid_volume * order_book_data.data.bid_price);
+                    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(order_book_data.data.bid_volume * order_book_data.data.bid_price, "%.2f");
 
                     // Asks column (represents sell-side volume at best ask in USD)
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%.2f", order_book_data.data.ask_volume * order_book_data.data.ask_price);
+                    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(order_book_data.data.ask_volume * order_book_data.data.ask_price, "%.2f");
 
                     // Price column (last traded price)
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%.2f", order_book_data.data.last_price);
+                    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(order_book_data.data.last_price, "%.2f");
 
                     // Bids column (best bid price)
                     ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%.2f", order_book_data.data.bid_price * order_book_data.data.bid_volume); // USD value
+                    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(order_book_data.data.bid_price * order_book_data.data.bid_volume, "%.2f"); // USD value
 
                     // Sells column (represents sell-side volume at best ask in USD)
                     ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%.2f", order_book_data.data.ask_volume * order_book_data.data.ask_price);
+                    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(order_book_data.data.ask_volume * order_book_data.data.ask_price, "%.2f");
 
                     ImGui::EndTable();
                 }
@@ -310,13 +311,13 @@ void visualizeTPOData(const TPOEngine& engine, float width, float height) {
             
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%.2f", node.price_level);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(node.price_level, "%.2f");
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%d", node.count);
+            BTQuant::UI::FontManager::getInstance().renderNumericalValue(node.count);
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.2f", node.total_volume);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(node.total_volume, "%.2f");
             ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%.2f", opacity);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(opacity, "%.2f");
             
             display_count++;
         }
@@ -358,15 +359,15 @@ void visualizeLiquiditySweeps(const LiquiditySweepDetector& detector, float widt
             auto time_t = std::chrono::system_clock::to_time_t(sweep.timestamp);
             ImGui::Text("%s", std::ctime(&time_t));
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.2f", sweep.price_level);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sweep.price_level, "%.2f");
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("%s", sweep.is_bid_sweep ? "Bid" : "Ask");
             ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%.2f", sweep.volume_before);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sweep.volume_before, "%.2f");
             ImGui::TableSetColumnIndex(4);
             // Calculate severity as the ratio of swept volume to original volume
             double severity = sweep.volume_before > 0 ? sweep.swept_volume / sweep.volume_before : 0.0;
-            ImGui::Text("%.2f", severity);
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(severity, "%.2f");
             
             display_count++;
         }
@@ -381,23 +382,45 @@ void visualizeMarketData(const LockFreeSnapshotPipeline& pipeline, uint32_t symb
     bool success = pipeline.read_market_data_snapshot(symbol_index, data);
 
     if (!success) {
-        ImGui::Text("No market data available for symbol index %u", symbol_index);
+        ImGui::Text("No market data available for symbol index ");
+        ImGui::SameLine();
+        BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(symbol_index));
         return;
     }
 
     // Display market data in a simple format
-    ImGui::Text("Symbol Index: %u", symbol_index);
+    ImGui::Text("Symbol Index: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(symbol_index));
     ImGui::Separator();
 
-    ImGui::Text("Price: %.2f", data.price.load());
-    ImGui::Text("Volume: %.2f", data.volume.load());
+    ImGui::Text("Price: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.price.load(), "%.2f");
     
+    ImGui::Text("Volume: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.volume.load(), "%.2f");
+
     // If USD: Multiply atomic_size (volume) by atomic_last_price (price) during render pass
     double usd_notional_value = data.volume.load() * data.price.load();
-    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
-    
-    ImGui::Text("Bid: %.2f @ %.2f", data.bid_price.load(), data.bid_volume.load());
-    ImGui::Text("Ask: %.2f @ %.2f", data.ask_price.load(), data.ask_volume.load());
+    ImGui::Text("USD Notional Value: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(usd_notional_value, "%.2f");
+
+    ImGui::Text("Bid: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.bid_price.load(), "%.2f");
+    ImGui::Text("@ ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.bid_volume.load(), "%.2f");
+
+    ImGui::Text("Ask: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.ask_price.load(), "%.2f");
+    ImGui::Text("@ ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.ask_volume.load(), "%.2f");
 
     // Show timestamp
     auto timestamp = data.timestamp.load();
@@ -408,10 +431,21 @@ void visualizeMarketData(const LockFreeSnapshotPipeline& pipeline, uint32_t symb
     auto stats = pipeline.get_stats();
     ImGui::Separator();
     ImGui::Text("Pipeline Stats:");
-    ImGui::Text("Total Updates: %lu", stats.total_updates);
-    ImGui::Text("Dropped Updates: %lu", stats.dropped_updates);
-    ImGui::Text("Write Head: %u", stats.write_head);
-    ImGui::Text("Read Tail: %u", stats.read_tail);
+    ImGui::Text("Total Updates: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.total_updates));
+    
+    ImGui::Text("Dropped Updates: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.dropped_updates));
+    
+    ImGui::Text("Write Head: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.write_head));
+    
+    ImGui::Text("Read Tail: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.read_tail));
 }
 
 void renderTPOProfileHistogram(const TPOEngine& engine, float width, float height) {
@@ -474,8 +508,16 @@ void renderValueAreaAndPOC(const TPOEngine& engine, float width, float height) {
     auto value_area = engine.get_current_value_area_bounds();
     
     // Display POC and Value Area
-    ImGui::Text("Point of Control (POC): %.2f", poc);
-    ImGui::Text("Value Area (70%%): %.2f - %.2f", value_area.first, value_area.second);
+    ImGui::Text("Point of Control (POC): ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(poc, "%.2f");
+    
+    ImGui::Text("Value Area (70%%): ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(value_area.first, "%.2f");
+    ImGui::Text(" - ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(value_area.second, "%.2f");
     
     // Visual representation of POC and Value Area
     ImGui::Separator();
@@ -542,7 +584,9 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
     bool success = pipeline.read_market_data_snapshot(symbol_index, data);
 
     if (!success) {
-        ImGui::Text("No market data available for symbol index %u", symbol_index);
+        ImGui::Text("No market data available for symbol index ");
+        ImGui::SameLine();
+        BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(symbol_index));
         return;
     }
 
@@ -596,9 +640,17 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
     // Show additional market data information
     ImGui::Separator();
     ImGui::Text("Additional Market Data:");
-    ImGui::Text("Symbol Index: %u", symbol_index);
-    ImGui::Text("Volume: %.2f", volume);
-    ImGui::Text("USD Notional Value: %.2f", usd_notional_value);
+    ImGui::Text("Symbol Index: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(symbol_index));
+
+    ImGui::Text("Volume: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume, "%.2f");
+    
+    ImGui::Text("USD Notional Value: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(usd_notional_value, "%.2f");
 
     // Show timestamp
     auto timestamp = data.timestamp.load();
@@ -626,23 +678,23 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
 
         // Buys column (represents buy-side volume at best bid)
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%.2f", bid_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_volume, "%.2f");
 
         // Asks column (represents sell-side volume at best ask)
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%.2f", ask_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_volume, "%.2f");
 
         // Price column (last traded price)
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%.2f", last_price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(last_price, "%.2f");
 
         // Bids column (best bid price)
         ImGui::TableSetColumnIndex(3);
-        ImGui::Text("%.2f", bid_price);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_price, "%.2f");
 
         // Sells column (represents sell-side volume at best ask)
         ImGui::TableSetColumnIndex(4);
-        ImGui::Text("%.2f", ask_volume);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(ask_volume, "%.2f");
 
         ImGui::EndTable();
     }
@@ -721,26 +773,51 @@ void renderHorizontalBars(const std::vector<float>& values, const std::vector<Im
 void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float height) {
     // Get trade statistics
     auto stats = trade_table.get_trade_statistics();
-    
+
     // Display trade statistics at the top
     ImGui::Text("Trade Statistics:");
-    ImGui::Text("Total Trades: %zu", stats.total_trades);
-    ImGui::Text("Total Volume: %.2f", stats.total_volume);
-    ImGui::Text("Avg Trade Size: %.2f", stats.avg_trade_size);
-    ImGui::Text("Largest Trade: %.2f", stats.largest_trade_size);
-    ImGui::Text("Buy Vol: %.2f (%d trades)", stats.buy_volume, stats.buy_count);
-    ImGui::Text("Sell Vol: %.2f (%d trades)", stats.sell_volume, stats.sell_count);
+    ImGui::Text("Total Trades: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(stats.total_trades));
     
+    ImGui::Text("Total Volume: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.total_volume, "%.2f");
+    
+    ImGui::Text("Avg Trade Size: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.avg_trade_size, "%.2f");
+    
+    ImGui::Text("Largest Trade: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.largest_trade_size, "%.2f");
+    
+    ImGui::Text("Buy Vol: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.buy_volume, "%.2f");
+    ImGui::Text(" (");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(stats.buy_count);
+    ImGui::Text(" trades)");
+    
+    ImGui::Text("Sell Vol: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(stats.sell_volume, "%.2f");
+    ImGui::Text(" (");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(stats.sell_count);
+    ImGui::Text(" trades)");
+
     ImGui::Separator();
-    
+
     // Get recent trades to display
     auto recent_trades = trade_table.get_recent_trades(50); // Limit to 50 for performance
-    
+
     if (recent_trades.empty()) {
         ImGui::Text("No trades available");
         return;
     }
-    
+
     // Create a table to display raw trade data
     if (ImGui::BeginTable("RawTradeTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -753,7 +830,7 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
 
         for (const auto& trade : recent_trades) {
             ImGui::TableNextRow();
-            
+
             // Time column
             ImGui::TableSetColumnIndex(0);
             auto time_t = std::chrono::system_clock::to_time_t(trade.timestamp);
@@ -762,15 +839,15 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
             char time_str[100];
             std::strftime(time_str, sizeof(time_str), "%H:%M:%S", &tm_local);
             ImGui::Text("%s", time_str);
-            
+
             // Price column
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.2f", trade.price);
-            
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.price, "%.2f");
+
             // Volume column
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.2f", trade.volume);
-            
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.volume, "%.2f");
+
             // Side column with color coding
             ImGui::TableSetColumnIndex(3);
             if (trade.side == 'B' || trade.side == 'b') {
@@ -780,7 +857,7 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
             } else {
                 ImGui::Text("N/A");
             }
-            
+
             // Trade ID column
             ImGui::TableSetColumnIndex(4);
             ImGui::Text("%s", trade.trade_id.c_str());
@@ -788,7 +865,7 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
 
         ImGui::EndTable();
     }
-    
+
     // Show additional controls
     ImGui::Separator();
     if (ImGui::SmallButton("Clear All Trades")) {
@@ -797,10 +874,66 @@ void visualizeRawTradeTable(const RawTradeTable& trade_table, float width, float
         // For now, we'll just show a notification
         ImGui::Text("Clear command sent");
     }
-    
+
     if (ImGui::SmallButton("Export to CSV")) {
         ImGui::Text("Export command sent");
     }
+}
+
+void ComputeToImGuiBind::bindLiveBidAskButton(const LockFreeSnapshotPipeline& pipeline, uint32_t symbol_index, const char* window_name) {
+    // Create a visualization entry for the live bid/ask button
+    BoundVisualization viz;
+    viz.window_name = window_name;
+    viz.is_visible = true;
+
+    // Set up the render callback that fetches live atomic data
+    viz.render_callback = [&pipeline, symbol_index, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            AtomicMarketData data;
+            bool success = pipeline.read_market_data_snapshot(symbol_index, data);
+
+            if (success) {
+                // Get the current bid and ask prices from atomic data
+                double bid_price = data.bid_price.load();
+                double ask_price = data.ask_price.load();
+
+                // Format the button text with live bid/ask
+                char button_text[128];
+                snprintf(button_text, sizeof(button_text), "Best Bid: %.2f | Best Ask: %.2f", bid_price, ask_price);
+
+                // Create the button with the live bid/ask data in the text
+                if (ImGui::Button(button_text)) {
+                    // Button click handler - could trigger additional actions if needed
+                    // For now, just showing the live data
+                }
+
+                // Optionally show additional info
+                ImGui::Text("Symbol Index: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(symbol_index));
+
+                ImGui::Text("Last Price: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.price.load(), "%.2f");
+                
+                ImGui::Text("Bid Volume: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.bid_volume.load(), "%.2f");
+                
+                ImGui::Text("Ask Volume: ");
+                ImGui::SameLine();
+                BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(data.ask_volume.load(), "%.2f");
+            } else {
+                // If no data available, show a placeholder button
+                if (ImGui::Button("No Data Available")) {
+                    // Button click handler
+                }
+            }
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
 }
 
 } // namespace UI

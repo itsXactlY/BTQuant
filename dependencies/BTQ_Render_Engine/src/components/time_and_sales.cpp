@@ -7,6 +7,8 @@
 #include "backends/imgui_impl_vulkan.h"
 #include <sstream>
 
+#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -278,7 +280,9 @@ void TimeAndSalesPanel::render_panel_header() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-scroll", &auto_scroll_);
   ImGui::SameLine();
-  ImGui::Text("| Trades: %zu", cached_trades_.size());
+  ImGui::Text("| Trades: ");
+  ImGui::SameLine();
+  BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(cached_trades_.size()));
   ImGui::SameLine();
 
   // Display trade pace information in the header
@@ -290,7 +294,15 @@ void TimeAndSalesPanel::render_panel_header() {
     double tpm_15min =
         calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000);  // 15 minutes in microseconds
 
-    ImGui::Text("| TPM: 1m:%.1f 5m:%.1f 15m:%.1f", tpm_1min, tpm_5min, tpm_15min);
+    ImGui::Text("| TPM: 1m:");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_1min, "%.1f");
+    ImGui::Text(" 5m:");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_5min, "%.1f");
+    ImGui::Text(" 15m:");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_15min, "%.1f");
   }
 }
 
@@ -558,11 +570,17 @@ void TimeAndSalesPanel::render_controls() {
 
     ImGui::Separator();
     ImGui::Text("Current clustering stats:");
-    ImGui::Text("- Total trades: %d", total_trades);
-    ImGui::Text("- Clustered trades: %d", clustered_trades);
+    ImGui::Text("- Total trades: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(total_trades);
+    ImGui::Text("- Clustered trades: ");
+    ImGui::SameLine();
+    BTQuant::UI::FontManager::getInstance().renderNumericalValue(clustered_trades);
     if (total_trades > 0) {
       float percentage = (static_cast<float>(clustered_trades) / total_trades) * 100.0f;
-      ImGui::Text("- Cluster percentage: %.2f%%", percentage);
+      ImGui::Text("- Cluster percentage: ");
+      ImGui::SameLine();
+      BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(percentage, "%.2f%%");
     }
 
     ImGui::Unindent();
@@ -800,23 +818,25 @@ void TimeAndSalesPanel::render_trade_size_histogram() {
         // Range column
         ImGui::TableSetColumnIndex(0);
         if (&bucket == &histogram.back()) {
-          ImGui::Text(">=%.3f", bucket.lower_bound);
+          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.lower_bound, ">=%.3f");
         } else {
-          ImGui::Text("%.3f-%.3f", bucket.lower_bound, bucket.upper_bound);
+          char range_str[64];
+          snprintf(range_str, sizeof(range_str), "%.3f-%.3f", bucket.lower_bound, bucket.upper_bound);
+          ImGui::Text("%s", range_str);
         }
 
         // Count column
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%d", bucket.count);
+        BTQuant::UI::FontManager::getInstance().renderNumericalValue(bucket.count);
 
         // Total Size column
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%.2f", bucket.total_size);
+        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.total_size, "%.2f");
 
         // Average Size column
         ImGui::TableSetColumnIndex(3);
         if (bucket.count > 0) {
-          ImGui::Text("%.3f", bucket.total_size / bucket.count);
+          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.total_size / bucket.count, "%.3f");
         } else {
           ImGui::Text("0.000");
         }
@@ -825,7 +845,7 @@ void TimeAndSalesPanel::render_trade_size_histogram() {
         ImGui::TableSetColumnIndex(4);
         if (total_trades > 0) {
           double percentage = (static_cast<double>(bucket.count) / total_trades) * 100.0;
-          ImGui::Text("%.2f%%", percentage);
+          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(percentage, "%.2f%%");
         } else {
           ImGui::Text("0.00%%");
         }
@@ -1066,7 +1086,8 @@ void TimeAndSalesPanel::render_trade_table() {
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            ImGui::TextColored(price_color, "%.4f", trade.price);
+            // Use monospaced font for price
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.price, "%.4f");
 
             if (is_block_trade_price) {
               ImGui::PopFont();
@@ -1094,7 +1115,8 @@ void TimeAndSalesPanel::render_trade_table() {
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            ImGui::TextColored(qty_color, "%.4f", trade.size);
+            // Use monospaced font for quantity
+            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.size, "%.4f");
 
             if (is_block_trade_qty) {
               ImGui::PopFont();
@@ -1118,7 +1140,13 @@ void TimeAndSalesPanel::render_trade_table() {
               uint64_t millis = (trade.timestamp / 1000) % 1000;
               char time_str[16];
               strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-              ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
+              
+              // Format the time string with milliseconds
+              char formatted_time[32];
+              snprintf(formatted_time, sizeof(formatted_time), "%s.%03lu", time_str, static_cast<unsigned long>(millis));
+              
+              // Use monospaced font for time
+              ImGui::Text("%s", formatted_time);
             } else {
               ImGui::Text("-");
             }

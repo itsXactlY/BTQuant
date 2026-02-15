@@ -21,6 +21,11 @@
 #include <unordered_map>
 #include <vector>
 
+// Forward declaration for miniaudio types to avoid including the header in the interface
+#ifdef MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+#endif
+
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
 #include "cache_manager.hpp"

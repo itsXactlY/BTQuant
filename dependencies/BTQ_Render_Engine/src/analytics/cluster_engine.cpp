@@ -2,7 +2,6 @@
 
 #include <limits>
 #include <map>
-#include <mutex>
 #include <tuple>
 
 namespace Analytics {

@@ -228,6 +228,14 @@ class DomSurfacePanel : public PanelBase {
   bool show_flush_dom_ruler_ = true;  // Toggle for flush DOM ruler display
   float flush_dom_ruler_width_ = 0.05f;  // Width as fraction of plot (5%)
 
+  // 5-Column MMT Layout functionality
+  bool show_mmt_layout_ = false;  // Toggle for 5-column MMT layout
+  int mmt_display_levels_ = 20;   // Number of levels to display in MMT layout
+  bool mmt_center_mode_ = false;  // Center mode: mathematically lock Y-limits
+  double mmt_center_range_ = 0.02; // Range for center mode (default 2%)
+  void renderMMTLayout();
+  void updateMMTLayoutData();
+
   // Vulkan texture methods
   void initializeVulkanTexture();
   void updateVulkanTexture();

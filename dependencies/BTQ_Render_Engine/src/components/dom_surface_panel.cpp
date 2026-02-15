@@ -739,6 +739,11 @@ void DomSurfacePanel::render() {
     if (texture_initialized_) {
       updateVulkanTexture();
     }
+    
+    // Update MMT layout data if enabled
+    if (show_mmt_layout_) {
+      updateMMTLayoutData();
+    }
   }
 
   begin_panel_window();
@@ -756,74 +761,99 @@ void DomSurfacePanel::render() {
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
+  ImGui::Checkbox("Show MMT 5-Column Layout", &show_mmt_layout_);
+  ImGui::SameLine();
   ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
               large_order_markers_.size(), trade_bubbles_.size());
 
-  // Enable Pan/Zoom for DOM Surface
-  std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
-  if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
-    ImPlot::SetupAxes("Time", "Price");
+  // If MMT layout is enabled, render it instead of the heatmap
+  if (show_mmt_layout_) {
+    renderMMTLayout();
+  } else {
+    // Enable Pan/Zoom for DOM Surface
+    std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
+    if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
+      ImPlot::SetupAxes("Time", "Price");
 
-    // Allow user to pan and zoom
-    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
-    ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
+      // Allow user to pan and zoom
+      ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
+      ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
 
-    // Set axis limits with option for user interaction
-    ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
-                            ImPlotCond_Once);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
-                            ImPlotCond_Once);
-
-    // Use Vulkan-accelerated heatmap texture if available
-    if (texture_initialized_ && heatmap_texture_id_) {
-      // Render the heatmap using the Vulkan texture
-      // First, ensure the texture is updated with current data
-      updateVulkanTexture();
-      
-      // Calculate the size of the plot area to fit the texture
-      ImPlotRect plot_rect = ImPlot::GetPlotRect();
-      
-      // Render the texture as an image overlay on the plot
-      // We'll use ImPlot::PlotImage to draw the texture
-      ImPlot::PlotImage("Liquidity", 
-                        heatmap_texture_id_, 
-                        ImPlotPoint(bounds_min_[0], bounds_min_[1]), 
-                        ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-    } else {
-      // Fallback to CPU-based heatmap rendering if Vulkan texture is not available
-      int rows = price_bins_;
-      int cols = static_cast<int>(heatmap_data_.size()) / rows;
-
-      if (cols > 0 && rows > 0) {
-        ImPlot::PushColormap(ImPlotColormap_Viridis);
-        // Apply heatmap intensity to adjust color mapping sensitivity
-        double adjusted_scale_max = scale_max_ / heatmap_intensity_;
-        ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
-                            ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                            ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-        ImPlot::PopColormap();
+      // Set axis limits with option for user interaction
+      ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
+                              ImPlotCond_Once);
+      // Apply center mode if enabled
+      if (mmt_center_mode_) {
+        // Calculate center price
+        double center_price = 0.0;
+        if (!orderbook_opt->bids.empty() && !orderbook_opt->asks.empty()) {
+          center_price = (orderbook_opt->bids.front().price + orderbook_opt->asks.front().price) / 2.0;
+        } else if (!orderbook_opt->bids.empty()) {
+          center_price = orderbook_opt->bids.front().price;
+        } else if (!orderbook_opt->asks.empty()) {
+          center_price = orderbook_opt->asks.front().price;
+        }
+        
+        // Calculate range based on center price and mmt_center_range_
+        double range = center_price * mmt_center_range_;
+        ImPlot::SetupAxisLimits(ImAxis_Y1, center_price - range, center_price + range,
+                                ImPlotCond_Always); // Use Always to enforce center mode
+      } else {
+        ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
+                                ImPlotCond_Once);
       }
+
+      // Use Vulkan-accelerated heatmap texture if available
+      if (texture_initialized_ && heatmap_texture_id_) {
+        // Render the heatmap using the Vulkan texture
+        // First, ensure the texture is updated with current data
+        updateVulkanTexture();
+
+        // Calculate the size of the plot area to fit the texture
+        ImPlotRect plot_rect = ImPlot::GetPlotRect();
+
+        // Render the texture as an image overlay on the plot
+        // We'll use ImPlot::PlotImage to draw the texture
+        ImPlot::PlotImage("Liquidity",
+                          heatmap_texture_id_,
+                          ImPlotPoint(bounds_min_[0], bounds_min_[1]),
+                          ImPlotPoint(bounds_max_[0], bounds_max_[1]));
+      } else {
+        // Fallback to CPU-based heatmap rendering if Vulkan texture is not available
+        int rows = price_bins_;
+        int cols = static_cast<int>(heatmap_data_.size()) / rows;
+
+        if (cols > 0 && rows > 0) {
+          ImPlot::PushColormap(ImPlotColormap_Viridis);
+          // Apply heatmap intensity to adjust color mapping sensitivity
+          double adjusted_scale_max = scale_max_ / heatmap_intensity_;
+          ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
+                              ImPlotPoint(bounds_min_[0], bounds_min_[1]),
+                              ImPlotPoint(bounds_max_[0], bounds_max_[1]));
+          ImPlot::PopColormap();
+        }
+      }
+
+      // Render Persistent Level Lines OVER the heatmap
+      if (show_persistent_lines_) {
+        renderPersistentLevels();
+      }
+
+      // Render Large Order Markers OVER the heatmap and persistent lines
+      renderLargeOrderMarkers();
+
+      // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
+      renderTradeBubbles();
+
+      // Render Flush DOM Ruler OVER everything else - showing live orderbook at the right edge
+      renderFlushDOMRuler();
+
+      ImPlot::EndPlot();
     }
-
-    // Render Persistent Level Lines OVER the heatmap
-    if (show_persistent_lines_) {
-      renderPersistentLevels();
-    }
-
-    // Render Large Order Markers OVER the heatmap and persistent lines
-    renderLargeOrderMarkers();
-
-    // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
-    renderTradeBubbles();
-
-    // Render Flush DOM Ruler OVER everything else - showing live orderbook at the right edge
-    renderFlushDOMRuler();
-
-    ImPlot::EndPlot();
   }
 
   // Debug Overlay for DOM troubleshooting
-  if (heatmap_data_.size() > 0) {
+  if (heatmap_data_.size() > 0 && !show_mmt_layout_) {
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
@@ -1037,10 +1067,25 @@ void DomSurfacePanel::render_panel_header() {
         ImGui::EndMenu();
       }
     }
+    
+    // Add MMT layout options to the context menu
+    if (ImGui::BeginMenu("MMT Layout")) {
+      ImGui::MenuItem("Enable 5-Column Layout", nullptr, &show_mmt_layout_);
+      ImGui::MenuItem("Center Mode", nullptr, &mmt_center_mode_);
+      if (ImGui::BeginMenu("Display Levels")) {
+        if (ImGui::MenuItem("5 Levels", nullptr, mmt_display_levels_ == 5)) mmt_display_levels_ = 5;
+        if (ImGui::MenuItem("10 Levels", nullptr, mmt_display_levels_ == 10)) mmt_display_levels_ = 10;
+        if (ImGui::MenuItem("20 Levels", nullptr, mmt_display_levels_ == 20)) mmt_display_levels_ = 20;
+        if (ImGui::MenuItem("30 Levels", nullptr, mmt_display_levels_ == 30)) mmt_display_levels_ = 30;
+        if (ImGui::MenuItem("50 Levels", nullptr, mmt_display_levels_ == 50)) mmt_display_levels_ = 50;
+        ImGui::EndMenu();
+      }
+      ImGui::EndMenu();
+    }
 
     ImGui::EndPopup();
   }
-  
+
   ImGui::PopStyleColor(3); // Restore button colors
 
   // Add heatmap intensity slider to the panel header
@@ -1109,6 +1154,16 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::SliderFloat("Width##FlushDOMRuler", &flush_dom_ruler_width_, 0.01f, 0.2f, "%.2f%%", ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
   ImGui::PopStyleVar();
+  ImGui::Separator();
+
+  // Add MMT Layout controls
+  ImGui::Text("MMT Layout:");
+  ImGui::SameLine();
+  ImGui::Checkbox("Show##MMTLayout", &show_mmt_layout_);
+  ImGui::SameLine();
+  if (show_mmt_layout_) {
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "ACTIVE"); // Cyan indicator when active
+  }
   ImGui::Separator();
 }
 
@@ -1296,6 +1351,168 @@ void DomSurfacePanel::destroyVulkanTexture() {
     } catch (const std::exception& e) {
       std::cerr << "[DomSurfacePanel] Failed to destroy Vulkan texture: " << e.what() << std::endl;
     }
+  }
+}
+
+void DomSurfacePanel::updateMMTLayoutData() {
+  // Update data for the 5-column MMT layout
+  // This method prepares the data needed for the MMT-style table view
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get the latest orderbook data for the current symbol
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt) return;
+
+  const auto& orderbook = *orderbook_opt;
+  
+  // The data is already available in the orderbook, so we just need to prepare for rendering
+  // The MMT layout will render the orderbook data in 5 columns: [Buys | Asks | Price | Bids | Sells]
+}
+
+void DomSurfacePanel::renderMMTLayout() {
+  // Render the 5-column MMT layout as a table
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get the latest orderbook data for the current symbol
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt) {
+    ImGui::Text("No orderbook data available");
+    return;
+  }
+
+  const auto& orderbook = *orderbook_opt;
+
+  // Calculate how many levels to display
+  int display_levels = std::min(mmt_display_levels_, static_cast<int>(std::max(orderbook.bids.size(), orderbook.asks.size()))); // Use a reasonable default
+
+  // Create the 5-column table
+  if (ImGui::BeginTable("MMTLayoutTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
+    ImGui::TableSetupColumn("Buys", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    ImGui::TableSetupColumn("Asks", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    ImGui::TableSetupColumn("Bids", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    ImGui::TableSetupColumn("Sells", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    
+    ImGui::TableHeadersRow();
+
+    // Calculate midpoint price for reference
+    double mid_price = 0.0;
+    if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
+      mid_price = (orderbook.bids.front().price + orderbook.asks.front().price) / 2.0;
+    } else if (!orderbook.bids.empty()) {
+      mid_price = orderbook.bids.front().price;
+    } else if (!orderbook.asks.empty()) {
+      mid_price = orderbook.asks.front().price;
+    }
+
+    // Render the orderbook levels in the 5-column format
+    for (int i = 0; i < display_levels; ++i) {
+      ImGui::TableNextRow();
+      
+      // Column 1: Buys (aggregated buy volume from recent trades)
+      ImGui::TableSetColumnIndex(0);
+      // For now, we'll show aggregated buy volume indicators
+      if (i < orderbook.bids.size()) {
+        // Calculate buy pressure based on bid size and recent trades
+        double buy_pressure = orderbook.bids[i].size; // Placeholder for actual buy pressure calculation
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+        ImGui::Text("%.4f", buy_pressure);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::Text("--");
+      }
+      
+      // Column 2: Asks (from orderbook asks)
+      ImGui::TableSetColumnIndex(1);
+      if (i < orderbook.asks.size()) {
+        // Show ask volume in red
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
+        ImGui::Text("%.4f", orderbook.asks[i].size);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::Text("--");
+      }
+      
+      // Column 3: Price (center column - actual price level)
+      ImGui::TableSetColumnIndex(2);
+      // Show the price in the middle - this represents the actual price level
+      if (i < orderbook.bids.size() && i < orderbook.asks.size()) {
+        // Average of bid and ask at this level
+        double avg_price = (orderbook.bids[i].price + orderbook.asks[i].price) / 2.0;
+        // Highlight if center mode is active and this is near the center
+        if (mmt_center_mode_) {
+          double center_price = (orderbook.bids.front().price + orderbook.asks.front().price) / 2.0;
+          double range = center_price * mmt_center_range_;
+          if (avg_price >= (center_price - range) && avg_price <= (center_price + range)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255)); // Yellow for center
+          }
+        }
+        ImGui::Text("%.4f", avg_price);
+        if (mmt_center_mode_) {
+          ImGui::PopStyleColor(); // Pop the yellow color if we pushed it
+        }
+      } else if (i < orderbook.bids.size()) {
+        // Only bid exists at this level
+        ImGui::Text("%.4f", orderbook.bids[i].price);
+      } else if (i < orderbook.asks.size()) {
+        // Only ask exists at this level
+        ImGui::Text("%.4f", orderbook.asks[i].price);
+      } else {
+        ImGui::Text("--");
+      }
+      
+      // Column 4: Bids (from orderbook bids)
+      ImGui::TableSetColumnIndex(3);
+      if (i < orderbook.bids.size()) {
+        // Show bid volume in green
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+        ImGui::Text("%.4f", orderbook.bids[i].size);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::Text("--");
+      }
+      
+      // Column 5: Sells (aggregated sell volume from recent trades)
+      ImGui::TableSetColumnIndex(4);
+      // For now, we'll show aggregated sell volume indicators
+      if (i < orderbook.asks.size()) {
+        // Calculate sell pressure based on ask size and recent trades
+        double sell_pressure = orderbook.asks[i].size; // Placeholder for actual sell pressure calculation
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
+        ImGui::Text("%.4f", sell_pressure);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::Text("--");
+      }
+    }
+    
+    ImGui::EndTable();
+  }
+  
+  // Add controls for the MMT layout
+  ImGui::Separator();
+  ImGui::Text("MMT Layout Controls:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(100);
+  ImGui::SliderInt("##Levels", &mmt_display_levels_, 5, 50, "Levels: %d");
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::Checkbox("Center##MMTCenter", &mmt_center_mode_);
+  ImGui::SameLine();
+  if (ImGui::Button("Refresh")) {
+    markDirty();
+  }
+  
+  // Add center mode range control if center mode is enabled
+  if (mmt_center_mode_) {
+    ImGui::Separator();
+    ImGui::Text("Center Mode Range:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(150);
+    ImGui::SliderFloat("##CenterRange", reinterpret_cast<float*>(&mmt_center_range_), 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    ImGui::Text("(%.2f%%)", mmt_center_range_ * 100);
   }
 }
 

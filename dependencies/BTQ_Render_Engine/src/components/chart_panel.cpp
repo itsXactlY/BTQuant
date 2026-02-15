@@ -2770,8 +2770,21 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       // Transform to screen coordinates
       ImVec2 wick_top = ImPlot::PlotToPixels(x, high);
       ImVec2 wick_bot = ImPlot::PlotToPixels(x, low);
-      ImVec2 body_tl = ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
-      ImVec2 body_br = ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
+
+      ImVec2 body_tl, body_br; // Declare the variables
+
+      // FEATURE IMPLEMENTATION: Green bars (Buys) extend right; Red bars (Sells) extend left
+      // This creates a visual distinction where bullish candles extend to the right of the center point
+      // and bearish candles extend to the left of the center point, making trend identification easier
+      if (bullish) {
+        // Green bar (buy) extends right from x position
+        body_tl = ImPlot::PlotToPixels(x, std::min(open, close));
+        body_br = ImPlot::PlotToPixels(x + candle_half_width * 2, std::max(open, close));
+      } else {
+        // Red bar (sell) extends left from x position
+        body_tl = ImPlot::PlotToPixels(x - candle_half_width * 2, std::min(open, close));
+        body_br = ImPlot::PlotToPixels(x, std::max(open, close));
+      }
 
       // Ensure minimum body width in pixels
       float body_width = std::abs(body_br.x - body_tl.x);

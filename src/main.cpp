@@ -2,6 +2,7 @@
 #include "analytics/liquiditysweepdetector.h"
 #include "analytics/lockfreesnapshotpipeline.h"
 #include "ui/compute_to_imgui_bind.h"
+#include "imgui.h"
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -300,7 +301,31 @@ int main() {
     
     std::cout << "Market table bound to UI successfully!\n";
 
-    std::cout << "\nAll analytics modules tested successfully!\n";
+    // Test the horizontal bars visualization
+    std::cout << "\n=== Testing Horizontal Bars Visualization ===\n";
+
+    // Create sample data for horizontal bars
+    std::vector<float> bar_values = {25.0f, 40.0f, 10.0f, 75.0f, 60.0f, 30.0f};
+    std::vector<ImU32> bar_colors = {
+        IM_COL32(255, 100, 100, 255),  // Red
+        IM_COL32(100, 255, 100, 255),  // Green
+        IM_COL32(100, 100, 255, 255),  // Blue
+        IM_COL32(255, 255, 100, 255),  // Yellow
+        IM_COL32(255, 100, 255, 255),  // Magenta
+        IM_COL32(100, 255, 255, 255)   // Cyan
+    };
+
+    // Bind the horizontal bars to the UI
+    ui_bind.bindHorizontalBars(bar_values, bar_colors, "Horizontal Bars Demo");
+
+    std::cout << "Horizontal bars visualization bound to UI successfully!\n";
+    std::cout << "Values: ";
+    for (float val : bar_values) {
+        std::cout << val << " ";
+    }
+    std::cout << "\nColors: " << bar_colors.size() << " colors assigned\n";
+
+    std::cout << "\nAll analytics modules and UI visualizations tested successfully!\n";
 
     return 0;
 }

@@ -144,6 +144,28 @@ void ComputeToImGuiBind::update() {
     // For now, this is a placeholder for future functionality
 }
 
+void ComputeToImGuiBind::bindHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors, 
+                                          const char* window_name) {
+    // Create a visualization entry for horizontal bars
+    BoundVisualization viz;
+    viz.window_name = window_name ? std::string(window_name) : "Horizontal Bars Visualization";
+    viz.is_visible = true;
+
+    // Set up the render callback - make copies of the vectors to capture in lambda
+    std::vector<float> values_copy = values;
+    std::vector<ImU32> colors_copy = colors;
+
+    viz.render_callback = [values_copy, colors_copy, window_name]() {
+        if (ImGui::Begin(window_name)) {
+            // Render the horizontal bars visualization
+            renderHorizontalBars(values_copy, colors_copy, 400.0f, 300.0f, "Horizontal Bars");
+        }
+        ImGui::End();
+    };
+
+    m_visualizations.push_back(viz);
+}
+
 void visualizeTPOData(const TPOEngine& engine, float width, float height) {
     // Get TPO data with opacity for visualization
     auto tpo_with_opacity = engine.get_tpo_data_with_opacity();
@@ -460,7 +482,7 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
     ImGui::Text("Timestamp: %s", std::ctime(&time_t));
 }
 
-void renderMarketTable(double bid_volume, double ask_volume, double last_price, 
+void renderMarketTable(double bid_volume, double ask_volume, double last_price,
                       double bid_price, double ask_price, float width, float height) {
     // Create a table to display market data: Buys | Asks | Price | Bids | Sells
     if (ImGui::BeginTable("MarketTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
@@ -496,6 +518,56 @@ void renderMarketTable(double bid_volume, double ask_volume, double last_price,
 
         ImGui::EndTable();
     }
+}
+
+void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors, 
+                         float width, float height, const char* label) {
+    if (values.empty()) {
+        ImGui::Text("No data to display");
+        return;
+    }
+
+    // Create a canvas for drawing the horizontal bars
+    ImGui::Text("%s", label);
+    
+    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+    ImVec2 canvas_size(width, height);
+    
+    // Draw a background rectangle
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), 
+                            IM_COL32(30, 30, 30, 200));
+
+    // Calculate dimensions for each bar
+    float bar_height = canvas_size.y / values.size();
+    float max_value = 0.0f;
+    
+    // Find the maximum value to normalize the bars
+    for (float val : values) {
+        if (val > max_value) max_value = val;
+    }
+    
+    if (max_value == 0.0f) max_value = 1.0f; // Prevent division by zero
+    
+    // Draw each horizontal bar
+    for (size_t i = 0; i < values.size(); ++i) {
+        float bar_width = (values[i] / max_value) * canvas_size.x;
+        
+        ImVec2 bar_start = ImVec2(canvas_pos.x, canvas_pos.y + i * bar_height);
+        ImVec2 bar_end = ImVec2(canvas_pos.x + bar_width, canvas_pos.y + (i + 1) * bar_height);
+        
+        // Use the provided color or default to white if not enough colors provided
+        ImU32 color = (i < colors.size()) ? colors[i] : IM_COL32(255, 255, 255, 255);
+        
+        // Draw the filled rectangle for the bar
+        draw_list->AddRectFilled(bar_start, bar_end, color);
+        
+        // Draw a border around the bar for better visibility
+        draw_list->AddRect(bar_start, bar_end, IM_COL32(200, 200, 200, 100));
+    }
+    
+    // Advance the cursor to account for the drawn content
+    ImGui::Dummy(canvas_size);
 }
 
 } // namespace UI

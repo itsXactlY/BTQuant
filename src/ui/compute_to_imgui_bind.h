@@ -16,6 +16,9 @@
 #include <vector>
 #include <string>
 
+// Need to include imgui.h to get ImU32 definition
+#include "imgui.h"
+
 // Forward declaration to avoid including imgui.h in header
 struct ImGuiContext;
 typedef struct ImGuiContext ImGuiContext;
@@ -87,6 +90,15 @@ public:
      * @brief Update the bound data from compute modules
      */
     void update();
+
+    /**
+     * @brief Bind horizontal bars visualization to ImGui
+     * @param values Vector of values to represent as horizontal bars
+     * @param colors Vector of colors for each bar
+     * @param window_name Name of the ImGui window to render in
+     */
+    void bindHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors, 
+                          const char* window_name = "Horizontal Bars");
 
 private:
     struct BoundVisualization {
@@ -176,8 +188,19 @@ void visualizeMarketDepthTable(const LockFreeSnapshotPipeline& pipeline, uint32_
  * @param width Width of the visualization
  * @param height Height of the visualization
  */
-void renderMarketTable(double bid_volume, double ask_volume, double last_price, 
+void renderMarketTable(double bid_volume, double ask_volume, double last_price,
                       double bid_price, double ask_price, float width = 400.0f, float height = 300.0f);
+
+/**
+ * @brief Helper function to render horizontal bars using DrawList->AddRectFilled
+ * @param values Vector of values to represent as horizontal bars
+ * @param colors Vector of colors for each bar
+ * @param width Width of the visualization
+ * @param height Height of the visualization
+ * @param label Label for the visualization
+ */
+void renderHorizontalBars(const std::vector<float>& values, const std::vector<ImU32>& colors, 
+                         float width = 400.0f, float height = 300.0f, const char* label = "Horizontal Bars");
 
 } // namespace UI
 } // namespace BTQuant

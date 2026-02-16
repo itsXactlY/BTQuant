@@ -124,6 +124,13 @@ class PanelManager {
   std::string get_current_layout_name() const { return current_layout_name_; }
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
+  // C++26 Push Notification Subscription Management
+  // Panels subscribe through PanelManager which manages subscription lifecycle
+  void subscribe_panel_to_data(uint32_t panel_id, uint32_t symbol_id,
+                               RenderEngine::NotificationType type);
+  void unsubscribe_panel(uint32_t panel_id);
+  void unsubscribe_all_panels();
+
  private:
   // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -158,6 +165,9 @@ class PanelManager {
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;
   std::vector<PanelRemovedCallback> panel_removed_callbacks_;
+
+  // Panel subscriptions to MarketDataProcessor (panel_id -> subscription_id)
+  std::unordered_map<uint32_t, uint64_t> panel_subscriptions_;
 
   PanelConfig create_panel_config(PanelType type, const std::string& title, int grid_x, int grid_y,
                                   int width, int height);

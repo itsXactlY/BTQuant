@@ -5,12 +5,12 @@
 #include <string>
 
 #include "imgui.h"
-#include "theme_manager.hpp"
 #include "panel_settings_interface.hpp"
+#include "theme_manager.hpp"
 
 // Forward declaration to avoid circular dependency
 namespace BTQuant {
-    class ContextMenuManager;
+class ContextMenuManager;
 }
 
 namespace BTQuant {
@@ -69,7 +69,8 @@ struct PanelConfig {
   int grid_y = 0;
   int grid_width = 1;
   int grid_height = 1;
-  std::string symbol = "";  // Trading symbol associated with the panel
+  int panel_instance_id = 0;  // Stable instance ID for DockBuilder (set by PanelManager)
+  std::string symbol = "";    // Trading symbol associated with the panel
 
   // Per-panel settings data
   std::string settings_key = "";  // Key for identifying panel-specific settings
@@ -107,13 +108,24 @@ class PanelBase {
   bool is_minimized() const { return config_.minimized; }
   const std::string& get_title() const { return config_.title; }
 
+  // Returns the stable ImGui window ID string for DockBuilder compatibility
+  std::string get_imgui_window_id() const {
+    return config_.title + "###" + get_panel_type_name(config_.type) + "_" +
+           std::to_string(config_.panel_instance_id);
+  }
+
+  // C++26 Reactive Push Notification Support
+  // PanelManager is a friend and can call markDirty() directly
+  friend class PanelManager;
+
   // Per-panel settings functionality
   virtual PanelSettingsInterface* get_settings_interface() { return nullptr; }
   virtual void open_settings() {}
 
   // Context menu functionality
   virtual void render_context_menu() {}  // Virtual method for context menu
-  virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
+  virtual void handle_context_menu(
+      class ContextMenuManager& manager);  // Virtual method for context menu handling
 
   // Virtual method for initializing Vulkan resources
   virtual void initialize_vulkan_resources(class VulkanCore* core) {}

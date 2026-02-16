@@ -20,9 +20,7 @@
 namespace BTQuant {
 
 // Using declarations for RenderEngine types
-using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::OrderBookSnapshot;
-using BTQuant::RenderEngine::CandleCluster;
+// Note: TradeData and OrderBookSnapshot are defined in BTQuant namespace (core_types.hpp)
 using BTQuant::RenderEngine::TimeFrame;
 using BTQuant::RenderEngine::OHLCVCandle;
 using BTQuant::RenderEngine::PriceLevel;

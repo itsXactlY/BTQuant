@@ -72,6 +72,9 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
 }
 
 PanelManager::~PanelManager() {
+  // Unsubscribe all panels from MarketDataProcessor
+  unsubscribe_all_panels();
+  
   context_menu_manager_.reset();  // Explicitly reset context menu manager before other members
   strategy_builder_.reset();      // Explicitly reset strategy builder before other members
   panels_.clear();
@@ -343,6 +346,75 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
+    // Subscribe panel to MarketDataProcessor using C++26 push notification system
+    // Each panel type subscribes to relevant data types for reactive updates
+    switch (type) {
+      case PanelType::ORDERBOOK:
+      case PanelType::DOM_SURFACE:
+      case PanelType::MARKET_DEPTH_TABLE:
+        // Orderbook panels subscribe to orderbook updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ORDERBOOK);
+        break;
+
+      case PanelType::CHART:
+      case PanelType::TIME_HISTOGRAM:
+      case PanelType::VOLUME_PROFILE:
+      case PanelType::DEPTH_CHART:
+      case PanelType::FOOTPRINT_CHART:
+      case PanelType::TPO_PROFILE:
+      case PanelType::TECHNICAL_INDICATORS:
+        // Chart panels subscribe to candle updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::CANDLE);
+        break;
+
+      case PanelType::TIME_AND_SALES:
+      case PanelType::HISTORICAL_TIME_SALES:
+      case PanelType::TAPE:
+      case PanelType::WATCHLIST:
+      case PanelType::SCREENER:
+        // Trade data panels subscribe to trade updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::TRADE);
+        break;
+
+      case PanelType::METRICS:
+      case PanelType::RISK_METRICS:
+      case PanelType::RISK_ANALYZER:
+      case PanelType::STATUS_BAR:
+        // Analytics panels subscribe to all data types
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::TRADE);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ORDERBOOK);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::CANDLE);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ANALYTICS);
+        break;
+
+      case PanelType::ALERTS:
+        // Alerts panel subscribes to analytics updates for trigger checks
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ANALYTICS);
+        break;
+
+      // These panels don't need real-time market data subscriptions
+      case PanelType::TIME_STATISTICS:
+      case PanelType::PERFORMANCE_MONITOR:
+      case PanelType::TRADING_ORDERS:
+      case PanelType::TRADING_POSITIONS:
+      case PanelType::HISTOGRAM:
+      case PanelType::SCATTER_PLOT:
+      case PanelType::TIME_SERIES:
+      case PanelType::LOG_PANEL:
+      case PanelType::CHART_REPLAY:
+      case PanelType::STRATEGY_BUILDER:
+      case PanelType::CORRELATION_HEATMAP:
+      case PanelType::MULTI_VWAP:
+      case PanelType::THEME_CUSTOMIZATION:
+      case PanelType::KEYBOARD_SHORTCUTS:
+      case PanelType::DRAWING_TOOLS:
+      case PanelType::HEATMAP:  // DomSurfacePanel handles its own data access
+      case PanelType::OPTION_ANALYTICS:
+      default:
+        // No subscription needed or panel handles its own data access
+        break;
+    }
+
     // Special handling for connecting watchlist and alerts panels
     // Check if we now have both panels and connect them
     if (type == PanelType::WATCHLIST || type == PanelType::ALERTS) {
@@ -530,6 +602,75 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
+    // Subscribe panel to MarketDataProcessor using C++26 push notification system
+    // Each panel type subscribes to relevant data types for reactive updates
+    switch (type) {
+      case PanelType::ORDERBOOK:
+      case PanelType::DOM_SURFACE:
+      case PanelType::MARKET_DEPTH_TABLE:
+        // Orderbook panels subscribe to orderbook updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ORDERBOOK);
+        break;
+
+      case PanelType::CHART:
+      case PanelType::TIME_HISTOGRAM:
+      case PanelType::VOLUME_PROFILE:
+      case PanelType::DEPTH_CHART:
+      case PanelType::FOOTPRINT_CHART:
+      case PanelType::TPO_PROFILE:
+      case PanelType::TECHNICAL_INDICATORS:
+        // Chart panels subscribe to candle updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::CANDLE);
+        break;
+
+      case PanelType::TIME_AND_SALES:
+      case PanelType::HISTORICAL_TIME_SALES:
+      case PanelType::TAPE:
+      case PanelType::WATCHLIST:
+      case PanelType::SCREENER:
+        // Trade data panels subscribe to trade updates
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::TRADE);
+        break;
+
+      case PanelType::METRICS:
+      case PanelType::RISK_METRICS:
+      case PanelType::RISK_ANALYZER:
+      case PanelType::STATUS_BAR:
+        // Analytics panels subscribe to all data types
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::TRADE);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ORDERBOOK);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::CANDLE);
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ANALYTICS);
+        break;
+
+      case PanelType::ALERTS:
+        // Alerts panel subscribes to analytics updates for trigger checks
+        subscribe_panel_to_data(panel_id, 0, RenderEngine::NotificationType::ANALYTICS);
+        break;
+
+      // These panels don't need real-time market data subscriptions
+      case PanelType::TIME_STATISTICS:
+      case PanelType::PERFORMANCE_MONITOR:
+      case PanelType::TRADING_ORDERS:
+      case PanelType::TRADING_POSITIONS:
+      case PanelType::HISTOGRAM:
+      case PanelType::SCATTER_PLOT:
+      case PanelType::TIME_SERIES:
+      case PanelType::LOG_PANEL:
+      case PanelType::CHART_REPLAY:
+      case PanelType::STRATEGY_BUILDER:
+      case PanelType::CORRELATION_HEATMAP:
+      case PanelType::MULTI_VWAP:
+      case PanelType::THEME_CUSTOMIZATION:
+      case PanelType::KEYBOARD_SHORTCUTS:
+      case PanelType::DRAWING_TOOLS:
+      case PanelType::HEATMAP:  // DomSurfacePanel handles its own data access
+      case PanelType::OPTION_ANALYTICS:
+      default:
+        // No subscription needed or panel handles its own data access
+        break;
+    }
+
     // Special handling for connecting watchlist and alerts panels
     // Check if we now have both panels and connect them
     if (type == PanelType::WATCHLIST || type == PanelType::ALERTS) {
@@ -598,8 +739,59 @@ void PanelManager::remove_panel(uint32_t panel_id) {
 }
 
 void PanelManager::clear_panels() {
+  // Unsubscribe all panels before clearing
+  unsubscribe_all_panels();
+  
   panels_.clear();
   next_panel_id_ = 1;
+}
+
+// C++26 Push Notification Subscription Implementation
+void PanelManager::subscribe_panel_to_data(uint32_t panel_id, uint32_t symbol_id,
+                                           RenderEngine::NotificationType type) {
+  // Unsubscribe existing subscription for this panel if any
+  unsubscribe_panel(panel_id);
+  
+  if (!processor_) {
+    return;
+  }
+  
+  // Find the panel to get its callback
+  auto it = panels_.find(panel_id);
+  if (it == panels_.end()) {
+    return;
+  }
+  
+  PanelBase* panel = it->second.get();
+  
+  // Subscribe with callback that marks panel data as dirty
+  uint64_t subscription_id = processor_->subscribe(
+      symbol_id, type,
+      [panel](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+        panel->markDirty();
+      });
+  
+  panel_subscriptions_[panel_id] = subscription_id;
+}
+
+void PanelManager::unsubscribe_panel(uint32_t panel_id) {
+  auto sub_it = panel_subscriptions_.find(panel_id);
+  if (sub_it != panel_subscriptions_.end() && processor_) {
+    processor_->unsubscribe(sub_it->second);
+    panel_subscriptions_.erase(sub_it);
+  }
+}
+
+void PanelManager::unsubscribe_all_panels() {
+  if (!processor_) {
+    panel_subscriptions_.clear();
+    return;
+  }
+  
+  for (const auto& [panel_id, subscription_id] : panel_subscriptions_) {
+    processor_->unsubscribe(subscription_id);
+  }
+  panel_subscriptions_.clear();
 }
 
 void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y) {

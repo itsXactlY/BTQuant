@@ -23,6 +23,7 @@
 
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
+#include "data/incremental_updater.hpp"
 #include "cache_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
@@ -400,6 +401,18 @@ class MarketDataProcessor {
   static uint64_t getTimeFrameDuration(TimeFrame timeframe);
 
   /**
+   * @brief Get the heatmap dirty flag for compute shader dispatch optimization
+   * @return Reference to the heatmap dirty flag
+   */
+  HeatmapDirtyFlag& getHeatmapDirtyFlag() { return heatmap_dirty_flag_; }
+
+  /**
+   * @brief Get the heatmap dirty flag (const version)
+   * @return Const reference to the heatmap dirty flag
+   */
+  [[nodiscard]] const HeatmapDirtyFlag& getHeatmapDirtyFlag() const { return heatmap_dirty_flag_; }
+
+  /**
    * Clear analytics data for a specific symbol
    * @param symbol_id Symbol ID to clear
    */
@@ -534,7 +547,7 @@ class MarketDataProcessor {
   void updateVolatility(SymbolAnalytics& symbol_data);
   void updateTradingMetrics(SymbolAnalytics& symbol_data, const TradeData& trade);
   void updateSpreadAnalysis(SymbolAnalytics& symbol_data);
-  void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade);
+  void processTradeIncrementallyInternal(SymbolAnalytics& symbol_data, const TradeData& trade);
 
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade);
@@ -577,6 +590,9 @@ class MarketDataProcessor {
 
   // Update BBO state from network thread (uses release semantics)
   void updateBBOState(uint32_t symbol_id, const SymbolAnalytics& symbol_data) const;
+
+  // Heatmap dirty flag for compute shader dispatch optimization
+  mutable HeatmapDirtyFlag heatmap_dirty_flag_;
 };
 
 }  // namespace RenderEngine

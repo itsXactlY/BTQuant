@@ -1,3 +1,6 @@
+#include "data/incremental_updater.hpp"
+
+// Include market_data_processor.hpp for full type definitions of SymbolAnalytics and TradeData
 #include "market_data_processor.hpp"
 
 #include <algorithm>
@@ -13,13 +16,21 @@ namespace RenderEngine {
 /**
  * @brief Process a single trade incrementally
  * Only updates affected analytics without recalculating everything
+ * @param symbol_data The symbol analytics to update
+ * @param trade The trade data to process
+ * @param dirty_flag Optional dirty flag to set on state change
  */
-void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade) {
+void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade,
+                               HeatmapDirtyFlag* dirty_flag) {
+    // Track if state changed for dirty flag
+    bool state_changed = false;
+
     // Update basic trade metrics incrementally
     symbol_data.trade_count++;
     symbol_data.last_trade_price = trade.price;
     symbol_data.last_trade_size = trade.size;
     symbol_data.last_trade_time = trade.timestamp;
+    state_changed = true;  // Trade update always changes state
 
     // Update buy/sell counts
     if (trade.is_buy) {
@@ -194,6 +205,11 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
         variance /= symbol_data.log_returns.size();
         symbol_data.volatility = std::sqrt(variance) * std::sqrt(252 * 24 * 60 * 60);  // Annualized
         symbol_data.sharpe_ratio = mean / std::sqrt(variance);  // Simplified Sharpe ratio
+    }
+
+    // Set dirty flag if state changed and flag is provided
+    if (state_changed && dirty_flag) {
+        dirty_flag->set();
     }
 }
 

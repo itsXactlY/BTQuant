@@ -9,6 +9,7 @@
 #include "components/interaction_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/tpo_panel.hpp"
+#include "data/incremental_updater.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "implot.h"
@@ -283,8 +284,23 @@ void VulkanDashboard::render_frame() {
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
-  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [](VkCommandBuffer cmd) {
+  // Check dirty flag for heatmap compute shader dispatch optimization
+  // Only dispatch compute shader if incremental_updater signaled a state change
+  bool heatmap_dirty = false;
+  if (market_data_processor_) {
+    heatmap_dirty = market_data_processor_->getHeatmapDirtyFlag().consume();
+  }
+
+  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [heatmap_dirty](VkCommandBuffer cmd) {
     // No microstructure renderer - panels handle their own rendering
+    
+    // Conditional heatmap compute shader dispatch
+    // Only dispatch if dirty flag was set by incremental_updater
+    if (heatmap_dirty) {
+      // Heatmap compute dispatch would go here when implemented
+      // Example: vkCmdDispatch(cmd, workgroupCountX, workgroupCountY, workgroupCountZ);
+    }
+    // If not dirty, skip compute dispatch to save GPU cycles
   });
   vulkan_core_->PresentFrame(imageIndex);
 }

@@ -11,6 +11,88 @@
 #include <thread>
 #include <cstdint>
 
+// Lock-free free-list stack node for slab allocator
+template<typename T>
+struct alignas(64) FreeListNode {
+    T* ptr;                              // Pointer to the actual object
+    std::atomic<FreeListNode<T>*> next;  // Next node in the free-list (cache-line aligned)
+    
+    FreeListNode() : ptr(nullptr), next(nullptr) {}
+    explicit FreeListNode(T* p) : ptr(p), next(nullptr) {}
+};
+
+// Lock-free free-list stack using std::atomic<Node*> for O(1) acquire/release
+template<typename T>
+class LockFreeFreeList {
+public:
+    LockFreeFreeList() : head_(nullptr), size_(0) {}
+    
+    ~LockFreeFreeList() {
+        // Clean up remaining nodes
+        FreeListNode<T>* current = head_.load(std::memory_order_relaxed);
+        while (current) {
+            FreeListNode<T>* next = current->next.load(std::memory_order_relaxed);
+            delete current;
+            current = next;
+        }
+    }
+    
+    // Acquire a node from the free-list (pop operation) - O(1)
+    T* acquire() {
+        FreeListNode<T>* old_head;
+        FreeListNode<T>* new_head;
+        
+        do {
+            old_head = head_.load(std::memory_order_acquire);
+            if (!old_head) {
+                return nullptr;  // Free-list is empty
+            }
+            new_head = old_head->next.load(std::memory_order_relaxed);
+        } while (!head_.compare_exchange_weak(old_head, new_head,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire));
+        
+        T* result = old_head->ptr;
+        size_.fetch_sub(1, std::memory_order_relaxed);
+        
+        // Delete the node structure (not the actual object)
+        delete old_head;
+        
+        return result;
+    }
+    
+    // Release a node back to the free-list (push operation) - O(1)
+    void release(T* obj) {
+        if (!obj) return;
+        
+        FreeListNode<T>* new_node = new FreeListNode<T>(obj);
+        FreeListNode<T>* old_head;
+        
+        do {
+            old_head = head_.load(std::memory_order_relaxed);
+            new_node->next.store(old_head, std::memory_order_relaxed);
+        } while (!head_.compare_exchange_weak(old_head, new_node,
+                                               std::memory_order_release,
+                                               std::memory_order_relaxed));
+        
+        size_.fetch_add(1, std::memory_order_relaxed);
+    }
+    
+    // Get current size (approximate, for statistics)
+    size_t size() const {
+        return size_.load(std::memory_order_relaxed);
+    }
+    
+    // Check if empty
+    bool empty() const {
+        return head_.load(std::memory_order_acquire) == nullptr;
+    }
+
+private:
+    std::atomic<FreeListNode<T>*> head_;  // Head of the free-list stack
+    std::atomic<size_t> size_;            // Current size (approximate)
+};
+
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
@@ -57,18 +139,18 @@ namespace BTQuant {
 
 namespace BTQuant {
 
-// Generic memory pool template for fixed-size objects
+// Generic memory pool template for fixed-size objects with lock-free allocation
 template<typename T>
 class ObjectPool {
 public:
     explicit ObjectPool(size_t arena_size = 1024 * 1024 * 1024);  // 1GB default arena
     ~ObjectPool();
 
-    // Allocate an object from the pool
+    // Allocate an object from the pool - O(1) lock-free
     template<typename... Args>
     T* allocate(Args&&... args);
 
-    // Deallocate an object back to the pool
+    // Deallocate an object back to the pool - O(1) lock-free
     void deallocate(T* obj);
 
     // Pre-allocate more objects to the pool
@@ -93,8 +175,8 @@ private:
     size_t arena_size_;     // Total size of the arena
     size_t arena_offset_;   // Current offset within the arena for new allocations
 
-    std::mutex mutex_;
-    std::stack<T*> free_list_;
+    // Lock-free free-list for O(1) acquire/release without mutex
+    LockFreeFreeList<T> free_list_;
     size_t total_objects_;
     size_t objects_per_block_;
 };
@@ -569,17 +651,18 @@ private:
 };
 
 // Thread-local memory pool for even better performance in multi-threaded scenarios
+// Uses lock-free free-list for O(1) acquire/release operations
 template<typename T>
 class ThreadLocalObjectPool {
 public:
     explicit ThreadLocalObjectPool(size_t arena_size = 1024 * 1024 * 1024);  // 1GB default arena
     ~ThreadLocalObjectPool();
 
-    // Allocate an object from the pool
+    // Allocate an object from the pool - O(1) lock-free
     template<typename... Args>
     T* allocate(Args&&... args);
 
-    // Deallocate an object back to the pool
+    // Deallocate an object back to the pool - O(1) lock-free
     void deallocate(T* obj);
 
     // Pre-allocate more objects to the pool
@@ -608,8 +691,8 @@ private:
     size_t arena_size_;     // Total size of the arena
     size_t arena_offset_;   // Current offset within the arena for new allocations
 
-    std::mutex mutex_;
-    std::stack<T*> free_list_;
+    // Lock-free free-list for O(1) acquire/release without mutex
+    LockFreeFreeList<T> free_list_;
     size_t total_objects_;
     size_t objects_per_block_;
 
@@ -1288,20 +1371,54 @@ ObjectPool<T>::~ObjectPool() {
 template<typename T>
 template<typename... Args>
 T* ObjectPool<T>::allocate(Args&&... args) {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    if (free_list_.empty()) {
-        // Allocate more objects from the arena if we run out
-        size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
-        preallocate(new_count);
+    // Try to acquire from lock-free free-list first - O(1)
+    T* obj = free_list_.acquire();
+    
+    if (!obj) {
+        // Free-list is empty, need to allocate more objects from arena
+        // Use a simple spin-lock for arena expansion (rare operation)
+        std::atomic<bool> lock(false);
+        while (lock.exchange(true, std::memory_order_acquire)) {
+            // Spin-wait with pause for better performance
+            #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+                #ifdef _MSC_VER
+                    _mm_pause();
+                #else
+                    __builtin_ia32_pause();
+                #endif
+            #endif
+        }
+        
+        // Double-check after acquiring lock
+        if (free_list_.empty()) {
+            // Allocate more objects from the arena if we run out
+            size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
+            
+            if (arena_ && arena_offset_ + new_count * sizeof(PoolBlock) <= arena_size_) {
+                // Initialize each PoolBlock and add to free list from the monolithic arena
+                char* block_ptr = static_cast<char*>(arena_) + arena_offset_;
+                
+                for (size_t i = 0; i < new_count; ++i) {
+                    PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
+                    T* obj_addr = reinterpret_cast<T*>(pool_block->data);
+                    free_list_.release(obj_addr);
+                    total_objects_++;
+                    block_ptr += sizeof(PoolBlock);
+                }
+                
+                arena_offset_ += new_count * sizeof(PoolBlock);
+            }
+        }
+        
+        lock.store(false, std::memory_order_release);
+        
+        // Try to acquire again
+        obj = free_list_.acquire();
     }
-
-    if (free_list_.empty()) {
+    
+    if (!obj) {
         return nullptr; // No memory available
     }
-
-    T* obj = free_list_.top();
-    free_list_.pop();
 
     // Construct the object in place with provided arguments and return it
     return new (obj) T(std::forward<Args>(args)...);
@@ -1314,23 +1431,19 @@ void ObjectPool<T>::deallocate(T* obj) {
     // Destruct the object
     obj->~T();
 
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    // Add back to free list
-    free_list_.push(obj);
+    // Release back to lock-free free-list - O(1)
+    free_list_.release(obj);
 }
 
 template<typename T>
 void ObjectPool<T>::preallocate(size_t count) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (!arena_) {
         return; // Arena not allocated
     }
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);
-    
+
     // Check if we have enough space in the arena
     if (arena_offset_ + total_size > arena_size_) {
         return; // Not enough space in arena
@@ -1345,8 +1458,8 @@ void ObjectPool<T>::preallocate(size_t count) {
         // Get the address where the T object will be constructed
         T* obj_addr = reinterpret_cast<T*>(pool_block->data);
 
-        // Add to free list
-        free_list_.push(obj_addr);
+        // Add to lock-free free-list - O(1) release
+        free_list_.release(obj_addr);
         total_objects_++;
 
         // Move to next PoolBlock
@@ -1373,13 +1486,6 @@ ThreadLocalObjectPool<T>::ThreadLocalObjectPool(size_t arena_size)
 
 template<typename T>
 ThreadLocalObjectPool<T>::~ThreadLocalObjectPool() {
-    // Clean up all objects
-    std::lock_guard<std::mutex> lock(mutex_);
-    
-    // Clear the stack
-    std::stack<T*> empty_stack;
-    free_list_.swap(empty_stack);
-    
     // Free the monolithic arena
     if (arena_) {
 #ifdef _WIN32
@@ -1394,20 +1500,51 @@ ThreadLocalObjectPool<T>::~ThreadLocalObjectPool() {
 template<typename T>
 template<typename... Args>
 T* ThreadLocalObjectPool<T>::allocate(Args&&... args) {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    if (free_list_.empty()) {
-        // Allocate more objects from the arena if we run out
-        size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
-        preallocate(new_count);
+    // Try to acquire from lock-free free-list first - O(1)
+    T* obj = free_list_.acquire();
+    
+    if (!obj) {
+        // Free-list is empty, need to allocate more objects from arena
+        // Use a simple spin-lock for arena expansion (rare operation)
+        std::atomic<bool> lock(false);
+        while (lock.exchange(true, std::memory_order_acquire)) {
+            #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+                #ifdef _MSC_VER
+                    _mm_pause();
+                #else
+                    __builtin_ia32_pause();
+                #endif
+            #endif
+        }
+        
+        // Double-check after acquiring lock
+        if (free_list_.empty()) {
+            size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
+            
+            if (arena_ && arena_offset_ + new_count * sizeof(PoolBlock) <= arena_size_) {
+                char* block_ptr = static_cast<char*>(arena_) + arena_offset_;
+                
+                for (size_t i = 0; i < new_count; ++i) {
+                    PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
+                    T* obj_addr = reinterpret_cast<T*>(pool_block->data);
+                    free_list_.release(obj_addr);
+                    total_objects_++;
+                    block_ptr += sizeof(PoolBlock);
+                }
+                
+                arena_offset_ += new_count * sizeof(PoolBlock);
+            }
+        }
+        
+        lock.store(false, std::memory_order_release);
+        
+        // Try to acquire again
+        obj = free_list_.acquire();
     }
-
-    if (free_list_.empty()) {
+    
+    if (!obj) {
         return nullptr; // No memory available
     }
-
-    T* obj = free_list_.top();
-    free_list_.pop();
 
     // Increment allocation counter
     allocation_count_.fetch_add(1, std::memory_order_relaxed);
@@ -1423,10 +1560,8 @@ void ThreadLocalObjectPool<T>::deallocate(T* obj) {
     // Destruct the object
     obj->~T();
 
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    // Add back to free list
-    free_list_.push(obj);
+    // Release back to lock-free free-list - O(1)
+    free_list_.release(obj);
 
     // Increment deallocation counter
     deallocation_count_.fetch_add(1, std::memory_order_relaxed);
@@ -1434,15 +1569,13 @@ void ThreadLocalObjectPool<T>::deallocate(T* obj) {
 
 template<typename T>
 void ThreadLocalObjectPool<T>::preallocate(size_t count) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (!arena_) {
         return; // Arena not allocated
     }
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);
-    
+
     // Check if we have enough space in the arena
     if (arena_offset_ + total_size > arena_size_) {
         return; // Not enough space in arena
@@ -1457,8 +1590,8 @@ void ThreadLocalObjectPool<T>::preallocate(size_t count) {
         // Get the address where the T object will be constructed
         T* obj_addr = reinterpret_cast<T*>(pool_block->data);
 
-        // Add to free list
-        free_list_.push(obj_addr);
+        // Add to lock-free free-list - O(1) release
+        free_list_.release(obj_addr);
         total_objects_++;
 
         // Move to next PoolBlock

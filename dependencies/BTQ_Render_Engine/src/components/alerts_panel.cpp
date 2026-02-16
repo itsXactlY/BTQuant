@@ -38,7 +38,7 @@ void AlertsPanel::update(float /*dt*/) {
   // For now, it's just a UI shell
 }
 
-void AlertsPanel::render() {
+void AlertsPanel::render_content() {
   begin_panel_window();
 
   // Top Bar

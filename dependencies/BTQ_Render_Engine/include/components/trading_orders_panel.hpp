@@ -14,7 +14,7 @@ class TradingOrdersPanel : public PanelBase {
                      std::shared_ptr<PositionManager> position_manager);
 
   void initialize() override;
-  void render() override;
+  void render_content() override;
 
  private:
   std::shared_ptr<OrderManager> order_manager_;

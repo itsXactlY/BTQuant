@@ -36,12 +36,12 @@ struct OrderbookSnapshot {
 // Component for managing historical order book snapshots
 class OrderbookHistoryPanel : public PanelBase {
 public:
-    OrderbookHistoryPanel(const PanelConfig& config, 
+    OrderbookHistoryPanel(const PanelConfig& config,
                          std::shared_ptr<HotSpineDataBridge> bridge,
                          std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
     void update(float dt) override;
-    void render() override;
+    void render_content() override;
 
     // Capture a snapshot of the current order book state
     void captureSnapshot(uint32_t symbol_id, const std::string& symbol_name);

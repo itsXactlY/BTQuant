@@ -12,7 +12,7 @@ HistogramPanel::HistogramPanel(const PanelConfig& config) : PanelBase(config) {}
 
 void HistogramPanel::initialize() { PanelBase::initialize(); }
 
-void HistogramPanel::render() {
+void HistogramPanel::render_content() {
   begin_panel_window();
 
   if (ImPlot::BeginPlot("Histogram")) {

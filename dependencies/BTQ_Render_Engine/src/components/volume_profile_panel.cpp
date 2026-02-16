@@ -288,7 +288,7 @@ void VolumeProfilePanel::subscribe_to_updates() {
       });
 }
 
-void VolumeProfilePanel::render() {
+void VolumeProfilePanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

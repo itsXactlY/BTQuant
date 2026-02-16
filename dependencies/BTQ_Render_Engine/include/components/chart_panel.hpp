@@ -156,7 +156,7 @@ class ChartPanel : public PanelBase {
              ChartManager* chart_manager, PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
-  void render() override;
+  void render_content() override;
   void initialize() override;
 
   // Chart-specific methods

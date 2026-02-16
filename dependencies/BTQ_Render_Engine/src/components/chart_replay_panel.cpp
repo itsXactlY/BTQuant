@@ -18,7 +18,7 @@ void ChartReplayPanel::update(float dt) {
     (void)dt;
 }
 
-void ChartReplayPanel::render() {
+void ChartReplayPanel::render_content() {
     begin_panel_window();
 
     if (!is_visible()) {

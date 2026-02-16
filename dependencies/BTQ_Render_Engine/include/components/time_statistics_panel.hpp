@@ -20,7 +20,7 @@ public:
     TimeStatisticsPanel(const PanelConfig& config);
     ~TimeStatisticsPanel() override = default;
 
-    void render() override;
+    void render_content() override;
     void updateData(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& data);
 
     // Set callback for when a row is double-clicked

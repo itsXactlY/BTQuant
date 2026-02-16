@@ -27,7 +27,7 @@ void DrawingToolsPanel::initialize() {
     // Stub implementation
 }
 
-void DrawingToolsPanel::render() {
+void DrawingToolsPanel::render_content() {
     begin_panel_window();
     
     if (!is_visible()) {

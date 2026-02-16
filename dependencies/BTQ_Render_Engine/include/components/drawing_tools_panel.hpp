@@ -22,7 +22,7 @@ public:
     ~DrawingToolsPanel() override = default;
 
     void initialize() override;
-    void render() override;
+    void render_content() override;
 
     // Tool management
     void select_tool(const std::string& tool_name);

@@ -69,7 +69,7 @@ class DomSurfacePanel : public PanelBase {
   explicit DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
   ~DomSurfacePanel() override;
 
-  void render() override;
+  void render_content() override;
   void setSymbol(uint32_t symbol_id);
 
   // Override panel header to add heatmap intensity control

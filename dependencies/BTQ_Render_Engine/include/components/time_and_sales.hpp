@@ -32,7 +32,7 @@ class TimeAndSalesPanel : public PanelBase {
 
   ~TimeAndSalesPanel() override;
 
-  void render() override;
+  void render_content() override;
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:

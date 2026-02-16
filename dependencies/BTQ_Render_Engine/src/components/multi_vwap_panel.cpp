@@ -17,7 +17,7 @@ void MultiVWAPPanel::initialize() {
     // Stub implementation
 }
 
-void MultiVWAPPanel::render() {
+void MultiVWAPPanel::render_content() {
     begin_panel_window();
     
     if (!is_visible()) {

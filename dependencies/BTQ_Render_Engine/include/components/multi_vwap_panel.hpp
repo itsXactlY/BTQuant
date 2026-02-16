@@ -21,7 +21,7 @@ public:
     ~MultiVWAPPanel() override = default;
 
     void initialize() override;
-    void render() override;
+    void render_content() override;
 
     // VWAP configuration
     void add_vwap(const std::string& period, const ImVec4& color);

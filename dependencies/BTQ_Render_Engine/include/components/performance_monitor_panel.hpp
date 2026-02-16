@@ -12,7 +12,7 @@ class PerformanceMonitorPanel : public PanelBase {
   explicit PerformanceMonitorPanel(const PanelConfig& config);
 
   void update(float dt) override;
-  void render() override;
+  void render_content() override;
 
   // Configuration
   void set_update_interval(float interval);

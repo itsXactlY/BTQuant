@@ -16,7 +16,7 @@ TradingOrdersPanel::TradingOrdersPanel(const PanelConfig& config,
 
 void TradingOrdersPanel::initialize() { PanelBase::initialize(); }
 
-void TradingOrdersPanel::render() {
+void TradingOrdersPanel::render_content() {
   begin_panel_window();
 
   // Add heatmap intensity slider to the panel header for resting limit orders

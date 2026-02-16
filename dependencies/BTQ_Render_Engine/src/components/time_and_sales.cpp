@@ -70,7 +70,7 @@ void TimeAndSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol
   markDirty();  // Force immediate refresh
 }
 
-void TimeAndSalesPanel::render() {
+void TimeAndSalesPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

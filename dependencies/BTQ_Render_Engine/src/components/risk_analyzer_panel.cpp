@@ -27,7 +27,7 @@ void RiskAnalyzerPanel::update(float dt) {
   compute_risk_data();
 }
 
-void RiskAnalyzerPanel::render() {
+void RiskAnalyzerPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

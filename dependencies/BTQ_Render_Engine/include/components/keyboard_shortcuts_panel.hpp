@@ -23,7 +23,7 @@ public:
     ~KeyboardShortcutsPanel() override = default;
 
     void initialize() override;
-    void render() override;
+    void render_content() override;
 
     // Shortcut management
     void reset_to_defaults();

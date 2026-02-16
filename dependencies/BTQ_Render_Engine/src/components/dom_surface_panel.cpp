@@ -541,7 +541,7 @@ void DomSurfacePanel::renderLargeOrderMarkers() {
   // Note: PopStyleVar removed - no corresponding PushStyleVar in this function
 }
 
-void DomSurfacePanel::render() {
+void DomSurfacePanel::render_content() {
   if (consumeDirty()) {
     updateHeatmapData();
     updateLargeOrderMarkers();

@@ -68,7 +68,7 @@ void OrderbookHistoryPanel::update(float /*dt*/) {
     }
 }
 
-void OrderbookHistoryPanel::render() {
+void OrderbookHistoryPanel::render_content() {
     begin_panel_window();
 
     // If panel is hidden via X button, we still need to call end

@@ -34,7 +34,7 @@ void StatusBarPanel::update(float dt) {
   }
 }
 
-void StatusBarPanel::render() {
+void StatusBarPanel::render_content() {
   // Status bar should be a fixed bar at the top, not a window
   ImGui::SetNextWindowPos(ImVec2(0, 0));
   ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 30));

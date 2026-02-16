@@ -14,7 +14,7 @@ RiskMetricsPanel::RiskMetricsPanel(const PanelConfig& config,
 
 void RiskMetricsPanel::initialize() { PanelBase::initialize(); }
 
-void RiskMetricsPanel::render() {
+void RiskMetricsPanel::render_content() {
   begin_panel_window();
 
   if (risk_assessment_) {

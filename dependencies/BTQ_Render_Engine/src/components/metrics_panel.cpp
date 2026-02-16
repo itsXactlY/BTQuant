@@ -29,7 +29,7 @@ void MetricsPanel::update(float dt) {
   }
 }
 
-void MetricsPanel::render() {
+void MetricsPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

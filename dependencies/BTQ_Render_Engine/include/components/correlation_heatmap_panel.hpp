@@ -21,7 +21,7 @@ public:
     ~CorrelationHeatmapPanel() override = default;
 
     void initialize() override;
-    void render() override;
+    void render_content() override;
 
     // Symbol management
     void add_symbol(const std::string& symbol);

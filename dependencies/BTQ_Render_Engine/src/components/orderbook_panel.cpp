@@ -325,7 +325,7 @@ void OrderbookPanel::trackVolumeChanges(const HotOrderbookSnapshot& snapshot, ui
   }
 }
 
-void OrderbookPanel::render() {
+void OrderbookPanel::render_content() {
   begin_panel_window();
 
   // If panel is hidden via X button, we still need to call end

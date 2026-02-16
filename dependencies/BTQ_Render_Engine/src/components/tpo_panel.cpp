@@ -36,7 +36,7 @@ void TpoPanel::update(float /*dt*/) {
   // Update logic if needed
 }
 
-void TpoPanel::render() {
+void TpoPanel::render_content() {
   begin_panel_window();
 
   // Enhanced toolbar with more options

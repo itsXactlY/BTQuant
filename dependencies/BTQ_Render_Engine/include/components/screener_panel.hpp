@@ -9,7 +9,7 @@ class ScreenerPanel : public PanelBase {
   ScreenerPanel(const PanelConfig& config);
 
   void initialize() override;
-  void render() override;
+  void render_content() override;
 };
 
 }  // namespace BTQuant

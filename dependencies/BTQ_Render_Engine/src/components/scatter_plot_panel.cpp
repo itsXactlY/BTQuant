@@ -12,7 +12,7 @@ ScatterPlotPanel::ScatterPlotPanel(const PanelConfig& config) : PanelBase(config
 
 void ScatterPlotPanel::initialize() { PanelBase::initialize(); }
 
-void ScatterPlotPanel::render() {
+void ScatterPlotPanel::render_content() {
   begin_panel_window();
 
   if (ImPlot::BeginPlot("Scatter Plot")) {

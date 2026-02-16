@@ -12,7 +12,7 @@ TimeSeriesPanel::TimeSeriesPanel(const PanelConfig& config) : PanelBase(config) 
 
 void TimeSeriesPanel::initialize() { PanelBase::initialize(); }
 
-void TimeSeriesPanel::render() {
+void TimeSeriesPanel::render_content() {
   begin_panel_window();
 
   if (ImPlot::BeginPlot("Time Series")) {

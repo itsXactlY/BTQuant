@@ -42,9 +42,8 @@ void PanelBase::render() {
 
   render_panel_header();
 
-  // Default content for placeholder panels
-  ImGui::Text("Panel Type: %s", get_panel_type_name(config_.type));
-  ImGui::Text("Implementation coming soon...");
+  // Call derived class's render_content()
+  render_content();
 
   end_panel_window();
 

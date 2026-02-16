@@ -10,7 +10,7 @@ LogPanel::LogPanel(const PanelConfig& config) : PanelBase(config) {}
 
 void LogPanel::initialize() { PanelBase::initialize(); }
 
-void LogPanel::render() {
+void LogPanel::render_content() {
   begin_panel_window();
 
   // Log controls

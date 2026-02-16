@@ -10,7 +10,7 @@ class TimeHistogramPanel : public PanelBase {
   TimeHistogramPanel(const PanelConfig& config);
 
   void initialize() override;
-  void render() override;
+  void render_content() override;
 
   // Volume data type selection for time histogram visualization
   void setVolumeDataType(Data::VolumeDataType vol_type) { volume_data_type_ = vol_type; }

@@ -47,7 +47,7 @@ void DepthChartPanel::subscribe_to_updates() {
       });
 }
 
-void DepthChartPanel::render() {
+void DepthChartPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

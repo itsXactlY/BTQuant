@@ -39,7 +39,7 @@ class OptionAnalyticsPanel : public PanelBase {
  public:
   OptionAnalyticsPanel(StrategyBuilder* strategy_builder);
 
-  void render() override;
+  void render_content() override;
   void update(float dt) override {}
 
   void switchTab(int tabIndex);

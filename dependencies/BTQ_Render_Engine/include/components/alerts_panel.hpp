@@ -28,7 +28,7 @@ class AlertsPanel : public PanelBase {
   ~AlertsPanel() override = default;
 
   void update(float dt) override;
-  void render() override;
+  void render_content() override;
 
  public:
   // Public method to add logs from external sources (e.g., watchlist alerts)

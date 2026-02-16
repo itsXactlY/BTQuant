@@ -31,7 +31,7 @@ class HistoricalTimeSalesPanel : public PanelBase {
 
   ~HistoricalTimeSalesPanel() override;
 
-  void render() override;
+  void render_content() override;
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
   
   // Set trades for a specific time range (for displaying trades from a specific bar)

@@ -24,7 +24,7 @@ void PerformanceMonitorPanel::update(float dt) {
   }
 }
 
-void PerformanceMonitorPanel::render() {
+void PerformanceMonitorPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

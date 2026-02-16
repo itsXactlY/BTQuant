@@ -143,7 +143,7 @@ void WatchlistPanel::update(float dt) {
   process_pending_updates();
 }
 
-void WatchlistPanel::render() {
+void WatchlistPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

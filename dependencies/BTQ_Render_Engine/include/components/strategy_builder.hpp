@@ -28,7 +28,7 @@ public:
     StrategyBuilder();  // Default constructor for backward compatibility
     ~StrategyBuilder() override = default;
 
-    void render() override;
+    void render_content() override;
     
     // Add a strike to the current strategy
     void addStrike(double strike, const std::string& option_type = "Call", 

@@ -127,7 +127,7 @@ void TimeStatisticsPanel::sortDataByColumn(int columnIndex) {
     }
 }
 
-void TimeStatisticsPanel::render() {
+void TimeStatisticsPanel::render_content() {
     if (!config_.visible) return;
 
     ImGui::SetNextWindowSize(ImVec2(1000, 600), ImGuiCond_FirstUseEver);

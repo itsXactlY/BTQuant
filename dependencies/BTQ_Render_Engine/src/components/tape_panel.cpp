@@ -67,7 +67,7 @@ void TapePanel::subscribe_to_updates() {
       });
 }
 
-void TapePanel::render() {
+void TapePanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

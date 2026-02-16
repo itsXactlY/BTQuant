@@ -38,7 +38,7 @@ class WatchlistPanel : public PanelBase {
   ~WatchlistPanel();
 
   void update(float dt) override;
-  void render() override;
+  void render_content() override;
 
   // Watchlist management
   void add_symbol(uint32_t symbol_id, const std::string& symbol, const std::string& exchange);

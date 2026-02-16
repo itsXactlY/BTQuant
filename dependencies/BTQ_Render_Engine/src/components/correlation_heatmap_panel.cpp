@@ -14,7 +14,7 @@ void CorrelationHeatmapPanel::initialize() {
     // Stub implementation - no initialization needed
 }
 
-void CorrelationHeatmapPanel::render() {
+void CorrelationHeatmapPanel::render_content() {
     begin_panel_window();
     
     if (!is_visible()) {

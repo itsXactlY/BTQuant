@@ -9,7 +9,7 @@ class TimeSeriesPanel : public PanelBase {
   TimeSeriesPanel(const PanelConfig& config);
 
   void initialize() override;
-  void render() override;
+  void render_content() override;
 };
 
 }  // namespace BTQuant

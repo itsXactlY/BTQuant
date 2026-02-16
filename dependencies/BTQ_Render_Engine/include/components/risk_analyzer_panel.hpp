@@ -24,7 +24,7 @@ class RiskAnalyzerPanel : public PanelBase {
   RiskAnalyzerPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  void render() override;
+  void render_content() override;
   void update(float dt) override;
   void set_symbol(const std::string& symbol, const std::string& exchange = "Binance");
 

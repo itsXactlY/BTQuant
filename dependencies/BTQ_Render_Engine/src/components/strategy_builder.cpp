@@ -30,7 +30,7 @@ StrategyBuilder::StrategyBuilder()
 {
 }
 
-void StrategyBuilder::render() {
+void StrategyBuilder::render_content() {
     begin_panel_window();
 
     // Compact footer-style UI

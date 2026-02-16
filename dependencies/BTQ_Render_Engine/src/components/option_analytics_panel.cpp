@@ -90,7 +90,7 @@ std::string OptionAnalyticsPanel::getActiveTabName() const {
     return "";
 }
 
-void OptionAnalyticsPanel::render() {
+void OptionAnalyticsPanel::render_content() {
     begin_panel_window();
 
     // Render tab navigation

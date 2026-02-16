@@ -19,7 +19,7 @@ public:
                      ChartManager* chart_manager);
 
     void update(float dt) override;
-    void render() override;
+    void render_content() override;
     void initialize() override;
 
     // Method to update the replay timeframe

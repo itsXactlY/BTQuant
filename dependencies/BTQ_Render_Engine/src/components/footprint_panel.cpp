@@ -707,7 +707,7 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
   }
 }
 
-void FootprintPanel::render() {
+void FootprintPanel::render_content() {
   begin_panel_window();
 
   // Show some basic controls

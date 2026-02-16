@@ -14,7 +14,7 @@ TradingPositionsPanel::TradingPositionsPanel(const PanelConfig& config,
 
 void TradingPositionsPanel::initialize() { PanelBase::initialize(); }
 
-void TradingPositionsPanel::render() {
+void TradingPositionsPanel::render_content() {
   begin_panel_window();
 
   if (ImGui::BeginTable("PositionsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {

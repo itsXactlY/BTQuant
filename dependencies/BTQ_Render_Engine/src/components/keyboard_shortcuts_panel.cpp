@@ -30,7 +30,7 @@ void KeyboardShortcutsPanel::initialize() {
     // Stub implementation
 }
 
-void KeyboardShortcutsPanel::render() {
+void KeyboardShortcutsPanel::render_content() {
     begin_panel_window();
     
     if (!is_visible()) {

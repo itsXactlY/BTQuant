@@ -100,7 +100,7 @@ void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, ui
   markDirty();  // Force refresh of the display
 }
 
-void HistoricalTimeSalesPanel::render() {
+void HistoricalTimeSalesPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

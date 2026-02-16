@@ -15,7 +15,7 @@ class StatusBarPanel : public PanelBase {
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt) override;
-  void render() override;
+  void render_content() override;
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

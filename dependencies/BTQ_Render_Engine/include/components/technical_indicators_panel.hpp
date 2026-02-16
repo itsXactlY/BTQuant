@@ -23,7 +23,7 @@ public:
     ~TechnicalIndicatorsPanel() override = default;
 
     void initialize() override;
-    void render() override;
+    void render_content() override;
 
     // Indicator management
     void add_indicator(const std::string& name, const std::string& description = "");

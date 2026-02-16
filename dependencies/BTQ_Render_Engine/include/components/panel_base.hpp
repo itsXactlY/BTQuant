@@ -81,6 +81,10 @@ struct PanelConfig {
  * - data_dirty_ flag set by notification callback (thread-safe atomic)
  * - render() checks consumeDirty() to know when to refresh data
  * - No polling timers needed - truly event-driven
+ *
+ * Panel Inheritance Pattern:
+ * - Derived classes override render_content() to provide panel-specific rendering
+ * - render() handles window management, header, and calls render_content()
  */
 class PanelBase {
  public:
@@ -88,8 +92,14 @@ class PanelBase {
   virtual ~PanelBase() = default;
 
   virtual void update([[maybe_unused]] float dt) {}
-  virtual void render() = 0;
+  virtual void render();
   virtual void initialize() {}
+
+  /**
+   * Pure virtual method for panel-specific content rendering
+   * Derived classes MUST override this method to render their content
+   */
+  virtual void render_content() = 0;
 
   // Panel management
   void set_position(const ImVec2& pos) { config_.position = pos; }

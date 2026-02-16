@@ -313,7 +313,7 @@ void ChartPanel::update(float dt) {
   }
 }
 
-void ChartPanel::render() {
+void ChartPanel::render_content() {
   begin_panel_window();
 
   if (!is_visible()) {

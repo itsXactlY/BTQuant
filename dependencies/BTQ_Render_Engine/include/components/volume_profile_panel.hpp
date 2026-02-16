@@ -44,7 +44,7 @@ class VolumeProfilePanel : public PanelBase {
 
   ~VolumeProfilePanel() override;
 
-  void render() override;
+  void render_content() override;
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
   // Method to render mini histogram overlays on candlestick charts

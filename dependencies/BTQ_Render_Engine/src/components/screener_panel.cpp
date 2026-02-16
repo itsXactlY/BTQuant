@@ -13,7 +13,7 @@ ScreenerPanel::ScreenerPanel(const PanelConfig& config) : PanelBase(config) {}
 
 void ScreenerPanel::initialize() { PanelBase::initialize(); }
 
-void ScreenerPanel::render() {
+void ScreenerPanel::render_content() {
   begin_panel_window();
 
   // Screener controls

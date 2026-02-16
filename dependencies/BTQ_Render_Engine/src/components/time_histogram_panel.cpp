@@ -18,7 +18,7 @@ TimeHistogramPanel::TimeHistogramPanel(const PanelConfig& config)
 
 void TimeHistogramPanel::initialize() { PanelBase::initialize(); }
 
-void TimeHistogramPanel::render() {
+void TimeHistogramPanel::render_content() {
   begin_panel_window();
 
   // Add volume analysis type selector

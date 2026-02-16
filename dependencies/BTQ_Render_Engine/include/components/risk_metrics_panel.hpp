@@ -14,7 +14,7 @@ class RiskMetricsPanel : public PanelBase {
                    std::shared_ptr<PositionManager> position_manager);
 
   void initialize() override;
-  void render() override;
+  void render_content() override;
 
  private:
   std::shared_ptr<RiskAssessment> risk_assessment_;

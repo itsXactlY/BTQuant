@@ -6,7 +6,7 @@ namespace RenderEngine {
 
 TradeCommandQueue::TradeCommandQueue(size_t capacity)
     : queue_(capacity) {
-    std::cout << "[TradeCommandQueue] Initialized with capacity: " << capacity << std::endl;
+    std::cout << "[TradeCommandQueue] Initialized with dedicated SPSC ring buffer (capacity: " << capacity << ")" << std::endl;
 }
 
 TradeCommandQueue::~TradeCommandQueue() {
@@ -15,23 +15,28 @@ TradeCommandQueue::~TradeCommandQueue() {
 }
 
 bool TradeCommandQueue::push(const TradeCommand& command) {
-    return queue_.try_enqueue(command);
+    return queue_.push(command);
 }
 
 bool TradeCommandQueue::push(TradeCommand&& command) {
-    return queue_.try_enqueue(std::move(command));
+    return queue_.push(std::move(command));
 }
 
 bool TradeCommandQueue::try_pop(TradeCommand& command) {
-    return queue_.try_dequeue(command);
+    auto result = queue_.try_pop();
+    if (result.has_value()) {
+        command = std::move(result.value());
+        return true;
+    }
+    return false;
 }
 
 size_t TradeCommandQueue::size_approx() const {
-    return queue_.size_approx();
+    return queue_.size();
 }
 
 bool TradeCommandQueue::empty() const {
-    return queue_.size_approx() == 0;
+    return queue_.empty();
 }
 
 void TradeCommandQueue::set_result_callback(TradeResultCallback callback) {

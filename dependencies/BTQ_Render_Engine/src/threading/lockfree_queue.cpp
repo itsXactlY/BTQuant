@@ -1,5 +1,6 @@
 #include "../../include/threading/lockfree_queue.hpp"
 #include "../../include/task_scheduler.hpp"  // For btq::Trade and btq::Candle
+#include "../../include/trading/trade_command_queue.hpp"  // For TradeCommand
 #include <string>
 #include <vector>
 #include <chrono>
@@ -144,6 +145,9 @@ template class SPSCRingBuffer<std::optional<btq::Candle>>;
 // Additional template instantiations for new functionality for SPSCRingBuffer
 template class SPSCRingBuffer<std::pair<btq::Trade, btq::Candle>>;
 template class SPSCRingBuffer<std::vector<std::pair<double, double>>>;
+
+// TradeCommand struct for SPSCRingBuffer (used by TradeCommandQueue)
+template class SPSCRingBuffer<BTQuant::RenderEngine::TradeCommand>;
 
 // Template instantiations for the new AtomicWrapper
 template class AtomicWrapper<int>;

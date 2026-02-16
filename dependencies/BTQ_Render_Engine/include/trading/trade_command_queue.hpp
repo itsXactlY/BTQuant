@@ -8,9 +8,8 @@
 #include <string>
 #include <thread>
 
-// Lock-free SPSC queue from moodycamel (concurrentqueue)
-// We'll use a simple ring buffer implementation for SPSC
-#include "readerwriterqueue.h"
+// Dedicated SPSC ring buffer for TradeCommand structs
+#include "threading/lockfree_queue.hpp"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -186,7 +185,7 @@ public:
     bool is_running() const { return running_.load(std::memory_order_acquire); }
 
 private:
-    moodycamel::ReaderWriterQueue<TradeCommand> queue_;
+    btq::threading::SPSCRingBuffer<TradeCommand> queue_;
     std::atomic<uint64_t> next_command_id_{1};
     std::atomic<bool> running_{false};
     std::thread execution_thread_;

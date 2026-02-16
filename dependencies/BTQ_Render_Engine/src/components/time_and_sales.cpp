@@ -88,15 +88,44 @@ void TimeAndSalesPanel::render_content() {
   ImGui::Separator();
 
   // Refresh data when new trades arrive or first load
-  if (processor_ && symbol_id_ != 0) {
+  if (bridge_ && symbol_id_ != 0) {
     if (consumeDirty() || cached_trades_.empty()) {
-      auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-      cached_trades_ = analytics.recent_trades;
-
-      // Keep only most recent trades for display
-      if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
-        cached_trades_.erase(cached_trades_.begin(),
-                             cached_trades_.begin() + (cached_trades_.size() - MAX_VISIBLE_TRADES));
+      // Read directly from the atomic tail of the trade ring buffer
+      auto trade_span = bridge_->getTradeBuffer();
+      
+      // Convert HotTrade to TradeData and filter by symbol_id
+      cached_trades_.clear();
+      cached_trades_.reserve(std::min(static_cast<size_t>(MAX_VISIBLE_TRADES), trade_span.size()));
+      
+      // Find the tail (most recent trades) by scanning from the end
+      // Ring buffer may have wrapped, so we need to find valid trades
+      std::vector<RenderEngine::TradeData> temp_trades;
+      temp_trades.reserve(trade_span.size());
+      
+      for (const auto& hot_trade : trade_span) {
+        // Skip empty slots
+        if (hot_trade.ts_local == 0) continue;
+        
+        // Filter by symbol
+        if (hot_trade.symbol_id != symbol_id_) continue;
+        
+        // Convert HotTrade to TradeData
+        RenderEngine::TradeData trade;
+        trade.symbol_id = hot_trade.symbol_id;
+        trade.timestamp = hot_trade.ts_local;
+        trade.price = hot_trade.price;
+        trade.size = hot_trade.size;
+        trade.is_buy = (hot_trade.side == 0);
+        
+        temp_trades.push_back(trade);
+      }
+      
+      // Keep only most recent trades for display (tail of the buffer)
+      if (temp_trades.size() > MAX_VISIBLE_TRADES) {
+        cached_trades_ = std::vector<RenderEngine::TradeData>(
+            temp_trades.end() - MAX_VISIBLE_TRADES, temp_trades.end());
+      } else {
+        cached_trades_ = std::move(temp_trades);
       }
 
       // Check for large trades and trigger audio alerts

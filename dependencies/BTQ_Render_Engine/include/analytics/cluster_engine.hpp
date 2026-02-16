@@ -76,7 +76,7 @@ namespace Analytics {
 class ClusterEngine {
  public:
   explicit ClusterEngine(double tick_size)
-      : tick_size_(tick_size), min_tick_index_(0), session_start_us_(0) {
+      : tick_size_(tick_size), min_tick_index_(0), session_start_us_(0), session_low_(0.0) {
     // Reserve some initial space to avoid immediate reallocations
     canvas_.reserve(10000);
     cluster_canvas_.reserve(10000);  // Reserve similar space for cluster canvas
@@ -88,38 +88,38 @@ class ClusterEngine {
   void process_trade(const MarketData::Trade& trade) {
     if (session_start_us_ == 0) {
       session_start_us_ = trade.timestamp_us;
+      session_low_ = trade.price;
     }
 
-    int64_t abs_tick_index = static_cast<int64_t>(std::round(trade.price / tick_size_));
+    // Track session low for O(1) binning
+    if (trade.price < session_low_) {
+      session_low_ = trade.price;
+    }
 
-    // Initialize min_tick_index_ on first trade
+    // O(1) constant-time price binning
+    int64_t bin_index = static_cast<int64_t>((trade.price - session_low_) / tick_size_);
+
+    // Handle Expansion Low (price went below session_low_)
+    if (bin_index < 0) {
+      session_low_ = trade.price;
+      bin_index = 0;
+    }
+
+    // Initialize canvas_ on first trade
     if (canvas_.empty()) {
-      min_tick_index_ = abs_tick_index - 100;  // start with some padding
-      canvas_.resize(200);
-    }
-
-    int64_t relative_index = abs_tick_index - min_tick_index_;
-
-    // Handle Expansion Low
-    if (relative_index < 0) {
-      size_t deficit = -relative_index;
-      size_t padding = 100;
-      size_t final_insert = deficit + padding;
-
-      canvas_.insert(canvas_.begin(), final_insert, HotSpine::V3::VolumeNode{});
-      min_tick_index_ -= (int64_t)final_insert;
-      relative_index = abs_tick_index - min_tick_index_;
+      size_t initial_size = 200;
+      canvas_.resize(initial_size);
     }
 
     // Handle Expansion High
-    if (static_cast<size_t>(relative_index) >= canvas_.size()) {
-      size_t needed = static_cast<size_t>(relative_index) - canvas_.size() + 1;
+    if (static_cast<size_t>(bin_index) >= canvas_.size()) {
+      size_t needed = static_cast<size_t>(bin_index) - canvas_.size() + 1;
       size_t padding = 100;
       canvas_.resize(canvas_.size() + needed + padding);
     }
 
     // Update Node
-    auto& node = canvas_[relative_index];
+    auto& node = canvas_[bin_index];
     if (trade.is_buyer_maker) {
       // Buyer is maker -> Seller is taker -> Sell Volume
       node.sell_vol += static_cast<float>(trade.quantity);
@@ -164,6 +164,9 @@ class ClusterEngine {
   // Getter method to access the cluster canvas for visualization
   const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
 
+  // Getter method to access session low price
+  double getSessionLow() const { return session_low_; }
+
   // Calculate standard deviation for a specific price level and time bucket
   double calculateStandardDeviation(int64_t price_level, int time_bucket) const;
 
@@ -177,18 +180,21 @@ class ClusterEngine {
     out.tick_size = tick_size_;
     out.base_tick_index = start_abs_index;
 
+    // Calculate session low tick index for converting absolute tick indices to bin indices
+    int64_t session_low_tick = static_cast<int64_t>(std::round(session_low_ / tick_size_));
+
     // Note: out.open/high/low/close are not populated here as they depend on
     // session/candle context, which this specific rasterizer doesn't
     // necessarily track. The processor loop should populate them.
 
     for (size_t i = 0; i < HotSpine::V3::VIEWPORT_ROWS; ++i) {
       int64_t current_abs_idx = start_abs_index + i;
-      int64_t relative_idx = current_abs_idx - min_tick_index_;
+      int64_t bin_index = current_abs_idx - session_low_tick;
 
       auto& row = out.rows[i];
 
-      if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < canvas_.size()) {
-        row = canvas_[relative_idx];
+      if (bin_index >= 0 && static_cast<size_t>(bin_index) < canvas_.size()) {
+        row = canvas_[bin_index];
       } else {
         row = HotSpine::V3::VolumeNode{};
       }
@@ -199,6 +205,7 @@ class ClusterEngine {
   double tick_size_;
   int64_t min_tick_index_;
   int64_t session_start_us_;
+  double session_low_;  // Lowest price seen in session for O(1) binning
   std::vector<HotSpine::V3::VolumeNode> canvas_;
 
   // Additional data structure for cluster cells with time buckets

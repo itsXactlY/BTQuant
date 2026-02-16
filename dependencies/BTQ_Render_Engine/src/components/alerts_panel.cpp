@@ -49,15 +49,27 @@ void AlertsPanel::render_content() {
   if (ImGui::Button("Clear Logs")) {
     logs_.clear();
   }
+  ImGui::SameLine();
+  if (ImGui::Button("Clear Rejections")) {
+    rejections_.clear();
+  }
 
   ImGui::Separator();
 
-  // Split view: Rules (Top) and Logs (Bottom)
+  // Split view: Rules (Top), Rejections (Middle), and Logs (Bottom)
   // Using Child windows for scrolling
 
   ImGui::TextDisabled("Active Rules");
   ImGui::BeginChild("RulesList", ImVec2(0, 150), true);
   render_rules_table();
+  ImGui::EndChild();
+
+  ImGui::Separator();
+
+  // Rejections Panel - Display risk invariant failures in ASK_RED
+  ImGui::TextDisabled("Risk Rejections");
+  ImGui::BeginChild("RejectionsList", ImVec2(0, 150), true);
+  render_rejections();
   ImGui::EndChild();
 
   ImGui::Separator();
@@ -164,6 +176,50 @@ void AlertsPanel::render_alert_logs() {
 
       ImGui::TableSetColumnIndex(3);
       ImGui::Text("%s", log.message.c_str());
+    }
+    ImGui::EndTable();
+  }
+}
+
+void AlertsPanel::render_rejections() {
+  if (rejections_.empty()) {
+    ImGui::TextDisabled("No risk rejections");
+    return;
+  }
+
+  if (ImGui::BeginTable(
+          "RejectionsTable", 5,
+          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+    ImGui::TableSetupColumn("Time");
+    ImGui::TableSetupColumn("Symbol");
+    ImGui::TableSetupColumn("Side");
+    ImGui::TableSetupColumn("Size");
+    ImGui::TableSetupColumn("Reason");
+    ImGui::TableHeadersRow();
+
+    // ASK_RED color for risk invariant failures
+    const ImVec4 ask_red_color(1.0f, 0.3f, 0.3f, 1.0f);
+
+    for (const auto& rej : rejections_) {
+      ImGui::TableNextRow();
+
+      ImGui::TableSetColumnIndex(0);
+      std::time_t t = std::chrono::system_clock::to_time_t(rej.timestamp);
+      char time_buf[64];
+      std::strftime(time_buf, sizeof(time_buf), "%H:%M:%S", std::localtime(&t));
+      ImGui::Text("%s", time_buf);
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextColored(ask_red_color, "%s", rej.symbol.c_str());
+
+      ImGui::TableSetColumnIndex(2);
+      ImGui::TextColored(ask_red_color, "%s", rej.is_buy ? "BUY" : "SELL");
+
+      ImGui::TableSetColumnIndex(3);
+      ImGui::TextColored(ask_red_color, "%.4f @ %.2f", rej.quantity, rej.price);
+
+      ImGui::TableSetColumnIndex(4);
+      ImGui::TextColored(ask_red_color, "%s", rej.reason.c_str());
     }
     ImGui::EndTable();
   }

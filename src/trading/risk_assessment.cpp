@@ -61,11 +61,25 @@ RiskAssessmentResult RiskAssessment::assess_order(const Order& order) const {
 
     RiskAssessmentResult loss_check = check_daily_loss_limit(order);
     if (loss_check != RiskAssessmentResult::APPROVED) {
+        // Push rejection to the lock-free queue
+        ExecutionReport::RejectReason reason = 
+            (loss_check == RiskAssessmentResult::DAILY_LOSS_LIMIT_EXCEEDED)
+                ? ExecutionReport::RejectReason::DAILY_LOSS_LIMIT_EXCEEDED
+                : ExecutionReport::RejectReason::UNKNOWN;
+        rejection_queue_.push(ExecutionReport(order.symbol, order.quantity, order.price, 
+                                               order.is_buy, reason));
         return loss_check;
     }
 
     RiskAssessmentResult position_check = check_max_position_size(order);
     if (position_check != RiskAssessmentResult::APPROVED) {
+        // Push rejection to the lock-free queue
+        ExecutionReport::RejectReason reason = 
+            (position_check == RiskAssessmentResult::MAX_POSITION_SIZE_EXCEEDED)
+                ? ExecutionReport::RejectReason::MAX_POSITION_SIZE_EXCEEDED
+                : ExecutionReport::RejectReason::UNKNOWN;
+        rejection_queue_.push(ExecutionReport(order.symbol, order.quantity, order.price, 
+                                               order.is_buy, reason));
         return position_check;
     }
 

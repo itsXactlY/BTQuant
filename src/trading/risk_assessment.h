@@ -4,6 +4,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
+#include <optional>
+
+#include "../dependencies/BTQ_Render_Engine/include/threading/lockfree_queue.hpp"
 
 // Structure to represent an order
 struct Order {
@@ -24,6 +28,31 @@ enum class RiskAssessmentResult {
     MAX_POSITION_SIZE_EXCEEDED
 };
 
+// Execution report for rejected orders
+struct ExecutionReport {
+    enum class RejectReason {
+        NONE = 0,
+        DAILY_LOSS_LIMIT_EXCEEDED,
+        MAX_POSITION_SIZE_EXCEEDED,
+        UNKNOWN
+    };
+
+    std::string symbol;
+    double quantity;
+    double price;
+    bool is_buy;
+    RejectReason reason;
+    std::chrono::system_clock::time_point timestamp;
+
+    ExecutionReport()
+        : symbol(""), quantity(0.0), price(0.0), is_buy(true),
+          reason(RejectReason::NONE), timestamp(std::chrono::system_clock::now()) {}
+
+    ExecutionReport(const std::string& sym, double qty, double p, bool buy, RejectReason r)
+        : symbol(sym), quantity(qty), price(p), is_buy(buy), reason(r),
+          timestamp(std::chrono::system_clock::now()) {}
+};
+
 class RiskAssessment {
 private:
     // Daily loss limit (atomic for lock-free reads)
@@ -40,6 +69,9 @@ private:
 
     // Track the date for daily reset (store as seconds since epoch)
     std::atomic<int64_t> last_reset_date_;
+
+    // Lock-free queue for rejected orders (reverse queue for error codes)
+    mutable btq::threading::LockFreeQueue<ExecutionReport> rejection_queue_;
 
 public:
     explicit RiskAssessment(double daily_loss_limit = 10000.0,
@@ -76,6 +108,16 @@ public:
     // Manual reset functions
     void reset_daily_pnl();
     void reset_position_size();
+
+    // Get rejection queue for UI rendering
+    const btq::threading::LockFreeQueue<ExecutionReport>& get_rejection_queue() const {
+        return rejection_queue_;
+    }
+
+    // Pop a rejection from the queue (for UI consumption)
+    std::optional<ExecutionReport> pop_rejection() const {
+        return rejection_queue_.try_pop();
+    }
 };
 
 #endif // PUBBTQUANT_RISK_ASSESSMENT_H

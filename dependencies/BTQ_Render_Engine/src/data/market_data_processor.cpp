@@ -1,6 +1,4 @@
 #include "market_data_processor.hpp"
-#include "cache_manager.hpp"
-#include "data/incremental_updater.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -9,6 +7,8 @@
 #include <numeric>
 #include <stdexcept>
 
+#include "cache_manager.hpp"
+#include "data/incremental_updater.hpp"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -108,7 +108,6 @@ void MarketDataProcessor::clearHistory() {
     }
   }
 }
-
 ProcessorPerformanceMetrics MarketDataProcessor::getPerformanceMetrics() const {
   return performance_metrics_.toNonAtomic();
 }
@@ -204,7 +203,7 @@ std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symb
 std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
   // UI thread read path - uses acquire semantics for lock-free access
   // Load active pointer with acquire to ensure we see all writes made by network thread
-  
+
   // First try to get from atomic BBO buffer (fast path for UI)
   AtomicBBOState* bbo = bbo_active_ptr_.load(std::memory_order_acquire);
   if (bbo != nullptr && bbo->symbol_id == symbol_id && bbo->best_bid > 0.0 && bbo->best_ask > 0.0) {
@@ -218,7 +217,7 @@ std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_
     snapshot.best_ask_size = bbo->best_ask_size;
     snapshot.spread = bbo->spread;
     snapshot.spread_percent = bbo->spread_percent;
-    
+
     // Get last trade info from symbol data (requires shard lock)
     auto& shard = getShard(symbol_id);
     auto it = shard.data.find(symbol_id);
@@ -227,17 +226,17 @@ std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_
       snapshot.last_trade_size = it->second.last_trade_size;
       snapshot.last_trade_time = it->second.last_trade_time;
     }
-    
+
     // Calculate mid-price
     if (snapshot.best_bid > 0.0 && snapshot.best_ask > 0.0) {
       snapshot.mid_price = (snapshot.best_bid + snapshot.best_ask) / 2.0;
     } else if (snapshot.last_trade_price > 0.0) {
       snapshot.mid_price = snapshot.last_trade_price;
     }
-    
+
     return snapshot;
   }
-  
+
   // Fallback to traditional method if BBO buffer not populated for this symbol
   auto& shard = getShard(symbol_id);
 
@@ -450,9 +449,7 @@ void MarketDataProcessor::clearIndicatorCache(uint32_t symbol_id,
   }
 }
 
-void MarketDataProcessor::clearAllIndicatorCaches() {
-  indicator_caches_.clear();
-}
+void MarketDataProcessor::clearAllIndicatorCaches() { indicator_caches_.clear(); }
 
 void MarketDataProcessor::setParallelProcessingEnabled(bool enabled) {
   parallel_processing_enabled_ = enabled;
@@ -689,10 +686,10 @@ void MarketDataProcessor::updateSpreadAnalysis(SymbolAnalytics& symbol_data) {
 
 void MarketDataProcessor::updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade) {
   for (auto timeframe :
-       {TimeFrame::TF_1MS, TimeFrame::TF_10MS, TimeFrame::TF_100MS, TimeFrame::TF_500MS,
-        TimeFrame::TF_1SEC, TimeFrame::TF_3SEC, TimeFrame::TF_5SEC, TimeFrame::TF_15SEC,
-        TimeFrame::TF_30SEC, TimeFrame::TF_1MIN, TimeFrame::TF_2MIN, TimeFrame::TF_5MIN,
-        TimeFrame::TF_15MIN, TimeFrame::TF_30MIN, TimeFrame::TF_1HOUR, TimeFrame::TF_2HOUR,
+       {TimeFrame::TF_1MS,   TimeFrame::TF_10MS,  TimeFrame::TF_100MS,  TimeFrame::TF_500MS,
+        TimeFrame::TF_1SEC,  TimeFrame::TF_3SEC,  TimeFrame::TF_5SEC,   TimeFrame::TF_15SEC,
+        TimeFrame::TF_30SEC, TimeFrame::TF_1MIN,  TimeFrame::TF_2MIN,   TimeFrame::TF_5MIN,
+        TimeFrame::TF_15MIN, TimeFrame::TF_30MIN, TimeFrame::TF_1HOUR,  TimeFrame::TF_2HOUR,
         TimeFrame::TF_4HOUR, TimeFrame::TF_6HOUR, TimeFrame::TF_12HOUR, TimeFrame::TF_1DAY,
         TimeFrame::TF_1WEEK}) {
     updateCandleForTimeframe(symbol_data, trade, timeframe);
@@ -831,6 +828,9 @@ void MarketDataProcessor::processQueueLoop() {
 void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
   auto& shard = getShard(update.symbol_id);
 
+  // Acquire exclusive lock for writing to shard data
+  std::unique_lock<std::shared_mutex> lock(shard.mutex);
+
   auto& symbol_data = shard.data[update.symbol_id];
   symbol_data.symbol_id = update.symbol_id;
   symbol_data.last_update_time = update.timestamp;
@@ -909,6 +909,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
 
   // Release lock before notifying subscribers (avoid holding while calling
   // callbacks)
+  lock.unlock();
+
   NotificationType notify_type = (update.type == MarketDataType::TRADE)
                                      ? NotificationType::TRADE
                                      : NotificationType::ORDERBOOK;
@@ -918,7 +920,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
   notifySubscribers(notify_symbol_id, notify_type);
 }
 
-void MarketDataProcessor::processTradeIncrementallyInternal(SymbolAnalytics& symbol_data, const TradeData& trade) {
+void MarketDataProcessor::processTradeIncrementallyInternal(SymbolAnalytics& symbol_data,
+                                                            const TradeData& trade) {
   // Delegate to the incremental_updater module with dirty flag
   // This ensures consistent analytics updates and dirty flag signaling
   RenderEngine::processTradeIncrementally(symbol_data, trade, &heatmap_dirty_flag_);
@@ -927,7 +930,7 @@ void MarketDataProcessor::processTradeIncrementallyInternal(SymbolAnalytics& sym
   auto now = std::chrono::high_resolution_clock::now();
   auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(
       now - std::chrono::high_resolution_clock::time_point(
-               std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
+                std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
   symbol_data.last_update_time = now.time_since_epoch().count();
 
   // Update atomic BBO state for lock-free UI access (network thread - release semantics)
@@ -936,7 +939,8 @@ void MarketDataProcessor::processTradeIncrementallyInternal(SymbolAnalytics& sym
 
 // Update BBO state using double-buffered atomic pointers
 // Called from network/worker thread - uses release semantics
-void MarketDataProcessor::updateBBOState(uint32_t symbol_id, const SymbolAnalytics& symbol_data) const {
+void MarketDataProcessor::updateBBOState(uint32_t symbol_id,
+                                         const SymbolAnalytics& symbol_data) const {
   // Get best bid/ask from consolidated orderbook or recent orderbooks
   double best_bid = 0.0;
   double best_ask = 0.0;
@@ -983,7 +987,7 @@ void MarketDataProcessor::updateBBOState(uint32_t symbol_id, const SymbolAnalyti
   // This ensures all writes to the buffer are visible before the pointer swap
   AtomicBBOState* old_active = bbo_active_ptr_.load(std::memory_order_relaxed);
   bbo_active_ptr_.store(inactive, std::memory_order_release);
-  
+
   // Old active buffer becomes the new inactive buffer for next update
   bbo_inactive_ptr_.store(old_active, std::memory_order_relaxed);
 }

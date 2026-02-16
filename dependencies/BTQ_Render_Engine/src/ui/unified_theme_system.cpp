@@ -485,6 +485,128 @@ void UnifiedThemeManager::load_builtin_themes() {
   deep_void.is_builtin = true;
 
   themes_[deep_void.name] = deep_void;
+
+  // MMT (Market Monkey Terminal) Palette - Hardcoded per specification
+  ThemeDefinition mmt_palette;
+  mmt_palette.name = "MMT Palette";
+  mmt_palette.description = "Hardcoded MMT aesthetic - Deep Void";
+  mmt_palette.is_dark_theme = true;
+
+  // MMT Color Palette (hardcoded)
+  // ImGuiCol_WindowBg = #0B0E11 -> RGB(11, 14, 17)
+  mmt_palette.colors.background_primary[0] = 11.0f / 255.0f;
+  mmt_palette.colors.background_primary[1] = 14.0f / 255.0f;
+  mmt_palette.colors.background_primary[2] = 17.0f / 255.0f;
+  mmt_palette.colors.background_primary[3] = 1.0f;
+
+  // ImGuiCol_ChildBg = #15191E -> RGB(21, 25, 30)
+  mmt_palette.colors.background_secondary[0] = 21.0f / 255.0f;
+  mmt_palette.colors.background_secondary[1] = 25.0f / 255.0f;
+  mmt_palette.colors.background_secondary[2] = 30.0f / 255.0f;
+  mmt_palette.colors.background_secondary[3] = 1.0f;
+
+  // Panel background (same as window bg for seamless integration)
+  mmt_palette.colors.background_panel[0] = 11.0f / 255.0f;
+  mmt_palette.colors.background_panel[1] = 14.0f / 255.0f;
+  mmt_palette.colors.background_panel[2] = 17.0f / 255.0f;
+  mmt_palette.colors.background_panel[3] = 1.0f;
+
+  // ImGuiCol_Text = #D1D4DC -> RGB(209, 212, 220)
+  mmt_palette.colors.text_primary[0] = 209.0f / 255.0f;
+  mmt_palette.colors.text_primary[1] = 212.0f / 255.0f;
+  mmt_palette.colors.text_primary[2] = 220.0f / 255.0f;
+  mmt_palette.colors.text_primary[3] = 1.0f;
+
+  // Secondary text (slightly dimmed)
+  mmt_palette.colors.text_secondary[0] = 180.0f / 255.0f;
+  mmt_palette.colors.text_secondary[1] = 183.0f / 255.0f;
+  mmt_palette.colors.text_secondary[2] = 190.0f / 255.0f;
+  mmt_palette.colors.text_secondary[3] = 1.0f;
+
+  // Muted text
+  mmt_palette.colors.text_muted[0] = 120.0f / 255.0f;
+  mmt_palette.colors.text_muted[1] = 123.0f / 255.0f;
+  mmt_palette.colors.text_muted[2] = 130.0f / 255.0f;
+  mmt_palette.colors.text_muted[3] = 1.0f;
+
+  // Price colors (trading specific)
+  mmt_palette.colors.price_up[0] = 0.0f;
+  mmt_palette.colors.price_up[1] = 0.8f;
+  mmt_palette.colors.price_up[2] = 0.0f;
+  mmt_palette.colors.price_up[3] = 1.0f;
+
+  mmt_palette.colors.price_down[0] = 0.8f;
+  mmt_palette.colors.price_down[1] = 0.0f;
+  mmt_palette.colors.price_down[2] = 0.0f;
+  mmt_palette.colors.price_down[3] = 1.0f;
+
+  mmt_palette.colors.price_neutral[0] = 0.6f;
+  mmt_palette.colors.price_neutral[1] = 0.6f;
+  mmt_palette.colors.price_neutral[2] = 0.6f;
+  mmt_palette.colors.price_neutral[3] = 1.0f;
+
+  // Accent colors
+  mmt_palette.colors.accent_primary[0] = 0.2f;
+  mmt_palette.colors.accent_primary[1] = 0.6f;
+  mmt_palette.colors.accent_primary[2] = 1.0f;
+  mmt_palette.colors.accent_primary[3] = 1.0f;
+
+  mmt_palette.colors.accent_secondary[0] = 0.8f;
+  mmt_palette.colors.accent_secondary[1] = 0.4f;
+  mmt_palette.colors.accent_secondary[2] = 0.0f;
+  mmt_palette.colors.accent_secondary[3] = 1.0f;
+
+  // ImGuiCol_Separator = rgba(94, 82, 64, 0.2)
+  mmt_palette.colors.border_color[0] = 94.0f / 255.0f;
+  mmt_palette.colors.border_color[1] = 82.0f / 255.0f;
+  mmt_palette.colors.border_color[2] = 64.0f / 255.0f;
+  mmt_palette.colors.border_color[3] = 0.2f;
+
+  // Status colors
+  mmt_palette.colors.status_connected[0] = 0.0f;
+  mmt_palette.colors.status_connected[1] = 0.8f;
+  mmt_palette.colors.status_connected[2] = 0.0f;
+  mmt_palette.colors.status_connected[3] = 1.0f;
+
+  mmt_palette.colors.status_disconnected[0] = 0.8f;
+  mmt_palette.colors.status_disconnected[1] = 0.0f;
+  mmt_palette.colors.status_disconnected[2] = 0.0f;
+  mmt_palette.colors.status_disconnected[3] = 1.0f;
+
+  mmt_palette.colors.status_warning[0] = 0.8f;
+  mmt_palette.colors.status_warning[1] = 0.8f;
+  mmt_palette.colors.status_warning[2] = 0.0f;
+  mmt_palette.colors.status_warning[3] = 1.0f;
+
+  // Typography
+  mmt_palette.font_family = "JetBrains Mono";
+  mmt_palette.font_size_normal = 14.0f;
+  mmt_palette.font_size_small = 12.0f;
+  mmt_palette.font_size_large = 18.0f;
+
+  // Spacing
+  mmt_palette.padding_small = 4.0f;
+  mmt_palette.padding_medium = 8.0f;
+  mmt_palette.padding_large = 16.0f;
+
+  // Border radius - ZERO for absolute zero-border integration (MMT spec)
+  mmt_palette.border_radius_small = 0.0f;
+  mmt_palette.border_radius_medium = 0.0f;
+  mmt_palette.border_radius_large = 0.0f;
+
+  // Shadow properties (minimal for MMT aesthetic)
+  mmt_palette.shadow_normal.offset_x = 0.0f;
+  mmt_palette.shadow_normal.offset_y = 0.0f;
+  mmt_palette.shadow_normal.blur_radius = 0.0f;
+  mmt_palette.shadow_normal.spread = 0.0f;
+  mmt_palette.shadow_normal.color[0] = 0.0f;
+  mmt_palette.shadow_normal.color[1] = 0.0f;
+  mmt_palette.shadow_normal.color[2] = 0.0f;
+  mmt_palette.shadow_normal.color[3] = 0.0f;
+
+  mmt_palette.is_builtin = true;
+
+  themes_[mmt_palette.name] = mmt_palette;
 }
 
 bool UnifiedThemeManager::register_theme(const ThemeDefinition& theme) {

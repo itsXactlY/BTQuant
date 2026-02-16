@@ -6,13 +6,13 @@
 #include <vector>
 
 #include "vulkan_base_types.hpp"
+#include "data/core_types.hpp"
 
 namespace BTQuant {
 
 // Forward declaration
 namespace RenderEngine {
 struct TradeData;
-struct OrderbookData;
 }  // namespace RenderEngine
 
 // ============================================================================
@@ -140,7 +140,7 @@ class MarketDepthAnalyzer {
   };
 
   MarketDepthAnalyzer() = default;
-  MarketDepthSnapshot create_depth_snapshot(const RenderEngine::OrderbookData& orderbook);
+  MarketDepthSnapshot create_depth_snapshot(const OrderbookData& orderbook);
   DepthAnalysis analyze_market_depth(const MarketDepthSnapshot& snapshot);
   std::vector<LiquidityGap> detect_liquidity_gaps(const MarketDepthSnapshot& snapshot,
                                                   double min_gap_size = 0.01);

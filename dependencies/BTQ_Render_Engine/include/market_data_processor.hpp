@@ -27,7 +27,7 @@
 #endif
 
 #include "hotspine_data_bridge.hpp"
-#include "data/data_types.hpp"
+#include "data/core_types.hpp"
 #include "cache_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
@@ -38,20 +38,14 @@
 namespace BTQuant {
 namespace RenderEngine {
 
-// Market data update type
-enum class MarketDataType { TRADE, ORDERBOOK };
-
-// Market data update structure
-struct MarketDataUpdate {
-  MarketDataType type;
-  uint32_t symbol_id;
-  uint64_t timestamp;
-  double price;
-  double size;
-  std::string side;
-  std::vector<PriceLevel> bids;
-  std::vector<PriceLevel> asks;
-};
+// Type aliases for backward compatibility with core_types.hpp
+using MarketDataType = BTQuant::MarketDataType;
+using MarketDataUpdate = BTQuant::MarketDataUpdate;
+using OrderbookData = BTQuant::OrderbookData;
+using PriceLevel = BTQuant::PriceLevel;
+using TimeFrame = BTQuant::TimeFrame;
+using OHLCVCandle = BTQuant::OHLCVCandle;
+using VolumeProfileLevel = BTQuant::VolumeProfileLevel;
 
 // Trade data for analytics
 struct TradeData {
@@ -61,21 +55,6 @@ struct TradeData {
   double price;
   double size;
   bool is_buy;
-};
-
-// Orderbook data for analytics
-struct OrderbookData {
-  std::string symbol;
-  uint32_t symbol_id = 0;
-  uint64_t timestamp;
-  std::vector<PriceLevel> bids;
-  std::vector<PriceLevel> asks;
-  double spread;
-  double spread_percent;
-  double bid_depth;
-  double ask_depth;
-  double total_depth;
-  double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
 // Standard Layout POD OrderBookSnapshot for ring buffer

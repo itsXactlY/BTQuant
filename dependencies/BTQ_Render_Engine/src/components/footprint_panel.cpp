@@ -708,6 +708,48 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
   }
 }
 
+std::vector<FootprintCell> FootprintPanel::detectBidAskImbalance(
+    const std::vector<FootprintCell>& cells, double threshold) const {
+  std::vector<FootprintCell> imbalances;
+
+  // Group cells by price level (y coordinate)
+  std::map<int, std::vector<const FootprintCell*>> cells_by_price;
+  for (const auto& cell : cells) {
+    int price_level = static_cast<int>(std::round(cell.y));
+    cells_by_price[price_level].push_back(&cell);
+  }
+
+  // For each price level N, compare Bid volume at N with Ask volume at N+1
+  for (const auto& [price_level, level_cells] : cells_by_price) {
+    int next_price_level = price_level + 1;
+    auto it = cells_by_price.find(next_price_level);
+    if (it == cells_by_price.end()) {
+      continue;  // No price level N+1 found
+    }
+
+    const std::vector<const FootprintCell*>& next_level_cells = it->second;
+
+    // Compare each cell at level N with cells at level N+1
+    for (const auto* cell : level_cells) {
+      for (const auto* next_cell : next_level_cells) {
+        // Check if cells are at similar time (same time bucket)
+        if (std::abs(cell->x - next_cell->x) < 2.0) {
+          // Compare Bid volume at level N with Ask volume at level N+1
+          if (next_cell->ask_volume > 0 && cell->bid_volume > 0) {
+            double ratio = cell->bid_volume / next_cell->ask_volume;
+            if (ratio > threshold) {
+              imbalances.push_back(*cell);
+              break;  // Only mark once per cell
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return imbalances;
+}
+
 void FootprintPanel::render_content() {
   begin_panel_window();
 
@@ -854,6 +896,9 @@ void FootprintPanel::render_content() {
     std::vector<FootprintCell> diagonal_imbalances;
     std::vector<FootprintCell> stacked_imbalances;
     detectImbalances(cells_, diagonal_imbalances, stacked_imbalances);
+
+    // Detect Bid/Ask imbalance (Bid at level N vs Ask at level N+1)
+    std::vector<FootprintCell> bid_ask_imbalances = detectBidAskImbalance(cells_, 3.0);
     
     // Use ClusterEngine for advanced imbalance and exhaustion detection
     std::vector<std::tuple<int64_t, int, double, double, double>> diagonal_imbalances_raw;
@@ -914,7 +959,7 @@ void FootprintPanel::render_content() {
                 }
             }
         }
-        
+
         // Highlight stacked imbalances from raw detection
         for (const auto& [price_level, time_bucket, buy_vol, sell_vol, ratio] : stacked_imbalances_raw) {
             // Map the detected price level and time bucket to visual cells
@@ -927,7 +972,7 @@ void FootprintPanel::render_content() {
                 }
             }
         }
-        
+
         if (show_exhaustion) {
             // Highlight exhaustion moves from raw detection
             for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
@@ -942,6 +987,13 @@ void FootprintPanel::render_content() {
                 }
             }
         }
+    }
+
+    // Highlight Bid/Ask imbalances (Bid at level N vs Ask at level N+1) with 2px boundary box
+    for (const auto& cell : bid_ask_imbalances) {
+        ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width / 2, cell.y - cell.height / 2);
+        ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width / 2, cell.y + cell.height / 2);
+        draw_list->AddRect(p1, p2, IM_COL32(255, 128, 0, 255), 0.0f, 0, 2.0f); // Orange 2px border for bid/ask imbalance
     }
 
     ImPlot::EndPlot();

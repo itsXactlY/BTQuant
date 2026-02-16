@@ -204,6 +204,10 @@ class FootprintPanel : public PanelBase {
                         std::vector<FootprintCell>& diagonal_imbalances,
                         std::vector<FootprintCell>& stacked_imbalances) const;
 
+  // Bid/Ask Imbalance Detection (Bid at level N vs Ask at level N+1)
+  std::vector<FootprintCell> detectBidAskImbalance(
+      const std::vector<FootprintCell>& cells, double threshold = 3.0) const;
+
  private:
   // Number formatting helper
   static std::string formatNumber(double value, NumberFormat format, int decimal_places);

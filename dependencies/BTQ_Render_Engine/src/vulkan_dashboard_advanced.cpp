@@ -290,6 +290,8 @@ void VulkanDashboard::init_components() {
 }
 
 void VulkanDashboard::render_frame() {
+  g_performance_monitor.start_frame();
+
   if (window_resized_) {
     vulkan_core_->recreate_swapchain(width_, height_);
     window_resized_ = false;
@@ -335,6 +337,8 @@ void VulkanDashboard::render_frame() {
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [](VkCommandBuffer cmd) {
     // No microstructure renderer - panels handle their own rendering
   });
+
+  g_performance_monitor.end_frame();
   vulkan_core_->PresentFrame(imageIndex);
 }
 

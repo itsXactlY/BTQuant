@@ -269,7 +269,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<DepthChartPanel>(config, bridge_, processor_);
       break;
     case PanelType::FOOTPRINT_CHART:
-      panel = std::make_unique<FootprintPanel>(config);
+      panel = std::make_unique<FootprintPanel>(config, processor_);
       break;
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config, bridge_, processor_);
@@ -525,7 +525,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<DepthChartPanel>(config, bridge_, processor_);
       break;
     case PanelType::FOOTPRINT_CHART:
-      panel = std::make_unique<FootprintPanel>(config);
+      panel = std::make_unique<FootprintPanel>(config, processor_);
       break;
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config, bridge_, processor_);

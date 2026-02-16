@@ -107,8 +107,10 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
   return oss.str();
 }
 
-FootprintPanel::FootprintPanel(const PanelConfig& config)
+FootprintPanel::FootprintPanel(const PanelConfig& config,
+                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config),
+      market_data_processor_(processor),
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
       volume_based_n_contracts_(1000),
@@ -116,6 +118,15 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
       price_aggregation_type_(Data::PriceAggregationType::P_1TICK),
       custom_price_aggregation_value_(0.1),
       zoom_sensitivity_(1.0f) {
+
+  // Subscribe to TRADE notifications for footprint data updates
+  if (market_data_processor_) {
+    subscription_id_ = market_data_processor_->subscribe(
+        0, RenderEngine::NotificationType::TRADE,
+        [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+          this->markDirty();
+        });
+  }
 
   // Configure the LOD system with appropriate thresholds for footprint visualization
   lod_system_.setMinDetailZoom(0.1f);
@@ -131,9 +142,15 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
   lod_system_.setTextRenderThreshold(12.0f);
   lod_system_.setLabelRenderThreshold(20.0f);
   lod_system_.setDetailRenderThreshold(8.0f);
-  
+
   // Initialize the ClusterEngine with a default tick size
   cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size of 0.25
+}
+
+FootprintPanel::~FootprintPanel() {
+  if (market_data_processor_ && subscription_id_ > 0) {
+    market_data_processor_->unsubscribe(subscription_id_);
+  }
 }
 
 void FootprintPanel::update(float /*dt*/) {

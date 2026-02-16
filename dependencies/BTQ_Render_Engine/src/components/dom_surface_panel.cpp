@@ -24,6 +24,22 @@ DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcess
   // Initialize Vulkan texture if Vulkan core is available
   // Vulkan compute removed - using CPU-based heatmap rendering initially
   // But we'll prepare for Vulkan-accelerated texture rendering
+
+  // Subscribe to ORDERBOOK and TRADE updates in constructor
+  if (processor_) {
+    // Subscribe to ORDERBOOK updates
+    subscription_id_ = processor_->subscribe(
+        0, RenderEngine::NotificationType::ORDERBOOK,
+        [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+          this->markDirty();
+        });
+
+    // Also subscribe to TRADE updates for trade bubbles
+    processor_->subscribe(0, RenderEngine::NotificationType::TRADE,
+                          [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+                            this->markDirty();
+                          });
+  }
 }
 
 DomSurfacePanel::~DomSurfacePanel() {
@@ -792,9 +808,9 @@ void DomSurfacePanel::render() {
       updateVulkanTexture();
     }
 
-    // Update MMT layout data if enabled
-    if (show_mmt_layout_) {
-      updateMMTLayoutData();
+    // Update BTQ layout data if enabled
+    if (show_BTQ_layout_) {
+      updateBTQLayoutData();
     }
   }
 
@@ -844,14 +860,14 @@ void DomSurfacePanel::render() {
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
-  ImGui::Checkbox("Show MMT 5-Column Layout", &show_mmt_layout_);
+  ImGui::Checkbox("Show BTQ 5-Column Layout", &show_BTQ_layout_);
   ImGui::SameLine();
   ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
               large_order_markers_.size(), trade_bubbles_.size());
 
-  // If MMT layout is enabled, render it instead of the heatmap
-  if (show_mmt_layout_) {
-    renderMMTLayout();
+  // If BTQ layout is enabled, render it instead of the heatmap
+  if (show_BTQ_layout_) {
+    renderBTQLayout();
   } else {
     // Enable Pan/Zoom for DOM Surface
     std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
@@ -866,7 +882,7 @@ void DomSurfacePanel::render() {
       ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
                               ImPlotCond_Once);
       // Apply center mode if enabled
-      if (mmt_center_mode_) {
+      if (BTQ_center_mode_) {
         // Calculate center price
         double center_price = 0.0;
         auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
@@ -881,8 +897,8 @@ void DomSurfacePanel::render() {
           center_price = (bounds_min_[1] + bounds_max_[1]) / 2.0;
         }
 
-        // Calculate range based on center price and mmt_center_range_
-        double range = center_price * mmt_center_range_;
+        // Calculate range based on center price and BTQ_center_range_
+        double range = center_price * BTQ_center_range_;
         ImPlot::SetupAxisLimits(ImAxis_Y1, center_price - range, center_price + range,
                                 ImPlotCond_Always); // Use Always to enforce center mode
       } else {
@@ -1038,7 +1054,7 @@ void DomSurfacePanel::render() {
   }
 
   // Debug Overlay for DOM troubleshooting
-  if (heatmap_data_.size() > 0 && !show_mmt_layout_) {
+  if (heatmap_data_.size() > 0 && !show_BTQ_layout_) {
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
@@ -1259,16 +1275,16 @@ void DomSurfacePanel::render_panel_header() {
       }
     }
     
-    // Add MMT layout options to the context menu
-    if (ImGui::BeginMenu("MMT Layout")) {
-      ImGui::MenuItem("Enable 5-Column Layout", nullptr, &show_mmt_layout_);
-      ImGui::MenuItem("Center Mode", nullptr, &mmt_center_mode_);
+    // Add BTQ layout options to the context menu
+    if (ImGui::BeginMenu("BTQ Layout")) {
+      ImGui::MenuItem("Enable 5-Column Layout", nullptr, &show_BTQ_layout_);
+      ImGui::MenuItem("Center Mode", nullptr, &BTQ_center_mode_);
       if (ImGui::BeginMenu("Display Levels")) {
-        if (ImGui::MenuItem("5 Levels", nullptr, mmt_display_levels_ == 5)) mmt_display_levels_ = 5;
-        if (ImGui::MenuItem("10 Levels", nullptr, mmt_display_levels_ == 10)) mmt_display_levels_ = 10;
-        if (ImGui::MenuItem("20 Levels", nullptr, mmt_display_levels_ == 20)) mmt_display_levels_ = 20;
-        if (ImGui::MenuItem("30 Levels", nullptr, mmt_display_levels_ == 30)) mmt_display_levels_ = 30;
-        if (ImGui::MenuItem("50 Levels", nullptr, mmt_display_levels_ == 50)) mmt_display_levels_ = 50;
+        if (ImGui::MenuItem("5 Levels", nullptr, BTQ_display_levels_ == 5)) BTQ_display_levels_ = 5;
+        if (ImGui::MenuItem("10 Levels", nullptr, BTQ_display_levels_ == 10)) BTQ_display_levels_ = 10;
+        if (ImGui::MenuItem("20 Levels", nullptr, BTQ_display_levels_ == 20)) BTQ_display_levels_ = 20;
+        if (ImGui::MenuItem("30 Levels", nullptr, BTQ_display_levels_ == 30)) BTQ_display_levels_ = 30;
+        if (ImGui::MenuItem("50 Levels", nullptr, BTQ_display_levels_ == 50)) BTQ_display_levels_ = 50;
         ImGui::EndMenu();
       }
       ImGui::EndMenu();
@@ -1347,12 +1363,12 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::PopStyleVar();
   ImGui::Separator();
 
-  // Add MMT Layout controls
-  ImGui::Text("MMT Layout:");
+  // Add BTQ Layout controls
+  ImGui::Text("BTQ Layout:");
   ImGui::SameLine();
-  ImGui::Checkbox("Show##MMTLayout", &show_mmt_layout_);
+  ImGui::Checkbox("Show##BTQLayout", &show_BTQ_layout_);
   ImGui::SameLine();
-  if (show_mmt_layout_) {
+  if (show_BTQ_layout_) {
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "ACTIVE"); // Cyan indicator when active
   }
   ImGui::Separator();
@@ -1635,9 +1651,9 @@ void DomSurfacePanel::initialize_vulkan_resources(VulkanCore* core) {
   std::cout << "[DomSurfacePanel] Vulkan resources initialized successfully" << std::endl;
 }
 
-void DomSurfacePanel::updateMMTLayoutData() {
-  // Update data for the 5-column MMT layout
-  // This method prepares the data needed for the MMT-style table view
+void DomSurfacePanel::updateBTQLayoutData() {
+  // Update data for the 5-column BTQ layout
+  // This method prepares the data needed for the BTQ-style table view
   if (current_symbol_id_ == 0 || !processor_) return;
 
   // Get the latest orderbook data for the current symbol
@@ -1647,7 +1663,7 @@ void DomSurfacePanel::updateMMTLayoutData() {
   const auto& orderbook = *orderbook_opt;
   
   // The data is already available in the orderbook, so we just need to prepare for rendering
-  // The MMT layout will render the orderbook data in 5 columns: [Buys | Asks | Price | Bids | Sells]
+  // The BTQ layout will render the orderbook data in 5 columns: [Buys | Asks | Price | Bids | Sells]
 }
 
 void DomSurfacePanel::renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height, 
@@ -1677,8 +1693,8 @@ void DomSurfacePanel::renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 p
   }
 }
 
-void DomSurfacePanel::renderMMTLayout() {
-  // Render the 5-column MMT layout as a table
+void DomSurfacePanel::renderBTQLayout() {
+  // Render the 5-column BTQ layout as a table
   if (current_symbol_id_ == 0 || !processor_) return;
 
   // Get the latest orderbook data for the current symbol
@@ -1691,10 +1707,10 @@ void DomSurfacePanel::renderMMTLayout() {
   const auto& orderbook = *orderbook_opt;
 
   // Calculate how many levels to display
-  int display_levels = std::min(mmt_display_levels_, static_cast<int>(std::max(orderbook.bids.size(), orderbook.asks.size()))); // Use a reasonable default
+  int display_levels = std::min(BTQ_display_levels_, static_cast<int>(std::max(orderbook.bids.size(), orderbook.asks.size()))); // Use a reasonable default
 
   // Create the 5-column table
-  if (ImGui::BeginTable("MMTLayoutTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
+  if (ImGui::BeginTable("BTQLayoutTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
     ImGui::TableSetupColumn("Buys", ImGuiTableColumnFlags_WidthStretch, 0.2f);
     ImGui::TableSetupColumn("Asks", ImGuiTableColumnFlags_WidthStretch, 0.2f);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.2f);
@@ -1823,15 +1839,15 @@ void DomSurfacePanel::renderMMTLayout() {
         // Average of bid and ask at this level
         double avg_price = (orderbook.bids[i].price + orderbook.asks[i].price) / 2.0;
         // Highlight if center mode is active and this is near the center
-        if (mmt_center_mode_) {
+        if (BTQ_center_mode_) {
           double center_price = (orderbook.bids.front().price + orderbook.asks.front().price) / 2.0;
-          double range = center_price * mmt_center_range_;
+          double range = center_price * BTQ_center_range_;
           if (avg_price >= (center_price - range) && avg_price <= (center_price + range)) {
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255)); // Yellow for center
           }
         }
         ImGui::Text("%.4f", avg_price);
-        if (mmt_center_mode_) {
+        if (BTQ_center_mode_) {
           ImGui::PopStyleColor(); // Pop the yellow color if we pushed it
         }
       } else if (i < orderbook.bids.size()) {
@@ -1936,30 +1952,30 @@ void DomSurfacePanel::renderMMTLayout() {
     ImGui::EndTable();
   }
 
-  // Add controls for the MMT layout
+  // Add controls for the BTQ layout
   ImGui::Separator();
-  ImGui::Text("MMT Layout Controls:");
+  ImGui::Text("BTQ Layout Controls:");
   ImGui::SameLine();
   ImGui::PushItemWidth(100);
-  ImGui::SliderInt("##Levels", &mmt_display_levels_, 5, 50, "Levels: %d");
+  ImGui::SliderInt("##Levels", &BTQ_display_levels_, 5, 50, "Levels: %d");
   ImGui::PopItemWidth();
   ImGui::SameLine();
-  ImGui::Checkbox("Center##MMTCenter", &mmt_center_mode_);
+  ImGui::Checkbox("Center##BTQCenter", &BTQ_center_mode_);
   ImGui::SameLine();
   if (ImGui::Button("Refresh")) {
     markDirty();
   }
 
   // Add center mode range control if center mode is enabled
-  if (mmt_center_mode_) {
+  if (BTQ_center_mode_) {
     ImGui::Separator();
     ImGui::Text("Center Mode Range:");
     ImGui::SameLine();
     ImGui::PushItemWidth(150);
-    ImGui::SliderFloat("##CenterRange", reinterpret_cast<float*>(&mmt_center_range_), 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("##CenterRange", reinterpret_cast<float*>(&BTQ_center_range_), 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
     ImGui::PopItemWidth();
     ImGui::SameLine();
-    ImGui::Text("(%.2f%%)", mmt_center_range_ * 100);
+    ImGui::Text("(%.2f%%)", BTQ_center_range_ * 100);
   }
 
   // Display cumulative volume information from ClusterEngine if available

@@ -58,7 +58,9 @@ enum class NumberFormat {
 
 class FootprintPanel : public PanelBase {
  public:
-  FootprintPanel(const PanelConfig& config);
+  FootprintPanel(const PanelConfig& config,
+                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  ~FootprintPanel() override;
 
   void update(float dt) override;
   void render() override;
@@ -129,6 +131,7 @@ class FootprintPanel : public PanelBase {
   double getZoomSensitivity() const { return zoom_sensitivity_; }
 
  private:
+  std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   uint32_t symbol_id_ = 0;
 
   // Volume Data Type for Footprint Visualization

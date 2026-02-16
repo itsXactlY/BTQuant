@@ -1,4 +1,15 @@
 cmake_minimum_required(VERSION 3.15)
+
+# Set Ninja as the default generator
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+find_package(Ninja REQUIRED)
+
+# CMAKE_GENERATOR must be set before running cmake, not within CMakeLists.txt
+# Users should run: cmake -G Ninja ..
+# This variable is set here for documentation purposes and for any custom scripts
+# that may check CMAKE_GENERATOR after configuration
+set(CMAKE_GENERATOR "Ninja" CACHE STRING "Build system generator (set via -G Ninja)")
+
 project(PubBTQuant LANGUAGES CXX C)
 
 # Set C++ standard globally

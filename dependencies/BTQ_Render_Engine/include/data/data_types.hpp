@@ -4,7 +4,8 @@
 #include <cstdint>
 
 // Price level for order book data
-struct PriceLevel {
+// alignas(64) prevents cache-line false sharing across CPU cores
+struct alignas(64) PriceLevel {
   double price;
   double size;
 };

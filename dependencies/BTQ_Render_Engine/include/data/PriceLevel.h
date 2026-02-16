@@ -3,7 +3,9 @@
 
 #include <vector>
 
-struct PriceLevel {
+// Price level for order book data
+// alignas(64) prevents cache-line false sharing across CPU cores
+struct alignas(64) PriceLevel {
   double price;
   double bidVolume;
   double askVolume;

@@ -20,6 +20,11 @@ namespace UI {
 // LayoutManager Implementation
 // ============================================================================
 
+LayoutManager& LayoutManager::getInstance() {
+    static LayoutManager instance;
+    return instance;
+}
+
 LayoutManager::LayoutManager() {
     initialize_presets_directory();
 }

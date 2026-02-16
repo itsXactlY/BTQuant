@@ -19,6 +19,15 @@
 
 namespace BTQuant {
 
+// Using declarations for RenderEngine types
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::OrderBookSnapshot;
+using BTQuant::RenderEngine::CandleCluster;
+using BTQuant::RenderEngine::TimeFrame;
+using BTQuant::RenderEngine::OHLCVCandle;
+using BTQuant::RenderEngine::PriceLevel;
+using BTQuant::RenderEngine::OrderbookData;
+
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
                                  std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,

@@ -117,6 +117,10 @@ class TapePanel : public PanelBase {
   // Trade clustering detection
   bool isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const;
 
+  // Slippage detection - consecutive trades < 50ms apart at different prices
+  static constexpr uint64_t SLIPPAGE_TIME_THRESHOLD_US = 50000;  // 50ms in microseconds
+  bool isSlippageTrade(int index, const std::vector<RenderEngine::TradeData>& trades) const;
+
   // Trade size histogram functions
   struct LogBucket {
     double lower_bound;

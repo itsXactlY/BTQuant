@@ -839,6 +839,9 @@ void TapePanel::render_trade_table() {
             // Check if this trade is part of a cluster
             bool is_clustered = isTradeClustered(original_index, cached_trades_);
 
+            // Check if this trade is part of a slippage event (consecutive trades < 50ms at different prices)
+            bool is_slippage = isSlippageTrade(original_index, cached_trades_);
+
             // Set background color for search matches and clustered trades
             if (is_search_match) {
               // Highlight search results with light blue background
@@ -977,6 +980,40 @@ void TapePanel::render_trade_table() {
 
             ImGui::PopID();
 
+            // Draw slippage bracket if this trade and the next (older) trade form a slippage pair
+            if (is_slippage && original_index - 1 >= 0) {
+              const auto& next_trade = cached_trades_[original_index - 1];
+              uint64_t time_diff = trade.timestamp >= next_trade.timestamp
+                                       ? trade.timestamp - next_trade.timestamp
+                                       : next_trade.timestamp - trade.timestamp;
+              bool price_different = std::abs(trade.price - next_trade.price) > price_match_tolerance_;
+
+              if (time_diff < SLIPPAGE_TIME_THRESHOLD_US && price_different) {
+                // Get the draw list and draw a white bracket on the right side
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                ImVec2 row_min = ImGui::GetItemRectMin();
+                ImVec2 row_max = ImGui::GetItemRectMax();
+
+                // Bracket extends to the right of the row
+                float bracket_offset = 10.0f;
+                float bracket_width = 6.0f;
+                float row_height = row_max.y - row_min.y;
+
+                // Draw the bracket: vertical line with two horizontal caps
+                ImVec2 bracket_left = ImVec2(row_max.x + bracket_offset, row_min.y);
+                ImVec2 bracket_right = ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y);
+                ImVec2 bracket_bottom_left = ImVec2(row_max.x + bracket_offset, row_min.y + row_height);
+                ImVec2 bracket_bottom_right = ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y + row_height);
+
+                // Top horizontal line
+                draw_list->AddLine(bracket_left, bracket_right, IM_COL32(255, 255, 255, 255), 1.0f);
+                // Vertical line
+                draw_list->AddLine(bracket_right, bracket_bottom_right, IM_COL32(255, 255, 255, 255), 1.0f);
+                // Bottom horizontal line
+                draw_list->AddLine(bracket_bottom_right, bracket_bottom_left, IM_COL32(255, 255, 255, 255), 1.0f);
+              }
+            }
+
             if (filtered_index >= clipper.DisplayEnd - 1) break;  // Move to next clipper step
           }
           filtered_index++;
@@ -1087,6 +1124,47 @@ bool BTQuant::TapePanel::isTradeClustered(
 
   // Return true if we found enough trades in the cluster
   return cluster_count >= min_cluster_size_;
+}
+
+// Check if a trade at the given index is part of a slippage event
+// Slippage: consecutive trades < 50ms apart at different prices
+bool BTQuant::TapePanel::isSlippageTrade(
+    int index, const std::vector<RenderEngine::TradeData>& trades) const {
+  if (index < 0 || index >= static_cast<int>(trades.size())) {
+    return false;
+  }
+
+  const auto& current_trade = trades[index];
+
+  // Check previous trade (newer in the tape, since we iterate backwards)
+  if (index + 1 < static_cast<int>(trades.size())) {
+    const auto& prev_trade = trades[index + 1];
+    uint64_t time_diff = current_trade.timestamp >= prev_trade.timestamp
+                             ? current_trade.timestamp - prev_trade.timestamp
+                             : prev_trade.timestamp - current_trade.timestamp;
+
+    // Check if trades are within 50ms and at different prices
+    if (time_diff < SLIPPAGE_TIME_THRESHOLD_US &&
+        std::abs(prev_trade.price - current_trade.price) > price_match_tolerance_) {
+      return true;
+    }
+  }
+
+  // Check next trade (older in the tape)
+  if (index - 1 >= 0) {
+    const auto& next_trade = trades[index - 1];
+    uint64_t time_diff = next_trade.timestamp >= current_trade.timestamp
+                             ? next_trade.timestamp - current_trade.timestamp
+                             : current_trade.timestamp - next_trade.timestamp;
+
+    // Check if trades are within 50ms and at different prices
+    if (time_diff < SLIPPAGE_TIME_THRESHOLD_US &&
+        std::abs(next_trade.price - current_trade.price) > price_match_tolerance_) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Calculate trades per minute for a given time window

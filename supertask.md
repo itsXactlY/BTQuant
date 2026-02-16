@@ -166,4 +166,4 @@
 - [x] Run `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and verify zero errors.
 - [x] Test that the terminal launches without crashes and all panels render correctly.
 - [x] Verify hotkey functionality (F5-F8 for layouts, F12 for debug overlay, Delete for panel removal).
-- [ ] Run `valgrind --leak-check=full ./build/BTQuantTerminal` to check for memory leaks in the subscription system.
+- [x] Run `valgrind --leak-check=full ./build/BTQuantTerminal` to check for memory leaks in the subscription system.

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numeric>
 
 namespace BTQuant {
@@ -162,6 +163,57 @@ double VolumeCalculator::calculateSellVolume(const std::vector<Data::TradeData>&
     }
   }
   return sell_volume;
+}
+
+std::vector<VolumeCalculator::VolumeProfileNode> VolumeCalculator::get_visible_volume_profile(
+    const std::vector<Data::TradeData>& trades, uint64_t start_time, uint64_t end_time,
+    double tick_size) {
+  std::vector<VolumeProfileNode> profile;
+
+  if (trades.empty() || tick_size <= 0.0) {
+    return profile;
+  }
+
+  // Use a map to aggregate volume by price level
+  // Key: Price level (as integer index), Value: Node with volume data
+  std::map<int, VolumeProfileNode> volume_map;
+
+  for (const auto& trade : trades) {
+    // Filter by time range
+    if (trade.timestamp < start_time || trade.timestamp > end_time) {
+      continue;
+    }
+
+    // Calculate price level index
+    int price_level_idx = static_cast<int>(std::round(trade.price / tick_size));
+    double price_level = price_level_idx * tick_size;
+
+    // Get or create node
+    auto& node = volume_map[price_level_idx];
+    if (node.total == 0.0) {
+      node.price = price_level;
+      node.buys = 0.0;
+      node.sells = 0.0;
+      node.total = 0.0;
+    }
+
+    // Aggregate volume
+    double vol = static_cast<double>(trade.volume);
+    if (trade.side == Data::TradeSide::BUY) {
+      node.buys += vol;
+    } else {
+      node.sells += vol;
+    }
+    node.total += vol;
+  }
+
+  // Convert map to vector
+  profile.reserve(volume_map.size());
+  for (const auto& pair : volume_map) {
+    profile.push_back(pair.second);
+  }
+
+  return profile;
 }
 
 }  // namespace Analytics

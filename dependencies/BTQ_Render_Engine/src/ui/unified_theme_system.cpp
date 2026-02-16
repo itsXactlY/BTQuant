@@ -548,7 +548,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.Colors[ImGuiCol_WindowBg] =
       ImVec4(theme.colors.background_panel[0], theme.colors.background_panel[1],
              theme.colors.background_panel[2], theme.colors.background_panel[3]);
-  // ImGuiCol_ChildBg will be set to #15191E via MMT Deep Void aesthetic override below
+  // ImGuiCol_ChildBg will be set to #15191E via BTQ Deep Void aesthetic override below
   style.Colors[ImGuiCol_PopupBg] =
       ImVec4(theme.colors.background_primary[0], theme.colors.background_primary[1],
              theme.colors.background_primary[2], theme.colors.background_primary[3]);
@@ -606,7 +606,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.Colors[ImGuiCol_HeaderActive] =
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.8f);
-  // Set separator color to rgba(94, 82, 64, 0.2) for seamless visual blending (MMT aesthetic)
+  // Set separator color to rgba(94, 82, 64, 0.2) for seamless visual blending (BTQ aesthetic)
   // Convert RGB values from 0-255 to 0-1 range: 94/255 ≈ 0.369, 82/255 ≈ 0.321, 64/255 ≈ 0.251
   style.Colors[ImGuiCol_Separator] = ImVec4(0.369f, 0.321f, 0.251f, 0.2f);
   // Maintain consistent separator colors for hover and active states
@@ -642,7 +642,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
       ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
              theme.colors.accent_primary[2], theme.colors.accent_primary[3] * 0.3f);
 
-  // ========== MMT Institutional Aesthetic Overrides ==========
+  // ========== BTQ Institutional Aesthetic Overrides ==========
   // Sub-pixel FinTech styling: zero-border, tight-spacing, deep-void palette
   style.WindowPadding = ImVec2(0.0f, 0.0f);  // Zero padding for seamless docked panels
   style.FramePadding = ImVec2(4.0f, 2.0f);   // Tight frame padding
@@ -652,7 +652,7 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.ScrollbarSize = 10.0f;  // Slim scrollbars
   style.GrabMinSize = 8.0f;
 
-  // Zero borders — seamless panel blending (MMT signature look)
+  // Zero borders — seamless panel blending (BTQ signature look)
   style.WindowBorderSize = 0.0f;
   style.ChildBorderSize = 0.0f;
   style.PopupBorderSize = 0.0f;
@@ -668,13 +668,13 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.GrabRounding = 0.0f;
   style.TabRounding = 0.0f;
 
-  // MMT Deep Void color overrides (applied on top of theme colors)
+  // BTQ Deep Void color overrides (applied on top of theme colors)
   style.Colors[ImGuiCol_WindowBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);    // #0B0E11
   style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);     // #15191E (Panel Surface - as required by task #05)
   style.Colors[ImGuiCol_PopupBg] = ImVec4(0.059f, 0.071f, 0.090f, 0.96f);    // #0F1217
   style.Colors[ImGuiCol_Text] = ImVec4(0.820f, 0.831f, 0.863f, 1.0f);        // #D1D4DC
   style.Colors[ImGuiCol_Border] = ImVec4(0.169f, 0.188f, 0.220f, 0.30f);     // #2B3038 (subtle)
-  // Note: Separator colors are set earlier to rgba(94, 82, 64, 0.2) for MMT aesthetic and should remain unchanged
+  // Note: Separator colors are set earlier to rgba(94, 82, 64, 0.2) for BTQ aesthetic and should remain unchanged
   style.Colors[ImGuiCol_TitleBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);
   style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.059f, 0.071f, 0.090f, 1.0f);
   style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);

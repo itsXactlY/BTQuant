@@ -15,7 +15,9 @@ namespace BTQuant {
 TradingInterface::TradingInterface()
     : order_manager_(std::make_unique<OrderManager>()),
       position_manager_(std::make_unique<PositionManager>()),
-      risk_assessment_(std::make_unique<RiskAssessment>()) {
+      risk_assessment_(std::make_unique<RiskAssessment>()),
+      market_data_processor_(nullptr),
+      chart_manager_(nullptr) {
   // Set up internal callbacks
   order_manager_->set_order_update_callback(
       [this](const OrderManager::Order& order) { on_order_update(order); });
@@ -334,6 +336,42 @@ std::string TradingInterface::generate_order_id() {
   auto timestamp =
       std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
   return "ORD-" + std::to_string(timestamp) + "-" + std::to_string(counter.fetch_add(1));
+}
+
+// Atomic Market Data Access
+void TradingInterface::set_market_data_processor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
+  market_data_processor_ = processor;
+}
+
+void TradingInterface::set_chart_manager(class ChartManager* chart_manager) {
+  chart_manager_ = chart_manager;
+}
+
+std::pair<double, double> TradingInterface::get_atomic_best_bid_ask(const std::string& symbol) const {
+  if (!market_data_processor_) {
+    return {0.0, 0.0};  // Return zero if no processor is set
+  }
+
+  // Get symbol ID from chart manager
+  if (!chart_manager_) {
+    return {0.0, 0.0};  // Return zero if no chart manager is set
+  }
+
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol);
+  if (!symbol_id_opt) {
+    return {0.0, 0.0};  // Return zero if symbol ID is not found
+  }
+
+  uint32_t symbol_id = *symbol_id_opt;
+
+  // Read from atomic snapshot
+  auto snapshot_opt = market_data_processor_->get_atomic_snapshot(symbol_id);
+  if (snapshot_opt) {
+    const auto& snapshot = *snapshot_opt;
+    return {snapshot.best_bid, snapshot.best_ask};
+  }
+
+  return {0.0, 0.0};  // Return zero if snapshot is not available
 }
 
 }  // namespace BTQuant

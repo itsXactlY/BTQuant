@@ -80,6 +80,28 @@ class VolumeCalculator {
                                         double min_price = 0.0,
                                         double max_price = std::numeric_limits<double>::max());
 
+  /**
+   * @brief Structure representing a single price level in the volume profile
+   */
+  struct VolumeProfileNode {
+    double price;
+    double buys;
+    double sells;
+    double total;
+  };
+
+  /**
+   * @brief Calculate the volume profile for a specific visible time range
+   * @param trades Vector of trade data
+   * @param start_time Start of the time range (timestamp)
+   * @param end_time End of the time range (timestamp)
+   * @param tick_size Price tick size for aggregation
+   * @return Vector of volume profile nodes
+   */
+  static std::vector<VolumeProfileNode> get_visible_volume_profile(
+      const std::vector<Data::TradeData>& trades, uint64_t start_time, uint64_t end_time,
+      double tick_size);
+
  private:
   // Private helper methods
   static double calculateTotalVolume(const std::vector<Data::TradeData>& trades);

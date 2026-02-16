@@ -1,11 +1,11 @@
-# TASK_MMT_CLONE_ARCHITECTURE.md
+# TASK_BTQ_CLONE_ARCHITECTURE.md
 
-**Objective:** Upgrade the BTQ Render Engine to achieve MMT.gg parity in Order Flow, Profiling, Liquidity, and visual aesthetics.
+**Objective:** Upgrade the BTQ Render Engine to achieve BTQ parity in Order Flow, Profiling, Liquidity, and visual aesthetics.
 **Core Principle:** All heavy visual computation (Heatmaps, TPO aggregations) must leverage custom Vulkan textures (`ImTextureID`) or batched `ImDrawList` calls. Zero blocking in the UI thread.
 
 ---
 
-## Phase 1: The Visual Vanguard (MMT Aesthetics)
+## Phase 1: The Visual Vanguard (BTQ Aesthetics)
 **Goal:** Establish the brutalist, borderless, high-contrast visual identity.
 
 - [x] **1.1: Institutional Typography (`src/ui/font_manager.cpp`)**
@@ -15,7 +15,7 @@
 
 - [x] **1.2: Deep Void Theme (`src/ui/unified_theme_system.cpp`)**
     - Strip all ImGui padding and borders: `WindowBorderSize = 0`, `FrameBorderSize = 0`, `WindowPadding = ImVec2(0,0)`.
-    - Apply MMT Color Palette:
+    - Apply BTQ Color Palette:
         - Background (`ImGuiCol_WindowBg`): `#080A0C` (True Void).
         - Panels (`ImGuiCol_ChildBg`): `#101418`.
         - Accent/Buy (`ImGuiCol_Text` or custom): `#00E676` (Neon Mint).
@@ -68,7 +68,7 @@
 ---
 
 ## Phase 4: Liquidity Heatmap (DOM Surface)
-**Goal:** Replicate MMT's smooth, GPU-accelerated historical depth surface.
+**Goal:** Replicate BTQ's smooth, GPU-accelerated historical depth surface.
 
 - [x] **4.1: Rolling Depth Buffer (`src/data/orderbook_snapshot_manager.hpp`)**
     - Maintain a lock-free circular buffer of the top 100 Bid/Ask levels, snapping state every 100ms.

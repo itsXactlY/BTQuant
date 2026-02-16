@@ -1,6 +1,6 @@
-# TASK_ULTIMA_MMT_CLONE_MAPPING.md
+# TASK_ULTIMA_BTQ_CLONE_MAPPING.md
 
-**Objective:** Transform BTQ Terminal into a 144Hz institutional Order Flow platform by mapping MMT features to the existing C++26 decoupled architecture.
+**Objective:** Transform BTQ Terminal into a 144Hz institutional Order Flow platform by mapping BTQ features to the existing C++26 decoupled architecture.
 **Core Principle:** Data is pulled from `MarketDataProcessor` atomics; UI is composed via `LayoutManager` DockBuilder; Heavy visuals use `VulkanCore` textures.
 
 ---
@@ -8,7 +8,7 @@
 ## Phase 1: The Docking Matrix (Workspace Composition)
 **Target:** `src/ui/layout_manager.cpp` & `src/components/quant_workspace_component.cpp`
 
-- [x] **1.1: MMT programmatic Grid Construction**
+- [x] **1.1: BTQ programmatic Grid Construction**
 - Inside `LayoutManager::apply_layout_preset(MODERN_TRADING)`:
 - [x] Create central `ChartSuperNode`.
 - [x] Split Left (3%) -> `drawing_tools_panel`.
@@ -39,7 +39,7 @@
 ## Phase 3: The DOM & Market Volume Profiles
 **Target:** `src/components/dom_surface_panel.cpp` & `src/analytics/cluster_engine.cpp`
 
-- [x] **3.1: 5-Column MMT Layout**
+- [x] **3.1: 5-Column BTQ Layout**
 - [x] Render Table: `[Buys | Asks | Price | Bids | Sells]`.
 - [x] **Center Mode:** Mathematically lock Y-limits: `y_min = current_price - range`.
 - [x] **3.2: Cumulative Volume Columns**

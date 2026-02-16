@@ -7,6 +7,7 @@
 .coverage
 
 # ===== Build & output =====
+build.sh
 dependencies/BTQ_Render_Engine/build_tests/
 dependencies/BTQ_Render_Engine/build_tests/
 dependencies/ccapi/example/build/

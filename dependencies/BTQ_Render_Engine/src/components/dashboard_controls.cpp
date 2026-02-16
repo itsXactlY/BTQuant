@@ -127,7 +127,7 @@ void DashboardControls::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", nullptr)) {
+  if (ImGui::Begin("Dashboard Controls", nullptr, UI::OVERLAY_FLAGS)) {
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
 

@@ -8,6 +8,7 @@
 #include "../include/performance_monitor.hpp"
 #include "../include/performance/memory_tracker.hpp"
 #include "../src/imgui/imgui.h"
+#include "ui/ui_base.hpp"
 #include <sstream>
 #include <iomanip>
 #include <chrono>
@@ -187,14 +188,11 @@ void DebugOverlay::render() {
     // Create an always-topmost, borderless window for the debug overlay
     ImGui::Begin("Performance Debug Overlay",
                  nullptr,
-                 ImGuiWindowFlags_NoTitleBar |
-                 ImGuiWindowFlags_NoResize |
-                 ImGuiWindowFlags_NoMove |
+                 UI::OVERLAY_FLAGS |
                  ImGuiWindowFlags_NoScrollbar |
                  ImGuiWindowFlags_NoScrollWithMouse |
                  ImGuiWindowFlags_NoCollapse |
                  ImGuiWindowFlags_AlwaysAutoResize |
-                 ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoFocusOnAppearing |
                  ImGuiWindowFlags_NoNav);
 

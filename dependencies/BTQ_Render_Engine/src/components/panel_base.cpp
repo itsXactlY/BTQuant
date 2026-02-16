@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "ui/context_menus.hpp"
+#include "ui/ui_base.hpp"
 
 namespace BTQuant {
 
@@ -9,7 +10,7 @@ void PanelBase::begin_panel_window() {
   ImGui::SetNextWindowPos(config_.position, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
 
-  ImGuiWindowFlags flags = ImGuiWindowFlags_None;
+  ImGuiWindowFlags flags = UI::PANEL_DEFAULT_FLAGS;
   if (!config_.resizable) flags |= ImGuiWindowFlags_NoResize;
   if (!config_.movable) flags |= ImGuiWindowFlags_NoMove;
 

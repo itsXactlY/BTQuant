@@ -4,6 +4,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 ChartReplayPanel::ChartReplayPanel(const PanelConfig& config, 
                                    std::shared_ptr<HotSpineDataBridge> bridge,
                                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,

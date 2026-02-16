@@ -10,16 +10,17 @@
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "../market_data_processor.hpp"
+#include "../trading/trading_interface.hpp"  // Full include needed for method calls
+#include "../ui/font_manager.hpp"
 #include "chart_manager.hpp"
 #include "chart_panel_settings.hpp"
 #include "chart_super_node.hpp"  // Include the central chart node
-#include "drawing_tools.hpp"  // Include drawing tools header
+#include "drawing_tools.hpp"     // Include drawing tools header
 #include "historical_time_sales.hpp"
 #include "indicator_renderer.hpp"
 #include "panel_base.hpp"
 #include "panel_manager.hpp"
 #include "panel_settings_interface.hpp"
-#include "../ui/font_manager.hpp"
 
 namespace BTQuant {
 
@@ -94,7 +95,7 @@ enum class PriceScaleMode {
   AUTO_CENTERED,  // Center on last price: (Y_max + Y_min)/2 == last_price
   KEEP_IN_VIEW,   // Only adjust if last_price exceeds bounds
   MANUAL,         // Disable auto-fitting, triggered on drag
-  CENTER          // Center Mode: Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2
+  CENTER  // Center Mode: Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2
 };
 
 // Chart style options
@@ -107,10 +108,7 @@ enum class ChartStyle {
 };
 
 // Trading mode for chart interaction
-enum class TradingMode {
-  MOUSE_TRADING,
-  KEYBOARD_TRADING
-};
+enum class TradingMode { MOUSE_TRADING, KEYBOARD_TRADING };
 
 // Time in Force for orders
 enum class TimeInForce {
@@ -125,7 +123,7 @@ struct FavoriteTool {
   std::string name;
   std::string icon;
   bool is_favorite;
-  
+
   FavoriteTool(const std::string& n, const std::string& i, bool fav = false)
       : name(n), icon(i), is_favorite(fav) {}
 };
@@ -154,12 +152,13 @@ class ChartPanel : public PanelBase {
  public:
   using ScrollSyncCallback = std::function<void(uint64_t start_timestamp, uint64_t end_timestamp)>;
 
+  // DEPRECATED - Legacy hotspine
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-             ChartManager* chart_manager,
-             std::shared_ptr<ChartSuperNode> super_node = nullptr,
-             PanelManager* panel_manager = nullptr);
-  
+             ChartManager* chart_manager, std::shared_ptr<ChartSuperNode> super_node = nullptr,
+             PanelManager* panel_manager = nullptr,
+             class TradingInterface* trading_interface = nullptr);
+
   ~ChartPanel();
 
   void update(float dt) override;
@@ -208,11 +207,14 @@ class ChartPanel : public PanelBase {
   void render_context_menu() override;
 
  private:
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   ChartManager* chart_manager_;
   IndicatorRenderer* indicator_renderer_;
   std::shared_ptr<ChartSuperNode> super_node_;  // Reference to central chart node
+  class TradingInterface*
+      trading_interface_;  // Reference to trading interface for atomic market data
 
   std::string symbol_ = "BTC-USDT";
   std::string exchange_ = "Binance";
@@ -220,6 +222,28 @@ class ChartPanel : public PanelBase {
   uint32_t chart_id_ = 0;
 
   IndicatorConfig indicator_config_;
+
+  // VPVR Configuration
+  bool show_vpvr_ = true;
+  double vpvr_tick_size_ = 10.0;  // Default tick size
+  enum class VpvrMode { STANDARD, TOTAL, DELTA };
+  VpvrMode vpvr_mode_ = VpvrMode::STANDARD;
+  float vpvr_width_percentage_ = 0.30f;  // Takes up 30% of chart width
+  bool show_vpvr_poc_ = true;
+  bool show_vpvr_value_area_ = true;
+  int vpvr_value_area_percent_ = 68;
+
+  // Helper methods for VPVR
+  void render_vpvr_overlay();
+  std::vector<BTQuant::RenderEngine::TradeData> get_visible_trades(uint64_t start_time,
+                                                                   uint64_t end_time);
+
+  // TPO Configuration
+  bool show_tpo_ = false;
+
+  // Derivative Data Configuration
+  bool show_cvd_ = false;
+  bool show_liquidation_bubbles_ = false;
   bool follow_latest_ = true;
   float auto_follow_window_ = 1000.0f;
   double last_view_min_ = 0.0;
@@ -344,10 +368,10 @@ class ChartPanel : public PanelBase {
     double price;
     double volume;
     bool is_bid;  // true for bid, false for ask
-    
+
     LiquidityLevel(double p, double v, bool bid) : price(p), volume(v), is_bid(bid) {}
   };
-  
+
   std::vector<LiquidityLevel> liquidity_levels_;
   double max_liquidity_volume_ = 1.0;  // Track max volume for scaling
 
@@ -483,8 +507,8 @@ class ChartPanel : public PanelBase {
 
   // Configuration for liquidity bars
   bool show_liquidity_bars_ = true;
-  float liquidity_bar_width_ = 10.0f;  // Width of liquidity bars in pixels
-  float liquidity_bar_opacity_ = 0.7f; // Opacity of liquidity bars
+  float liquidity_bar_width_ = 10.0f;   // Width of liquidity bars in pixels
+  float liquidity_bar_opacity_ = 0.7f;  // Opacity of liquidity bars
   ImVec4 liquidity_bids_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.7f);  // Green for bids
   ImVec4 liquidity_asks_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.7f);  // Red for asks
 
@@ -500,16 +524,17 @@ class ChartPanel : public PanelBase {
         : timestamp(ts), price(p), volume(v), is_buy(buy), trade_id(id) {}
   };
 
-  void render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx, int aggregation_factor = 1);
+  void render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx,
+                                      int aggregation_factor = 1);
   void update_aggressor_trades_data();
-  
+
   // Configuration for aggressor trade bubbles
   bool show_aggressor_bubbles_ = true;
-  float bubble_min_size_ = 3.0f;  // Minimum bubble size in pixels
-  float bubble_max_size_ = 15.0f; // Maximum bubble size in pixels
-  float bubble_opacity_ = 0.8f;   // Opacity of bubbles
-  ImVec4 bubble_buy_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.8f);  // Green for buy trades
-  ImVec4 bubble_sell_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.8f); // Red for sell trades
+  float bubble_min_size_ = 3.0f;                               // Minimum bubble size in pixels
+  float bubble_max_size_ = 15.0f;                              // Maximum bubble size in pixels
+  float bubble_opacity_ = 0.8f;                                // Opacity of bubbles
+  ImVec4 bubble_buy_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.8f);   // Green for buy trades
+  ImVec4 bubble_sell_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);  // Red for sell trades
   std::vector<TradeBubble> aggressor_trades_;
 
   // HD/SD Resolution toggle configuration
@@ -518,19 +543,19 @@ class ChartPanel : public PanelBase {
   // ========================================================================
   // QUANTOWER-STYLE 5-PART LAYOUT (Phase 3)
   // ========================================================================
-  
+
   // --- Layout Constants (TASK_CHART_ANATOMY.md Phase 1.1) ---
   static constexpr float TOP_BAR_HEIGHT = 32.0f;
   static constexpr float BOTTOM_BAR_HEIGHT = 32.0f;
   static constexpr float LEFT_SIDEBAR_WIDTH = 45.0f;
   static constexpr float RIGHT_SIDEBAR_WIDTH = 220.0f;
-  
+
   // --- 3.1 Top Toolbar State ---
   char symbol_input_buffer_[32] = "BTC-USDT";  // Symbol lookup input buffer
-  int selected_timeframe_index_ = 9;  // Default: 1m (index in timeframe array)
+  int selected_timeframe_index_ = 9;           // Default: 1m (index in timeframe array)
   ChartStyle chart_style_ = ChartStyle::CANDLE;
   TradingMode trading_mode_ = TradingMode::MOUSE_TRADING;
-  
+
   // --- 3.2 Left Sidebar State ---
   bool show_crosshair_ = true;
   bool show_drawing_tools_sidebar_ = false;
@@ -538,24 +563,24 @@ class ChartPanel : public PanelBase {
   bool show_indicators_menu_ = false;
   std::vector<FavoriteTool> favorite_tools_;
   int selected_drawing_tool_ = -1;  // -1 = no tool selected
-  
+
   // --- 3.3 Price Scale Modes ---
   PriceScaleMode price_scale_mode_ = PriceScaleMode::AUTO;
   double manual_y_min_ = 0.0;
   double manual_y_max_ = 0.0;
-  double center_mode_range_percentage_ = 0.01;  // 1% range for CENTER (configurable)
-  double auto_mode_lerp_factor_ = 0.1;          // Lerp factor for AUTO mode adjustment
-  double auto_mode_deviation_threshold_ = 0.25; // 25% deviation threshold for AUTO mode adjustment
-  bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
-  bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
-  
+  double center_mode_range_percentage_ = 0.01;   // 1% range for CENTER (configurable)
+  double auto_mode_lerp_factor_ = 0.1;           // Lerp factor for AUTO mode adjustment
+  double auto_mode_deviation_threshold_ = 0.25;  // 25% deviation threshold for AUTO mode adjustment
+  bool user_dragged_chart_ = false;              // Set to true on drag, triggers MANUAL mode
+  bool show_snap_to_last_ = false;  // Show "Snap to Last" button when X-axis < current time
+
   // --- 3.4 Right Sidebar Order Entry State ---
   double order_quantity_ = 1.0;
   TimeInForce selected_tif_ = TimeInForce::GTC;
-  double cached_best_bid_ = 0.0;   // Updated from atomic snapshot
-  double cached_best_ask_ = 0.0;   // Updated from atomic snapshot
-  uint64_t last_quote_update_ = 0; // Timestamp of last quote update
-  
+  double cached_best_bid_ = 0.0;    // Updated from atomic snapshot
+  double cached_best_ask_ = 0.0;    // Updated from atomic snapshot
+  uint64_t last_quote_update_ = 0;  // Timestamp of last quote update
+
   // --- 3.5 Bottom Toolbar State ---
   bool show_volume_profile_overlay_ = true;
   bool show_delta_overlay_ = false;
@@ -567,7 +592,7 @@ class ChartPanel : public PanelBase {
   bool floating_left_sidebar_ = false;
   bool floating_right_sidebar_ = false;
   bool floating_bottom_toolbar_ = false;
-  
+
   // Positions and sizes for floating windows
   ImVec2 floating_top_toolbar_pos_ = ImVec2(10, 10);
   ImVec2 floating_top_toolbar_size_ = ImVec2(400, 40);
@@ -577,29 +602,29 @@ class ChartPanel : public PanelBase {
   ImVec2 floating_right_sidebar_size_ = ImVec2(250, 300);
   ImVec2 floating_bottom_toolbar_pos_ = ImVec2(10, 600);
   ImVec2 floating_bottom_toolbar_size_ = ImVec2(800, 40);
-  
+
   // --- Quantower Layout Rendering Methods ---
-  
+
   // 3.1 Top Toolbar (Main Controls)
   void render_top_toolbar();
-  
+
   // 3.2 Left Sidebar (Tools & Objects)
   void render_left_sidebar();
   void render_drawing_tools_popup();
   void render_overlays_popup();
   void render_indicators_popup();
   void toggle_favorite_tool(const std::string& tool_name);
-  
+
   // 3.3 Price Scale Implementation
   void apply_price_scale_mode(const ChartInstance& chart, double last_price);
   void handle_y_axis_context_menu();  // Right-click on Y-axis for mode selection
   void render_snap_to_last_button();  // Only visible when X-axis max < current time
-  
+
   // 3.4 Right Sidebar Order Entry
   void render_right_sidebar_order_entry();
-  void update_cached_quotes();  // Read from atomic snapshot
+  void update_cached_quotes();             // Read from atomic snapshot
   void execute_market_order(bool is_buy);  // Push to SPSC queue (Phase 4)
-  
+
   // 3.5 Bottom Toolbar (Volume Analysis)
   void render_bottom_toolbar();
 

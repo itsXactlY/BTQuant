@@ -13,6 +13,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 VolumeProfilePanel::VolumeProfilePanel(const PanelConfig& config,
                                        std::shared_ptr<HotSpineDataBridge> bridge,
                                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

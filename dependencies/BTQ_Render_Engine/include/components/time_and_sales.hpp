@@ -28,7 +28,8 @@ namespace BTQuant {
  */
 class TimeAndSalesPanel : public PanelBase {
  public:
-  TimeAndSalesPanel(const PanelConfig& config, 
+  // DEPRECATED - Legacy hotspine
+  TimeAndSalesPanel(const PanelConfig& config,
                    std::shared_ptr<HotSpineDataBridge> bridge,
                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -38,6 +39,7 @@ class TimeAndSalesPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unique_ptr<TextureAtlasManager> texture_atlas_manager_;

@@ -84,6 +84,7 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   }
 }
 
+// DEPRECATED - Legacy hotspine
 WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

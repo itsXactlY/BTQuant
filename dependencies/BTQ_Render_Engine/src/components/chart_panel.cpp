@@ -9,12 +9,14 @@
 #include <numeric>
 #include <optional>
 
+#include "../../include/analytics/volume_calculator.hpp"
 #include "../../include/components/chart_panel_settings.hpp"
 #include "../../include/components/drawing_tools.hpp"
 #include "../../include/components/historical_time_sales.hpp"
 #include "../../include/components/interaction_manager.hpp"
 #include "../../include/components/quant_workspace_component.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
+#include "../../include/data/TradeData.h"
 #include "../../include/indicators/anchored_vwap.hpp"
 #include "../../include/indicators/session_vwap.hpp"
 #include "../../include/symbol_registry.hpp"
@@ -121,16 +123,18 @@ static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
   }
 }
 
+// DEPRECATED - Legacy hotspine
 ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                        ChartManager* chart_manager, std::shared_ptr<ChartSuperNode> super_node,
-                       PanelManager* panel_manager)
+                       PanelManager* panel_manager, TradingInterface* trading_interface)
     : PanelBase(config),
       bridge_(bridge),
       processor_(processor),
       chart_manager_(chart_manager),
       super_node_(super_node),
-      panel_manager_(panel_manager) {
+      panel_manager_(panel_manager),
+      trading_interface_(trading_interface) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 
@@ -2845,42 +2849,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // VOLUME PROFILE OVERLAY - using direct draw to avoid axis switching after setup lock
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
-      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+      // Legacy volume profile code removed/replaced by new method
+    }
 
-      // Use Theme Colors for a more integrated look
-      ImVec4 vp_color = colors.text;
-      vp_color.w = 0.25f;  // reduced alpha
-
-      // ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
-      // ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
-      // ImPlot::PushStyleColor(ImPlotCol_Line,
-      //                        ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f));  // clearer
-      //                        border
-
-      // Calculate bar width in plot coordinates based on volume values
-      double max_vol_display = vp_max_vol * 4.0;  // Same as used in SetupAxisLimits for X2
-      (void)max_vol_display;                      // Suppress unused variable warning
-
-      // Draw volume profile bars using direct drawing to avoid axis switching after setup lock
-      for (size_t i = 0; i < vp_prices.size(); ++i) {
-        // Convert price (Y coordinate) and volume (X coordinate) to screen coordinates
-        ImVec2 pos_screen = ImPlot::PlotToPixels(vp_volumes[i], vp_prices[i]);  // tip of the bar
-        ImVec2 base_screen = ImPlot::PlotToPixels(0, vp_prices[i]);             // base of the bar
-
-        // Calculate bar dimensions
-        float bar_width = base_screen.x - pos_screen.x;  // width from volume value to zero
-        float bar_height = 3.0f;                         // fixed height for visibility
-
-        // Define bar corners
-        ImVec2 bar_tl = ImVec2(base_screen.x - bar_width, pos_screen.y - bar_height / 2);
-        ImVec2 bar_br = ImVec2(base_screen.x, pos_screen.y + bar_height / 2);
-
-        // Draw the volume bar
-        draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
-      }
-
-      // ImPlot::PopStyleColor(2);
-      // ImPlot::PopStyleVar();
+    // VPVR Overlay (MMT Style)
+    if (show_vpvr_) {
+      render_vpvr_overlay();
     }
 
     // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)
@@ -2954,7 +2928,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       float high = chart.highs[i];
       float low = chart.lows[i];
       float close = chart.closes[i];
-      
+
       // Aggregate if in SD mode
       if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
         for (int j = 1; j < aggregation_factor; ++j) {
@@ -2962,7 +2936,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
           if (idx < chart.dates.size()) {
             high = std::max(static_cast<float>(high), chart.highs[idx]);
             low = std::min(static_cast<float>(low), chart.lows[idx]);
-            close = chart.closes[idx]; // Use the last close in the aggregation
+            close = chart.closes[idx];  // Use the last close in the aggregation
           }
         }
       }
@@ -3031,14 +3005,14 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         RenderEngine::OHLCVCandle candle;
         candle.timestamp =
             static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert back to microseconds
-        
+
         // Initialize with first tick values
         candle.open = chart.opens[i];
         candle.high = chart.highs[i];
         candle.low = chart.lows[i];
         candle.close = chart.closes[i];
         candle.volume = chart.volumes[i];
-        
+
         // Aggregate if in SD mode
         if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
           for (int j = 1; j < aggregation_factor; ++j) {
@@ -3046,12 +3020,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
             if (idx < chart.dates.size()) {
               candle.high = std::max(static_cast<float>(candle.high), chart.highs[idx]);
               candle.low = std::min(static_cast<float>(candle.low), chart.lows[idx]);
-              candle.close = chart.closes[idx]; // Use the last close in the aggregation
-              candle.volume += chart.volumes[idx]; // Sum the volumes
+              candle.close = chart.closes[idx];     // Use the last close in the aggregation
+              candle.volume += chart.volumes[idx];  // Sum the volumes
             }
           }
         }
-        
+
         candle.trade_count = 1;  // Placeholder
 
         visible_candles.push_back(candle);
@@ -3119,11 +3093,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     if (ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-      
+
       // Update global crosshair atomics when crosshair is active in this chart
       QuantWorkspaceComponent::g_crosshair_price.store(mouse_pos.y, std::memory_order_relaxed);
       QuantWorkspaceComponent::g_crosshair_time.store(
-          static_cast<uint64_t>(mouse_pos.x * 1000000), std::memory_order_relaxed);  // Convert to microseconds
+          static_cast<uint64_t>(mouse_pos.x * 1000000),
+          std::memory_order_relaxed);  // Convert to microseconds
       QuantWorkspaceComponent::g_crosshair.active.store(true, std::memory_order_relaxed);
 
       if (indicator_config_.show_crosshair_info) {
@@ -3350,30 +3325,30 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx, aggregation_factor);
     }
 
-    // "Snap to Last" functionality: If X-axis max < latest data time, show a button to jump to live edge
+    // "Snap to Last" functionality: If X-axis max < latest data time, show a button to jump to live
+    // edge
     if (!chart.dates.empty()) {
       ImPlotRect current_limits = ImPlot::GetPlotLimits();
-      double latest_atomic_time = chart.dates.back(); // Latest data point in the chart
-      
+      double latest_atomic_time = chart.dates.back();  // Latest data point in the chart
+
       if (current_limits.X.Max < latest_atomic_time) {
         // Calculate position for the button - top-right corner of the plot
         ImVec2 plot_pos = ImPlot::GetPlotPos();
         ImVec2 plot_size = ImPlot::GetPlotSize();
-        
+
         // Position the button in the top-right corner of the plot area
         ImVec2 button_pos = ImVec2(plot_pos.x + plot_size.x - 30, plot_pos.y + 5);
-        
+
         // Draw a hovering arrow button
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        
+
         // Draw a semi-transparent background for the button
-        draw_list->AddRectFilled(
-            ImVec2(button_pos.x - 2, button_pos.y - 2), 
-            ImVec2(button_pos.x + 28, button_pos.y + 22), 
-            IM_COL32(0, 0, 0, 180), // Dark semi-transparent background
-            4.0f // Rounded corners
+        draw_list->AddRectFilled(ImVec2(button_pos.x - 2, button_pos.y - 2),
+                                 ImVec2(button_pos.x + 28, button_pos.y + 22),
+                                 IM_COL32(0, 0, 0, 180),  // Dark semi-transparent background
+                                 4.0f                     // Rounded corners
         );
-        
+
         // Draw an arrow pointing right (>) to indicate "snap to latest"
         ImVec2 center = ImVec2(button_pos.x + 12, button_pos.y + 10);
         ImVec2 arrow_points[3] = {
@@ -3381,45 +3356,41 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
             ImVec2(center.x + 5, center.y),      // Tip of arrow
             ImVec2(center.x - 3, center.y + 4)   // Bottom left of arrow
         };
-        
+
         // Draw the arrow
-        draw_list->AddTriangleFilled(
-            arrow_points[0], 
-            arrow_points[1], 
-            arrow_points[2], 
-            IM_COL32(255, 255, 255, 220) // White arrow
+        draw_list->AddTriangleFilled(arrow_points[0], arrow_points[1], arrow_points[2],
+                                     IM_COL32(255, 255, 255, 220)  // White arrow
         );
-        
+
         // Handle button click
         ImVec2 mouse_pos = ImGui::GetMousePos();
         if (mouse_pos.x >= button_pos.x - 2 && mouse_pos.x <= button_pos.x + 28 &&
             mouse_pos.y >= button_pos.y - 2 && mouse_pos.y <= button_pos.y + 22) {
-            
-            // Draw highlight when hovered
-            draw_list->AddRect(
-                ImVec2(button_pos.x - 2, button_pos.y - 2), 
-                ImVec2(button_pos.x + 28, button_pos.y + 22), 
-                IM_COL32(255, 255, 255, 200), // Highlight border
-                4.0f // Rounded corners
-            );
-            
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                // Jump to the live edge by setting follow_latest_ to true
-                follow_latest_ = true;
-                
-                // Reset the view to show the latest data
-                double time_max = latest_atomic_time;
-                double duration_raw = RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
-                double duration_sec = duration_raw / 1000000.0;
-                double window_size = duration_sec * auto_follow_window_;
-                double padding = window_size * 0.05;
+          // Draw highlight when hovered
+          draw_list->AddRect(ImVec2(button_pos.x - 2, button_pos.y - 2),
+                             ImVec2(button_pos.x + 28, button_pos.y + 22),
+                             IM_COL32(255, 255, 255, 200),  // Highlight border
+                             4.0f                           // Rounded corners
+          );
 
-                last_view_min_ = time_max - window_size;
-                last_view_max_ = time_max + padding;
-                
-                // Force the axis limits to update immediately
-                ImPlot::SetNextAxisLimits(ImAxis_X1, last_view_min_, last_view_max_, ImPlotCond_Always);
-            }
+          if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            // Jump to the live edge by setting follow_latest_ to true
+            follow_latest_ = true;
+
+            // Reset the view to show the latest data
+            double time_max = latest_atomic_time;
+            double duration_raw =
+                RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
+            double duration_sec = duration_raw / 1000000.0;
+            double window_size = duration_sec * auto_follow_window_;
+            double padding = window_size * 0.05;
+
+            last_view_min_ = time_max - window_size;
+            last_view_max_ = time_max + padding;
+
+            // Force the axis limits to update immediately
+            ImPlot::SetNextAxisLimits(ImAxis_X1, last_view_min_, last_view_max_, ImPlotCond_Always);
+          }
         }
       }
     }
@@ -4471,37 +4442,38 @@ void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size
 
     // For market sells: Draw solid red rectangles extending left
     if (!trade.is_buy) {  // This is a sell trade
-        // Calculate rectangle dimensions
-        float rect_width = bubble_size * 2.0f;  // Make it wider than the circle
-        float rect_height = bubble_size;        // Make it shorter than the circle diameter
-        float rect_half_height = rect_height / 2.0f;
-        
-        // Define rectangle corners - extending left from the trade position
-        ImVec2 rect_start = ImVec2(bubble_pos.x - rect_width, bubble_pos.y - rect_half_height);
-        ImVec2 rect_end = ImVec2(bubble_pos.x, bubble_pos.y + rect_half_height);
-        
-        // Use solid red color for sell rectangles
-        ImVec4 red_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Pure red
-        red_color.w *= bubble_opacity_;  // Apply opacity
-        ImU32 red_im_color = ImGui::ColorConvertFloat4ToU32(red_color);
-        
-        // Draw the solid red rectangle extending left
-        draw_list->AddRectFilled(rect_start, rect_end, red_im_color);
-        
-        // Draw a subtle border to make the rectangle more visible
-        ImVec4 border_color = red_color;
-        border_color.w = 0.3f;  // Less opaque border
-        ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
-        draw_list->AddRect(rect_start, rect_end, border_im_color, 0.0f, ImDrawFlags_RoundCornersNone, 1.0f);
-    } else {  // This is a buy trade - keep the original bubble
-        // Draw the bubble as a filled circle
-        draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
+      // Calculate rectangle dimensions
+      float rect_width = bubble_size * 2.0f;  // Make it wider than the circle
+      float rect_height = bubble_size;        // Make it shorter than the circle diameter
+      float rect_half_height = rect_height / 2.0f;
 
-        // Draw a subtle border to make the bubble more visible
-        ImVec4 border_color = color;
-        border_color.w = 0.3f;  // Less opaque border
-        ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
-        draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
+      // Define rectangle corners - extending left from the trade position
+      ImVec2 rect_start = ImVec2(bubble_pos.x - rect_width, bubble_pos.y - rect_half_height);
+      ImVec2 rect_end = ImVec2(bubble_pos.x, bubble_pos.y + rect_half_height);
+
+      // Use solid red color for sell rectangles
+      ImVec4 red_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Pure red
+      red_color.w *= bubble_opacity_;                     // Apply opacity
+      ImU32 red_im_color = ImGui::ColorConvertFloat4ToU32(red_color);
+
+      // Draw the solid red rectangle extending left
+      draw_list->AddRectFilled(rect_start, rect_end, red_im_color);
+
+      // Draw a subtle border to make the rectangle more visible
+      ImVec4 border_color = red_color;
+      border_color.w = 0.3f;  // Less opaque border
+      ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+      draw_list->AddRect(rect_start, rect_end, border_im_color, 0.0f, ImDrawFlags_RoundCornersNone,
+                         1.0f);
+    } else {  // This is a buy trade - keep the original bubble
+      // Draw the bubble as a filled circle
+      draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
+
+      // Draw a subtle border to make the bubble more visible
+      ImVec4 border_color = color;
+      border_color.w = 0.3f;  // Less opaque border
+      ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+      draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
     }
   }
 }
@@ -4668,16 +4640,18 @@ void ChartPanel::render_top_toolbar() {
 void ChartPanel::render_left_sidebar() {
   // Get the font manager instance to access the icons font
   auto& font_manager = BTQuant::UI::FontManager::getInstance();
-  
+
   // Crosshair button
   ImVec4 crosshair_color =
       show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf05b", ImVec2(32, 32))) { // Crosshairs icon
-    show_crosshair_ = !show_crosshair_;
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf05b", ImVec2(32, 32))) {  // Crosshairs icon
+      show_crosshair_ = !show_crosshair_;
+    }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
 
@@ -4686,14 +4660,16 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 drawing_color =
       show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf14b", ImVec2(32, 32))) { // Pencil icon
-    show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
-    if (show_drawing_tools_sidebar_) {
-      ImGui::OpenPopup("DrawingToolsPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf14b", ImVec2(32, 32))) {  // Pencil icon
+      show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
+      if (show_drawing_tools_sidebar_) {
+        ImGui::OpenPopup("DrawingToolsPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
 
@@ -4702,14 +4678,16 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 overlays_color =
       show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf0ab", ImVec2(32, 32))) { // Filter icon
-    show_overlays_menu_ = !show_overlays_menu_;
-    if (show_overlays_menu_) {
-      ImGui::OpenPopup("OverlaysPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf0ab", ImVec2(32, 32))) {  // Filter icon
+      show_overlays_menu_ = !show_overlays_menu_;
+      if (show_overlays_menu_) {
+        ImGui::OpenPopup("OverlaysPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
 
@@ -4718,14 +4696,16 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 indicators_color =
       show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf080", ImVec2(32, 32))) { // Bar chart icon
-    show_indicators_menu_ = !show_indicators_menu_;
-    if (show_indicators_menu_) {
-      ImGui::OpenPopup("IndicatorsPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf080", ImVec2(32, 32))) {  // Bar chart icon
+      show_indicators_menu_ = !show_indicators_menu_;
+      if (show_indicators_menu_) {
+        ImGui::OpenPopup("IndicatorsPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
@@ -4734,11 +4714,13 @@ void ChartPanel::render_left_sidebar() {
   ImVec4 bubbles_color =
       show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf247", ImVec2(32, 32))) { // USD icon (for trades)
-    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf247", ImVec2(32, 32))) {  // USD icon (for trades)
+      show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+    }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
 
@@ -4748,17 +4730,19 @@ void ChartPanel::render_left_sidebar() {
   ImGui::Spacing();
 
   // Favorite tools section
-  font_manager.pushIconsFont();
-  ImGui::Text("\uf005"); // Star icon
-  ImGui::PopFont(); // Pop icons font
+  {
+    bool pushed = font_manager.pushIconsFont();
+    ImGui::Text("\uf005");         // Star icon
+    if (pushed) ImGui::PopFont();  // Pop icons font
+  }
   ImGui::Spacing();
 
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false); // Horizontal line icon
-    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false); // Trend line icon
-    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true); // Chevron down icon
-    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false); // Check square icon
+    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false);  // Horizontal line icon
+    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false);       // Trend line icon
+    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true);         // Chevron down icon
+    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false);        // Check square icon
   }
 
   // Render favorite tools
@@ -4768,11 +4752,13 @@ void ChartPanel::render_left_sidebar() {
         tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
-    font_manager.pushIconsFont();
-    if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
-      selected_drawing_tool_ = static_cast<int>(i);
+    {
+      bool pushed = font_manager.pushIconsFont();
+      if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
+        selected_drawing_tool_ = static_cast<int>(i);
+      }
+      if (pushed) ImGui::PopFont();  // Pop icons font
     }
-    ImGui::PopFont(); // Pop icons font
     ImGui::PopID();
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());
@@ -4940,27 +4926,28 @@ void ChartPanel::apply_price_scale_mode(const ChartInstance& chart, double last_
     case PriceScaleMode::AUTO: {
       // Auto Mode: Soft-lerp the Y-axis center only if price deviates > 25% from the middle
       double current_center = (limits.Y.Min + limits.Y.Max) / 2.0;
-      
+
       // Calculate percentage deviation - avoid division by zero
       double denominator = std::abs(current_center) > 1e-10 ? std::abs(current_center) : 1.0;
       double price_deviation = std::abs(last_price - current_center) / denominator;
-      
+
       // Only adjust if deviation is greater than the threshold (25% by default)
       if (price_deviation > auto_mode_deviation_threshold_) {
         // Calculate soft interpolation factor (lerp) - adjust gradually
-        double lerp_factor = auto_mode_lerp_factor_; // Configurable adjustment factor for smooth transition
+        double lerp_factor =
+            auto_mode_lerp_factor_;  // Configurable adjustment factor for smooth transition
         double target_center = last_price;
-        
+
         // Interpolate the center towards the target
         double new_center = current_center + lerp_factor * (target_center - current_center);
-        
+
         // Maintain the same range but shift the center
         double y_range = limits.Y.Max - limits.Y.Min;
         double half_range = y_range / 2.0;
-        
+
         double new_y_min = new_center - half_range;
         double new_y_max = new_center + half_range;
-        
+
         ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
       }
       break;
@@ -5058,12 +5045,12 @@ void ChartPanel::handle_y_axis_context_menu() {
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Disable auto-fitting");
 
-    if (ImGui::RadioButton("Center",
-                           mode == static_cast<int>(PriceScaleMode::CENTER))) {
+    if (ImGui::RadioButton("Center", mode == static_cast<int>(PriceScaleMode::CENTER))) {
       price_scale_mode_ = PriceScaleMode::CENTER;
     }
     if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2");
+      ImGui::SetTooltip(
+          "Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2");
 
     // If Center Mode is selected, show range percentage control
     if (price_scale_mode_ == PriceScaleMode::CENTER) {
@@ -5080,12 +5067,12 @@ void ChartPanel::handle_y_axis_context_menu() {
         ImGui::SetTooltip("Range percentage of current price for Y-axis limits");
       }
     }
-    
+
     // If Auto Mode is selected, show lerp factor and deviation threshold controls
     if (price_scale_mode_ == PriceScaleMode::AUTO) {
       ImGui::Separator();
       ImGui::Text("Auto Mode Adjustments:");
-      
+
       // Control for lerp factor
       float lerp_factor_pct = static_cast<float>(auto_mode_lerp_factor_ * 100.0);
       if (ImGui::SliderFloat("Lerp Factor##AutoMode", &lerp_factor_pct, 1.0f, 50.0f, "%.1f%%")) {
@@ -5094,10 +5081,11 @@ void ChartPanel::handle_y_axis_context_menu() {
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Adjustment speed factor when centering (higher = faster)");
       }
-      
+
       // Control for deviation threshold
       float threshold_pct = static_cast<float>(auto_mode_deviation_threshold_ * 100.0);
-      if (ImGui::SliderFloat("Deviation Threshold##AutoMode", &threshold_pct, 1.0f, 100.0f, "%.1f%%")) {
+      if (ImGui::SliderFloat("Deviation Threshold##AutoMode", &threshold_pct, 1.0f, 100.0f,
+                             "%.1f%%")) {
         auto_mode_deviation_threshold_ = static_cast<double>(threshold_pct / 100.0);
       }
       if (ImGui::IsItemHovered()) {
@@ -5317,12 +5305,12 @@ void ChartPanel::render_bottom_toolbar() {
 // Floating toolbar implementations
 void ChartPanel::render_floating_top_toolbar() {
   // Set cursor position for the floating toolbar - positioned at the top of the chart area
-  ImVec2 toolbar_pos = ImVec2(10.0f, 10.0f); // Position from top-left of the parent window
+  ImVec2 toolbar_pos = ImVec2(10.0f, 10.0f);  // Position from top-left of the parent window
   ImGui::SetCursorPos(toolbar_pos);
 
   // Create a borderless toolbar using ImGui::BeginGroup to group elements together
   ImGui::BeginGroup();
-  
+
   // Symbol Lookup (InputText)
   ImGui::PushItemWidth(100);
   if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_),
@@ -5421,16 +5409,18 @@ void ChartPanel::render_floating_left_sidebar() {
 
   // Get the font manager instance to access the icons font
   auto& font_manager = BTQuant::UI::FontManager::getInstance();
-  
+
   // Crosshair button
   ImVec4 crosshair_color =
       show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf05b", ImVec2(32, 32))) { // Crosshairs icon
-    show_crosshair_ = !show_crosshair_;
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf05b", ImVec2(32, 32))) {  // Crosshairs icon
+      show_crosshair_ = !show_crosshair_;
+    }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
 
@@ -5439,14 +5429,16 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 drawing_color =
       show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf14b", ImVec2(32, 32))) { // Pencil icon
-    show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
-    if (show_drawing_tools_sidebar_) {
-      ImGui::OpenPopup("DrawingToolsPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf14b", ImVec2(32, 32))) {  // Pencil icon
+      show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
+      if (show_drawing_tools_sidebar_) {
+        ImGui::OpenPopup("DrawingToolsPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
 
@@ -5455,14 +5447,16 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 overlays_color =
       show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf0ab", ImVec2(32, 32))) { // Filter icon
-    show_overlays_menu_ = !show_overlays_menu_;
-    if (show_overlays_menu_) {
-      ImGui::OpenPopup("OverlaysPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf0ab", ImVec2(32, 32))) {  // Filter icon
+      show_overlays_menu_ = !show_overlays_menu_;
+      if (show_overlays_menu_) {
+        ImGui::OpenPopup("OverlaysPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
 
@@ -5471,14 +5465,16 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 indicators_color =
       show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf080", ImVec2(32, 32))) { // Bar chart icon
-    show_indicators_menu_ = !show_indicators_menu_;
-    if (show_indicators_menu_) {
-      ImGui::OpenPopup("IndicatorsPopup");
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf080", ImVec2(32, 32))) {  // Bar chart icon
+      show_indicators_menu_ = !show_indicators_menu_;
+      if (show_indicators_menu_) {
+        ImGui::OpenPopup("IndicatorsPopup");
+      }
     }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
@@ -5487,11 +5483,13 @@ void ChartPanel::render_floating_left_sidebar() {
   ImVec4 bubbles_color =
       show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  font_manager.pushIconsFont();
-  if (ImGui::Button("\uf247", ImVec2(32, 32))) { // USD icon (for trades)
-    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+  {
+    bool pushed = font_manager.pushIconsFont();
+    if (ImGui::Button("\uf247", ImVec2(32, 32))) {  // USD icon (for trades)
+      show_aggressor_bubbles_ = !show_aggressor_bubbles_;
+    }
+    if (pushed) ImGui::PopFont();  // Pop icons font
   }
-  ImGui::PopFont(); // Pop icons font
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
 
@@ -5501,17 +5499,19 @@ void ChartPanel::render_floating_left_sidebar() {
   ImGui::Spacing();
 
   // Favorite tools section
-  font_manager.pushIconsFont();
-  ImGui::Text("\uf005"); // Star icon
-  ImGui::PopFont(); // Pop icons font
+  {
+    bool pushed = font_manager.pushIconsFont();
+    ImGui::Text("\uf005");         // Star icon
+    if (pushed) ImGui::PopFont();  // Pop icons font
+  }
   ImGui::Spacing();
 
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false); // Horizontal line icon
-    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false); // Trend line icon
-    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true); // Chevron down icon
-    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false); // Check square icon
+    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false);  // Horizontal line icon
+    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false);       // Trend line icon
+    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true);         // Chevron down icon
+    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false);        // Check square icon
   }
 
   // Render favorite tools
@@ -5521,11 +5521,13 @@ void ChartPanel::render_floating_left_sidebar() {
         tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
-    font_manager.pushIconsFont();
-    if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
-      selected_drawing_tool_ = static_cast<int>(i);
+    {
+      bool pushed = font_manager.pushIconsFont();
+      if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
+        selected_drawing_tool_ = static_cast<int>(i);
+      }
+      if (pushed) ImGui::PopFont();  // Pop icons font
     }
-    ImGui::PopFont(); // Pop icons font
     ImGui::PopID();
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());
@@ -5792,6 +5794,122 @@ void ChartPanel::render_cumulative_delta_overlay(const ChartInstance& chart) {
 
       // Draw line segment
       draw_list->AddLine(points[i - 1], points[i], ImGui::ColorConvertFloat4ToU32(color), 2.0f);
+    }
+  }
+}
+
+std::vector<BTQuant::RenderEngine::TradeData> ChartPanel::get_visible_trades(uint64_t start_time,
+                                                                             uint64_t end_time) {
+  std::vector<BTQuant::RenderEngine::TradeData> visible_trades;
+
+  if (!processor_) return visible_trades;
+
+  auto id_opt = chart_manager_->getSymbolId(symbol_);
+  if (!id_opt) return visible_trades;
+
+  // Get analytics data (copy)
+  auto analytics = processor_->getSymbolAnalytics(*id_opt);
+
+  // Filter and convert trades
+  visible_trades.reserve(analytics.recent_trades.size());
+  for (const auto& trade : analytics.recent_trades) {
+    if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
+      visible_trades.push_back(trade);
+    }
+  }
+
+  return visible_trades;
+}
+
+void ChartPanel::render_vpvr_overlay() {
+  // 1. Get the current visible time range directly from ImPlot
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+  uint64_t visible_start_time =
+      static_cast<uint64_t>(limits.X.Min * 1000000.0);  // Convert to microseconds
+  uint64_t visible_end_time = static_cast<uint64_t>(limits.X.Max * 1000000.0);
+
+  // 2. Fetch lock-free aggregated volume data for THIS exact time window
+  // 2. Fetch lock-free aggregated volume data for THIS exact time window
+  auto render_trades = get_visible_trades(visible_start_time, visible_end_time);
+
+  // Convert to Data::TradeData for VolumeCalculator compatibility
+  std::vector<BTQuant::Data::TradeData> data_trades;
+  data_trades.reserve(render_trades.size());
+  for (const auto& t : render_trades) {
+    BTQuant::Data::TradeData dt;
+    dt.timestamp = t.timestamp;
+    dt.price = t.price;
+    dt.volume = static_cast<float>(t.size);
+    dt.side = t.is_buy ? BTQuant::Data::TradeSide::BUY : BTQuant::Data::TradeSide::SELL;
+    data_trades.push_back(dt);
+  }
+
+  auto vpvr_data = BTQuant::Analytics::VolumeCalculator::get_visible_volume_profile(
+      data_trades, visible_start_time, visible_end_time, vpvr_tick_size_);
+
+  if (vpvr_data.empty()) return;
+
+  // 3. Calculate Point of Control (POC) and Value Area (68%)
+  double max_vol = 0;
+  double poc_price = 0;
+  double total_vol = 0;
+  for (const auto& node : vpvr_data) {
+    total_vol += node.total;
+    if (node.total > max_vol) {
+      max_vol = node.total;
+      poc_price = node.price;
+    }
+  }
+
+  // 4. Render using raw ImDrawList mapped to ImPlot coordinates
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  ImVec2 plot_pos = ImPlot::GetPlotPos();
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+
+  float max_bar_width = plot_size.x * vpvr_width_percentage_;
+  float right_edge = plot_pos.x + plot_size.x;
+
+  for (const auto& node : vpvr_data) {
+    ImVec2 top_left = ImPlot::PlotToPixels(limits.X.Max, node.price + (vpvr_tick_size_ / 2.0));
+    ImVec2 bottom_right = ImPlot::PlotToPixels(limits.X.Max, node.price - (vpvr_tick_size_ / 2.0));
+
+    float y_top = top_left.y;
+    float y_bot = bottom_right.y;
+
+    // MMT "Standard Mode" (Split Buy/Sell)
+    if (vpvr_mode_ == VpvrMode::STANDARD) {
+      float buy_width = static_cast<float>((node.buys / max_vol) * max_bar_width);
+      float sell_width = static_cast<float>((node.sells / max_vol) * max_bar_width);
+
+      // Draw Sells (Red) pushing left
+      draw_list->AddRectFilled(ImVec2(right_edge - buy_width - sell_width, y_top),
+                               ImVec2(right_edge - buy_width, y_bot),
+                               IM_COL32(255, 84, 89, 150)  // MMT AskRed
+      );
+      // Draw Buys (Green) anchored to the right
+      draw_list->AddRectFilled(ImVec2(right_edge - buy_width, y_top), ImVec2(right_edge, y_bot),
+                               IM_COL32(50, 190, 198, 150)  // MMT BidGreen
+      );
+    } else if (vpvr_mode_ == VpvrMode::TOTAL) {
+      float total_width = static_cast<float>((node.total / max_vol) * max_bar_width);
+      draw_list->AddRectFilled(ImVec2(right_edge - total_width, y_top), ImVec2(right_edge, y_bot),
+                               IM_COL32(200, 200, 200, 150)  // Neutral Gray
+      );
+    }
+  }
+
+  // 5. Draw MMT POC Line
+  if (show_vpvr_poc_) {
+    ImVec2 poc_pos =
+        ImPlot::PlotToPixels(limits.X.Min, poc_price);  // X doesn't matter for horizontal line
+    float poc_y = poc_pos.y;
+
+    // Only draw if within vertical limits
+    if (poc_y >= plot_pos.y && poc_y <= plot_pos.y + plot_size.y) {
+      draw_list->AddLine(ImVec2(plot_pos.x, poc_y), ImVec2(right_edge, poc_y),
+                         IM_COL32(255, 215, 0, 200),  // Gold for POC
+                         2.0f                         // Thickness
+      );
     }
   }
 }

@@ -49,6 +49,7 @@ using json = nlohmann::json;
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                            std::shared_ptr<OrderManager> order_manager,
@@ -268,7 +269,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<FootprintPanel>(config);
       break;
     case PanelType::TPO_PROFILE:
-      panel = std::make_unique<TpoPanel>(config);
+      panel = std::make_unique<TpoPanel>(config, bridge_, processor_);
       break;
     case PanelType::OPTION_ANALYTICS:
       panel =
@@ -455,7 +456,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<FootprintPanel>(config);
       break;
     case PanelType::TPO_PROFILE:
-      panel = std::make_unique<TpoPanel>(config);
+      panel = std::make_unique<TpoPanel>(config, bridge_, processor_);
       break;
     case PanelType::OPTION_ANALYTICS:
       panel =
@@ -895,6 +896,7 @@ PanelConfig PanelManager::create_panel_config(PanelType type, const std::string&
   PanelConfig config;
   config.type = type;
   config.title = title.empty() ? get_default_panel_title(type) : title;
+  config.panel_instance_id = next_instance_id_++;  // Stable ID for DockBuilder
   config.grid_x = grid_x;
   config.grid_y = grid_y;
   config.grid_width = width;
@@ -1379,22 +1381,22 @@ void PanelManager::load_all_panel_configs(const std::string& config_file) {
 void PanelManager::check_global_symbol_changes() {
   // Check if we have a valid global atomic pointer
   if (!global_active_symbol_id_ptr_) {
-    return; // Skip if no global atomic pointer provided
+    return;  // Skip if no global atomic pointer provided
   }
-  
+
   // Get the current global active symbol ID
   uint32_t global_symbol_id = global_active_symbol_id_ptr_->load();
-  
+
   // If the global symbol ID has changed compared to our local tracking, update all panels
   if (global_symbol_id != active_symbol_id_ && global_symbol_id != 0) {
     // Update our local tracking
     active_symbol_id_ = global_symbol_id;
-    
+
     // Get the symbol name from the bridge
     std::string symbol_name = bridge_ ? bridge_->getSymbolName(global_symbol_id) : "";
     if (!symbol_name.empty()) {
       active_symbol_name_ = symbol_name;
-      
+
       // Propagate symbol to all relevant panel types
       for (auto& [id, panel] : panels_) {
         switch (panel->get_config().type) {
@@ -1472,77 +1474,6 @@ void PanelManager::check_global_symbol_changes() {
         }
       }
     }
-  }
-}
-
-void PanelManager::apply_layout_preset(LayoutPreset preset) {
-  // CRITICAL: Clear all existing panels first to prevent duplication
-  clear_panels();
-
-  // Apply the specific layout based on the preset
-  switch (preset) {
-    case LayoutPreset::DEFAULT:
-      // Add default panels for the default layout
-      add_panel(PanelType::CHART, "Chart", 0, 0, 2, 3);
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 2, 0, 1, 2);
-      add_panel(PanelType::METRICS, "Metrics", 2, 2, 1, 1);
-      break;
-
-    case LayoutPreset::MODERN_TRADING:
-      // Explicitly clear panels to eradicate duplicate panels before building
-      panels_.clear();
-      
-      // MMT programmatic Grid Construction
-      // Set up a 100-column grid system to enable percentage-based splits
-      set_grid_layout(100, 100);
-
-      // Create central ChartSuperNode
-      add_panel(PanelType::CHART, "ChartSuperNode", 3, 0, 72,
-                75);  // Central chart taking most space
-
-      // Split Left (3%) -> drawing_tools_panel
-      add_panel(PanelType::DRAWING_TOOLS, "Drawing Tools", 0, 0, 3, 75);  // Left side panel
-
-      // Split Right (25%) -> dom_surface_panel + orderbook_panel
-      add_panel(PanelType::DOM_SURFACE, "DOM Surface", 75, 0, 25, 37);  // Top-right (37%)
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 75, 37, 25, 38);     // Bottom-right (38%)
-
-      // Split Right-Bottom (40%) -> time_and_sales (Trades)
-      add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 75, 75, 25,
-                24);  // Bottom-right quadrant (24% height)
-
-      // Split Center-Bottom (15%) -> time_histogram_panel
-      add_panel(PanelType::TIME_HISTOGRAM, "Time Histogram", 3, 75, 72,
-                15);  // Bottom-center (15% height)
-
-      // Status bar at the bottom
-      add_panel(PanelType::STATUS_BAR, "Status", 0, 99, 100, 1);  // Full width, 1% height
-      break;
-
-    case LayoutPreset::DASHBOARD_ONLY:
-      // Layout with only dashboard elements, no trading panels
-      add_panel(PanelType::CHART, "Chart", 0, 0, 2, 2);
-      add_panel(PanelType::METRICS, "Metrics", 2, 0, 1, 1);
-      add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 2, 1, 1, 1);
-      add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 3, 1);
-      break;
-
-    case LayoutPreset::CHART_FOCUS:
-      // Layout focused on charting with minimal other panels
-      add_panel(PanelType::CHART, "Main Chart", 0, 0, 3, 3);
-      add_panel(PanelType::ORDERBOOK, "Orderbook", 0, 3, 1, 1);
-      add_panel(PanelType::TIME_AND_SALES, "T&S", 1, 3, 1, 1);
-      add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
-      break;
-
-    case LayoutPreset::RISK_MONITORING:
-      // Layout focused on risk monitoring
-      add_panel(PanelType::RISK_METRICS, "Risk Metrics", 0, 0, 1, 2);
-      add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 0, 1, 2);
-      add_panel(PanelType::CHART, "Chart", 2, 0, 1, 2);
-      add_panel(PanelType::RISK_ANALYZER, "Risk Analyzer", 0, 2, 3, 1);
-      add_panel(PanelType::STATUS_BAR, "Status", 0, 3, 3, 1);
-      break;
   }
 }
 

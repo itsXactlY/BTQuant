@@ -13,12 +13,17 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
+
 // Destructor to clean up the lock-free cache
 OrderbookPanel::~OrderbookPanel() {
     OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
     if (cache) {
         delete cache;
     }
+
+    // Clean up any resources associated with the atomic snapshots if needed
+    // Note: We don't delete the snapshots since they point to data owned elsewhere
 }
 
 // Helper function to round to nearest multiple
@@ -191,20 +196,27 @@ void OrderbookPanel::update(float /*dt*/) {
 
 void OrderbookPanel::updateOrderbookCache() {
   auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
-  
+
   if (orderbook_opt.has_value()) {
     const auto& orderbook = orderbook_opt.value();
-    
+
     // Create a new cache object with the latest data
     OrderbookCache* new_cache = new OrderbookCache(orderbook);
-    
+
     // Atomically swap the old cache with the new one
     OrderbookCache* old_cache = latest_orderbook_cache_.exchange(new_cache, std::memory_order_acq_rel);
-    
+
     // Clean up the old cache
     if (old_cache) {
       delete old_cache;
     }
+
+    // Update the atomic snapshots for asks and bids using memory_order_release
+    const std::vector<PriceLevel>* new_asks_snapshot = &orderbook.asks;
+    const std::vector<PriceLevel>* new_bids_snapshot = &orderbook.bids;
+    
+    snapshot_asks_.store(new_asks_snapshot, std::memory_order_release);
+    snapshot_bids_.store(new_bids_snapshot, std::memory_order_release);
   }
 }
 
@@ -468,7 +480,11 @@ void OrderbookPanel::render() {
 
   // Get orderbook data from the lock-free cache
   OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
-  
+
+  // Access snapshot_asks_ and snapshot_bids_ via std::memory_order_acquire as required by task
+  const std::vector<PriceLevel>* asks_snapshot = snapshot_asks_.load(std::memory_order_acquire);
+  const std::vector<PriceLevel>* bids_snapshot = snapshot_bids_.load(std::memory_order_acquire);
+
   if (!cache || cache->bids.empty() || cache->asks.empty()) {
     ImGui::Text("Waiting for Orderbook: %s", symbol_name_.c_str());
     ImGui::Text("ID: %u", symbol_id_);
@@ -1612,6 +1628,10 @@ void OrderbookPanel::center_price() {
   // This method would center the view on the current mid-price
   // For now, we'll just log that the action was triggered
   OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
+
+  // Access snapshot_asks_ and snapshot_bids_ via std::memory_order_acquire as required by task
+  const std::vector<PriceLevel>* asks_snapshot = snapshot_asks_.load(std::memory_order_acquire);
+  const std::vector<PriceLevel>* bids_snapshot = snapshot_bids_.load(std::memory_order_acquire);
 
   if (cache && !cache->bids.empty() && !cache->asks.empty()) {
     // Calculate mid price (average of best bid and best ask)

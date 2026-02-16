@@ -9,6 +9,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 GlobalAlertManager::GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
                                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                        std::shared_ptr<AlertsPanel> alerts_panel)

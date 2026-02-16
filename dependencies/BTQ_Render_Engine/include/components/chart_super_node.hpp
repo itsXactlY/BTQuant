@@ -73,6 +73,7 @@ public:
     using DataUpdateCallback = std::function<void(uint32_t chart_id)>;
     using IndicatorCalculationCallback = std::function<void(const std::string&, const std::vector<double>&)>;
 
+    // DEPRECATED - Legacy hotspine
     explicit ChartSuperNode(std::shared_ptr<HotSpineDataBridge> bridge,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -138,6 +139,7 @@ public:
 
 private:
     // Internal data structures
+    // DEPRECATED - Legacy hotspine
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     std::unique_ptr<ChartManager> chart_manager_;

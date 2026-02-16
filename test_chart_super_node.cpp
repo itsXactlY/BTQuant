@@ -7,8 +7,9 @@
 
 int main() {
     std::cout << "Testing ChartSuperNode...\n";
-    
+
     // Create mock dependencies
+    // DEPRECATED - Legacy hotspine
     auto bridge = std::make_shared<BTQuant::HotSpineDataBridge>();
     auto processor = std::make_shared<RenderEngine::MarketDataProcessor>();
     

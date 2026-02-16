@@ -28,6 +28,7 @@ using BTQuant::RenderEngine::OHLCVCandle;
 using BTQuant::RenderEngine::PriceLevel;
 using BTQuant::RenderEngine::OrderbookData;
 
+// DEPRECATED - Legacy hotspine
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
                                  std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,

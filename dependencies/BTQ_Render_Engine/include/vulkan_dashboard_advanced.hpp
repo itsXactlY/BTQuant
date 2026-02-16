@@ -244,6 +244,7 @@ class VulkanDashboard {
    * @param processor Shared pointer to the market data processor
    * @param config Configuration object for dashboard settings
    */
+  // DEPRECATED - Legacy hotspine
   VulkanDashboard(uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig& config);
@@ -306,6 +307,7 @@ class VulkanDashboard {
   void render_layout_indicator();
 
   uint32_t width_, height_;
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   VulkanDashboardConfig config_;

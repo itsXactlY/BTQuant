@@ -4,6 +4,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 ChartSuperNode::ChartSuperNode(std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge)

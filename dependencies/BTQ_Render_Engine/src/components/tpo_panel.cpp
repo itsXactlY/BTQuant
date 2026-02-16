@@ -4,35 +4,39 @@
 #include <chrono>
 #include <ctime>
 #include <format>
-#include <vector>
-#include <unordered_map>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
-#include "components/theme_manager.hpp"
+#include "../../include/analytics/tpoengine.h"
+#include "../../include/symbol_registry.hpp"
 #include "components/quant_workspace_component.hpp"
+#include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
 
 // Define dummy structures for compilation
 namespace Data {
-    struct Cluster {
-        double centerX = 0.0;
-        double centerY = 0.0;
-        double width = 0.0;
-        double height = 0.0;
-        double askVolume = 0.0;
-        double bidVolume = 0.0;
-    };
-    
-    struct Stats {
-        uint64_t lastUpdateTimeNs = 0;
-    };
-}
+struct Cluster {
+  double centerX = 0.0;
+  double centerY = 0.0;
+  double width = 0.0;
+  double height = 0.0;
+  double askVolume = 0.0;
+  double bidVolume = 0.0;
+};
 
+struct Stats {
+  uint64_t lastUpdateTimeNs = 0;
+};
+}  // namespace Data
+
+// DEPRECATED - Legacy hotspine
 namespace BTQuant {
 
-TpoPanel::TpoPanel(const PanelConfig& config)
-    : PanelBase(config) {}
+TpoPanel::TpoPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    : PanelBase(config), bridge_(bridge), processor_(processor) {}
 
 void TpoPanel::update(float /*dt*/) {
   // Update logic if needed
@@ -46,239 +50,153 @@ void TpoPanel::render() {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
-  static bool show_text = true;
-  ImGui::Checkbox("Delta Labels", &show_text);
-  ImGui::SameLine();
-  static bool show_grid = true;
-  ImGui::Checkbox("Grid", &show_grid);
-  ImGui::SameLine();
-  static bool show_heatmap = true;
-  ImGui::Checkbox("Heatmap", &show_heatmap);
 
   // Time window configuration
-  static float time_window = 30.0f;
+  static float time_window = 3600.0f * 4.0f;  // Default 4 hours
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::SliderFloat("Time Window", &time_window, 10.0f, 300.0f, "%.0f s");
+  ImGui::SliderFloat("Time Window (s)", &time_window, 60.0f, 86400.0f, "%.0f s");
 
-  // TODO: Implement actual TPO data retrieval
-  // For now, using dummy data to allow compilation
-  std::vector<Data::Cluster> clusters; // Dummy vector
-  Data::Stats stats{}; // Dummy stats
-
-  // Calculate TPO statistics
-  double local_poc_price = 0.0;
-  double max_volume = 0.0;
-  std::unordered_map<double, double> price_volumes;
-  std::unordered_map<double, int> tpo_counts; // Track TPO counts per price level
-
-  // Pre-calculate POC data and TPO counts
-  for (const auto& cluster : clusters) {
-    // Accumulate volume by price level for POC calculation
-    price_volumes[cluster.centerY] += cluster.askVolume + cluster.bidVolume;
-    
-    // Count TPO occurrences per price level (simulating TPO counts)
-    // In a real implementation, this would come from the TPO engine
-    tpo_counts[cluster.centerY]++;
+  // Determine active symbol
+  uint32_t active_symbol_id = symbol_id_;
+  if (active_symbol_id == 0 && bridge_) {
+    // Fallback or use global symbol if needed
   }
 
-  // Find Point of Control (POC) - price level with highest volume
-  for (const auto& [price, volume] : price_volumes) {
-    if (volume > max_volume) {
-      max_volume = volume;
-      local_poc_price = price;
-    }
+  if (active_symbol_id == 0 || !processor_) {
+    ImGui::Text("No symbol selected or processor unavailable");
+    end_panel_window();
+    return;
   }
-  
-  // Calculate Value Area (70% of TPOs) - simplified implementation
-  // In a real implementation, this would use the TPO engine's get_value_area method
-  double value_area_low = local_poc_price - 5.0;  // Placeholder calculation
-  double value_area_high = local_poc_price + 5.0; // Placeholder calculation
-  
-  // More accurate calculation based on TPO counts
-  if (!tpo_counts.empty()) {
-    // Calculate total TPO count
-    int total_tpo_count = 0;
-    for (const auto& [price, count] : tpo_counts) {
-        total_tpo_count += count;
-    }
-    
-    if (total_tpo_count > 0) {
-        // Target 70% of total TPOs for value area
-        int target_count = static_cast<int>(total_tpo_count * 0.70);
-        
-        // Sort price levels by distance from POC
-        std::vector<std::pair<double, int>> sorted_by_distance;
-        for (const auto& [price, count] : tpo_counts) {
-            sorted_by_distance.emplace_back(price, count);
-        }
-        
-        std::sort(sorted_by_distance.begin(), sorted_by_distance.end(),
-                  [local_poc_price](const auto& a, const auto& b) {
-                      return std::abs(a.first - local_poc_price) < std::abs(b.first - local_poc_price);
-                  });
-        
-        // Expand from POC until we reach 70% of TPOs
-        int accumulated_count = 0;
-        value_area_low = local_poc_price;
-        value_area_high = local_poc_price;
-        
-        for (const auto& [price, count] : sorted_by_distance) {
-            if (accumulated_count >= target_count) break;
-            
-            accumulated_count += count;
-            value_area_low = std::min(value_area_low, price);
-            value_area_high = std::max(value_area_high, price);
-        }
+
+  // Get analytics data from processor
+  auto analytics = processor_->getSymbolAnalytics(active_symbol_id);
+
+  // Create TPO Engine and Process Data
+  // In a real implementation, we would maintain the TPOEngine state incrementally
+  // For now, we rebuild it for the visible range or recent history
+
+  // TPO Configuration
+  double tpo_tick_size = 0.5;  // Default fallback
+  auto sym_info = SymbolRegistry::instance().get_symbol_info(active_symbol_id);
+  if (sym_info && sym_info->tick_size > 0.0) {
+    tpo_tick_size = sym_info->tick_size;
+  }
+
+  TPOEngine tpo_engine(tpo_tick_size);
+
+  // Convert recent candles to OHLCVCandle and process
+  // Note: analytics.candles is std::deque<OHLCVCandle>
+  // We process all available candles for now (or filter by time window)
+
+  auto current_time = std::chrono::high_resolution_clock::now();
+  auto current_time_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(current_time.time_since_epoch()).count();
+  uint64_t window_start_ns =
+      current_time_ns - static_cast<uint64_t>(time_window * 1000000000.0);  // Simple window
+
+  // Check if we have candles
+  // We prefer 1-minute candles for TPO accuracy
+  using TimeFrame = BTQuant::RenderEngine::TimeFrame;
+  const std::vector<BTQuant::RenderEngine::OHLCVCandle>* candles_ptr = nullptr;
+
+  if (analytics.candles.count(TimeFrame::TF_1MIN)) {
+    candles_ptr = &analytics.candles.at(TimeFrame::TF_1MIN);
+  } else if (analytics.candles.count(TimeFrame::TF_5MIN)) {
+    candles_ptr = &analytics.candles.at(TimeFrame::TF_5MIN);
+  } else if (analytics.candles.count(TimeFrame::TF_30MIN)) {
+    candles_ptr = &analytics.candles.at(TimeFrame::TF_30MIN);
+  }
+
+  if (candles_ptr && !candles_ptr->empty()) {
+    for (const auto& candle : *candles_ptr) {
+      if (candle.timestamp >= window_start_ns) {
+        tpo_engine.process_candle(candle);
+      }
     }
   }
 
-  // Base time for labeling (relative to time window)
-  double base_time_sec =
-      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - time_window;
+  const auto& profile = tpo_engine.get_tpo_profile();
+  double poc = profile.get_poc();
+  auto va = profile.get_value_area(70.0);
 
+  // Statistics for auto-fit
+  int max_tpo_width = 0;
+  for (const auto& [price, letters] : profile.price_to_letters) {
+    max_tpo_width = std::max(max_tpo_width, (int)letters.length());
+  }
+
+  // Rendering
   if (ImPlot::BeginPlot("##TPOProfile", ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_Crosshairs)) {
-    // Axis Setup - ALL Setup calls must happen BEFORE any locking functions
-    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+    ImPlot::SetupAxes("TPO Count", "Price");
 
-    // Enable grid if requested (must call SetupAxis before SetupAxisLimits)
-    if (show_grid) {
-      ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
-      ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_None);
+    // Auto-fit axes
+    ImPlot::SetupAxesLimits(0, max_tpo_width + 2, 0, 100, ImPlotCond_Always);  // X is count
+    if (analytics.last_trade_price > 0) {
+      double p = analytics.last_trade_price;
+      ImPlot::SetupAxisLimits(ImAxis_Y1, p * 0.995, p * 1.005, ImPlotCond_Once);
     }
 
-    // Calculate Y-axis limits before calling SetupAxisLimits
-    float p_min = 0, p_max = 1000;
-    if (!clusters.empty()) {
-      p_min = clusters[0].centerY;
-      p_max = clusters[0].centerY;
-      for (const auto& c : clusters) {
-        p_min = std::min(p_min, (float)c.centerY);
-        p_max = std::max(p_max, (float)c.centerY);
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+    // Render TPO Profile
+    // Iterate through profile.price_to_letters (Map is sorted by Price)
+    for (auto it = profile.price_to_letters.rbegin(); it != profile.price_to_letters.rend(); ++it) {
+      double price = it->first;
+      const std::string& letters = it->second;
+
+      // MMT Single Print Detection
+      bool is_single = profile.is_single_print(price);
+
+      for (size_t i = 0; i < letters.length(); ++i) {
+        char letter = letters[i];
+
+        // Calculate screen position
+        // X = i (0-based index)
+        // Y = price
+
+        // We want to draw a box/character centered at (i + 0.5, price)
+        ImVec2 pos = ImPlot::PlotToPixels((double)i + 0.5, price);
+
+        // Color Logic
+        ImU32 color = IM_COL32(200, 200, 200, 255);  // Default Gray
+        if (is_single) {
+          color = IM_COL32(135, 206, 250, 200);  // MMT Light Blue
+        } else if (std::abs(price - poc) < tpo_tick_size / 2.0) {
+          color = IM_COL32(255, 215, 0, 255);  // Gold for POC
+        } else if (price >= va.first && price <= va.second) {
+          color = IM_COL32(50, 205, 50, 200);  // Greenish for Value Area
+        }
+
+        // Draw Block
+        // Determine block size in pixels
+        ImVec2 p1 = ImPlot::PlotToPixels((double)i, price - tpo_tick_size / 2.0);
+        ImVec2 p2 = ImPlot::PlotToPixels((double)i + 1.0, price + tpo_tick_size / 2.0);
+
+        // draw_list->AddRectFilled(p1, p2, color);
+
+        // Draw Letter
+        // Use simple text for now
+        char text[2] = {letter, '\0'};
+        // Center text ?
+        draw_list->AddText(ImVec2(pos.x - 4, pos.y - 6), color, text);
       }
     }
 
-    // Apply all axis limits at once
-    ImPlot::SetupAxisLimits(ImAxis_X1, 0, time_window, ImPlotCond_Always);
-    if (!clusters.empty()) {
-      ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min - 10, (double)p_max + 10, ImPlotCond_Once);
-    }
-
-    // Custom Formatting (C++26 lambda)
-    ImPlot::SetupAxisFormat(
-        ImAxis_X1,
-        [](double val, char* buff, int size, void* user_data) -> int {
-          double base = *static_cast<double*>(user_data);
-          std::time_t t = static_cast<std::time_t>(base + val);
-          std::tm* tm = std::localtime(&t);
-          if (tm) [[likely]] {
-            return (int)std::strftime(buff, size, "%H:%M:%S", tm);
-          } else {
-            return std::snprintf(buff, size, "%.2f", val);
-          }
-        },
-        &base_time_sec);
-
-    // Render Heatmap Background if available
-    if (show_heatmap) {
-      // TODO: Implement heatmap texture rendering
-      // For now, skip heatmap rendering to allow compilation
-    }
-
-    auto* draw_list = ImPlot::GetPlotDrawList();
-
-    // Get the crosshair price for highlighting
-    double crosshair_price = QuantWorkspaceComponent::g_crosshair_price.load(std::memory_order_relaxed);
-
-    for (const auto& cluster : clusters) {
-      int delta = static_cast<int>(cluster.askVolume) - static_cast<int>(cluster.bidVolume);
-
-      ImU32 color;
-      float intensity = std::clamp(std::abs((float)delta) / 2000.0f, 0.2f, 0.7f);
-      if (delta > 0) {
-        color = ImColor(0.1f, 0.8f, 0.1f, intensity);  // Green for positive delta
-      } else {
-        color = ImColor(0.8f, 0.1f, 0.1f, intensity);  // Red for negative delta
-      }
-
-      double x1 = (double)cluster.centerX - (double)cluster.width * 0.48;
-      double x2 = (double)cluster.centerX + (double)cluster.width * 0.48;
-      double y1 = (double)cluster.centerY - (double)cluster.height * 0.48;
-      double y2 = (double)cluster.centerY + (double)cluster.height * 0.48;
-
-      ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
-      ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
-
-      draw_list->AddRectFilled(p1, p2, color);
-      
-      // Check if this cluster corresponds to the crosshair price
-      // We'll consider it a match if the crosshair price falls within the cluster's vertical range
-      bool is_highlighted = crosshair_price >= y1 && crosshair_price <= y2;
-      
-      if (is_highlighted) {
-        // Draw a highlighted border around the TPO block
-        draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 0.0f, 1.0f), 0.0f, ImDrawFlags_RoundCornersAll, 2.0f); // Yellow highlight with 2px thickness
-      } else {
-        // Draw the normal border
-        draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
-      }
-
-      if (show_text && (std::abs(p2.y - p1.y) > 18)) {
-        std::string label = std::format("{}", delta);
-        ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
-        draw_list->AddText(
-            ImVec2((p1.x + p2.x - text_size.x) * 0.5f, (p1.y + p2.y - text_size.y) * 0.5f),
-            IM_COL32_WHITE, label.c_str());
-      }
-    }
-
-    // Draw Value Area (shaded region between VAH and VAL)
-    if (value_area_low < value_area_high && value_area_low > 0) {
-      // Draw shaded area for Value Area
-      double va_x[] = {0.0, time_window, time_window, 0.0};
-      double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
-      
-      // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
-      ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
-      ImPlot::PopStyleColor();
-      
-      // Draw Value Area High (VAH) line
-      double vah_line_x[2] = {0, time_window};
-      double vah_line_y[2] = {value_area_high, value_area_high};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
-      ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
-      ImPlot::PopStyleColor();
-      
-      // Draw Value Area Low (VAL) line
-      double val_line_x[2] = {0, time_window};
-      double val_line_y[2] = {value_area_low, value_area_low};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
-      ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
-      ImPlot::PopStyleColor();
-    }
-
-    // Draw POC line if found (using pre-calculated value)
-    if (local_poc_price > 0) {
-      double poc_line_x[2] = {0, time_window};
-      double poc_line_y[2] = {local_poc_price, local_poc_price};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
-      // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
-      ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
+    // Draw POC Line
+    if (poc > 0) {
+      double x[2] = {0, (double)max_tpo_width};
+      double y[2] = {poc, poc};
+      ImPlot::PlotLine("POC", x, y, 2);
     }
 
     ImPlot::EndPlot();
   }
 
-  // Enhanced Overlay Info
   ImGui::SetCursorPos(ImVec2(10, 45));
-  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f",
-                     clusters.size(), 
-                     local_poc_price > 0 ? local_poc_price : 0.0,
-                     value_area_low > 0 ? value_area_low : 0.0,
-                     value_area_high > 0 ? value_area_high : 0.0);
+  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | POC: %.2f | VA: %.2f - %.2f", poc,
+                     va.first, va.second);
 
   end_panel_window();
 }

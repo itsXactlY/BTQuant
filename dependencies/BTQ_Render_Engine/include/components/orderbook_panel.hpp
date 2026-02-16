@@ -32,6 +32,7 @@ enum class OrderbookAggregationMode {
 // Real-time orderbook ladder display
 class OrderbookPanel : public PanelBase {
  public:
+  // DEPRECATED - Legacy hotspine
   OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
                  
@@ -45,6 +46,7 @@ class OrderbookPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -270,7 +272,11 @@ class OrderbookPanel : public PanelBase {
   
   // Atomic pointer to the latest orderbook data for lock-free reads
   mutable std::atomic<OrderbookCache*> latest_orderbook_cache_{nullptr};
-  
+
+  // Atomic snapshots for asks and bids data - accessed via std::memory_order_acquire
+  mutable std::atomic<const std::vector<PriceLevel>*> snapshot_asks_{nullptr};
+  mutable std::atomic<const std::vector<PriceLevel>*> snapshot_bids_{nullptr};
+
   std::map<double, VolumeLevelHistory> volume_level_history_;
   uint64_t volume_delta_period_us_ = 5000000; // 5 seconds in microseconds
 };

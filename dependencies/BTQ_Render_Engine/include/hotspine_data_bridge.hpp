@@ -112,6 +112,7 @@ struct InstrumentStore {
 // Lock-Free Shared Memory Reader
 // ============================================================================
 
+// DEPRECATED - Legacy hotspine
 class HotSpineDataBridge {
  public:
   HotSpineDataBridge(const std::string& shm_path = "/btquant");

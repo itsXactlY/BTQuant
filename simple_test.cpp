@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cassert>
 
+// DEPRECATED - Legacy hotspine
 // Mock HotSpineDataBridge for testing purposes
 class MockHotSpineDataBridge {
 public:

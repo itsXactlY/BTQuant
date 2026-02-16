@@ -41,6 +41,7 @@ struct ChartInstance {
 
 class ChartManager {
  public:
+  // DEPRECATED - Legacy hotspine
   ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -69,6 +70,7 @@ class ChartManager {
   void update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe);
 
  private:
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unordered_map<uint32_t, ChartInstance> charts_;

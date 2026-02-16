@@ -10,6 +10,7 @@
 #include <cstdint>
 
 // Forward declaration to avoid circular dependencies
+// DEPRECATED - Legacy hotspine
 class HotSpineDataBridge;
 
 // Forward declaration of data types to avoid circular includes
@@ -74,6 +75,7 @@ private:
     std::thread snapshot_thread_;
     
     // Pointer to the data bridge for reading current orderbook state
+    // DEPRECATED - Legacy hotspine
     // Using void* to avoid circular dependency; cast to HotSpineDataBridge* when needed
     void* data_bridge_ptr_;
     

@@ -30,6 +30,7 @@ struct GlobalCrosshair {
 
 class QuantWorkspaceComponent : public UIComponent {
  public:
+  // DEPRECATED - Legacy hotspine
   explicit QuantWorkspaceComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
@@ -82,6 +83,7 @@ class QuantWorkspaceComponent : public UIComponent {
 
  private:
   // Core systems
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 

@@ -21,6 +21,7 @@ namespace BTQuant {
  */
 class RiskAnalyzerPanel : public PanelBase {
  public:
+  // DEPRECATED - Legacy hotspine
   RiskAnalyzerPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -29,6 +30,7 @@ class RiskAnalyzerPanel : public PanelBase {
   void set_symbol(const std::string& symbol, const std::string& exchange = "Binance");
 
  private:
+  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 

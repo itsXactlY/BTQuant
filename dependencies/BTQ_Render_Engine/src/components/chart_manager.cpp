@@ -12,6 +12,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge), processor_(processor), next_chart_id_(0) {}

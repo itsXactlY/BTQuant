@@ -8,6 +8,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 StatusBarPanel::StatusBarPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

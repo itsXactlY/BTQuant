@@ -20,6 +20,7 @@
 
 namespace BTQuant {
 
+// DEPRECATED - Legacy hotspine
 TimeAndSalesPanel::TimeAndSalesPanel(const PanelConfig& config,
                                      std::shared_ptr<HotSpineDataBridge> bridge,
                                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

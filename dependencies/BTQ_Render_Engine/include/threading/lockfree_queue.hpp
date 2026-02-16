@@ -655,27 +655,51 @@ public:
 };
 
 // Single-producer single-consumer ring buffer for high-performance scenarios
+// Capacity is always a power of 2 for bitwise modulo optimization
 template<typename T>
 class SPSCRingBuffer {
 private:
-    struct BufferNode {
-        alignas(64) std::atomic<bool> ready{false};
+    static constexpr size_t CACHE_LINE_SIZE = 64;
+
+    // Helper function to round up to the next power of 2
+    static constexpr size_t next_power_of_2(size_t n) {
+        if (n == 0) return 1;
+        --n;
+        n |= n >> 1;
+        n |= n >> 2;
+        n |= n >> 4;
+        n |= n >> 8;
+        n |= n >> 16;
+        n |= n >> 32;
+        return ++n;
+    }
+
+    struct alignas(CACHE_LINE_SIZE) BufferSlot {
+        std::atomic<bool> ready{false};
         T data{};
     };
 
-    std::vector<BufferNode> buffer_;
+    BufferSlot* buffer_;
     const size_t capacity_;
+    const size_t mask_;
 
-    alignas(64) std::atomic<size_t> write_pos_{0};
-    alignas(64) std::atomic<size_t> read_pos_{0};
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t> write_pos_{0};
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t> read_pos_{0};
 
 public:
     explicit SPSCRingBuffer(size_t capacity)
-        : buffer_(capacity), capacity_(capacity) {}
+        : buffer_(new BufferSlot[next_power_of_2(capacity)])
+        , capacity_(next_power_of_2(capacity))
+        , mask_(capacity_ - 1)
+    {}
+
+    ~SPSCRingBuffer() {
+        delete[] buffer_;
+    }
 
     bool push(const T& item) {
-        size_t write_idx = write_pos_.load(std::memory_order_relaxed);
-        size_t next_write_idx = (write_idx + 1) % capacity_;
+        const size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        const size_t next_write_idx = (write_idx + 1) & mask_;
 
         // Check if buffer is full (leave one slot empty to distinguish from empty)
         if (next_write_idx == read_pos_.load(std::memory_order_acquire)) {
@@ -690,8 +714,8 @@ public:
     }
 
     bool push(T&& item) {
-        size_t write_idx = write_pos_.load(std::memory_order_relaxed);
-        size_t next_write_idx = (write_idx + 1) % capacity_;
+        const size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        const size_t next_write_idx = (write_idx + 1) & mask_;
 
         // Check if buffer is full (leave one slot empty to distinguish from empty)
         if (next_write_idx == read_pos_.load(std::memory_order_acquire)) {
@@ -706,7 +730,7 @@ public:
     }
 
     std::optional<T> try_pop() {
-        size_t read_idx = read_pos_.load(std::memory_order_relaxed);
+        const size_t read_idx = read_pos_.load(std::memory_order_relaxed);
 
         if (read_idx == write_pos_.load(std::memory_order_acquire)) {
             return std::nullopt; // Buffer is empty
@@ -719,7 +743,7 @@ public:
 
         T result = std::move(buffer_[read_idx].data);
         buffer_[read_idx].ready.store(false, std::memory_order_release);
-        read_pos_.store((read_idx + 1) % capacity_, std::memory_order_release);
+        read_pos_.store((read_idx + 1) & mask_, std::memory_order_release);
 
         return result;
     }
@@ -729,7 +753,7 @@ public:
     }
 
     bool full() const {
-        size_t next_write_pos = (write_pos_.load(std::memory_order_acquire) + 1) % capacity_;
+        const size_t next_write_pos = (write_pos_.load(std::memory_order_acquire) + 1) & mask_;
         return next_write_pos == read_pos_.load(std::memory_order_acquire);
     }
 

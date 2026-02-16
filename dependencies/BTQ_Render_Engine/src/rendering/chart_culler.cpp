@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "implot.h"
+
 namespace BTQuant {
 namespace RenderEngine {
 
@@ -2016,6 +2018,49 @@ ChartInstance ChartCuller::cull_offscreen_items_and_reduce_polygons(const ChartI
                                                                  float viewport_width_pixels, float viewport_height_pixels) const {
     // Use our task-specific implementation which is optimized for the requirements
     return apply_task_specific_culling_and_lod(chart, zoom_factor, viewport_width_pixels, viewport_height_pixels);
+}
+
+bool ChartCuller::is_footprint_cell_visible(double cell_x, double cell_y, double cell_width, double cell_height) {
+    ImPlotRect limits = ImPlot::GetPlotLimits();
+
+    // Calculate cell bounding box
+    double cell_min_x = cell_x - cell_width * 0.5;
+    double cell_max_x = cell_x + cell_width * 0.5;
+    double cell_min_y = cell_y - cell_height * 0.5;
+    double cell_max_y = cell_y + cell_height * 0.5;
+
+    // Check if cell bounding box is completely outside plot limits
+    // If max < min_limit or min > max_limit, the cell is outside
+    if (cell_max_x < limits.X.Min || cell_min_x > limits.X.Max) {
+        return false;
+    }
+    if (cell_max_y < limits.Y.Min || cell_min_y > limits.Y.Max) {
+        return false;
+    }
+
+    // Cell intersects with visible plot area
+    return true;
+}
+
+bool ChartCuller::is_trade_circle_visible(double circle_x, double circle_y, double circle_radius) {
+    ImPlotRect limits = ImPlot::GetPlotLimits();
+
+    // Calculate circle bounding box (circle is inside this box)
+    double circle_min_x = circle_x - circle_radius;
+    double circle_max_x = circle_x + circle_radius;
+    double circle_min_y = circle_y - circle_radius;
+    double circle_max_y = circle_y + circle_radius;
+
+    // Check if circle bounding box is completely outside plot limits
+    if (circle_max_x < limits.X.Min || circle_min_x > limits.X.Max) {
+        return false;
+    }
+    if (circle_max_y < limits.Y.Min || circle_min_y > limits.Y.Max) {
+        return false;
+    }
+
+    // Circle intersects with visible plot area
+    return true;
 }
 
 } // namespace RenderEngine

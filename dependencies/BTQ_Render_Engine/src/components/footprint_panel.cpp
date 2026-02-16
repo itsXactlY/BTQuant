@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "../../include/analytics/cluster_engine.hpp"
+#include "../../include/rendering/chart_culler.hpp"
 #include "analytics/cluster_engine.hpp"
 #include "components/theme_manager.hpp"
 #include "imgui.h"
@@ -886,6 +887,11 @@ void FootprintPanel::render_content() {
     // Render each footprint cell using the LOD system
     ImDrawList* draw_list = ImPlot::GetPlotDrawList();
     for (const auto& cell : cells_) {
+      // AABB spatial culling: skip cells outside visible plot bounds
+      if (!RenderEngine::ChartCuller::is_footprint_cell_visible(cell.x, cell.y, cell.width, cell.height)) {
+        continue;  // Emit zero vertices for off-screen cells
+      }
+
       // Skip cells below the volume threshold if filtering is enabled
       if (enable_volume_filter_ && (cell.bid_volume + cell.ask_volume) < volume_threshold_) {
         renderFilteredCell(cell, draw_list, max_volume, zoom_factor);

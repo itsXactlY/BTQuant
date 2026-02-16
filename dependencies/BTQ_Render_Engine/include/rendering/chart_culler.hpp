@@ -331,6 +331,29 @@ public:
     ChartInstance cull_offscreen_items_and_reduce_polygons(const ChartInstance& chart, float zoom_factor = 1.0f,
                                                         float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
+    /**
+     * @brief Checks if a footprint cell is within the current ImPlot viewport bounds
+     *        Uses ImPlot::GetPlotLimits() to fetch current plot limits
+     *
+     * @param cell_x Center X position (time) of the footprint cell
+     * @param cell_y Center Y position (price) of the footprint cell
+     * @param cell_width Width of the footprint cell (time dimension)
+     * @param cell_height Height of the footprint cell (price dimension)
+     * @return true if the cell intersects with the visible plot area, false otherwise
+     */
+    static bool is_footprint_cell_visible(double cell_x, double cell_y, double cell_width, double cell_height);
+
+    /**
+     * @brief Checks if a trade circle is within the current ImPlot viewport bounds
+     *        Uses ImPlot::GetPlotLimits() to fetch current plot limits
+     *
+     * @param circle_x Center X position (time) of the trade circle
+     * @param circle_y Center Y position (price) of the trade circle
+     * @param circle_radius Radius of the trade circle
+     * @return true if the circle intersects with the visible plot area, false otherwise
+     */
+    static bool is_trade_circle_visible(double circle_x, double circle_y, double circle_radius);
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

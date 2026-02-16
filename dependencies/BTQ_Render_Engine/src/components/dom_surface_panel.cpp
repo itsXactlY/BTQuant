@@ -7,6 +7,9 @@
 #include <numeric>
 
 #include <imgui.h>
+#include <implot.h>
+
+#include "../../include/rendering/chart_culler.hpp"
 
 namespace BTQuant {
 
@@ -170,6 +173,11 @@ void DomSurfacePanel::renderTradeBubbles() {
 
   // Render each trade bubble as a circle
   for (const auto& bubble : trade_bubbles_) {
+    // AABB spatial culling: skip circles outside visible plot bounds
+    if (!RenderEngine::ChartCuller::is_trade_circle_visible(bubble.x, bubble.y, bubble.radius)) {
+      continue;  // Emit zero vertices for off-screen circles
+    }
+
     ImU32 color = getBubbleColor(bubble);
     ImU32 border_color = IM_COL32(255, 255, 255, 200);  // White semi-transparent border
 
@@ -188,8 +196,8 @@ void DomSurfacePanel::renderTradeBubbles() {
                                  std::pow(mouse_pos.y - pixel_pos.y, 2));
 
       if (distance < bubble.radius) {
-        std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}", 
-                                         bubble.is_buy ? "Buy" : "Sell", 
+        std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}",
+                                         bubble.is_buy ? "Buy" : "Sell",
                                          bubble.volume, bubble.price);
         ImGui::SetTooltip("%s", tooltip.c_str());
       }

@@ -17,6 +17,9 @@
 #include "ui/font_manager.hpp"  // Include font manager for monospaced font
 #include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
 #include "../../include/market_data_processor.hpp"  // Include for MarketDataProcessor
+#include "../trading/HotspineData.h"
+
+using namespace BTQuant::RenderEngine;
 
 namespace BTQuant {
 

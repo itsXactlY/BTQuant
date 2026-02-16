@@ -23,12 +23,18 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,un
 option(BUILD_TESTS "Build test executables" OFF)
 option(BUILD_DOCS "Build documentation" OFF)
 
+# Test sources
+set(TEST_SOURCES
+    tests/test_risk_assessment.cpp
+)
+
 # Define source files for the main project
 set(PUBBTQUANT_SOURCES
     src/main.cpp
     src/analytics/tpoengine.cpp
     src/analytics/liquiditysweepdetector.cpp
     src/components/dom_surface_panel.cpp
+    src/trading/risk_assessment.cpp
 )
 
 # Add subdirectories
@@ -46,6 +52,14 @@ if(PUBBTQUANT_SOURCES)
         ${CMAKE_BINARY_DIR}/_deps/imgui-src/backends
         ${CMAKE_BINARY_DIR}/_deps/implot-src
         ${CMAKE_BINARY_DIR}/_deps/glm-src
+    )
+endif()
+
+# Test executable
+if(BUILD_TESTS)
+    add_executable(test_risk_assessment ${TEST_SOURCES} src/trading/risk_assessment.cpp)
+    target_include_directories(test_risk_assessment PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 endif()
 

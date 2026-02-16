@@ -65,7 +65,6 @@ void MarketDataProcessor::processOrderbookUpdate(const MarketDataUpdate& update)
 
 SymbolAnalytics MarketDataProcessor::getSymbolAnalytics(uint32_t symbol_id) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -79,7 +78,6 @@ std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
   std::vector<uint32_t> active_symbols;
 
   for (auto& shard_ptr : shards_) {
-    std::shared_lock lock(shard_ptr->mutex);
     for (const auto& pair : shard_ptr->data) {
       auto now = std::chrono::high_resolution_clock::now();
       auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(
@@ -95,7 +93,6 @@ std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
 
 void MarketDataProcessor::clearHistory() {
   for (auto& shard_ptr : shards_) {
-    std::unique_lock lock(shard_ptr->mutex);
     for (auto& pair : shard_ptr->data) {
       pair.second.candles.clear();
       pair.second.recent_trades.clear();
@@ -115,7 +112,6 @@ std::vector<SymbolRanking> MarketDataProcessor::getRankings(RankingCriteria crit
   std::vector<SymbolRanking> rankings;
 
   for (auto& shard_ptr : shards_) {
-    std::shared_lock lock(shard_ptr->mutex);
     for (const auto& pair : shard_ptr->data) {
       double value = 0.0;
       std::string label;
@@ -161,7 +157,6 @@ std::vector<SymbolRanking> MarketDataProcessor::getRankings(RankingCriteria crit
 std::vector<OHLCVCandle> MarketDataProcessor::getCandles(uint32_t symbol_id,
                                                          TimeFrame timeframe) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -177,7 +172,6 @@ std::vector<OHLCVCandle> MarketDataProcessor::getCandles(uint32_t symbol_id,
 std::optional<OHLCVCandle> MarketDataProcessor::getCurrentCandle(uint32_t symbol_id,
                                                                  TimeFrame timeframe) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -192,7 +186,6 @@ std::optional<OHLCVCandle> MarketDataProcessor::getCurrentCandle(uint32_t symbol
 
 std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end() && !it->second.recent_orderbooks.empty()) {
@@ -204,7 +197,6 @@ std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symb
 
 std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it == shard.data.end()) {
@@ -251,7 +243,6 @@ std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_
 std::vector<OrderbookData> MarketDataProcessor::getHistoricalOrderbooks(uint32_t symbol_id,
                                                                         size_t count) const {
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -277,7 +268,6 @@ std::vector<VolumeProfileLevel> MarketDataProcessor::getVolumeProfile(uint32_t s
   }
 
   auto& shard = getShard(symbol_id);
-  std::shared_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -303,7 +293,6 @@ MarketSummary MarketDataProcessor::getMarketSummary() const {
   auto now = std::chrono::high_resolution_clock::now();
 
   for (auto& shard_ptr : shards_) {
-    std::shared_lock lock(shard_ptr->mutex);
     for (const auto& pair : shard_ptr->data) {
       summary.total_symbols++;
       summary.last_update = now;
@@ -386,7 +375,6 @@ uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
 
 void MarketDataProcessor::clearSymbolData(uint32_t symbol_id) {
   auto& shard = getShard(symbol_id);
-  std::unique_lock lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -397,7 +385,6 @@ void MarketDataProcessor::clearSymbolData(uint32_t symbol_id) {
 
 void MarketDataProcessor::clearAllData() {
   for (auto& shard_ptr : shards_) {
-    std::unique_lock lock(shard_ptr->mutex);
     shard_ptr->data.clear();
   }
 }
@@ -414,7 +401,6 @@ void MarketDataProcessor::setVolatilityWindow(size_t window_size) {
 
 void MarketDataProcessor::clearIndicatorCache(uint32_t symbol_id,
                                               const std::string& indicator_name) {
-  std::unique_lock lock(indicator_cache_mutex_);
   auto it = indicator_caches_.find(symbol_id);
   if (it != indicator_caches_.end()) {
     it->second.cache.erase(indicator_name);
@@ -422,7 +408,6 @@ void MarketDataProcessor::clearIndicatorCache(uint32_t symbol_id,
 }
 
 void MarketDataProcessor::clearAllIndicatorCaches() {
-  std::unique_lock lock(indicator_cache_mutex_);
   indicator_caches_.clear();
 }
 
@@ -440,7 +425,6 @@ uint64_t MarketDataProcessor::subscribe(uint32_t symbol_id, NotificationType fil
                                         SymbolCallback callback) {
   uint64_t id = next_subscription_id_.fetch_add(1, std::memory_order_relaxed);
 
-  std::lock_guard<std::mutex> lock(subscribers_mutex_);
   // Copy-on-write: create new list with subscription added
   auto new_list = std::make_shared<SubscriberList>(*subscribers_);
   new_list->push_back({id, symbol_id, filter, std::move(callback)});
@@ -450,7 +434,6 @@ uint64_t MarketDataProcessor::subscribe(uint32_t symbol_id, NotificationType fil
 }
 
 void MarketDataProcessor::unsubscribe(uint64_t subscription_id) {
-  std::lock_guard<std::mutex> lock(subscribers_mutex_);
   // Copy-on-write: create new list without subscription
   auto new_list = std::make_shared<SubscriberList>();
   new_list->reserve(subscribers_->size());
@@ -467,7 +450,6 @@ void MarketDataProcessor::notifySubscribers(uint32_t symbol_id, NotificationType
   // Lock-free read: copy shared_ptr under lock, then iterate without lock
   std::shared_ptr<SubscriberList> current_subs;
   {
-    std::lock_guard<std::mutex> lock(subscribers_mutex_);
     current_subs = subscribers_;
   }
 
@@ -805,7 +787,6 @@ void MarketDataProcessor::processQueueLoop() {
 
 void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
   auto& shard = getShard(update.symbol_id);
-  std::unique_lock lock(shard.mutex);
 
   auto& symbol_data = shard.data[update.symbol_id];
   symbol_data.symbol_id = update.symbol_id;
@@ -888,7 +869,6 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
                                      ? NotificationType::TRADE
                                      : NotificationType::ORDERBOOK;
   uint32_t notify_symbol_id = update.symbol_id;
-  lock.unlock();
 
   // Push notification to all subscribers (lock-free iteration)
   notifySubscribers(notify_symbol_id, notify_type);

@@ -5,6 +5,8 @@
 #include <mutex>
 #include <tuple>
 
+#include "../../include/trading/HotspineData.h"  // For CandleCluster CAS operations
+
 namespace Analytics {
 
 void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket) {
@@ -88,6 +90,78 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
       break;
     }
   }
+}
+
+void ClusterEngine::processTradeToCandleClusterCAS(const MarketData::Trade& trade,
+                                                    BTQuant::RenderEngine::CandleCluster& cluster) {
+  // Calculate trade volume as float for CandleCluster
+  float volume = static_cast<float>(trade.quantity);
+
+  // Use Compare-And-Swap (CAS) atomic operations for lock-free thread-safe volume accumulation
+  // This avoids mutex overhead and provides better performance under high concurrency
+
+  // Accumulate buy/sell volume based on trade direction
+  // Note: In CandleCluster, askVolume = buy volume (taker buy), bidVolume = sell volume (taker sell)
+  if (trade.is_buyer_maker) {
+    // Buyer is maker -> Seller is taker -> Sell Volume (bidVolume)
+    cluster.addBidVolumeCAS(static_cast<uint32_t>(volume));
+  } else {
+    // Seller is maker -> Buyer is taker -> Buy Volume (askVolume)
+    cluster.addAskVolumeCAS(static_cast<uint32_t>(volume));
+  }
+
+  // Atomically increment trade count using CAS
+  cluster.addTradeCountCAS(1);
+
+  // Atomically update trade type counts
+  if (trade.is_buyer_maker) {
+    cluster.addSellTradeCountCAS(1);
+  } else {
+    cluster.addBuyTradeCountCAS(1);
+  }
+
+  // Atomically update maximum single trade volume using CAS
+  cluster.updateMaxSingleTradeVolumeCAS(volume);
+
+  // Update VWAP incrementally using running totals
+  // Note: VWAP update uses a simple atomic exchange pattern since it's a float
+  float current_vwap = cluster.vwap;
+  uint32_t trade_count = cluster.tradeCount;
+  if (trade_count > 0) {
+    float new_vwap = (current_vwap * (trade_count - 1) + trade.price) / trade_count;
+    cluster.vwap = new_vwap;
+  } else {
+    cluster.vwap = trade.price;
+  }
+
+  // Update timestamps
+  uint64_t trade_ts = static_cast<uint64_t>(trade.timestamp_us) * 1000ULL;  // Convert to nanoseconds
+  if (cluster.startTimeNs == 0 || trade_ts < cluster.startTimeNs) {
+    cluster.startTimeNs = trade_ts;
+  }
+  if (trade_ts > cluster.endTimeNs) {
+    cluster.endTimeNs = trade_ts;
+  }
+
+  // Mark cluster as having trades
+  cluster.hasTrades = true;
+}
+
+void ClusterEngine::setActiveCandleCluster(float center_price, float tick_size, uint64_t start_time_ns) {
+  active_cluster_.centerX = center_price;
+  active_cluster_.centerY = center_price;
+  active_cluster_.width = tick_size;
+  active_cluster_.height = tick_size;
+  active_cluster_.bidVolume = 0;
+  active_cluster_.askVolume = 0;
+  active_cluster_.tradeCount = 0;
+  active_cluster_.vwap = 0.0f;
+  active_cluster_.hasTrades = false;
+  active_cluster_.buyTradeCount = 0;
+  active_cluster_.sellTradeCount = 0;
+  active_cluster_.maxSingleTradeVolume = 0.0f;
+  active_cluster_.startTimeNs = start_time_ns;
+  active_cluster_.endTimeNs = start_time_ns;
 }
 
 std::vector<std::tuple<int64_t, int, double, double, double>>

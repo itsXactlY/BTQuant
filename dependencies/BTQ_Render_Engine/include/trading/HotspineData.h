@@ -102,6 +102,92 @@ struct alignas(16) CandleCluster {
         maxSingleTradeVolume(maxTradeVol),
         startTimeNs(startNs),
         endTimeNs(endNs) {}
+
+  // Atomic Compare-And-Swap (CAS) operations for thread-safe volume accumulation
+  // Use these methods when multiple threads may update the same cluster concurrently
+
+  /// @brief Atomically add to bidVolume using Compare-And-Swap
+  /// @param delta Amount to add to bidVolume
+  /// @return The new bidVolume value after the addition
+  uint32_t addBidVolumeCAS(uint32_t delta) {
+    uint32_t expected = bidVolume;
+    uint32_t desired;
+    do {
+      desired = expected + delta;
+    } while (!__atomic_compare_exchange_n(&bidVolume, &expected, desired,
+                                          true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return desired;
+  }
+
+  /// @brief Atomically add to askVolume using Compare-And-Swap
+  /// @param delta Amount to add to askVolume
+  /// @return The new askVolume value after the addition
+  uint32_t addAskVolumeCAS(uint32_t delta) {
+    uint32_t expected = askVolume;
+    uint32_t desired;
+    do {
+      desired = expected + delta;
+    } while (!__atomic_compare_exchange_n(&askVolume, &expected, desired,
+                                          true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return desired;
+  }
+
+  /// @brief Atomically add to tradeCount using Compare-And-Swap
+  /// @param delta Amount to add to tradeCount
+  /// @return The new tradeCount value after the addition
+  uint32_t addTradeCountCAS(uint32_t delta) {
+    uint32_t expected = tradeCount;
+    uint32_t desired;
+    do {
+      desired = expected + delta;
+    } while (!__atomic_compare_exchange_n(&tradeCount, &expected, desired,
+                                          true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return desired;
+  }
+
+  /// @brief Atomically add to buyTradeCount using Compare-And-Swap
+  /// @param delta Amount to add to buyTradeCount
+  /// @return The new buyTradeCount value after the addition
+  uint32_t addBuyTradeCountCAS(uint32_t delta) {
+    uint32_t expected = buyTradeCount;
+    uint32_t desired;
+    do {
+      desired = expected + delta;
+    } while (!__atomic_compare_exchange_n(&buyTradeCount, &expected, desired,
+                                          true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return desired;
+  }
+
+  /// @brief Atomically add to sellTradeCount using Compare-And-Swap
+  /// @param delta Amount to add to sellTradeCount
+  /// @return The new sellTradeCount value after the addition
+  uint32_t addSellTradeCountCAS(uint32_t delta) {
+    uint32_t expected = sellTradeCount;
+    uint32_t desired;
+    do {
+      desired = expected + delta;
+    } while (!__atomic_compare_exchange_n(&sellTradeCount, &expected, desired,
+                                          true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return desired;
+  }
+
+  /// @brief Atomically update maxSingleTradeVolume using Compare-And-Swap
+  /// @param newVolume New volume to potentially set as max
+  /// @return The maxSingleTradeVolume value after the operation
+  float updateMaxSingleTradeVolumeCAS(float newVolume) {
+    uint32_t expected = __builtin_bit_cast(uint32_t, maxSingleTradeVolume);
+    uint32_t desired;
+    do {
+      float currentMax = __builtin_bit_cast(float, expected);
+      if (newVolume <= currentMax) {
+        return currentMax;  // No update needed
+      }
+      desired = __builtin_bit_cast(uint32_t, newVolume);
+    } while (!__atomic_compare_exchange_n(
+        __builtin_bit_cast(uint32_t*, &maxSingleTradeVolume), &expected, desired,
+        true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return newVolume;
+  }
 };
 
 static_assert(GpuAlignable<CandleCluster>, "CandleCluster must be GPU-alignable");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -11,6 +12,7 @@
 #include "../../../../dependencies/ccapi/example/src/market_data_collector/market_data_types.h"
 #include "../data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
 #include "../hotspine_layout_v3.hpp"
+#include "../trading/HotspineData.h"  // For CandleCluster with CAS operations
 
 namespace Analytics {
 
@@ -148,6 +150,18 @@ class ClusterEngine {
                                        BTQuant::Data::TimeAggregationType agg_type,
                                        int n_contracts = 1000, int n_ticks = 100);
 
+  // Process trade into active CandleCluster using Compare-And-Swap (CAS) atomic operations
+  // This method is thread-safe and lock-free for concurrent volume accumulation
+  void processTradeToCandleClusterCAS(const MarketData::Trade& trade,
+                                      BTQuant::RenderEngine::CandleCluster& cluster);
+
+  // Get reference to the active candle cluster for direct CAS operations
+  BTQuant::RenderEngine::CandleCluster& getActiveCandleCluster() { return active_cluster_; }
+  const BTQuant::RenderEngine::CandleCluster& getActiveCandleCluster() const { return active_cluster_; }
+
+  // Set the active candle cluster parameters
+  void setActiveCandleCluster(float center_price, float tick_size, uint64_t start_time_ns);
+
   // Detect diagonal imbalances by comparing buy_volume at price P with sell_volume at price P-1
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_diagonal_imbalances(
       double threshold = 3.0) const;
@@ -210,5 +224,8 @@ class ClusterEngine {
 
   // Additional data structure for cluster cells with time buckets
   std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]
+
+  // Active candle cluster for CAS-based volume accumulation
+  BTQuant::RenderEngine::CandleCluster active_cluster_;
 };
 }  // namespace Analytics

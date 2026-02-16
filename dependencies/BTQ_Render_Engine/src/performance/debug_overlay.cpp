@@ -268,15 +268,15 @@ void DebugOverlay::render() {
 
     ImGui::Separator();
 
-    // Active Features/Components Information
+    // Active Features/Components Information (from g_debug_overlay)
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== ACTIVE FEATURES ===");
 
-    // Show active panels/components count
-    ImGui::Text("Active Panels: %zu", active_panels_count_);
-    ImGui::Text("Active Indicators: %zu", active_indicators_count_);
-    ImGui::Text("Active Alerts: %zu", active_alerts_count_);
+    // Show active panels/component counts from g_debug_overlay
+    ImGui::Text("Panels: %zu", active_panels_count_);
+    ImGui::Text("Indicators: %zu", active_indicators_count_);
+    ImGui::Text("Alerts: %zu", active_alerts_count_);
 
-    // Data processing metrics
+    // Data processing metrics from g_performance_monitor
     size_t data_processed = g_performance_monitor.get_data_processed_count();
     size_t indicators_calculated = g_performance_monitor.get_indicators_calculated_count();
     double data_processing_time = g_performance_monitor.get_data_processing_time_ms();
@@ -285,7 +285,17 @@ void DebugOverlay::render() {
     ImGui::Text("Indicators Calc: %zu", indicators_calculated);
     ImGui::Text("Processing Time: %.2f ms", data_processing_time);
 
-    // Renderer Stats
+    // Debug Overlay Internal State
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== DEBUG OVERLAY STATUS ===");
+
+    // Overlay state from g_debug_overlay
+    ImGui::Text("Visible: %s", is_visible() ? "Yes" : "No");
+    ImGui::Text("Position: (%.1f, %.1f)", position_x_, position_y_);
+    ImGui::Text("Window Size: (%.1f x %.1f)", window_width_, window_height_);
+    ImGui::Text("Refresh Rate: %.1f Hz", refresh_rate_);
+
+    // Renderer stats from g_debug_overlay
     ImGui::Text("Frames Rendered: %s", format_large_number(frames_rendered_).c_str());
     ImGui::Text("LOB Updates: %s", format_large_number(lob_updates_).c_str());
     ImGui::Text("Trade Updates: %s", format_large_number(trade_updates_).c_str());

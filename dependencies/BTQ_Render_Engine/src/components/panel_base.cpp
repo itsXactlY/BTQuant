@@ -172,8 +172,6 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Multi VWAP";
     case PanelType::TECHNICAL_INDICATORS:
       return "Technical Indicators";
-    case PanelType::THEME_CUSTOMIZATION:
-      return "Theme Customization";
     case PanelType::KEYBOARD_SHORTCUTS:
       return "Keyboard Shortcuts";
     case PanelType::DRAWING_TOOLS:

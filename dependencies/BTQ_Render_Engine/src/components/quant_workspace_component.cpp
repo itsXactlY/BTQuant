@@ -383,11 +383,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Status Bar")) {
         panel_manager_->add_panel(PanelType::STATUS_BAR);
       }
-      
-      if (ImGui::Button("Theme")) {
-        panel_manager_->add_panel(PanelType::THEME_CUSTOMIZATION);
-      }
-      ImGui::SameLine();
+
       if (ImGui::Button("Shortcuts")) {
         panel_manager_->add_panel(PanelType::KEYBOARD_SHORTCUTS);
       }

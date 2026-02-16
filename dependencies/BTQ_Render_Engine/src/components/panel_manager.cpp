@@ -39,7 +39,6 @@
 #include "../../include/components/correlation_heatmap_panel.hpp"
 #include "../../include/components/multi_vwap_panel.hpp"
 #include "../../include/components/technical_indicators_panel.hpp"
-#include "../../include/components/theme_customization_panel.hpp"
 #include "../../include/components/keyboard_shortcuts_panel.hpp"
 #include "../../include/components/drawing_tools_panel.hpp"
 #include "../../include/symbol_registry.hpp"
@@ -310,9 +309,6 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::TECHNICAL_INDICATORS:
       panel = std::make_unique<TechnicalIndicatorsPanel>(config);
       break;
-    case PanelType::THEME_CUSTOMIZATION:
-      panel = std::make_unique<ThemeCustomizationPanel>(config);
-      break;
     case PanelType::KEYBOARD_SHORTCUTS:
       panel = std::make_unique<KeyboardShortcutsPanel>(config);
       break;
@@ -490,9 +486,6 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::TECHNICAL_INDICATORS:
       panel = std::make_unique<TechnicalIndicatorsPanel>(config);
-      break;
-    case PanelType::THEME_CUSTOMIZATION:
-      panel = std::make_unique<ThemeCustomizationPanel>(config);
       break;
     case PanelType::KEYBOARD_SHORTCUTS:
       panel = std::make_unique<KeyboardShortcutsPanel>(config);
@@ -976,8 +969,6 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Multi VWAP";
     case PanelType::TECHNICAL_INDICATORS:
       return "Technical Indicators";
-    case PanelType::THEME_CUSTOMIZATION:
-      return "Theme";
     case PanelType::KEYBOARD_SHORTCUTS:
       return "Shortcuts";
     case PanelType::DRAWING_TOOLS:

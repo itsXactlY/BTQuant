@@ -149,7 +149,6 @@ set(DASHBOARD_SOURCES
     src/components/historical_time_sales.cpp
     src/components/correlation_heatmap_panel.cpp
     src/components/technical_indicators_panel.cpp
-    src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
     src/trading/trading_interface.cpp
@@ -294,7 +293,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/historical_time_sales.cpp
     src/components/correlation_heatmap_panel.cpp
     src/components/technical_indicators_panel.cpp
-    src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
     src/trading/trading_interface.cpp

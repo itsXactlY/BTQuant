@@ -6,6 +6,7 @@
 
 #include "../analytics/cluster_engine.hpp"    // For ClusterEngine and imbalance/exhaustion detection
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
+#include "../market_data_processor.hpp"       // For MarketDataProcessor
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "panel_base.hpp"
 

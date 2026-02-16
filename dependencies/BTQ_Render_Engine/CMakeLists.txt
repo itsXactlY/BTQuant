@@ -200,7 +200,6 @@ set(DASHBOARD_SOURCES
     src/data/exchange_aggregator.cpp
     src/data/quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
-    src/performance_monitor.cpp
     src/performance/debug_overlay.cpp
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
@@ -350,7 +349,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/incremental_updater.cpp
     src/data/quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
-    src/performance_monitor.cpp
     src/performance/debug_overlay.cpp
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp

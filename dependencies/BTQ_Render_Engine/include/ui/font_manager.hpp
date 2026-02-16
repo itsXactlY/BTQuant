@@ -42,6 +42,11 @@ public:
     ImFont* getHeaderFont() const;
 
     /**
+     * @brief Get the FontAwesome 6 icon font
+     */
+    ImFont* getIconFont() const;
+
+    /**
      * @brief Push the monospace font onto the ImGui font stack
      */
     void pushMonospaceFont() const;
@@ -97,10 +102,11 @@ public:
 
 private:
     FontManager();  // Private constructor for singleton
-    
+
     ImFont* main_font_;
     ImFont* monospace_font_;
     ImFont* header_font_;
+    ImFont* icon_font_;
     bool is_initialized_;
 };
 

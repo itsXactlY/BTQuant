@@ -1201,6 +1201,9 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
   active_symbol_id_ = symbol_id;
   active_symbol_name_ = symbol_name;
 
+  // Cache exchange name safely
+  std::string exchange_name = bridge_ ? bridge_->getExchangeName(symbol_id) : "UNKNOWN";
+
   // Propagate symbol to all relevant panel types
   for (auto& [id, panel] : panels_) {
     switch (panel->get_config().type) {
@@ -1212,14 +1215,14 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
       }
       case PanelType::CHART: {
         if (auto* chart = dynamic_cast<ChartPanel*>(panel.get())) {
-          chart->set_symbol(symbol_name, bridge_->getExchangeName(symbol_id));
+          chart->set_symbol(symbol_name, exchange_name);
         }
         break;
       }
       case PanelType::WATCHLIST: {
         // Update the symbol for all watchlist panels
         if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
-          watchlist->add_symbol(symbol_id, symbol_name, bridge_->getExchangeName(symbol_id));
+          watchlist->add_symbol(symbol_id, symbol_name, exchange_name);
         }
         break;
       }

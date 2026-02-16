@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -77,6 +78,7 @@ class WatchlistPanel : public PanelBase {
   // Simple single watchlist
   std::map<uint32_t, WatchlistEntry> watchlist_;
   std::vector<uint32_t> display_order_;
+  mutable std::mutex watchlist_mutex_;  // Protects watchlist_ and display_order_ from concurrent access
 
   // UI state
   int sort_column_ = 0;  // 0=symbol, 1=exchange, 2=last price, 3=change%, 4=change$, 5=volume, 6=high, 7=low, 8=open, 9=vwap
@@ -96,6 +98,7 @@ class WatchlistPanel : public PanelBase {
 
   // Map to store subscription IDs for individual symbols
   std::unordered_map<uint32_t, uint64_t> symbol_subscriptions_;
+  std::mutex subscription_mutex_;  // Protects symbol_subscriptions_ from concurrent access
 
   void update_watchlist_data();
   void render_table_header();

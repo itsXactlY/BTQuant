@@ -109,10 +109,25 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
 }
 
 void WatchlistPanel::update(float dt) {
-  // Ensure all symbols in the watchlist are subscribed to real-time price feed
-  // updates This handles cases where subscriptions might have been lost or need to be refreshed
-  for (const auto& [symbol_id, entry] : watchlist_) {
-    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+  // Collect symbols that need subscription (under lock)
+  std::vector<uint32_t> symbols_to_subscribe;
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    for (const auto& [symbol_id, entry] : watchlist_) {
+      symbols_to_subscribe.push_back(symbol_id);
+    }
+  }
+
+  // Check and subscribe to symbols that don't have subscriptions
+  for (uint32_t symbol_id : symbols_to_subscribe) {
+    bool needs_subscription = true;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
+        needs_subscription = false;
+      }
+    }
+    if (needs_subscription) {
       subscribe_to_symbol(symbol_id);
     }
   }
@@ -126,16 +141,13 @@ void WatchlistPanel::update(float dt) {
   subscription_check_timer += dt;
   if (subscription_check_timer > 10.0f) {
     subscription_check_timer = 0.0f;
-    std::cout << "[WatchlistPanel] Active symbols: " << watchlist_.size()
-              << ", Active subscriptions: " << symbol_subscriptions_.size() << std::endl;
-
-    // Log any discrepancies between watchlist and subscriptions
-    for (const auto& [symbol_id, entry] : watchlist_) {
-      if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
-        std::cout << "[WatchlistPanel] Missing subscription for symbol ID: " << symbol_id << " ("
-                  << entry.symbol << ")" << std::endl;
-      }
+    size_t subscription_count = 0;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      subscription_count = symbol_subscriptions_.size();
     }
+    std::cout << "[WatchlistPanel] Active symbols: " << watchlist_.size()
+              << ", Active subscriptions: " << subscription_count << std::endl;
   }
 
   // Handle real-time price updates for all symbols in the watchlist
@@ -424,23 +436,26 @@ void WatchlistPanel::render_content() {
 
 void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
                                 const std::string& exchange) {
-  if (watchlist_.find(symbol_id) != watchlist_.end()) {
-    return;  // Already exists
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    if (watchlist_.find(symbol_id) != watchlist_.end()) {
+      return;  // Already exists
+    }
+
+    WatchlistEntry entry;
+    entry.symbol_id = symbol_id;
+    entry.symbol = symbol;
+    entry.exchange = exchange;
+    entry.is_active = true;
+
+    watchlist_[symbol_id] = entry;
+
+    // Add to display order - if there's an existing order, append to the end
+    // otherwise, just add to the vector
+    display_order_.push_back(symbol_id);
   }
 
-  WatchlistEntry entry;
-  entry.symbol_id = symbol_id;
-  entry.symbol = symbol;
-  entry.exchange = exchange;
-  entry.is_active = true;
-
-  watchlist_[symbol_id] = entry;
-
-  // Add to display order - if there's an existing order, append to the end
-  // otherwise, just add to the vector
-  display_order_.push_back(symbol_id);
-
-  // Subscribe to real-time updates for this symbol
+  // Subscribe to real-time updates for this symbol (outside of lock to avoid potential deadlock)
   subscribe_to_symbol(symbol_id);
 
   // Save the updated order to config file
@@ -457,8 +472,26 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
   }
 
   // Check if this symbol is in our watchlist
-  auto it = watchlist_.find(symbol_id);
-  if (it != watchlist_.end()) {
+  // Use a local copy to minimize lock time
+  double new_price = 0.0;
+  double new_vwap = 0.0;
+  uint64_t new_update_ts = 0;
+  double new_change_pct = 0.0;
+  double new_change_dollar = 0.0;
+  double new_open_24h = 0.0;
+  double new_high_24h = 0.0;
+  double new_low_24h = 0.0;
+  double new_volume_24h = 0.0;
+  std::string symbol_name;
+
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    auto it = watchlist_.find(symbol_id);
+    if (it == watchlist_.end()) {
+      return;
+    }
+    symbol_name = it->second.symbol;
+
     // Get the latest analytics data for this symbol
     auto analytics = processor_->getSymbolAnalytics(symbol_id);
     if (analytics.symbol_id != 0) {
@@ -497,21 +530,30 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
         it->second.volume_24h = analytics.volume_1m;  // Fallback
       }
 
-      // Log every market data update for monitoring
-      std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                << " (ID: " << symbol_id << "). New price: " << it->second.price
-                << ", Timestamp: " << it->second.last_update_ts << std::endl;
+      // Cache values for logging
+      new_price = it->second.price;
+      new_update_ts = it->second.last_update_ts;
     }
+  }
+
+  // Log outside of lock to minimize contention
+  if (new_price != 0.0) {
+    std::cout << "[WatchlistPanel] Market data update received for " << symbol_name
+              << " (ID: " << symbol_id << "). New price: " << new_price
+              << ", Timestamp: " << new_update_ts << std::endl;
   }
 }
 
 void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
-  watchlist_.erase(symbol_id);
-  display_order_.erase(std::remove(display_order_.begin(),
-                                  display_order_.end(), symbol_id),
-                      display_order_.end());
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    watchlist_.erase(symbol_id);
+    display_order_.erase(std::remove(display_order_.begin(),
+                                    display_order_.end(), symbol_id),
+                        display_order_.end());
+  }
 
-  // Unsubscribe from real-time updates for this symbol
+  // Unsubscribe from real-time updates for this symbol (outside of lock)
   unsubscribe_from_symbol(symbol_id);
 
   // Save the updated order to config file
@@ -520,19 +562,28 @@ void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
 
 WatchlistPanel::~WatchlistPanel() {
   // Unsubscribe from all market data updates when the panel is destroyed
+  // Note: We don't lock here since the panel should not be receiving updates during destruction
   for (const auto& [symbol_id, entry] : watchlist_) {
     unsubscribe_from_symbol(symbol_id);
   }
 }
 
 void WatchlistPanel::clear_watchlist() {
-  // Unsubscribe from all current symbols before clearing
-  for (const auto& [symbol_id, entry] : watchlist_) {
-    unsubscribe_from_symbol(symbol_id);
+  // Unsubscribe from all current symbols before clearing (outside of lock)
+  std::vector<uint32_t> symbols_to_unsubscribe;
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    for (const auto& [symbol_id, entry] : watchlist_) {
+      symbols_to_unsubscribe.push_back(symbol_id);
+    }
+    watchlist_.clear();
+    display_order_.clear();
   }
 
-  watchlist_.clear();
-  display_order_.clear();
+  // Unsubscribe from all symbols (outside of lock)
+  for (uint32_t symbol_id : symbols_to_unsubscribe) {
+    unsubscribe_from_symbol(symbol_id);
+  }
 
   // Save the updated order to config file
   save_watchlist_order_to_config(config_file_path_);
@@ -706,6 +757,7 @@ std::vector<uint32_t> WatchlistPanel::get_filtered_symbols() const {
   std::string filter(filter_buffer_);
   std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
 
+  std::lock_guard<std::mutex> lock(watchlist_mutex_);
   for (uint32_t symbol_id : display_order_) {
     auto it = watchlist_.find(symbol_id);
     if (it != watchlist_.end()) {
@@ -766,6 +818,7 @@ void WatchlistPanel::sort_watchlist() {
     return;
   }
 
+  std::lock_guard<std::mutex> lock(watchlist_mutex_);
   std::sort(display_order_.begin(), display_order_.end(),
             [this](uint32_t a_id, uint32_t b_id) {
               const auto& a_it = watchlist_.find(a_id);
@@ -1059,9 +1112,12 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
 void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
   if (processor_) {
     // Check if already subscribed to avoid duplicate subscriptions
-    if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
-      std::cout << "[WatchlistPanel] Already subscribed to symbol ID: " << symbol_id << std::endl;
-      return;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
+        std::cout << "[WatchlistPanel] Already subscribed to symbol ID: " << symbol_id << std::endl;
+        return;
+      }
     }
 
     // Create a subscription for this specific symbol to receive real-time price updates
@@ -1072,7 +1128,10 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
                               });
 
     // Store the subscription ID for this symbol
-    symbol_subscriptions_[symbol_id] = sub_id;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      symbol_subscriptions_[symbol_id] = sub_id;
+    }
 
     std::cout << "[WatchlistPanel] Subscribed to symbol ID: " << symbol_id
               << " with subscription ID: " << sub_id << std::endl;
@@ -1081,12 +1140,22 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
 
 void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
   if (processor_) {
-    auto it = symbol_subscriptions_.find(symbol_id);
-    if (it != symbol_subscriptions_.end()) {
-      processor_->unsubscribe(it->second);
+    uint64_t sub_id = 0;
+    bool found = false;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      auto it = symbol_subscriptions_.find(symbol_id);
+      if (it != symbol_subscriptions_.end()) {
+        sub_id = it->second;
+        found = true;
+        symbol_subscriptions_.erase(it);
+      }
+    }
+
+    if (found) {
+      processor_->unsubscribe(sub_id);
       std::cout << "[WatchlistPanel] Unsubscribed from symbol ID: " << symbol_id
-                << " with subscription ID: " << it->second << std::endl;
-      symbol_subscriptions_.erase(it);
+                << " with subscription ID: " << sub_id << std::endl;
     } else {
       std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id
                 << std::endl;
@@ -1108,22 +1177,38 @@ void WatchlistPanel::subscribe_to_all_watchlist_symbols() {
   // Subscribe to all symbols in the watchlist efficiently
   std::vector<uint32_t> symbols_to_subscribe;
 
-  for (const auto& [symbol_id, entry] : watchlist_) {
-    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    for (const auto& [symbol_id, entry] : watchlist_) {
       symbols_to_subscribe.push_back(symbol_id);
     }
   }
 
-  if (!symbols_to_subscribe.empty()) {
-    std::cout << "[WatchlistPanel] Subscribing to " << symbols_to_subscribe.size()
+  // Check which symbols need subscription
+  std::vector<uint32_t> symbols_needing_subscription;
+  for (uint32_t symbol_id : symbols_to_subscribe) {
+    bool needs_subscription = true;
+    {
+      std::lock_guard<std::mutex> lock(subscription_mutex_);
+      if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
+        needs_subscription = false;
+      }
+    }
+    if (needs_subscription) {
+      symbols_needing_subscription.push_back(symbol_id);
+    }
+  }
+
+  if (!symbols_needing_subscription.empty()) {
+    std::cout << "[WatchlistPanel] Subscribing to " << symbols_needing_subscription.size()
               << " symbols for real-time updates..."
               << std::endl;
 
-    for (uint32_t symbol_id : symbols_to_subscribe) {
+    for (uint32_t symbol_id : symbols_needing_subscription) {
       subscribe_to_symbol(symbol_id);
     }
 
-    std::cout << "[WatchlistPanel] Successfully subscribed to all " << symbols_to_subscribe.size()
+    std::cout << "[WatchlistPanel] Successfully subscribed to all " << symbols_needing_subscription.size()
               << " symbols" << std::endl;
   }
 }

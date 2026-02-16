@@ -84,13 +84,10 @@ set(LIB_SOURCES
     src/performance/regression_detector.cpp
     src/performance/cpu_profiler.cpp
     src/performance/memory_tracker.cpp
-    src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
-    src/ui/empty_states.cpp
     src/ui/tooltips.cpp
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
-    src/ui/tutorial.cpp
     src/ui/font_manager.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
@@ -177,10 +174,7 @@ set(DASHBOARD_SOURCES
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
-    src/ui/haptic_feedback.cpp
-    src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
-    src/ui/empty_states.cpp
     src/ui/quick_actions.cpp
     src/system/system_optimizer.cpp
     src/components/chart_panel_settings.cpp
@@ -230,13 +224,10 @@ set(BTQUANT_TERMINAL_SOURCES
     src/performance/regression_detector.cpp
     src/performance/cpu_profiler.cpp
     src/performance/memory_tracker.cpp
-    src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
-    src/ui/empty_states.cpp
     src/ui/tooltips.cpp
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
-    src/ui/tutorial.cpp
     src/ui/font_manager.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
@@ -321,12 +312,8 @@ set(BTQUANT_TERMINAL_SOURCES
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
-    src/ui/haptic_feedback.cpp
-    src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
-    src/ui/empty_states.cpp
     src/ui/quick_actions.cpp
-    src/ui/tutorial.cpp
     src/system/system_optimizer.cpp
     src/components/chart_panel_settings.cpp
     src/data/market_data_processor.cpp

@@ -9,6 +9,15 @@
 #include <unordered_map>
 #include <functional>
 #include <thread>
+#include <cstdint>
+
+#ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#else
+    #include <sys/mman.h>
+    #include <unistd.h>
+#endif
 
 #include "../include/data/TradeData.h"
 #include "../include/analytics/cluster_engine.hpp"
@@ -52,7 +61,7 @@ namespace BTQuant {
 template<typename T>
 class ObjectPool {
 public:
-    explicit ObjectPool(size_t initial_capacity = 1024);
+    explicit ObjectPool(size_t arena_size = 1024 * 1024 * 1024);  // 1GB default arena
     ~ObjectPool();
 
     // Allocate an object from the pool
@@ -70,14 +79,22 @@ public:
     size_t get_free_objects() const { return free_list_.size(); }
     size_t get_used_objects() const { return total_objects_ - free_list_.size(); }
 
+    // Get arena information
+    size_t get_arena_size() const { return arena_size_; }
+    size_t get_arena_used() const { return arena_offset_; }
+
 private:
     struct PoolBlock {
         alignas(T) char data[sizeof(T)];
     };
 
+    // Monolithic memory arena
+    void* arena_;           // Pointer to the mmap/VirtualAlloc block
+    size_t arena_size_;     // Total size of the arena
+    size_t arena_offset_;   // Current offset within the arena for new allocations
+
     std::mutex mutex_;
     std::stack<T*> free_list_;
-    std::vector<std::unique_ptr<char[]>> blocks_;
     size_t total_objects_;
     size_t objects_per_block_;
 };
@@ -555,7 +572,8 @@ private:
 template<typename T>
 class ThreadLocalObjectPool {
 public:
-    explicit ThreadLocalObjectPool(size_t initial_capacity = 1024);
+    explicit ThreadLocalObjectPool(size_t arena_size = 1024 * 1024 * 1024);  // 1GB default arena
+    ~ThreadLocalObjectPool();
 
     // Allocate an object from the pool
     template<typename... Args>
@@ -576,14 +594,22 @@ public:
     size_t get_allocation_count() const { return allocation_count_.load(std::memory_order_relaxed); }
     size_t get_deallocation_count() const { return deallocation_count_.load(std::memory_order_relaxed); }
 
+    // Get arena information
+    size_t get_arena_size() const { return arena_size_; }
+    size_t get_arena_used() const { return arena_offset_; }
+
 private:
     struct PoolBlock {
         alignas(T) char data[sizeof(T)];
     };
 
+    // Monolithic memory arena
+    void* arena_;           // Pointer to the mmap/VirtualAlloc block
+    size_t arena_size_;     // Total size of the arena
+    size_t arena_offset_;   // Current offset within the arena for new allocations
+
     std::mutex mutex_;
     std::stack<T*> free_list_;
-    std::vector<std::unique_ptr<char[]>> blocks_;
     size_t total_objects_;
     size_t objects_per_block_;
 
@@ -1226,19 +1252,37 @@ private:
 
 // Template implementations (included in header for template instantiation)
 template<typename T>
-ObjectPool<T>::ObjectPool(size_t initial_capacity)
-    : total_objects_(0), objects_per_block_(0) {
-    preallocate(initial_capacity);
+ObjectPool<T>::ObjectPool(size_t arena_size)
+    : arena_(nullptr), arena_size_(arena_size), arena_offset_(0), total_objects_(0), objects_per_block_(0) {
+    // Allocate monolithic memory arena using mmap (Linux) or VirtualAlloc (Windows)
+#ifdef _WIN32
+    arena_ = VirtualAlloc(nullptr, arena_size_, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else
+    arena_ = mmap(nullptr, arena_size_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (arena_ == MAP_FAILED) {
+        arena_ = nullptr;
+    }
+#endif
 }
 
 template<typename T>
 ObjectPool<T>::~ObjectPool() {
     // Clean up all objects
     std::lock_guard<std::mutex> lock(mutex_);
-    blocks_.clear();
+    
     // Clear the stack
     std::stack<T*> empty_stack;
     free_list_.swap(empty_stack);
+    
+    // Free the monolithic arena
+    if (arena_) {
+#ifdef _WIN32
+        VirtualFree(arena_, 0, MEM_RELEASE);
+#else
+        munmap(arena_, arena_size_);
+#endif
+        arena_ = nullptr;
+    }
 }
 
 template<typename T>
@@ -1247,7 +1291,7 @@ T* ObjectPool<T>::allocate(Args&&... args) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (free_list_.empty()) {
-        // Double the capacity if we run out
+        // Allocate more objects from the arena if we run out
         size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
         preallocate(new_count);
     }
@@ -1279,13 +1323,21 @@ void ObjectPool<T>::deallocate(T* obj) {
 template<typename T>
 void ObjectPool<T>::preallocate(size_t count) {
     std::lock_guard<std::mutex> lock(mutex_);
+    
+    if (!arena_) {
+        return; // Arena not allocated
+    }
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);
-    auto block_memory = std::make_unique<char[]>(total_size);
+    
+    // Check if we have enough space in the arena
+    if (arena_offset_ + total_size > arena_size_) {
+        return; // Not enough space in arena
+    }
 
-    // Initialize each PoolBlock and add to free list
-    char* block_ptr = block_memory.get();
+    // Initialize each PoolBlock and add to free list from the monolithic arena
+    char* block_ptr = static_cast<char*>(arena_) + arena_offset_;
 
     for (size_t i = 0; i < count; ++i) {
         PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
@@ -1301,14 +1353,42 @@ void ObjectPool<T>::preallocate(size_t count) {
         block_ptr += sizeof(PoolBlock);
     }
 
-    blocks_.push_back(std::move(block_memory));
+    arena_offset_ += total_size;
 }
 
 // ThreadLocalObjectPool implementation
 template<typename T>
-ThreadLocalObjectPool<T>::ThreadLocalObjectPool(size_t initial_capacity)
-    : total_objects_(0), objects_per_block_(0) {
-    preallocate(initial_capacity);
+ThreadLocalObjectPool<T>::ThreadLocalObjectPool(size_t arena_size)
+    : arena_(nullptr), arena_size_(arena_size), arena_offset_(0), total_objects_(0), objects_per_block_(0) {
+    // Allocate monolithic memory arena using mmap (Linux) or VirtualAlloc (Windows)
+#ifdef _WIN32
+    arena_ = VirtualAlloc(nullptr, arena_size_, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else
+    arena_ = mmap(nullptr, arena_size_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (arena_ == MAP_FAILED) {
+        arena_ = nullptr;
+    }
+#endif
+}
+
+template<typename T>
+ThreadLocalObjectPool<T>::~ThreadLocalObjectPool() {
+    // Clean up all objects
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // Clear the stack
+    std::stack<T*> empty_stack;
+    free_list_.swap(empty_stack);
+    
+    // Free the monolithic arena
+    if (arena_) {
+#ifdef _WIN32
+        VirtualFree(arena_, 0, MEM_RELEASE);
+#else
+        munmap(arena_, arena_size_);
+#endif
+        arena_ = nullptr;
+    }
 }
 
 template<typename T>
@@ -1317,7 +1397,7 @@ T* ThreadLocalObjectPool<T>::allocate(Args&&... args) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (free_list_.empty()) {
-        // Double the capacity if we run out
+        // Allocate more objects from the arena if we run out
         size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
         preallocate(new_count);
     }
@@ -1355,13 +1435,21 @@ void ThreadLocalObjectPool<T>::deallocate(T* obj) {
 template<typename T>
 void ThreadLocalObjectPool<T>::preallocate(size_t count) {
     std::lock_guard<std::mutex> lock(mutex_);
+    
+    if (!arena_) {
+        return; // Arena not allocated
+    }
 
     // Calculate how much memory we need
     size_t total_size = count * sizeof(PoolBlock);
-    auto block_memory = std::make_unique<char[]>(total_size);
+    
+    // Check if we have enough space in the arena
+    if (arena_offset_ + total_size > arena_size_) {
+        return; // Not enough space in arena
+    }
 
-    // Initialize each PoolBlock and add to free list
-    char* block_ptr = block_memory.get();
+    // Initialize each PoolBlock and add to free list from the monolithic arena
+    char* block_ptr = static_cast<char*>(arena_) + arena_offset_;
 
     for (size_t i = 0; i < count; ++i) {
         PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
@@ -1377,7 +1465,7 @@ void ThreadLocalObjectPool<T>::preallocate(size_t count) {
         block_ptr += sizeof(PoolBlock);
     }
 
-    blocks_.push_back(std::move(block_memory));
+    arena_offset_ += total_size;
 }
 
 // Additional memory pools for other frequently allocated objects

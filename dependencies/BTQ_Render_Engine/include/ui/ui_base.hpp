@@ -9,6 +9,17 @@
 #include "vulkan_base_types.hpp"
 #include "data/core_types.hpp"
 
+namespace BTQuant::UI {
+
+constexpr ImGuiWindowFlags PANEL_DEFAULT_FLAGS =
+    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+
+constexpr ImGuiWindowFlags OVERLAY_FLAGS =
+    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground;
+
+}  // namespace BTQuant::UI
+
 namespace BTQuant {
 
 // Forward declarations

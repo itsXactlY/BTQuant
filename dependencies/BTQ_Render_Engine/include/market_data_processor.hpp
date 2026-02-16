@@ -78,24 +78,45 @@ struct OrderbookData {
 struct AtomicL2Snapshot {
   uint32_t symbol_id = 0;
   uint64_t timestamp = 0;
-  
+
   // Best bid/ask (top of book)
   double best_bid = 0.0;
   double best_ask = 0.0;
   double best_bid_size = 0.0;
   double best_ask_size = 0.0;
-  
+
   // Spread info
   double spread = 0.0;
   double spread_percent = 0.0;
-  
+
   // Last trade info
   double last_trade_price = 0.0;
   double last_trade_size = 0.0;
   uint64_t last_trade_time = 0;
-  
+
   // Mid price for convenience
   double mid_price = 0.0;
+};
+
+// Atomic BBO (Best Bid/Offer) State for double-buffered lock-free access
+// Network thread writes to inactive buffer, then swaps pointer with release semantics
+// UI thread reads from active buffer with acquire semantics
+struct AtomicBBOState {
+  uint32_t symbol_id = 0;
+  uint64_t timestamp = 0;
+
+  // Best bid/ask (top of book) - core BBO data
+  double best_bid = 0.0;
+  double best_ask = 0.0;
+  double best_bid_size = 0.0;
+  double best_ask_size = 0.0;
+
+  // Spread info
+  double spread = 0.0;
+  double spread_percent = 0.0;
+
+  // Padding to ensure cache-line alignment (64 bytes total for atomic copy)
+  char padding[64 - (sizeof(uint32_t) + sizeof(uint64_t) + 6 * sizeof(double))];
 };
 
 
@@ -545,6 +566,17 @@ class MarketDataProcessor {
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
+
+  // Atomic double-buffered BBO state pointers
+  // Network thread writes to inactive buffer, swaps pointer with release semantics
+  // UI thread reads active pointer with acquire semantics for lock-free access
+  static constexpr size_t BBO_BUFFER_COUNT = 2;
+  mutable std::atomic<AtomicBBOState*> bbo_active_ptr_{nullptr};
+  mutable std::atomic<AtomicBBOState*> bbo_inactive_ptr_{nullptr};
+  mutable std::unique_ptr<AtomicBBOState[]> bbo_buffers_;
+
+  // Update BBO state from network thread (uses release semantics)
+  void updateBBOState(uint32_t symbol_id, const SymbolAnalytics& symbol_data) const;
 };
 
 }  // namespace RenderEngine

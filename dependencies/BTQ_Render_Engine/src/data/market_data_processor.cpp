@@ -26,6 +26,11 @@ MarketDataProcessor::MarketDataProcessor()
   // Initialize cache manager
   cache_manager_ = std::make_shared<CacheManager>();
 
+  // Initialize double-buffered BBO state
+  bbo_buffers_ = std::make_unique<AtomicBBOState[]>(BBO_BUFFER_COUNT);
+  bbo_active_ptr_.store(&bbo_buffers_[0], std::memory_order_relaxed);
+  bbo_inactive_ptr_.store(&bbo_buffers_[1], std::memory_order_relaxed);
+
   // Start worker threads
   for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
     workers_.emplace_back(&MarketDataProcessor::processQueueLoop, this);
@@ -196,6 +201,43 @@ std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symb
 }
 
 std::optional<AtomicL2Snapshot> MarketDataProcessor::get_atomic_snapshot(uint32_t symbol_id) const {
+  // UI thread read path - uses acquire semantics for lock-free access
+  // Load active pointer with acquire to ensure we see all writes made by network thread
+  
+  // First try to get from atomic BBO buffer (fast path for UI)
+  AtomicBBOState* bbo = bbo_active_ptr_.load(std::memory_order_acquire);
+  if (bbo != nullptr && bbo->symbol_id == symbol_id && bbo->best_bid > 0.0 && bbo->best_ask > 0.0) {
+    // Fast path: use atomic BBO buffer directly
+    AtomicL2Snapshot snapshot;
+    snapshot.symbol_id = bbo->symbol_id;
+    snapshot.timestamp = bbo->timestamp;
+    snapshot.best_bid = bbo->best_bid;
+    snapshot.best_ask = bbo->best_ask;
+    snapshot.best_bid_size = bbo->best_bid_size;
+    snapshot.best_ask_size = bbo->best_ask_size;
+    snapshot.spread = bbo->spread;
+    snapshot.spread_percent = bbo->spread_percent;
+    
+    // Get last trade info from symbol data (requires shard lock)
+    auto& shard = getShard(symbol_id);
+    auto it = shard.data.find(symbol_id);
+    if (it != shard.data.end()) {
+      snapshot.last_trade_price = it->second.last_trade_price;
+      snapshot.last_trade_size = it->second.last_trade_size;
+      snapshot.last_trade_time = it->second.last_trade_time;
+    }
+    
+    // Calculate mid-price
+    if (snapshot.best_bid > 0.0 && snapshot.best_ask > 0.0) {
+      snapshot.mid_price = (snapshot.best_bid + snapshot.best_ask) / 2.0;
+    } else if (snapshot.last_trade_price > 0.0) {
+      snapshot.mid_price = snapshot.last_trade_price;
+    }
+    
+    return snapshot;
+  }
+  
+  // Fallback to traditional method if BBO buffer not populated for this symbol
   auto& shard = getShard(symbol_id);
 
   auto it = shard.data.find(symbol_id);
@@ -922,6 +964,63 @@ void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data
       now - std::chrono::high_resolution_clock::time_point(
                std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
   symbol_data.last_update_time = now.time_since_epoch().count();
+
+  // Update atomic BBO state for lock-free UI access (network thread - release semantics)
+  updateBBOState(symbol_data.symbol_id, symbol_data);
+}
+
+// Update BBO state using double-buffered atomic pointers
+// Called from network/worker thread - uses release semantics
+void MarketDataProcessor::updateBBOState(uint32_t symbol_id, const SymbolAnalytics& symbol_data) const {
+  // Get best bid/ask from consolidated orderbook or recent orderbooks
+  double best_bid = 0.0;
+  double best_ask = 0.0;
+  double best_bid_size = 0.0;
+  double best_ask_size = 0.0;
+  double spread = 0.0;
+  double spread_percent = 0.0;
+
+  // Try to get from consolidated orderbook first
+  if (!symbol_data.consolidated_bids.empty() && !symbol_data.consolidated_asks.empty()) {
+    best_bid = symbol_data.consolidated_bids.begin()->first;
+    best_bid_size = symbol_data.consolidated_bids.begin()->second;
+    best_ask = symbol_data.consolidated_asks.begin()->first;
+    best_ask_size = symbol_data.consolidated_asks.begin()->second;
+    spread = best_ask - best_bid;
+    spread_percent = (spread / best_bid) * 100.0;
+  } else if (!symbol_data.recent_orderbooks.empty()) {
+    // Fallback to recent orderbooks
+    const auto& latest_ob = symbol_data.recent_orderbooks.back();
+    if (!latest_ob.bids.empty()) {
+      best_bid = latest_ob.bids.front().price;
+      best_bid_size = latest_ob.bids.front().size;
+    }
+    if (!latest_ob.asks.empty()) {
+      best_ask = latest_ob.asks.front().price;
+      best_ask_size = latest_ob.asks.front().size;
+    }
+    spread = latest_ob.spread;
+    spread_percent = latest_ob.spread_percent;
+  }
+
+  // Write to inactive buffer (no synchronization needed - we own this buffer)
+  AtomicBBOState* inactive = bbo_inactive_ptr_.load(std::memory_order_relaxed);
+  inactive->symbol_id = symbol_id;
+  inactive->timestamp = symbol_data.last_update_time;
+  inactive->best_bid = best_bid;
+  inactive->best_ask = best_ask;
+  inactive->best_bid_size = best_bid_size;
+  inactive->best_ask_size = best_ask_size;
+  inactive->spread = spread;
+  inactive->spread_percent = spread_percent;
+
+  // Swap pointers: make inactive buffer active with release semantics
+  // This ensures all writes to the buffer are visible before the pointer swap
+  AtomicBBOState* old_active = bbo_active_ptr_.load(std::memory_order_relaxed);
+  bbo_active_ptr_.store(inactive, std::memory_order_release);
+  
+  // Old active buffer becomes the new inactive buffer for next update
+  bbo_inactive_ptr_.store(old_active, std::memory_order_relaxed);
 }
 
 }  // namespace RenderEngine

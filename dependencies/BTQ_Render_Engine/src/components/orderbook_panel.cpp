@@ -596,157 +596,111 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   }
 
   // Find max cumulative volume for scaling
-  double max_cumulative_vol = max_vol; // fallback to individual max if no cumulative data
+  double max_cumulative_vol = max_vol;
   if (!cumulative_bids.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_bids.back());
   if (!cumulative_asks.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
 
-  // Use Table instead of Columns for modern layout (C++26 style UI)
-  if (ImGui::BeginTable("OrderbookTable", 8,
+  const auto& colors = ThemeManager::getInstance().getColors();
+
+  // Determine how many levels to show based on selected_levels_count_
+  int max_levels_to_show = selected_levels_count_ == -1 ?
+                           std::max(aggregated_asks.size(), aggregated_bids.size()) :
+                           selected_levels_count_;
+
+  int ask_count = std::min((int)aggregated_asks.size(), max_levels_to_show);
+  int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
+
+  // Calculate mid-price
+  double mid_price = 0.0;
+  if (!aggregated_bids.empty() && !aggregated_asks.empty()) {
+    mid_price = (aggregated_bids[0].price + aggregated_asks[0].price) / 2.0;
+  }
+
+  // DOM Hardware Instancing: Collect all liquidity bar rectangles for batched rendering
+  struct LiquidityBar {
+      ImVec2 min;
+      ImVec2 max;
+      ImU32 color;
+  };
+  std::vector<LiquidityBar> bid_liquidity_bars;
+  std::vector<LiquidityBar> ask_liquidity_bars;
+  std::vector<std::pair<ImVec2, ImVec2>> bid_bar_pairs;
+  std::vector<std::pair<ImVec2, ImVec2>> ask_bar_pairs;
+
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+  const float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+  // Split panel 50/50: Asks (top half) and Bids (bottom half)
+  float available_height = ImGui::GetContentRegionAvail().y - 40.0f; // Reserve 40px for mid-price block
+  float half_height = available_height / 2.0f;
+
+  // ========== ASKS PANEL (TOP 50%) - Descending order (worst ask to best ask) ==========
+  if (ImGui::BeginTable("AsksTable", 8,
                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchSame)) {
-    // Setup Columns
     ImGui::TableSetupColumn("Bid", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Sold", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80);
     ImGui::TableSetupColumn("Bought", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Ask", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
-    ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60); // New column for volume delta over last 5 seconds
+    ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60);
     ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
-    ImGui::TableHeadersRow();
 
-    const auto& colors = ThemeManager::getInstance().getColors();
-
-    // Determine how many levels to show based on selected_levels_count_
-    int max_levels_to_show = selected_levels_count_ == -1 ?
-                             std::max(aggregated_asks.size(), aggregated_bids.size()) :
-                             selected_levels_count_;
-
-    int ask_count = std::min((int)aggregated_asks.size(), max_levels_to_show);
-    int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
-
-    // DOM Hardware Instancing: Collect all liquidity bar rectangles for batched rendering
-    // This bypasses standard ImGui::AddRectFilled and uses a single draw command
-    struct LiquidityBar {
-        ImVec2 min;
-        ImVec2 max;
-        ImU32 color;
-    };
-    std::vector<LiquidityBar> bid_liquidity_bars;
-    std::vector<LiquidityBar> ask_liquidity_bars;
-
-    // Pre-calculate bar geometry for all levels (first pass - collect positions)
-    // We need to iterate through the table structure to get row positions
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    const float row_height = ImGui::GetTextLineHeightWithSpacing();
-
-    // Collect ask liquidity bars (cumulative volume bars + size bars)
+    // Collect ask liquidity bars
     for (int i = ask_count - 1; i >= 0; --i) {
-        ImGui::TableNextRow();
-        const auto& level = aggregated_asks[i];
+      ImGui::TableNextRow();
+      const auto& level = aggregated_asks[i];
+      ImVec2 row_pos = ImGui::GetCursorScreenPos();
 
-        // Get row position for this level
-        ImVec2 row_pos = ImGui::GetCursorScreenPos();
+      // Size bar (column 4)
+      ImGui::TableSetColumnIndex(4);
+      float size_col_width = ImGui::GetContentRegionAvail().x;
+      float size_bar_width = size_col_width * (float)(level.size / max_vol);
+      ImVec2 size_bar_min = ImVec2(row_pos.x, row_pos.y);
+      ImVec2 size_bar_max = ImVec2(size_bar_min.x + size_bar_width, row_pos.y + row_height);
+      ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
+      ask_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
 
-        // Calculate size bar geometry (column 4)
-        ImGui::TableSetColumnIndex(4);
-        float size_col_width = ImGui::GetContentRegionAvail().x;
-        float size_bar_width = size_col_width * (float)(level.size / max_vol);
-        ImVec2 size_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x, row_pos.y);
-        ImVec2 size_bar_max = ImVec2(size_bar_min.x + size_bar_width, row_pos.y + row_height);
-        ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
-        ask_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
-
-        // Calculate cumulative volume bar geometry (column 2 - Price column)
-        ImGui::TableSetColumnIndex(2);
-        float cum_col_width = ImGui::GetContentRegionAvail().x;
-        float cum_bar_width = cum_col_width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f;
-        ImVec2 cum_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x, row_pos.y);
-        ImVec2 cum_bar_max = ImVec2(cum_bar_min.x + cum_bar_width, row_pos.y + row_height);
-        ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f));
-        ask_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
+      // Cumulative volume bar (column 2)
+      ImGui::TableSetColumnIndex(2);
+      float cum_col_width = ImGui::GetContentRegionAvail().x;
+      float cum_bar_width = cum_col_width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f;
+      ImVec2 cum_bar_min = ImVec2(row_pos.x, row_pos.y);
+      ImVec2 cum_bar_max = ImVec2(cum_bar_min.x + cum_bar_width, row_pos.y + row_height);
+      ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f));
+      ask_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
     }
 
-    // Spread row
-    ImGui::TableNextRow();
-
-    // Collect bid liquidity bars (cumulative volume bars + size bars)
-    for (int i = 0; i < bid_count; ++i) {
-        ImGui::TableNextRow();
-        const auto& level = aggregated_bids[i];
-
-        // Get row position for this level
-        ImVec2 row_pos = ImGui::GetCursorScreenPos();
-
-        // Calculate size bar geometry (column 0)
-        ImGui::TableSetColumnIndex(0);
-        float size_col_width = ImGui::GetContentRegionAvail().x;
-        float size_bar_width = size_col_width * (float)(level.size / max_vol);
-        ImVec2 size_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + size_col_width - size_bar_width, row_pos.y);
-        ImVec2 size_bar_max = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + size_col_width, row_pos.y + row_height);
-        ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
-        bid_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
-
-        // Calculate cumulative volume bar geometry (column 2 - Price column)
-        ImGui::TableSetColumnIndex(2);
-        float cum_col_width = ImGui::GetContentRegionAvail().x;
-        float cum_bar_width = cum_col_width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f;
-        ImVec2 cum_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + cum_col_width - cum_bar_width, row_pos.y);
-        ImVec2 cum_bar_max = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + cum_col_width, row_pos.y + row_height);
-        ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f));
-        bid_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
-    }
-
-    // Submit all liquidity bars via a single draw command (DOM Hardware Instancing)
-    OrderbookBatcher batcher;
-    std::vector<std::pair<ImVec2, ImVec2>> bid_bar_pairs, ask_bar_pairs;
-    for (const auto& bar : bid_liquidity_bars) {
-        bid_bar_pairs.push_back({bar.min, bar.max});
-    }
+    // Collect ask liquidity bar pairs
     for (const auto& bar : ask_liquidity_bars) {
-        ask_bar_pairs.push_back({bar.min, bar.max});
+      ask_bar_pairs.push_back({bar.min, bar.max});
     }
 
-    // Use the batcher's renderLiquidityBars method for single draw command submission
-    ImU32 bid_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
-    ImU32 ask_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
-    batcher.renderLiquidityBars(draw_list, bid_bar_pairs, ask_bar_pairs, bid_color, ask_color);
-
-    // Reset table position for content rendering
-    ImGui::TableNextRow();
-
-    // Now render the actual content in the default channel
-    // Render Asks (Sell) - Top down
-
-    // Render Asks (Sell) - Top down
+    // Render Asks content (descending: worst ask at top, best ask at bottom)
     for (int i = ask_count - 1; i >= 0; --i) {
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
-      ImGui::PushID(i);  // Unique ID for this row/side
+      ImGui::PushID(i);
 
-      // Check if this is a large order
       bool is_large_order = average_order_size_ > 0 &&
                            (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
 
-      // 1. Bid (Empty)
+      // Column 0: Bid (Empty)
       ImGui::TableSetColumnIndex(0);
 
-      // 2. Sold (Accumulated) + Order Flow Activity Indicators
+      // Column 1: Sold + Order Flow
       ImGui::TableSetColumnIndex(1);
       if (volume_profile_.contains(level.price)) {
         double sold = volume_profile_[level.price].sold;
         if (sold > 0) {
           if (is_large_order) {
-            // Draw yellow background for large orders
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", sold).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
                 ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
             ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
             ImGui::PopStyleColor();
           } else {
@@ -754,69 +708,42 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           }
         }
       }
-
-      // Draw order flow activity indicators
       if (order_flow_activity_.contains(level.price)) {
         const auto& activity = order_flow_activity_[level.price];
         int total_activity = activity.additions + activity.cancellations + activity.executions;
-
         if (total_activity > 0) {
           ImVec2 pos = ImGui::GetCursorScreenPos();
-
-          // Draw small activity indicator dots
-          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f); // Scale dot size with activity
-
-          // Addition activity (green)
+          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f);
           if (activity.additions > 0) {
-            float intensity = std::min(activity.additions / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 2),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity))
-            );
+            float intensity = std::min(activity.additions / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 2),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity)));
           }
-
-          // Cancellation activity (red)
           if (activity.cancellations > 0) {
-            float intensity = std::min(activity.cancellations / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 8),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity))
-            );
+            float intensity = std::min(activity.cancellations / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 8),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity)));
           }
-
-          // Execution activity (blue)
           if (activity.executions > 0) {
-            float intensity = std::min(activity.executions / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 14),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity))
-            );
+            float intensity = std::min(activity.executions / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 14),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity)));
           }
         }
       }
 
-      // 3. Price
+      // Column 2: Price
       ImGui::TableSetColumnIndex(2);
-      // Center Price text
-      float cursor_check =
-          ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x -
-                                    ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) *
-                                       0.5f;
+      float cursor_check = ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x -
+          ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) * 0.5f;
       ImGui::SetCursorPosX(cursor_check);
-
       if (is_large_order) {
-        // Draw yellow background for the entire price cell
         ImVec2 cell_pos = ImGui::GetCursorScreenPos();
         ImVec2 cell_size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            cell_pos,
+        ImGui::GetWindowDrawList()->AddRectFilled(cell_pos,
             ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f))); // Semi-transparent yellow background
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f)));
       }
-
       ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
                         ImGuiSelectableFlags_SpanAllColumns);
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
@@ -824,43 +751,32 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::Text("Price: %.2f", level.price);
         ImGui::EndDragDropSource();
       }
-
-      // Cumulative volume bar now rendered via DOM Hardware Instancing (single draw command)
-      // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
       ImGui::SameLine();
       if (is_large_order) {
-        // Draw yellow background for large orders
         ImVec2 text_pos = ImGui::GetCursorScreenPos();
         ImVec2 text_size = ImGui::CalcTextSize(std::format("%.2f", level.price).c_str());
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            text_pos,
+        ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
             ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-        // Draw text with increased weight effect
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
         ImGui::TextColored(colors.accent_red, "%.2f", level.price);
         ImGui::PopStyleColor();
       } else {
         ImGui::TextColored(colors.accent_red, "%.2f", level.price);
       }
 
-      // 4. Bought (Accumulated)
+      // Column 3: Bought
       ImGui::TableSetColumnIndex(3);
       if (volume_profile_.contains(level.price)) {
         double bought = volume_profile_[level.price].bought;
         if (bought > 0) {
           if (is_large_order) {
-            // Draw yellow background for large orders
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", bought).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
                 ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
             ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
             ImGui::PopStyleColor();
           } else {
@@ -869,32 +785,22 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         }
       }
 
-      // 5. Ask Size (with Bar)
+      // Column 4: Ask Size
       ImGui::TableSetColumnIndex(4);
-      {
-        // Size bar now rendered via DOM Hardware Instancing (single draw command)
-        // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
-
-        if (is_large_order) {
-          // Draw yellow background for large orders
-          ImVec2 text_pos = ImGui::GetCursorScreenPos();
-          ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", level.size).c_str());
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              text_pos,
-              ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-          // Draw text with increased weight effect by drawing it multiple times slightly offset
-          // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-          ImGui::Text("%.4f", level.size);
-          ImGui::PopStyleColor();
-        } else {
-          ImGui::Text("%.4f", level.size);
-        }
+      if (is_large_order) {
+        ImVec2 text_pos = ImGui::GetCursorScreenPos();
+        ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", level.size).c_str());
+        ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+        ImGui::Text("%.4f", level.size);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::Text("%.4f", level.size);
       }
 
-      // 6. Delta (Accumulated)
+      // Column 5: Delta
       ImGui::TableSetColumnIndex(5);
       if (volume_profile_.contains(level.price)) {
         const auto& vol = volume_profile_[level.price];
@@ -902,16 +808,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         if (delta != 0) {
           ImVec4 color = delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
           if (is_large_order) {
-            // Draw yellow background for large orders
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.0f", delta).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
                 ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
             ImGui::TextColored(color, "%+.0f", delta);
             ImGui::PopStyleColor();
           } else {
@@ -920,33 +822,23 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         }
       }
 
-      // 7. Volume Delta Over Last N Seconds
+      // Column 6: Volume Delta Last 5s
       ImGui::TableSetColumnIndex(6);
       {
-        // Get the current time for delta calculation
         uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-
-        // Look up the volume delta for this price level
         auto hist_it = volume_level_history_.find(level.price);
         if (hist_it != volume_level_history_.end()) {
-          // For asks, we want the ask delta
           double volume_delta = hist_it->second.getAskDeltaOverPeriod(current_time, volume_delta_period_us_);
-
           if (volume_delta != 0) {
             ImVec4 color = volume_delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
-
             if (is_large_order) {
-              // Draw yellow background for large orders
               ImVec2 text_pos = ImGui::GetCursorScreenPos();
               ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.2f", volume_delta).c_str());
-              ImGui::GetWindowDrawList()->AddRectFilled(
-                  text_pos,
+              ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
                   ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-              // Draw text with increased weight effect
-              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
               ImGui::TextColored(color, "%+.2f", volume_delta);
               ImGui::PopStyleColor();
             } else {
@@ -956,300 +848,19 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         }
       }
 
-      // 8. Volume (Accumulated)
+      // Column 7: Volume
       ImGui::TableSetColumnIndex(7);
       if (volume_profile_.contains(level.price)) {
         const auto& vol = volume_profile_[level.price];
         double total = vol.bought + vol.sold;
         if (total > 0) {
           if (is_large_order) {
-            // Draw yellow background for large orders
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", total).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
                 ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::Text("%.0f", total);
-            ImGui::PopStyleColor();
-          } else {
-            ImGui::Text("%.0f", total);
-          }
-        }
-      }
-
-      ImGui::PopID();
-    }
-
-    // Spread Row
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(2);
-    ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "--- %.1f ---", orderbook.spread);
-
-    // Render Bids (Buy)
-    for (int i = 0; i < bid_count; ++i) {
-      const auto& level = aggregated_bids[i];
-      ImGui::TableNextRow();
-      ImGui::PushID(i + 1000);  // Offset to ensure uniqueness from Asks
-
-      // Check if this is a large order
-      bool is_large_order = average_order_size_ > 0 &&
-                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
-
-      // 1. Bid Size (with Bar)
-      ImGui::TableSetColumnIndex(0);
-      {
-        // Bid size bar now rendered via DOM Hardware Instancing (single draw command)
-        // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
-
-        // Text Right Aligned
-        auto text = std::format("{:.4f}", level.size);
-        float text_width = ImGui::CalcTextSize(text.c_str()).x;
-        float col_width = ImGui::GetContentRegionAvail().x;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + col_width - text_width);
-
-        if (is_large_order) {
-          // Draw yellow background for large orders
-          ImVec2 text_pos = ImGui::GetCursorScreenPos();
-          ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              text_pos,
-              ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-          // Draw text with increased weight effect
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-          ImGui::TextUnformatted(text.c_str());
-          ImGui::PopStyleColor();
-        } else {
-          ImGui::TextUnformatted(text.c_str());
-        }
-      }
-
-      // 2. Sold + Order Flow Activity Indicators
-      ImGui::TableSetColumnIndex(1);
-      if (volume_profile_.contains(level.price)) {
-        double sold = volume_profile_[level.price].sold;
-        if (sold > 0) {
-          if (is_large_order) {
-            // Draw yellow background for large orders
-            ImVec2 text_pos = ImGui::GetCursorScreenPos();
-            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", sold).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
-            ImGui::PopStyleColor();
-          } else {
-            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
-          }
-        }
-      }
-
-      // Draw order flow activity indicators
-      if (order_flow_activity_.contains(level.price)) {
-        const auto& activity = order_flow_activity_[level.price];
-        int total_activity = activity.additions + activity.cancellations + activity.executions;
-
-        if (total_activity > 0) {
-          ImVec2 pos = ImGui::GetCursorScreenPos();
-
-          // Draw small activity indicator dots
-          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f); // Scale dot size with activity
-
-          // Addition activity (green)
-          if (activity.additions > 0) {
-            float intensity = std::min(activity.additions / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 2),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity))
-            );
-          }
-
-          // Cancellation activity (red)
-          if (activity.cancellations > 0) {
-            float intensity = std::min(activity.cancellations / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 8),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity))
-            );
-          }
-
-          // Execution activity (blue)
-          if (activity.executions > 0) {
-            float intensity = std::min(activity.executions / 10.0f, 1.0f); // Normalize intensity
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 14),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity))
-            );
-          }
-        }
-      }
-
-      // 3. Price
-      ImGui::TableSetColumnIndex(2);
-      float cursor_check =
-          ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x -
-                                    ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) *
-                                       0.5f;
-      ImGui::SetCursorPosX(cursor_check);
-
-      if (is_large_order) {
-        // Draw yellow background for the entire price cell
-        ImVec2 cell_pos = ImGui::GetCursorScreenPos();
-        ImVec2 cell_size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            cell_pos,
-            ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f))); // Semi-transparent yellow background
-      }
-
-      ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
-                        ImGuiSelectableFlags_SpanAllColumns);
-      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-        ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-        ImGui::Text("Price: %.2f", level.price);
-        ImGui::EndDragDropSource();
-      }
-
-      // Cumulative volume bar now rendered via DOM Hardware Instancing (single draw command)
-      // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
-      ImGui::SameLine();
-      if (is_large_order) {
-        // Draw yellow background for large orders
-        ImVec2 text_pos = ImGui::GetCursorScreenPos();
-        ImVec2 text_size = ImGui::CalcTextSize(std::format("%.2f", level.price).c_str());
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            text_pos,
-            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-        // Draw text with increased weight effect
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-        ImGui::TextColored(colors.accent_green, "%.2f",
-                           level.price);  // Green for Bid Price
-        ImGui::PopStyleColor();
-      } else {
-        ImGui::TextColored(colors.accent_green, "%.2f",
-                           level.price);  // Green for Bid Price
-      }
-
-      // 4. Bought
-      ImGui::TableSetColumnIndex(3);
-      if (volume_profile_.contains(level.price)) {
-        double bought = volume_profile_[level.price].bought;
-        if (bought > 0) {
-          if (is_large_order) {
-            // Draw yellow background for large orders
-            ImVec2 text_pos = ImGui::GetCursorScreenPos();
-            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", bought).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
-            ImGui::PopStyleColor();
-          } else {
-            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
-          }
-        }
-      }
-
-      // 5. Ask (Empty)
-      ImGui::TableSetColumnIndex(4);
-
-      // 6. Delta
-      ImGui::TableSetColumnIndex(5);
-      if (volume_profile_.contains(level.price)) {
-        const auto& vol = volume_profile_[level.price];
-        double delta = vol.bought - vol.sold;
-        if (delta != 0) {
-          ImVec4 color = delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
-          if (is_large_order) {
-            // Draw yellow background for large orders
-            ImVec2 text_pos = ImGui::GetCursorScreenPos();
-            ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.0f", delta).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            ImGui::TextColored(color, "%+.0f", delta);
-            ImGui::PopStyleColor();
-          } else {
-            ImGui::TextColored(color, "%+.0f", delta);
-          }
-        }
-      }
-
-      // 7. Volume Delta Over Last N Seconds
-      ImGui::TableSetColumnIndex(6);
-      {
-        // Get the current time for delta calculation
-        uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-
-        // Look up the volume delta for this price level
-        auto hist_it = volume_level_history_.find(level.price);
-        if (hist_it != volume_level_history_.end()) {
-          // For bids, we want the bid delta
-          double volume_delta = hist_it->second.getBidDeltaOverPeriod(current_time, volume_delta_period_us_);
-
-          if (volume_delta != 0) {
-            ImVec4 color = volume_delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
-
-            if (is_large_order) {
-              // Draw yellow background for large orders
-              ImVec2 text_pos = ImGui::GetCursorScreenPos();
-              ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.2f", volume_delta).c_str());
-              ImGui::GetWindowDrawList()->AddRectFilled(
-                  text_pos,
-                  ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-              // Draw text with increased weight effect
-              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-              ImGui::TextColored(color, "%+.2f", volume_delta);
-              ImGui::PopStyleColor();
-            } else {
-              ImGui::TextColored(color, "%+.2f", volume_delta);
-            }
-          }
-        }
-      }
-
-      // 8. Vol
-      ImGui::TableSetColumnIndex(7);
-      if (volume_profile_.contains(level.price)) {
-        const auto& vol = volume_profile_[level.price];
-        double total = vol.bought + vol.sold;
-        if (total > 0) {
-          if (is_large_order) {
-            // Draw yellow background for large orders
-            ImVec2 text_pos = ImGui::GetCursorScreenPos();
-            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", total).c_str());
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
-
-            // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
             ImGui::Text("%.0f", total);
             ImGui::PopStyleColor();
           } else {
@@ -1263,6 +874,296 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
     ImGui::EndTable();
   }
+
+  // ========== MID-PRICE BLOCK (40px distinct) ==========
+  ImGui::Separator();
+  ImVec2 mid_price_pos = ImGui::GetCursorScreenPos();
+  ImVec2 mid_price_size = ImVec2(ImGui::GetContentRegionAvail().x, 40.0f);
+
+  // Draw distinct mid-price background
+  draw_list->AddRectFilled(mid_price_pos,
+      ImVec2(mid_price_pos.x + mid_price_size.x, mid_price_pos.y + mid_price_size.y),
+      ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.5f, 0.4f)));
+
+  // Draw border
+  draw_list->AddRect(mid_price_pos,
+      ImVec2(mid_price_pos.x + mid_price_size.x, mid_price_pos.y + mid_price_size.y),
+      ImGui::GetColorU32(ImVec4(0.6f, 0.6f, 0.8f, 0.8f)), 0.0f, 0, 2.0f);
+
+  // Center mid-price text
+  std::string mid_price_text = std::format("MID: {:.2f}", mid_price);
+  ImVec2 text_size = ImGui::CalcTextSize(mid_price_text.c_str());
+  ImVec2 text_pos = ImVec2(
+      mid_price_pos.x + (mid_price_size.x - text_size.x) * 0.5f,
+      mid_price_pos.y + (mid_price_size.y - text_size.y) * 0.5f);
+
+  draw_list->AddText(ImVec2(text_pos.x, text_pos.y),
+      ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f)), mid_price_text.c_str());
+
+  // Draw spread info
+  std::string spread_text = std::format("Spread: {:.4f}", orderbook.spread);
+  ImVec2 spread_text_size = ImGui::CalcTextSize(spread_text.c_str());
+  ImVec2 spread_text_pos = ImVec2(
+      mid_price_pos.x + (mid_price_size.x - spread_text_size.x) * 0.5f,
+      text_pos.y + text_size.y + 4.0f);
+
+  draw_list->AddText(ImVec2(spread_text_pos.x, spread_text_pos.y),
+      ImGui::GetColorU32(ImVec4(0.8f, 0.8f, 0.8f, 0.8f)), spread_text.c_str());
+
+  ImGui::Dummy(mid_price_size);
+  ImGui::Separator();
+
+  // ========== BIDS PANEL (BOTTOM 50%) - Ascending order (worst bid to best bid) ==========
+  bid_liquidity_bars.clear();
+  if (ImGui::BeginTable("BidsTable", 8,
+                        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchSame)) {
+    ImGui::TableSetupColumn("Bid", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Sold", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80);
+    ImGui::TableSetupColumn("Bought", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Ask", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60);
+    ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
+
+    // Collect bid liquidity bars (ascending: worst bid at top, best bid at bottom)
+    for (int i = bid_count - 1; i >= 0; --i) {
+      ImGui::TableNextRow();
+      const auto& level = aggregated_bids[i];
+      ImVec2 row_pos = ImGui::GetCursorScreenPos();
+
+      // Size bar (column 0)
+      ImGui::TableSetColumnIndex(0);
+      float size_col_width = ImGui::GetContentRegionAvail().x;
+      float size_bar_width = size_col_width * (float)(level.size / max_vol);
+      ImVec2 size_bar_min = ImVec2(row_pos.x + size_col_width - size_bar_width, row_pos.y);
+      ImVec2 size_bar_max = ImVec2(row_pos.x + size_col_width, row_pos.y + row_height);
+      ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
+      bid_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
+
+      // Cumulative volume bar (column 2)
+      ImGui::TableSetColumnIndex(2);
+      float cum_col_width = ImGui::GetContentRegionAvail().x;
+      float cum_bar_width = cum_col_width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f;
+      ImVec2 cum_bar_min = ImVec2(row_pos.x + cum_col_width - cum_bar_width, row_pos.y);
+      ImVec2 cum_bar_max = ImVec2(row_pos.x + cum_col_width, row_pos.y + row_height);
+      ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f));
+      bid_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
+    }
+
+    // Collect bid liquidity bar pairs
+    for (const auto& bar : bid_liquidity_bars) {
+      bid_bar_pairs.push_back({bar.min, bar.max});
+    }
+
+    // Render Bids content (ascending: worst bid at top, best bid at bottom)
+    for (int i = bid_count - 1; i >= 0; --i) {
+      const auto& level = aggregated_bids[i];
+      ImGui::TableNextRow();
+      ImGui::PushID(i + 1000);
+
+      bool is_large_order = average_order_size_ > 0 &&
+                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
+
+      // Column 0: Bid Size
+      ImGui::TableSetColumnIndex(0);
+      auto text = std::format("{:.4f}", level.size);
+      float text_width = ImGui::CalcTextSize(text.c_str()).x;
+      float col_width = ImGui::GetContentRegionAvail().x;
+      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + col_width - text_width);
+      if (is_large_order) {
+        ImVec2 text_pos = ImGui::GetCursorScreenPos();
+        ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
+        ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+        ImGui::TextUnformatted(text.c_str());
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::TextUnformatted(text.c_str());
+      }
+
+      // Column 1: Sold + Order Flow
+      ImGui::TableSetColumnIndex(1);
+      if (volume_profile_.contains(level.price)) {
+        double sold = volume_profile_[level.price].sold;
+        if (sold > 0) {
+          if (is_large_order) {
+            ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", sold).c_str());
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+            ImGui::PopStyleColor();
+          } else {
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+          }
+        }
+      }
+      if (order_flow_activity_.contains(level.price)) {
+        const auto& activity = order_flow_activity_[level.price];
+        int total_activity = activity.additions + activity.cancellations + activity.executions;
+        if (total_activity > 0) {
+          ImVec2 pos = ImGui::GetCursorScreenPos();
+          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f);
+          if (activity.additions > 0) {
+            float intensity = std::min(activity.additions / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 2),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity)));
+          }
+          if (activity.cancellations > 0) {
+            float intensity = std::min(activity.cancellations / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 8),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity)));
+          }
+          if (activity.executions > 0) {
+            float intensity = std::min(activity.executions / 10.0f, 1.0f);
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + 2, pos.y + 14),
+                dot_size * 0.5f, ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity)));
+          }
+        }
+      }
+
+      // Column 2: Price
+      ImGui::TableSetColumnIndex(2);
+      float cursor_check = ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x -
+          ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) * 0.5f;
+      ImGui::SetCursorPosX(cursor_check);
+      if (is_large_order) {
+        ImVec2 cell_pos = ImGui::GetCursorScreenPos();
+        ImVec2 cell_size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
+        ImGui::GetWindowDrawList()->AddRectFilled(cell_pos,
+            ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f)));
+      }
+      ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
+                        ImGuiSelectableFlags_SpanAllColumns);
+      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
+        ImGui::Text("Price: %.2f", level.price);
+        ImGui::EndDragDropSource();
+      }
+      ImGui::SameLine();
+      if (is_large_order) {
+        ImVec2 text_pos = ImGui::GetCursorScreenPos();
+        ImVec2 text_size = ImGui::CalcTextSize(std::format("%.2f", level.price).c_str());
+        ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+        ImGui::TextColored(colors.accent_green, "%.2f", level.price);
+        ImGui::PopStyleColor();
+      } else {
+        ImGui::TextColored(colors.accent_green, "%.2f", level.price);
+      }
+
+      // Column 3: Bought
+      ImGui::TableSetColumnIndex(3);
+      if (volume_profile_.contains(level.price)) {
+        double bought = volume_profile_[level.price].bought;
+        if (bought > 0) {
+          if (is_large_order) {
+            ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", bought).c_str());
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+            ImGui::PopStyleColor();
+          } else {
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+          }
+        }
+      }
+
+      // Column 4: Ask (Empty)
+      ImGui::TableSetColumnIndex(4);
+
+      // Column 5: Delta
+      ImGui::TableSetColumnIndex(5);
+      if (volume_profile_.contains(level.price)) {
+        const auto& vol = volume_profile_[level.price];
+        double delta = vol.bought - vol.sold;
+        if (delta != 0) {
+          ImVec4 color = delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
+          if (is_large_order) {
+            ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.0f", delta).c_str());
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::TextColored(color, "%+.0f", delta);
+            ImGui::PopStyleColor();
+          } else {
+            ImGui::TextColored(color, "%+.0f", delta);
+          }
+        }
+      }
+
+      // Column 6: Volume Delta Last 5s
+      ImGui::TableSetColumnIndex(6);
+      {
+        uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        auto hist_it = volume_level_history_.find(level.price);
+        if (hist_it != volume_level_history_.end()) {
+          double volume_delta = hist_it->second.getBidDeltaOverPeriod(current_time, volume_delta_period_us_);
+          if (volume_delta != 0) {
+            ImVec4 color = volume_delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
+            if (is_large_order) {
+              ImVec2 text_pos = ImGui::GetCursorScreenPos();
+              ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.2f", volume_delta).c_str());
+              ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+                  ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+              ImGui::TextColored(color, "%+.2f", volume_delta);
+              ImGui::PopStyleColor();
+            } else {
+              ImGui::TextColored(color, "%+.2f", volume_delta);
+            }
+          }
+        }
+      }
+
+      // Column 7: Volume
+      ImGui::TableSetColumnIndex(7);
+      if (volume_profile_.contains(level.price)) {
+        const auto& vol = volume_profile_[level.price];
+        double total = vol.bought + vol.sold;
+        if (total > 0) {
+          if (is_large_order) {
+            ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", total).c_str());
+            ImGui::GetWindowDrawList()->AddRectFilled(text_pos,
+                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::Text("%.0f", total);
+            ImGui::PopStyleColor();
+          } else {
+            ImGui::Text("%.0f", total);
+          }
+        }
+      }
+
+      ImGui::PopID();
+    }
+
+    ImGui::EndTable();
+  }
+
+  // Submit all liquidity bars via a single draw command (DOM Hardware Instancing)
+  OrderbookBatcher batcher;
+  ImU32 bid_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
+  ImU32 ask_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
+  batcher.renderLiquidityBars(draw_list, bid_bar_pairs, ask_bar_pairs, bid_color, ask_color);
 }
 
 void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData& orderbook) {

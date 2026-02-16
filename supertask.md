@@ -1,6 +1,6 @@
 # TASK_ULTIMA_GENESIS_50.md
 
-**Objective:** The total transformation of BTQ Terminal into an institutional, GPU-accelerated, lock-free Order Flow platform matching MMT.gg.
+**Objective:** The total transformation of BTQ Terminal into an institutional, GPU-accelerated, lock-free Order Flow platform matching BTQ.
 **Core Principle:** No standard ImGui widgets for data. No mutexes on the hot path. Programmatic docking. Sub-pixel rendering.
 
 ---
@@ -11,7 +11,7 @@
 - [x] **01.** Set `style.WindowBorderSize = 0.0f` to remove legacy 1970s window outlines.
 - [x] **02.** Set `style.ChildBorderSize = 0.0f` and `style.FrameBorderSize = 0.0f`.
 - [x] **03.** Set `style.WindowPadding = ImVec2(0, 0)` globally so docked panels blend seamlessly.
-- [x] **04.** Define `ImGuiCol_WindowBg` as `#0B0E11` (MMT True Void).
+- [x] **04.** Define `ImGuiCol_WindowBg` as `#0B0E11` (BTQ True Void).
 - [x] **05.** Define `ImGuiCol_ChildBg` as `#15191E` (Panel Surface).
 - [x] **06.** Define `ImGuiCol_Text` as `#D1D4DC` (Off-white anti-glare).
 - [x] **07.** Define `ImGuiCol_Separator` as `rgba(94, 82, 64, 0.2)` (Subtle grid lines).
@@ -87,16 +87,83 @@
 
 - [x] **48.** Render the UI header with a `USD / COIN` toggle switch.
 - [x] **49.** If USD is active, multiply atomic sizes by the atomic `current_price` on the fly during the render loop.
-- [ ] **50.** Render Asks descending from top. Render Bids ascending from bottom.
-- [ ] **51.** Access `snapshot_asks_` and `snapshot_bids_` via `std::memory_order_acquire`. ZERO mutexes allowed here.
+- [x] **50.** Render Asks descending from top. Render Bids ascending from bottom.
+- [x] **51.** Access `snapshot_asks_` and `snapshot_bids_` via `std::memory_order_acquire`. ZERO mutexes allowed here.
 
 ---
 
 ## Phase 7: Chart Panel & SPSC Order Entry
 **Target Files:** `src/components/chart_panel.cpp`, `src/trading/trading_interface.cpp`, `src/trading/trade_command_queue.cpp`
 
-- [ ] **52.** Override ImPlot defaults: `ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0,0))` to make the chart flush with the window edges.
-- [ ] **53.** Draw a borderless, floating Top Toolbar (`ImGui::SetCursorPos`) containing Symbol, Timeframe, and Chart Style.
-- [ ] **54.** Implement "Snap to Last": If `ImPlot::GetPlotLimits().X.Max < latest_atomic_time`, draw a hovering arrow button that forces X-axis to jump to the live edge.
-- [ ] **55.** In `trading_interface.cpp`, pull live `best_bid` and `best_ask` from atomics and display them inside massive `BUY MKT` and `SELL MKT` buttons.
-- [ ] **56.** Upon clicking a trading button, construct a `TradeCommand` struct and push it into `lockfree_queue` (`trade_command_queue.cpp`). UI thread must immediately return to rendering the next frame.
+- [x] **52.** Override ImPlot defaults: `ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0,0))` to make the chart flush with the window edges.
+- [x] **53.** Draw a borderless, floating Top Toolbar (`ImGui::SetCursorPos`) containing Symbol, Timeframe, and Chart Style.
+- [x] **54.** Implement "Snap to Last": If `ImPlot::GetPlotLimits().X.Max < latest_atomic_time`, draw a hovering arrow button that forces X-axis to jump to the live edge.
+- [x] **55.** In `trading_interface.cpp`, pull live `best_bid` and `best_ask` from atomics and display them inside massive `BUY MKT` and `SELL MKT` buttons.
+- [x] **56.** Upon clicking a trading button, construct a `TradeCommand` struct and push it into `lockfree_queue` (`trade_command_queue.cpp`). UI thread must immediately return to rendering the next frame.
+
+### TASK 33: NAMESPACE HARMONIZATION & TYPE CLEANUP
+- [x] Create a single source of truth for core data types in `include/data/core_types.hpp`:
+    - Move `TradeData`, `OrderbookData`, `PriceLevel`, `CandleCluster` into `namespace BTQuant::RenderEngine`.
+    - Ensure `CandleCluster` has ALL required fields: `centerX`, `centerY`, `maxSingleTradeVolume`, `totalVolume`, `buyVolume`, `sellVolume`.
+    - Add `PriceLevel::timestamp` field (uint64_t) for DOM Surface historical tracking.
+- [x] Update `market_data_processor.hpp` to `#include "data/core_types.hpp"` instead of defining these types inline.
+- [x] Update `vulkan_dashboard_advanced.cpp` line 63 to use fully qualified names: `using BTQuant::RenderEngine::TradeData;` etc.
+- [x] Fix `footprint_panel.cpp` by adding at the top: `using namespace BTQuant::RenderEngine;` to resolve all `CandleCluster*` errors.
+
+### TASK 34: LAYOUTMANAGER SINGLETON FIX
+- [x] Verify `include/ui/layout_manager.hpp` exists and declares `class LayoutManager` inside `namespace BTQuant::UI`.
+- [x] Ensure `LayoutManager::getInstance()` is declared as `static LayoutManager& getInstance();` in the class and implemented in `src/ui/layout_manager.cpp`.
+- [x] Add `#include "ui/layout_manager.hpp"` to `vulkan_dashboard_advanced.cpp` (already present, verify path is correct).
+- [x] Remove any duplicate `LayoutManager` declarations from `vulkan_dashboard_advanced.hpp` to prevent conflicts.
+
+### TASK 35: DEAD CODE REMOVAL & HOTSPINE CLEANUP
+- [x] Search all files for `HotspineDataBridge` usage and mark deprecated paths with `// DEPRECATED - Legacy hotspine`.
+- [x] Delete `hotspine_layout.hpp` (file:69 contains only a forward declaration, no implementation).
+- [x] Delete `hotspine_layout_v3.hpp` if it's unused by the current Vulkan pipeline.
+- [x] Remove `pollDataToRenderer()` method from `vulkan_dashboard_advanced.cpp` (lines 439-556) since panels now pull data directly from `market_data_processor_`.
+- [x] Remove all references to `micro_renderer_` in `vulkan_dashboard_advanced.cpp` as it's no longer used.
+
+### TASK 36: PERFORMANCE MONITOR INTEGRATION
+- [x] Verify `performance_monitor.hpp` and `performance_monitor.cpp` are properly linked in CMakeLists.txt.
+- [x] Ensure `g_performance_monitor` is declared `extern` in the header and defined in the `.cpp` file.
+- [x] Add frame time tracking to `VulkanDashboard::render_frame()`: call `g_performance_monitor.begin_frame()` at start and `g_performance_monitor.end_frame()` before present.
+- [x] Update debug overlay to pull metrics from both `g_performance_monitor` and `g_debug_overlay`.
+
+### TASK 37: BUILD SYSTEM MODERNIZATION
+- [x] Update CMakeLists.txt to use `find_package(Ninja REQUIRED)` and set `CMAKE_GENERATOR` to `Ninja` by default.
+- [x] Add `-Wno-deprecated-literal-operator` to `CMAKE_CXX_FLAGS` to suppress nlohmann/json C++23 warnings.
+- [x] Create a unified build script `build.sh`:
+    ```bash
+    #!/bin/bash
+    rm -rf build
+    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_FLAGS="-Wno-deprecated-literal-operator"
+    ninja -C build -j$(nproc)
+    ```
+- [x] Add `build.sh` to `.gitignore` under `# Build artifacts`.
+
+### TASK 38: ARCHITECTURAL CLEANUP - PANEL DATA FLOW
+- [x] Remove all direct data polling from `VulkanDashboard` - panels should subscribe to `MarketDataProcessor` using the C++26 push notification system (already implemented in `market_data_processor.hpp` lines 450-470).
+- [x] Update `FootprintPanel`, `DOMSurfacePanel`, `TimeSalesPanel` to call `market_data_processor_->subscribe()` in their constructors.
+- [x] Implement a `set_dirty()` flag in `PanelBase` that panels set when they receive subscription callbacks, triggering re-render only when data changes.
+- [x] Remove the `pollDataToRenderer()` call from `render_frame()` entirely.
+
+### TASK 39: IMGUI WINDOW FLAGS STANDARDIZATION
+- [x] Create a helper in `ui/ui_base.hpp`:
+    ```cpp
+    namespace BTQuant::UI {
+      constexpr ImGuiWindowFlags PANEL_DEFAULT_FLAGS = 
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+      constexpr ImGuiWindowFlags OVERLAY_FLAGS = 
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground;
+    }
+    ```
+- [x] Replace all instances of `ImGuiWindowFlags_TopMost` (which doesn't exist) with manual Z-ordering via `ImGui::SetNextWindowFocus()`.
+- [x] Apply `PANEL_DEFAULT_FLAGS` to all trading panels, `OVERLAY_FLAGS` to Dashboard Controls and Debug Overlay.
+
+### TASK 40: FINAL COMPILATION VERIFICATION
+- [x] Run `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and verify zero errors.
+- [x] Test that the terminal launches without crashes and all panels render correctly.
+- [x] Verify hotkey functionality (F5-F8 for layouts, F12 for debug overlay, Delete for panel removal).
+- [ ] Run `valgrind --leak-check=full ./build/BTQuantTerminal` to check for memory leaks in the subscription system.

@@ -595,7 +595,10 @@ class ChartPanel : public PanelBase {
   void render_right_sidebar_order_entry();
   void update_cached_quotes();  // Read from atomic snapshot
   void execute_market_order(bool is_buy);  // Push to SPSC queue (Phase 4)
-  
+
+  // Quick Order Buttons overlay on chart
+  void render_quick_order_buttons(const ChartInstance& chart);
+
   // 3.5 Bottom Toolbar (Volume Analysis)
   void render_bottom_toolbar();
 

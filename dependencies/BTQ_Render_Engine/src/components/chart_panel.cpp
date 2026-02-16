@@ -3027,6 +3027,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     ImPlot::EndPlot();
   }
 
+  // Render massive BUY MKT and SELL MKT buttons overlay on chart
+  render_quick_order_buttons(chart);
+
   // ImPlot::PopStyleVar();
   // ImPlot::PopStyleColor(3);
 }
@@ -4622,13 +4625,13 @@ void ChartPanel::render_right_sidebar_order_entry() {
 
 void ChartPanel::update_cached_quotes() {
   if (!processor_ || symbol_.empty()) return;
-  
+
   // Get symbol ID
   auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
   if (!symbol_id_opt) return;
-  
+
   uint32_t symbol_id = *symbol_id_opt;
-  
+
   // Read from atomic snapshot (Phase 4.1 requirement)
   // This is a non-blocking call that reads from atomic data
   auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id);
@@ -4637,6 +4640,121 @@ void ChartPanel::update_cached_quotes() {
     cached_best_bid_ = snapshot.best_bid;
     cached_best_ask_ = snapshot.best_ask;
     last_quote_update_ = snapshot.timestamp;
+  }
+}
+
+// Render massive BUY MKT and SELL MKT buttons overlay on chart
+void ChartPanel::render_quick_order_buttons(const ChartInstance& chart) {
+  if (chart.closes.empty()) return;
+
+  // Update cached quotes from atomic snapshot for live mid-price
+  update_cached_quotes();
+
+  // Get plot position and size for button placement
+  ImVec2 plot_pos = ImPlot::GetPlotPos();
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+
+  if (plot_size.x <= 0 || plot_size.y <= 0) return;
+
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+  // Button dimensions - massive size for easy clicking
+  const float button_height = 50.0f;
+  const float button_width = 140.0f;
+  const float button_spacing = 10.0f;
+  const float margin_right = 220.0f;  // Leave space for right sidebar if visible
+
+  // Position buttons in the lower-right area of the chart
+  float buy_button_x = plot_pos.x + plot_size.x - margin_right - button_width;
+  float sell_button_x = buy_button_x;
+  float buy_button_y = plot_pos.y + plot_size.y - button_height * 2 - button_spacing - 10.0f;
+  float sell_button_y = plot_pos.y + plot_size.y - button_height - 10.0f;
+
+  // Format price display
+  char buy_label[64];
+  char sell_label[64];
+  std::snprintf(buy_label, sizeof(buy_label), "BUY MKT\n%.2f", cached_best_ask_);
+  std::snprintf(sell_label, sizeof(sell_label), "SELL MKT\n%.2f", cached_best_bid_);
+
+  // Draw BUY button (Green)
+  ImU32 buy_color = ImGui::GetColorU32(ImVec4(0.0f, 0.7f, 0.0f, 0.95f));
+  ImU32 buy_hovered_color = ImGui::GetColorU32(ImVec4(0.0f, 0.9f, 0.0f, 1.0f));
+  ImU32 buy_active_color = ImGui::GetColorU32(ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
+
+  ImVec2 buy_min = ImVec2(buy_button_x, buy_button_y);
+  ImVec2 buy_max = ImVec2(buy_button_x + button_width, buy_button_y + button_height);
+  ImRect buy_rect(buy_min, buy_max);
+
+  bool buy_hovered = buy_rect.Contains(ImGui::GetMousePos());
+  bool buy_clicked = buy_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+  ImU32 buy_display_color = buy_active_color;
+  if (ImGui::IsItemActive() && buy_hovered) {
+    buy_display_color = buy_active_color;
+  } else if (buy_hovered) {
+    buy_display_color = buy_hovered_color;
+  }
+
+  // Draw rounded rectangle for BUY button
+  const float rounding = 8.0f;
+  draw_list->AddRectFilled(buy_min, buy_max, buy_display_color, rounding);
+  draw_list->AddRect(buy_min, buy_max, IM_COL32(255, 255, 255, 100), rounding, 0, 2.0f);
+
+  // Render BUY button text
+  ImVec2 buy_text_pos = ImVec2(buy_button_x + button_width / 2 - ImGui::CalcTextSize("BUY MKT").x / 2,
+                                buy_button_y + button_height / 2 - ImGui::GetTextLineHeight() - 2);
+  draw_list->AddText(buy_text_pos, IM_COL32(255, 255, 255, 255), "BUY MKT");
+
+  ImVec2 buy_price_pos = ImVec2(buy_button_x + button_width / 2 - ImGui::CalcTextSize(buy_label + 8).x / 2,
+                                 buy_button_y + button_height / 2 + 4);
+  draw_list->AddText(buy_price_pos, IM_COL32(200, 255, 200, 255), buy_label + 8);
+
+  // Draw SELL button (Red)
+  ImU32 sell_color = ImGui::GetColorU32(ImVec4(0.8f, 0.0f, 0.0f, 0.95f));
+  ImU32 sell_hovered_color = ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+  ImU32 sell_active_color = ImGui::GetColorU32(ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
+
+  ImVec2 sell_min = ImVec2(sell_button_x, sell_button_y);
+  ImVec2 sell_max = ImVec2(sell_button_x + button_width, sell_button_y + button_height);
+  ImRect sell_rect(sell_min, sell_max);
+
+  bool sell_hovered = sell_rect.Contains(ImGui::GetMousePos());
+  bool sell_clicked = sell_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+  ImU32 sell_display_color = sell_active_color;
+  if (ImGui::IsItemActive() && sell_hovered) {
+    sell_display_color = sell_active_color;
+  } else if (sell_hovered) {
+    sell_display_color = sell_hovered_color;
+  }
+
+  // Draw rounded rectangle for SELL button
+  draw_list->AddRectFilled(sell_min, sell_max, sell_display_color, rounding);
+  draw_list->AddRect(sell_min, sell_max, IM_COL32(255, 255, 255, 100), rounding, 0, 2.0f);
+
+  // Render SELL button text
+  ImVec2 sell_text_pos = ImVec2(sell_button_x + button_width / 2 - ImGui::CalcTextSize("SELL MKT").x / 2,
+                                 sell_button_y + button_height / 2 - ImGui::GetTextLineHeight() - 2);
+  draw_list->AddText(sell_text_pos, IM_COL32(255, 255, 255, 255), "SELL MKT");
+
+  ImVec2 sell_price_pos = ImVec2(sell_button_x + button_width / 2 - ImGui::CalcTextSize(sell_label + 10).x / 2,
+                                  sell_button_y + button_height / 2 + 4);
+  draw_list->AddText(sell_price_pos, IM_COL32(255, 200, 200, 255), sell_label + 10);
+
+  // Handle button clicks
+  if (buy_clicked) {
+    execute_market_order(true);  // Buy
+  }
+  if (sell_clicked) {
+    execute_market_order(false);  // Sell
+  }
+
+  // Set tooltip on hover
+  if (buy_hovered) {
+    ImGui::SetTooltip("Buy at Market Price: %.2f\nClick to execute", cached_best_ask_);
+  }
+  if (sell_hovered) {
+    ImGui::SetTooltip("Sell at Market Price: %.2f\nClick to execute", cached_best_bid_);
   }
 }
 

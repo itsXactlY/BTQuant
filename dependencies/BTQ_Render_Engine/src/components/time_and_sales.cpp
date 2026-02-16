@@ -128,6 +128,12 @@ void TimeAndSalesPanel::render_content() {
         cached_trades_ = std::move(temp_trades);
       }
 
+      // Update trade size window for dynamic alpha mapping
+      trade_size_window_.clear();
+      for (const auto& trade : cached_trades_) {
+        updateTradeSizeWindow(trade.size);
+      }
+
       // Check for large trades and trigger audio alerts
       checkForLargeTradesAndAlert();
     }
@@ -979,18 +985,27 @@ void TimeAndSalesPanel::render_trade_table() {
             // Check if this trade is part of a cluster
             bool is_clustered = isTradeClustered(original_index, cached_trades_);
 
+            // Calculate dynamic alpha based on trade size percentile
+            float dynamic_alpha = calculateDynamicAlpha(trade.size);
+
             // Set background color for search matches and clustered trades
             if (is_search_match) {
-              // Highlight search results with light blue background
+              // Highlight search results with light blue background using dynamic alpha
               const auto& colors = ThemeManager::getInstance().getColors();
               ImU32 search_highlight_color = ImGui::GetColorU32(
-                  ImVec4(0.3f, 0.5f, 1.0f, 0.3f));  // Light blue with transparency
+                  ImVec4(0.3f, 0.5f, 1.0f, dynamic_alpha));  // Light blue with dynamic alpha
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, search_highlight_color);
             } else if (is_clustered) {
               const auto& colors = ThemeManager::getInstance().getColors();
               ImU32 cluster_bg_color = ImGui::GetColorU32(
-                  ImVec4(0.8f, 0.6f, 0.2f, 0.3f));  // Light amber with transparency
+                  ImVec4(0.8f, 0.6f, 0.2f, dynamic_alpha));  // Light amber with dynamic alpha
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
+            } else {
+              // Apply dynamic alpha to normal trades based on size percentile
+              // Use a subtle gray base color with dynamic alpha
+              ImU32 normal_bg_color = ImGui::GetColorU32(
+                  ImVec4(0.15f, 0.15f, 0.15f, dynamic_alpha * 0.5f));  // Subtle gray with reduced alpha
+              ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, normal_bg_color);
             }
 
             // Time column (HH:MM:SS.mmm)
@@ -1443,6 +1458,48 @@ void TimeAndSalesPanel::exportTradesToCSV() {
   }
 
   file.close();
+}
+
+void TimeAndSalesPanel::updateTradeSizeWindow(double trade_size) {
+  // Add new trade size to the window
+  trade_size_window_.push_back(trade_size);
+  
+  // Maintain fixed window size (500 trades)
+  if (trade_size_window_.size() > TRAILING_WINDOW_SIZE) {
+    trade_size_window_.pop_front();
+  }
+}
+
+float TimeAndSalesPanel::calculateTradeSizePercentile(double trade_size) const {
+  if (trade_size_window_.empty()) {
+    return 0.0f;
+  }
+  
+  // Count how many trades in the window have size <= current trade size
+  size_t count_below = 0;
+  for (const auto& size : trade_size_window_) {
+    if (size <= trade_size) {
+      count_below++;
+    }
+  }
+  
+  // Calculate percentile (0.0 to 1.0)
+  return static_cast<float>(count_below) / static_cast<float>(trade_size_window_.size());
+}
+
+float TimeAndSalesPanel::mapPercentileToAlpha(float percentile) const {
+  // Map percentile (0.0-1.0) to alpha range (MIN_ALPHA to MAX_ALPHA)
+  // Higher percentile = larger trade = higher alpha (more opaque)
+  return MIN_ALPHA + (percentile * (MAX_ALPHA - MIN_ALPHA));
+}
+
+float TimeAndSalesPanel::calculateDynamicAlpha(double trade_size) const {
+  if (trade_size_window_.empty()) {
+    return MIN_ALPHA;
+  }
+  
+  float percentile = calculateTradeSizePercentile(trade_size);
+  return mapPercentileToAlpha(percentile);
 }
 
 }  // namespace BTQuant

@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <fstream>
+#include <deque>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -103,6 +104,12 @@ class TimeAndSalesPanel : public PanelBase {
   std::vector<TradePaceData> trade_pace_5min_history_;
   std::vector<TradePaceData> trade_pace_15min_history_;
 
+  // Trade size percentile tracking for dynamic alpha mapping
+  static constexpr size_t TRAILING_WINDOW_SIZE = 500;  // 500-trade window
+  std::deque<double> trade_size_window_;               // Trailing trade sizes
+  static constexpr float MIN_ALPHA = 0.05f;            // Minimum background alpha
+  static constexpr float MAX_ALPHA = 0.50f;            // Maximum background alpha
+
   // Subscription ID for market data updates
   uint64_t subscription_id_ = 0;
 
@@ -145,6 +152,12 @@ class TimeAndSalesPanel : public PanelBase {
   double calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const;
   void updateTradePaceHistory();
   void renderTradePaceChart();
+
+  // Trade size percentile and alpha mapping
+  void updateTradeSizeWindow(double trade_size);
+  float calculateTradeSizePercentile(double trade_size) const;
+  float mapPercentileToAlpha(float percentile) const;
+  float calculateDynamicAlpha(double trade_size) const;
 };
 
 }  // namespace BTQuant

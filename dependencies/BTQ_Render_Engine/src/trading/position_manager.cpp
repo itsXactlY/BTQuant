@@ -4,10 +4,87 @@
 #include <cmath>
 
 #include "trading/order_manager.hpp"
+#include "market_data_processor.hpp"
 
 namespace BTQuant {
 
 PositionManager::PositionManager() : cash_balance_(100000.0) {}
+
+void PositionManager::setMarketDataProcessor(
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
+  market_data_processor_ = processor;
+}
+
+void PositionManager::updateMarkToMarketPnL() {
+  // Get the MarketDataProcessor (lock-free atomic access)
+  auto processor = market_data_processor_.lock();
+  if (!processor) {
+    // Fallback to traditional market_prices_ if processor not available
+    update_market_values();
+    return;
+  }
+
+  // Update each position using atomic best_bid/best_ask from MarketDataProcessor
+  for (auto& pair : positions_) {
+    Position& position = pair.second;
+    if (position.quantity == 0) {
+      continue;  // Skip closed positions
+    }
+
+    // Get atomic snapshot (lock-free, uses acquire semantics)
+    // Symbol ID mapping: for now use hash of symbol string or lookup table
+    // In production, this would use a proper symbol_id mapping
+    uint32_t symbol_id = static_cast<uint32_t>(
+        std::hash<std::string>{}(position.symbol) & 0xFFFFFFFF);
+
+    auto snapshot_opt = processor->get_atomic_snapshot(symbol_id);
+    if (!snapshot_opt.has_value()) {
+      // Fallback to cached market price if atomic snapshot not available
+      auto price_it = market_prices_.find(position.symbol);
+      if (price_it != market_prices_.end()) {
+        double current_price = price_it->second;
+        position.mtm_bid_price = current_price;
+        position.mtm_ask_price = current_price;
+        position.mtm_mid_price = current_price;
+      }
+      continue;
+    }
+
+    const auto& snapshot = snapshot_opt.value();
+
+    // Store atomic prices for zero-latency access
+    position.mtm_bid_price = snapshot.best_bid;
+    position.mtm_ask_price = snapshot.best_ask;
+    position.mtm_mid_price = snapshot.mid_price;
+    position.mtm_timestamp = snapshot.timestamp;
+
+    // Calculate Mark-to-Market PnL using atomic prices
+    // For long positions: use best_bid (exit price)
+    // For short positions: use best_ask (exit price)
+    double exit_price = (position.quantity > 0) ? snapshot.best_bid : snapshot.best_ask;
+
+    position.market_value = std::abs(position.quantity) * exit_price;
+    position.cost_basis = std::abs(position.quantity) * position.average_price;
+
+    // Calculate unrealized PnL based on position side
+    if (position.quantity > 0) {
+      // Long position: profit when price goes up
+      position.unrealized_pnl = position.market_value - position.cost_basis;
+    } else {
+      // Short position: profit when price goes down
+      position.unrealized_pnl = position.cost_basis - position.market_value;
+    }
+
+    calculate_risk_metrics(position);
+  }
+
+  // Notify update for UI refresh
+  for (const auto& pair : positions_) {
+    if (pair.second.quantity != 0 && position_update_callback_) {
+      position_update_callback_(pair.second);
+    }
+  }
+}
 
 void PositionManager::update_position(const OrderManager::OrderExecution& execution) {
   std::string symbol = get_symbol_from_order(execution.order_id);
@@ -70,20 +147,25 @@ void PositionManager::update_position(const OrderManager::OrderExecution& execut
   position.last_trade_time = execution.timestamp;
   position.total_commission += execution.commission;
 
-  // Update market values
+  // Update market values using atomic BBO if available, otherwise cached price
   auto price_it = market_prices_.find(symbol);
-  if (price_it != market_prices_.end()) {
-    double current_price = price_it->second;
-    position.market_value = std::abs(position.quantity) * current_price;
-    position.cost_basis = std::abs(position.quantity) * position.average_price;
+  double current_price = (price_it != market_prices_.end()) ? price_it->second : execution.price;
 
-    if (position.quantity > 0) {
-      position.unrealized_pnl = position.market_value - position.cost_basis;
-    } else if (position.quantity < 0) {
-      position.unrealized_pnl = position.cost_basis - position.market_value;
-    } else {
-      position.unrealized_pnl = 0;  // No position
-    }
+  // Initialize mtm fields with available price (will be updated by atomic BBO on next tick)
+  position.mtm_bid_price = current_price;
+  position.mtm_ask_price = current_price;
+  position.mtm_mid_price = current_price;
+  position.mtm_timestamp = execution.timestamp;
+
+  position.market_value = std::abs(position.quantity) * current_price;
+  position.cost_basis = std::abs(position.quantity) * position.average_price;
+
+  if (position.quantity > 0) {
+    position.unrealized_pnl = position.market_value - position.cost_basis;
+  } else if (position.quantity < 0) {
+    position.unrealized_pnl = position.cost_basis - position.market_value;
+  } else {
+    position.unrealized_pnl = 0;  // No position
   }
 
   // Calculate risk metrics
@@ -186,6 +268,15 @@ bool PositionManager::is_buy_execution(const OrderManager::OrderExecution& execu
 }
 
 void PositionManager::update_market_values() {
+  // Try to use atomic BBO from MarketDataProcessor if available
+  auto processor = market_data_processor_.lock();
+  if (processor) {
+    // Use atomic Mark-to-Market update
+    updateMarkToMarketPnL();
+    return;
+  }
+
+  // Fallback to traditional market_prices_ based update
   for (auto& pair : positions_) {
     Position& position = pair.second;
     auto price_it = market_prices_.find(position.symbol);
@@ -194,6 +285,9 @@ void PositionManager::update_market_values() {
       double current_price = price_it->second;
       position.market_value = std::abs(position.quantity) * current_price;
       position.cost_basis = std::abs(position.quantity) * position.average_price;
+      position.mtm_bid_price = current_price;
+      position.mtm_ask_price = current_price;
+      position.mtm_mid_price = current_price;
 
       if (position.quantity > 0) {
         position.unrealized_pnl = position.market_value - position.cost_basis;

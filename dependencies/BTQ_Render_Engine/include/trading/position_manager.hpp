@@ -1,11 +1,20 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "order_manager.hpp"
+
+// Forward declaration to avoid circular dependency
+namespace BTQuant {
+namespace RenderEngine {
+class MarketDataProcessor;
+}
+}  // namespace BTQuant
 
 namespace BTQuant {
 
@@ -29,6 +38,11 @@ class PositionManager {
     std::vector<std::string> contributing_orders;
     double total_commission = 0;
     int trade_count = 0;
+    // Zero-latency Mark-to-Market fields (atomic best_bid/best_ask)
+    double mtm_bid_price = 0.0;   // Atomic best bid for PnL calc
+    double mtm_ask_price = 0.0;   // Atomic best ask for PnL calc
+    double mtm_mid_price = 0.0;   // Mid price for reference
+    uint64_t mtm_timestamp = 0;   // Timestamp of last atomic update
   };
 
   struct PortfolioSummary {
@@ -47,6 +61,20 @@ class PositionManager {
   };
 
   PositionManager();
+  ~PositionManager() = default;
+
+  /**
+   * Set the MarketDataProcessor for zero-latency Mark-to-Market PnL calculation
+   * Uses atomic best_bid/best_ask pointers for lock-free access
+   */
+  void setMarketDataProcessor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+
+  /**
+   * Update Mark-to-Market PnL using atomic best_bid/best_ask from MarketDataProcessor
+   * This provides zero-latency PnL calculation without locks
+   */
+  void updateMarkToMarketPnL();
+
   void update_position(const OrderManager::OrderExecution& execution);
   void update_market_price(const std::string& symbol, double price);
   void update_market_prices(const std::unordered_map<std::string, double>& prices);
@@ -81,6 +109,9 @@ class PositionManager {
   std::unordered_map<std::string, std::string> order_symbols_;
   PositionUpdateCallback position_update_callback_;
   double cash_balance_ = 100000.0;
+
+  // MarketDataProcessor for zero-latency atomic best_bid/best_ask access
+  std::weak_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
 
   std::string get_symbol_from_order(const std::string& order_id);
   bool is_buy_execution(const OrderManager::OrderExecution& execution);

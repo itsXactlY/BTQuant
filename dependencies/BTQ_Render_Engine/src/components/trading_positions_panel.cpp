@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "market_data_processor.hpp"
 
 namespace BTQuant {
 
@@ -15,13 +16,21 @@ TradingPositionsPanel::TradingPositionsPanel(const PanelConfig& config,
 void TradingPositionsPanel::initialize() { PanelBase::initialize(); }
 
 void TradingPositionsPanel::render_content() {
+  // V-Sync locked Mark-to-Market PnL update
+  // This ensures atomic best_bid/best_ask are read just before rendering,
+  // synchronized with the display refresh to prevent tearing
+  if (position_manager_) {
+    position_manager_->updateMarkToMarketPnL();
+  }
+
   begin_panel_window();
 
-  if (ImGui::BeginTable("PositionsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+  if (ImGui::BeginTable("PositionsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Symbol");
     ImGui::TableSetupColumn("Side");
     ImGui::TableSetupColumn("Quantity");
     ImGui::TableSetupColumn("Avg Price");
+    ImGui::TableSetupColumn("Mark Price");
     ImGui::TableSetupColumn("Unrealized P/L");
     ImGui::TableHeadersRow();
 
@@ -45,7 +54,17 @@ void TradingPositionsPanel::render_content() {
         ImGui::Text("%.4f", position.average_price);
 
         ImGui::TableSetColumnIndex(4);
+        // Display atomic mark price (mid price from atomic BBO)
+        ImGui::Text("%.4f", position.mtm_mid_price);
+
+        ImGui::TableSetColumnIndex(5);
+        // Color-code PnL for visual clarity
+        ImVec4 pnl_color = (position.unrealized_pnl >= 0.0f)
+            ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)  // Green for profit
+            : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);  // Red for loss
+        ImGui::PushStyleColor(ImGuiCol_Text, pnl_color);
         ImGui::Text("%.2f", position.unrealized_pnl);
+        ImGui::PopStyleColor();
       }
     }
 

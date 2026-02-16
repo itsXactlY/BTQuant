@@ -1,4 +1,5 @@
 #include "../../include/components/chart_panel.hpp"
+#include "../../include/components/quant_workspace_component.hpp"  // For g_crosshair_price
 
 #include <algorithm>
 #include <cmath>
@@ -2860,26 +2861,43 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       // Convert the stored global crosshair X position to plot coordinates
       // This requires knowing the current plot limits to map screen coordinates
       ImPlotRect limits = ImPlot::GetPlotLimits();
-      
+
       // Calculate the X coordinate in plot space based on the stored screen position
       // We need to map the screen X coordinate back to plot X coordinate
       ImVec2 plot_size = ImPlot::GetPlotSize();
       ImVec2 plot_pos = ImPlot::GetPlotPos();
-      
+
       // Calculate the relative position within the plot area
       float rel_x = (global_crosshair_x_pos_ - plot_pos.x) / plot_size.x;
-      
+
       // Map to plot coordinate
       double plot_x = limits.X.Min + rel_x * (limits.X.Max - limits.X.Min);
-      
+
       // Draw the vertical line at the synchronized position
       ImDrawList* draw_list = ImPlot::GetPlotDrawList();
       ImVec2 top = ImPlot::PlotToPixels(plot_x, limits.Y.Max);
       ImVec2 bottom = ImPlot::PlotToPixels(plot_x, limits.Y.Min);
-      
+
       // Draw the synchronized crosshair line (dashed or different color to distinguish)
-      draw_list->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y), 
+      draw_list->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y),
                          IM_COL32(255, 255, 0, 200), 1.0f); // Yellow dashed line for global sync
+    }
+
+    // Render global crosshair price line (horizontal dashed line)
+    {
+      double crosshair_price = g_crosshair_price.load();
+      if (crosshair_price > 0.0) {
+        ImPlotRect limits = ImPlot::GetPlotLimits();
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+        // Convert price to pixel coordinates
+        ImVec2 left = ImPlot::PlotToPixels(limits.X.Min, crosshair_price);
+        ImVec2 right = ImPlot::PlotToPixels(limits.X.Max, crosshair_price);
+
+        // Draw horizontal dashed line at the crosshair price (1px, cyan color)
+        draw_list->AddLine(ImVec2(left.x, left.y), ImVec2(right.x, right.y),
+                           IM_COL32(0, 255, 255, 200), 1.0f);
+      }
     }
 
     // Handle drawing tools mouse events
@@ -3819,6 +3837,15 @@ void ChartPanel::set_global_crosshair_position(double x_pos, bool active) {
 
 std::pair<double, bool> ChartPanel::get_global_crosshair_state() const {
   return std::make_pair(global_crosshair_x_pos_, global_crosshair_active_);
+}
+
+// Global crosshair price methods
+void ChartPanel::set_global_crosshair_price(double price) {
+  g_crosshair_price.store(price);
+}
+
+double ChartPanel::get_global_crosshair_price() {
+  return g_crosshair_price.load();
 }
 
   // Panel settings methods

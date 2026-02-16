@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "../hotspine_data_bridge.hpp"
@@ -13,6 +14,9 @@
 #include "imgui.h"
 #include "implot.h"
 #include "panel_manager.hpp"
+
+// Global crosshair price - shared across all chart panels for synchronized horizontal line
+extern std::atomic<double> g_crosshair_price;
 
 namespace BTQuant {
 

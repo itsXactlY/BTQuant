@@ -195,6 +195,10 @@ class ChartPanel : public PanelBase {
   void set_global_crosshair_position(double x_pos, bool active);
   std::pair<double, bool> get_global_crosshair_state() const;
 
+  // Global crosshair price methods
+  static void set_global_crosshair_price(double price);
+  static double get_global_crosshair_price();
+
   // Override methods from PanelBase for settings functionality
   PanelSettingsInterface* get_settings_interface() override { return settings_.get(); }
   void open_settings() override;

@@ -118,6 +118,9 @@ class PanelBase {
   // PanelManager is a friend and can call markDirty() directly
   friend class PanelManager;
 
+  // Public API for panels to mark themselves dirty when subscription callbacks fire
+  void set_dirty() noexcept { markDirty(); }
+
   // Per-panel settings functionality
   virtual PanelSettingsInterface* get_settings_interface() { return nullptr; }
   virtual void open_settings() {}

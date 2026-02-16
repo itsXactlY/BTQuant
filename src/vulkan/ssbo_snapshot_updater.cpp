@@ -41,26 +41,33 @@ bool SSBOBuffer::bindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffs
         return false;
     }
     memory_ = deviceMemory;
+    
+    // Persistently map the memory for hot-path writes
+    if (vkMapMemory(device_, memory_, 0, bufferSize_, 0, &mappedData_) != VK_SUCCESS) {
+        mappedData_ = nullptr;
+        return false;
+    }
+    
     return true;
 }
 
 bool SSBOBuffer::writeData(const OrderBookSnapshot& snapshot, const OrderBookLevel* levels) {
-    void* mappedData = nullptr;
-    if (vkMapMemory(device_, memory_, 0, bufferSize_, 0, &mappedData) != VK_SUCCESS) {
+    if (!mappedData_) {
         return false;
     }
 
     // Copy header
-    std::memcpy(mappedData, &snapshot, sizeof(OrderBookSnapshot));
+    std::memcpy(mappedData_, &snapshot, sizeof(OrderBookSnapshot));
 
     // Copy levels array
     if (levels && snapshot.priceLevelsCount > 0) {
         auto* destLevels = reinterpret_cast<OrderBookLevel*>(
-            reinterpret_cast<uint8_t*>(mappedData) + sizeof(OrderBookSnapshot));
+            reinterpret_cast<uint8_t*>(mappedData_) + sizeof(OrderBookSnapshot));
         std::memcpy(destLevels, levels, snapshot.priceLevelsCount * sizeof(OrderBookLevel));
     }
 
-    vkUnmapMemory(device_, memory_);
+    // No need to unmap - memory is persistently mapped
+    // HOST_COHERENT_BIT ensures writes are immediately visible to GPU
     return true;
 }
 
@@ -77,6 +84,11 @@ void SSBOBuffer::cleanup() {
         vkDestroyBuffer(device_, buffer_, nullptr);
         buffer_ = VK_NULL_HANDLE;
     }
+    // Unmap persistently mapped memory
+    if (mappedData_ != nullptr) {
+        vkUnmapMemory(device_, memory_);
+        mappedData_ = nullptr;
+    }
     // Note: Memory is typically freed by the caller who allocated it
     memory_ = VK_NULL_HANDLE;
     device_ = VK_NULL_HANDLE;
@@ -88,6 +100,17 @@ void SSBOBuffer::cleanup() {
 // Helper Functions
 // ============================================================================
 
+/**
+ * @brief Helper function to create a properly aligned SSBO buffer with persistent mapping
+ *
+ * @param device Vulkan device
+ * @param physicalDevice Vulkan physical device (for memory properties)
+ * @param numLevels Number of price levels to store
+ * @param memoryFlags Memory property flags (must include HOST_VISIBLE | HOST_COHERENT)
+ * @param outBuffer Output buffer wrapper
+ * @param outMemory Output memory handle
+ * @return true on success
+ */
 bool createSSBOBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
                       size_t numLevels, VkMemoryPropertyFlags memoryFlags,
                       SSBOBuffer& outBuffer, VkDeviceMemory& outMemory) {

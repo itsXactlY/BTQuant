@@ -129,14 +129,15 @@ static_assert(offsetof(OrderBookSnapshot, priceRange) == 12, "priceRange offset 
 
 /**
  * @brief SSBO Buffer wrapper for Vulkan
- * 
+ *
  * Manages a Vulkan buffer with proper memory flags for GPU access.
- * Supports both device-local and host-visible memory configurations.
+ * Uses persistently mapped memory with HOST_VISIBLE | HOST_COHERENT flags
+ * to avoid vkMapMemory/vkUnmapMemory overhead on the hot path.
  */
 class SSBOBuffer {
 public:
     SSBOBuffer() = default;
-    
+
     ~SSBOBuffer();
 
     /**
@@ -146,19 +147,19 @@ public:
      * @param usage Buffer usage flags (default: STORAGE_BUFFER_BIT)
      * @return true on success
      */
-    bool create(VkDevice device, size_t numLevels, 
+    bool create(VkDevice device, size_t numLevels,
                 VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
     /**
-     * @brief Bind memory to the buffer
-     * @param deviceMemory Vulkan device memory (must be allocated with proper flags)
+     * @brief Bind memory to the buffer and map it persistently
+     * @param deviceMemory Vulkan device memory (must be allocated with HOST_VISIBLE | HOST_COHERENT)
      * @param memoryOffset Offset into the device memory
      * @return true on success
      */
     bool bindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffset = 0);
 
     /**
-     * @brief Map the buffer and write snapshot data
+     * @brief Write snapshot data to the persistently mapped buffer
      * @param snapshot The snapshot data to write
      * @param levels Pointer to array of OrderBookLevel entries
      * @return true on success
@@ -196,18 +197,22 @@ private:
     VkDevice device_ = VK_NULL_HANDLE;
     VkBuffer buffer_ = VK_NULL_HANDLE;
     VkDeviceMemory memory_ = VK_NULL_HANDLE;
+    void* mappedData_ = nullptr;  ///< Persistently mapped pointer
     VkDeviceSize bufferSize_ = 0;
     size_t numLevels_ = 0;
 };
 
 /**
- * @brief Helper function to create a properly aligned SSBO buffer
- * 
+ * @brief Helper function to create a properly aligned SSBO buffer with persistent mapping
+ *
+ * Allocates memory with HOST_VISIBLE | HOST_COHERENT flags and persistently maps it
+ * to avoid vkMapMemory/vkUnmapMemory overhead on the hot path.
+ *
  * @param device Vulkan device
  * @param physicalDevice Vulkan physical device (for memory properties)
  * @param numLevels Number of price levels to store
- * @param memoryFlags Memory property flags (e.g., HOST_VISIBLE | HOST_COHERENT)
- * @param outBuffer Output buffer wrapper
+ * @param memoryFlags Memory property flags (must include HOST_VISIBLE | HOST_COHERENT)
+ * @param outBuffer Output buffer wrapper (will be persistently mapped)
  * @param outMemory Output memory handle
  * @return true on success
  */

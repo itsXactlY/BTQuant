@@ -776,13 +776,13 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.ScrollbarSize = 14.0f;
   style.GrabMinSize = 10.0f;
 
-  style.WindowBorderSize = 1.0f;
-  style.ChildBorderSize = 1.0f;
+  style.WindowBorderSize = 0.0f;
+  style.ChildBorderSize = 0.0f;
   style.PopupBorderSize = 1.0f;
-  style.FrameBorderSize = 1.0f;
+  style.FrameBorderSize = 0.0f;
   style.TabBorderSize = 1.0f;
 
-  style.WindowRounding = theme.border_radius_medium;
+  style.WindowRounding = 0.0f;
   style.ChildRounding = theme.border_radius_small;
   style.FrameRounding = theme.border_radius_small;
   style.PopupRounding = theme.border_radius_medium;

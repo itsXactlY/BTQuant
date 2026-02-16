@@ -153,6 +153,18 @@ void FramePacer::wait_for_next_frame() {
         return; // Unlimited FPS
     }
 
+    // Calculate frame duration using high_resolution_clock
+    auto current_time = std::chrono::high_resolution_clock::now();
+    auto frame_duration = current_time - frame_start_time_;
+    double frame_time_ms = std::chrono::duration<double, std::milli>(frame_duration).count();
+
+    // For 144Hz target: if frame finished in < 6.94ms, yield CPU to network ingestion thread
+    constexpr double FRAME_BUDGET_144HZ_MS = 6.94;
+    if (frame_time_ms < FRAME_BUDGET_144HZ_MS) {
+        // Yield CPU cache back to network ingestion thread
+        std::this_thread::yield();
+    }
+
     // Calculate precise sleep duration
     double sleep_duration = calculate_sleep_duration();
 

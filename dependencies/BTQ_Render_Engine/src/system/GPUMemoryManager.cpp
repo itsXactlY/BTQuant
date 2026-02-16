@@ -6,6 +6,9 @@
 
 #include "../../include/vulkan_base_types.hpp"
 
+#include "backends/imgui_impl_vulkan.h"
+#include "imgui.h"
+
 namespace BTQuant {
 
 // Helper function to find memory type (could be a static method of MemoryPool
@@ -283,6 +286,63 @@ GPUMemoryManager::MemoryStats GPUMemoryManager::get_memory_stats() const {
   stats.uniform_pool_usage = uniform_pool_->get_usage_percentage();
   stats.storage_pool_usage = storage_pool_->get_usage_percentage();
   return stats;
+}
+
+CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sampler,
+                                            VkImageLayout image_layout) {
+  std::lock_guard<std::mutex> lock(texture_cache_mutex_);
+
+  CachedTexture cached_tex{};
+  cached_tex.image_view = image_view;
+  cached_tex.sampler = sampler;
+  cached_tex.image_layout = image_layout;
+
+  // Register texture with ImGui using ImGui_ImplVulkan_AddTexture
+  // This returns the VkDescriptorSet which serves as the ImTextureID
+  VkDescriptorSet descriptor_set =
+      ImGui_ImplVulkan_AddTexture(sampler, image_view, image_layout);
+
+  if (descriptor_set == VK_NULL_HANDLE) {
+    std::cerr << "[GPUMemoryManager] Failed to add texture to ImGui" << std::endl;
+    return cached_tex;
+  }
+
+  cached_tex.descriptor_set = descriptor_set;
+  cached_tex.im_texture_id = reinterpret_cast<ImTextureID>(descriptor_set);
+
+  // Cache the texture for later retrieval
+  texture_cache_[descriptor_set] = cached_tex;
+
+  return cached_tex;
+}
+
+void GPUMemoryManager::remove_texture(VkDescriptorSet descriptor_set) {
+  std::lock_guard<std::mutex> lock(texture_cache_mutex_);
+
+  if (descriptor_set == VK_NULL_HANDLE) {
+    return;
+  }
+
+  // Remove from ImGui
+  ImGui_ImplVulkan_RemoveTexture(descriptor_set);
+
+  // Remove from cache
+  texture_cache_.erase(descriptor_set);
+}
+
+CachedTexture* GPUMemoryManager::get_cached_texture(VkDescriptorSet descriptor_set) {
+  std::lock_guard<std::mutex> lock(texture_cache_mutex_);
+
+  if (descriptor_set == VK_NULL_HANDLE) {
+    return nullptr;
+  }
+
+  auto it = texture_cache_.find(descriptor_set);
+  if (it != texture_cache_.end()) {
+    return &it->second;
+  }
+
+  return nullptr;
 }
 
 }  // namespace BTQuant

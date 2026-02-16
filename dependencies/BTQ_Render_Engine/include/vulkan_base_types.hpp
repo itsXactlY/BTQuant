@@ -6,6 +6,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // 3rd party
@@ -134,6 +135,14 @@ class MemoryPool {
                             VkMemoryPropertyFlags properties);
 };
 
+struct CachedTexture {
+  VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+  VkImageView image_view = VK_NULL_HANDLE;
+  VkSampler sampler = VK_NULL_HANDLE;
+  VkImageLayout image_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  uint64_t im_texture_id = 0;  // Stores ImTextureID value (typedef'd as ImU64 in ImGui)
+};
+
 class GPUMemoryManager {
  public:
   GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
@@ -148,6 +157,12 @@ class GPUMemoryManager {
   BufferAllocation allocate_staging_buffer(VkDeviceSize size);
 
   void deallocate_buffer(const BufferAllocation& allocation);
+
+  // ImGui texture management
+  CachedTexture add_texture(VkImageView image_view, VkSampler sampler,
+                            VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  void remove_texture(VkDescriptorSet descriptor_set);
+  CachedTexture* get_cached_texture(VkDescriptorSet descriptor_set);
 
   // Memory usage statistics
   struct MemoryStats {
@@ -166,6 +181,10 @@ class GPUMemoryManager {
   std::unique_ptr<MemoryPool> vertex_pool_;
   std::unique_ptr<MemoryPool> uniform_pool_;
   std::unique_ptr<MemoryPool> storage_pool_;
+
+  // Cached ImGui textures
+  std::unordered_map<VkDescriptorSet, CachedTexture> texture_cache_;
+  std::mutex texture_cache_mutex_;
 };
 
 class VulkanCore {

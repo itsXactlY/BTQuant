@@ -28,6 +28,7 @@ set(PUBBTQUANT_SOURCES
     src/main.cpp
     src/analytics/tpoengine.cpp
     src/analytics/liquiditysweepdetector.cpp
+    src/components/dom_surface_panel.cpp
 )
 
 # Add subdirectories
@@ -36,11 +37,15 @@ add_subdirectory(dependencies/BTQ_Render_Engine)
 # Create main executable if there are sources
 if(PUBBTQUANT_SOURCES)
     add_executable(pubbtquant ${PUBBTQUANT_SOURCES})
-    
-    # Include directories
+
+    # Include directories - use BUILD directory for fetched dependencies
     target_include_directories(pubbtquant PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/BTQ_Render_Engine/include
+        ${CMAKE_BINARY_DIR}/_deps/imgui-src
+        ${CMAKE_BINARY_DIR}/_deps/imgui-src/backends
+        ${CMAKE_BINARY_DIR}/_deps/implot-src
+        ${CMAKE_BINARY_DIR}/_deps/glm-src
     )
 endif()
 

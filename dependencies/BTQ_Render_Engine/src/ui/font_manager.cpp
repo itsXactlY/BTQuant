@@ -45,12 +45,12 @@ bool FontManager::initialize() {
         return false;
     }
 
-    // Configure monospace font for numerical displays
+    // Configure monospace font for numerical displays (JetBrains Mono / Berkeley Mono)
     ImFontConfig mono_config;
     mono_config.SizePixels = 14.0f;  // Slightly smaller for dense info
-    mono_config.OversampleH = 3;
-    mono_config.OversampleV = 3;
-    mono_config.PixelSnapH = true;
+    mono_config.OversampleH = 4;
+    mono_config.OversampleV = 4;
+    mono_config.PixelSnapH = false;
     strcpy(mono_config.Name, "Monospace##Custom");
 
     // Attempt to load a monospace font (fallback to default if unavailable)

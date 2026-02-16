@@ -139,6 +139,7 @@ class AlertManager {
 // Forward declarations
 class VulkanDashboard;
 class QuantWorkspaceComponent;
+class LayoutManager;
 
 class ResizablePanel : public UIComponent {
  public:
@@ -157,12 +158,6 @@ class ResizablePanel : public UIComponent {
   bool resizable_ = true;
   bool snap_to_grid_ = false;
   float grid_size_ = 10.0f;
-};
-
-class LayoutManager {
- public:
-  void create_default_layouts();
-  void save_layout(const std::string& name, const std::string& desc);
 };
 
 class SearchEngine {

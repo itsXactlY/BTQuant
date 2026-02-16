@@ -351,7 +351,13 @@ void FootprintLOD::updateAdaptiveLOD(const PerformanceMetrics& metrics, int tota
 }
 
 bool FootprintLOD::shouldRenderText(float cell_height_px, float zoom_factor) const {
-    // Skip text rendering when cell height < 12px OR when zoomed out significantly
+    // Hard threshold: suppress text completely when cell height < 4px
+    // This prevents unreadable text when TPO blocks or footprint cells are compressed
+    if (cell_height_px < 4.0f) {
+        return false;
+    }
+    
+    // Skip text rendering when cell height < threshold OR when zoomed out significantly
     return (cell_height_px >= text_render_threshold_ && zoom_factor >= min_detail_zoom_);
 }
 

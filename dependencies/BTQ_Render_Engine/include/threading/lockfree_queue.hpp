@@ -19,184 +19,127 @@
 namespace btq {
 namespace threading {
 
-// Enhanced LockFreeQueue with better memory management and thread safety
+// Strict Single-Producer/Single-Consumer (SPSC) ring buffer
+// Zero mutexes, zero runtime allocations after construction
+// Capacity is always a power of 2 for bitwise modulo optimization
 template<typename T>
 class LockFreeQueue {
 private:
-    struct Node {
-        std::atomic<Node*> next{nullptr};
-        T data{};
+    static constexpr size_t CACHE_LINE_SIZE = 64;
+    static constexpr size_t DEFAULT_CAPACITY = 65536; // Power of 2: 2^16
 
-        Node() = default;
-        explicit Node(const T& value) : data(value) {}
-        explicit Node(T&& value) : data(std::move(value)) {}
+    struct alignas(CACHE_LINE_SIZE) BufferSlot {
+        std::atomic<size_t> sequence;
+        T data;
 
-        template<typename... Args>
-        explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
+        BufferSlot() : sequence(0), data() {}
     };
 
-    static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size to prevent false sharing
-
-    alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
-    alignas(CACHE_LINE_SIZE) std::atomic<Node*> tail_;
-
-    // Additional padding to avoid false sharing between head and tail
-    alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
+    alignas(CACHE_LINE_SIZE) BufferSlot* buffer_;
+    alignas(CACHE_LINE_SIZE) const size_t capacity_;
+    alignas(CACHE_LINE_SIZE) const size_t mask_;
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t> write_pos_;
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t> read_pos_;
 
 public:
-    explicit LockFreeQueue() {
-        // Initialize with a dummy sentinel node to simplify the algorithm
-        Node* sentinel = new Node();
-        head_.store(sentinel, std::memory_order_relaxed);
-        tail_.store(sentinel, std::memory_order_relaxed);
+    explicit LockFreeQueue(size_t capacity = DEFAULT_CAPACITY)
+        : buffer_(new BufferSlot[capacity])
+        , capacity_(capacity)
+        , mask_(capacity - 1)  // Bitwise AND for modulo (requires power of 2)
+        , write_pos_(0)
+        , read_pos_(0)
+    {
+        // Initialize sequence numbers for each slot
+        for (size_t i = 0; i < capacity_; ++i) {
+            buffer_[i].sequence.store(i, std::memory_order_relaxed);
+        }
     }
 
     ~LockFreeQueue() {
-        // Sequentially clean up all nodes
-        // This assumes that no other threads are accessing the queue during destruction
-        Node* current = head_.load(std::memory_order_acquire);
-
-        while (current != nullptr) {
-            Node* next = current->next.load(std::memory_order_relaxed);
-            delete current;
-            current = next;
-        }
+        delete[] buffer_;
     }
 
-    void push(const T& new_value) {
-        Node* new_node = new Node(new_value);
+    // Non-copyable, non-movable for strict SPSC semantics
+    LockFreeQueue(const LockFreeQueue&) = delete;
+    LockFreeQueue& operator=(const LockFreeQueue&) = delete;
+    LockFreeQueue(LockFreeQueue&&) = delete;
+    LockFreeQueue& operator=(LockFreeQueue&&) = delete;
 
-        Node* prev_tail = tail_.load(std::memory_order_acquire);
+    // Push from producer (single producer only)
+    // Returns true on success, false if buffer is full
+    bool push(const T& value) {
+        const size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        const size_t next_write = (write_idx + 1) & mask_;
+        BufferSlot& slot = buffer_[write_idx];
 
-        while (true) {
-            Node* next = prev_tail->next.load(std::memory_order_acquire);
-
-            // Check if tail is still pointing to the same node
-            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-            if (prev_tail != tail_snapshot) {
-                // Another thread advanced tail, update our view
-                prev_tail = tail_snapshot;
-                continue;
-            }
-
-            if (next == nullptr) {
-                // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                    // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
-                    return;
-                }
-            } else {
-                // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
-            }
+        // Check if buffer is full
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(write_idx);
+        if (diff < 0) {
+            return false; // Buffer is full
         }
+
+        // Write data
+        slot.data = value;
+
+        // Release the slot to consumer
+        slot.sequence.store(write_idx + 1, std::memory_order_release);
+
+        // Advance write position
+        write_pos_.store(next_write, std::memory_order_release);
+
+        return true;
     }
 
-    void push(T&& new_value) {
-        Node* new_node = new Node(std::move(new_value));
+    // Push with rvalue reference (producer only)
+    bool push(T&& value) {
+        const size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        const size_t next_write = (write_idx + 1) & mask_;
+        BufferSlot& slot = buffer_[write_idx];
 
-        Node* prev_tail = tail_.load(std::memory_order_acquire);
-
-        while (true) {
-            Node* next = prev_tail->next.load(std::memory_order_acquire);
-
-            // Check if tail is still pointing to the same node
-            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-            if (prev_tail != tail_snapshot) {
-                // Another thread advanced tail, update our view
-                prev_tail = tail_snapshot;
-                continue;
-            }
-
-            if (next == nullptr) {
-                // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                    // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
-                    return;
-                }
-            } else {
-                // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
-            }
+        // Check if buffer is full
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(write_idx);
+        if (diff < 0) {
+            return false; // Buffer is full
         }
+
+        // Write data
+        slot.data = std::move(value);
+
+        // Release the slot to consumer
+        slot.sequence.store(write_idx + 1, std::memory_order_release);
+
+        // Advance write position
+        write_pos_.store(next_write, std::memory_order_release);
+
+        return true;
     }
 
-    std::shared_ptr<T> pop() {
-        // Node* prev_head = head_.load(std::memory_order_acquire); // Removed unused variable
-
-        while (true) {
-            Node* head_snapshot = head_.load(std::memory_order_acquire);
-            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-            Node* next = head_snapshot->next.load(std::memory_order_acquire);
-
-            if (head_snapshot == tail_snapshot) {
-                // Queue is empty or tail is falling behind
-                if (next == nullptr) {
-                    return nullptr; // Queue is actually empty
-                }
-                // Tail is falling behind, try to advance it
-                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire);
-                continue;
-            } else {
-                if (next == nullptr) {
-                    // This shouldn't happen in a consistent state, but handle it
-                    return nullptr;
-                }
-
-                // Try to advance the head to the next node
-                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                    // Successfully dequeued, extract the data
-                    T data = std::move(next->data);
-
-                    // Delete the old head node (the sentinel node that was previously at head)
-                    // We only delete the old head after advancing the head pointer
-                    delete head_snapshot;
-
-                    return std::make_shared<T>(std::move(data));
-                }
-                // If compare_exchange failed, continue loop to try again
-            }
-        }
-    }
-
-    // Non-blocking try_pop with std::optional return
+    // Pop from consumer (single consumer only)
+    // Returns true if value was retrieved, false if buffer is empty
     std::optional<T> try_pop() {
-        // Node* prev_head = head_.load(std::memory_order_acquire); // Removed unused variable
+        const size_t read_idx = read_pos_.load(std::memory_order_relaxed);
+        BufferSlot& slot = buffer_[read_idx];
 
-        while (true) {
-            Node* head_snapshot = head_.load(std::memory_order_acquire);
-            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-            Node* next = head_snapshot->next.load(std::memory_order_acquire);
-
-            if (head_snapshot == tail_snapshot) {
-                // Queue is empty or tail is falling behind
-                if (next == nullptr) {
-                    return std::nullopt; // Queue is actually empty
-                }
-                // Tail is falling behind, try to advance it
-                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire);
-                continue;
-            } else {
-                if (next == nullptr) {
-                    // This shouldn't happen in a consistent state, but handle it
-                    return std::nullopt;
-                }
-
-                // Try to advance the head to the next node
-                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                    // Successfully dequeued, extract the data
-                    T data = std::move(next->data);
-
-                    // Delete the old head node (the sentinel node that was previously at head)
-                    delete head_snapshot;
-
-                    return std::move(data);
-                }
-                // If compare_exchange failed, continue loop to try again
-            }
+        // Check if buffer is empty
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(read_idx + 1);
+        if (diff < 0) {
+            return std::nullopt; // Buffer is empty
         }
+
+        // Read data
+        T result = std::move(slot.data);
+
+        // Release the slot back to producer
+        slot.sequence.store(read_idx + capacity_, std::memory_order_release);
+
+        // Advance read position
+        const size_t next_read = (read_idx + 1) & mask_;
+        read_pos_.store(next_read, std::memory_order_release);
+
+        return result;
     }
 
     // Legacy try_pop for backward compatibility
@@ -209,99 +152,154 @@ public:
         return false;
     }
 
-    bool empty() const {
-        Node* head_snapshot = head_.load(std::memory_order_acquire);
-        Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-        Node* next = head_snapshot->next.load(std::memory_order_acquire);
-
-        if (head_snapshot == tail_snapshot) {
-            return (next == nullptr);
+    // Pop returning shared_ptr (for backward compatibility)
+    std::shared_ptr<T> pop() {
+        auto result = try_pop();
+        if (result.has_value()) {
+            return std::make_shared<T>(std::move(result.value()));
         }
-        return false; // There are definitely elements in the queue
+        return nullptr;
     }
 
-    // Note: size() is not lock-free and should be used carefully in concurrent environments
-    size_t size_approx() const {
-        size_t count = 0;
-        Node* current = head_.load(std::memory_order_acquire)->next.load(std::memory_order_acquire);
+    // Check if empty (consumer side)
+    bool empty() const {
+        const size_t read_idx = read_pos_.load(std::memory_order_acquire);
+        const BufferSlot& slot = buffer_[read_idx];
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(read_idx + 1);
+        return diff < 0;
+    }
 
-        while (current != nullptr) {
-            current = current->next.load(std::memory_order_acquire);
-            count++;
+    // Check if full (producer side)
+    bool full() const {
+        const size_t write_idx = write_pos_.load(std::memory_order_acquire);
+        const size_t next_write = (write_idx + 1) & mask_;
+        const BufferSlot& slot = buffer_[write_idx];
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(write_idx);
+        return diff < 0;
+    }
+
+    // Get current size (approximate, for monitoring)
+    size_t size() const {
+        const size_t write = write_pos_.load(std::memory_order_acquire);
+        const size_t read = read_pos_.load(std::memory_order_acquire);
+        return (write - read + capacity_) & mask_;
+    }
+
+    size_t size_approx() const {
+        return size();
+    }
+
+    // Get capacity
+    size_t capacity() const {
+        return capacity_;
+    }
+
+    // Emplace construction (producer only)
+    template<typename... Args>
+    bool emplace(Args&&... args) {
+        const size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        const size_t next_write = (write_idx + 1) & mask_;
+        BufferSlot& slot = buffer_[write_idx];
+
+        // Check if buffer is full
+        const size_t seq = slot.sequence.load(std::memory_order_acquire);
+        const intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(write_idx);
+        if (diff < 0) {
+            return false; // Buffer is full
+        }
+
+        // Construct data in-place
+        slot.data = T(std::forward<Args>(args)...);
+
+        // Release the slot to consumer
+        slot.sequence.store(write_idx + 1, std::memory_order_release);
+
+        // Advance write position
+        write_pos_.store(next_write, std::memory_order_release);
+
+        return true;
+    }
+
+    // Batch push (producer only)
+    template<typename Iterator>
+    size_t push_batch(Iterator begin, Iterator end) {
+        size_t count = 0;
+        for (auto it = begin; it != end; ++it) {
+            if (!push(*it)) {
+                break; // Buffer is full
+            }
+            ++count;
         }
         return count;
     }
 
-    // For compatibility with existing interface
-    size_t size() const {
-        return size_approx();
-    }
-
-    // Additional utility methods for thread safety
-    void clear() {
-        while (pop() != nullptr) {
-            // Keep popping until queue is empty
-        }
-    }
-
-    // Wait-free push operation for better performance
-    template<typename... Args>
-    void emplace(Args&&... args) {
-        Node* new_node = new Node(std::forward<Args>(args)...);
-
-        Node* prev_tail = tail_.load(std::memory_order_acquire);
-
-        while (true) {
-            Node* next = prev_tail->next.load(std::memory_order_acquire);
-
-            // Check if tail is still pointing to the same node
-            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-            if (prev_tail != tail_snapshot) {
-                // Another thread advanced tail, update our view
-                prev_tail = tail_snapshot;
-                continue;
-            }
-
-            if (next == nullptr) {
-                // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                    // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
-                    return;
-                }
-            } else {
-                // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
-            }
-        }
-    }
-
-    // Batch push operation for better performance when pushing multiple items
-    template<typename Iterator>
-    void push_batch(Iterator begin, Iterator end) {
-        for (auto it = begin; it != end; ++it) {
-            push(*it);
-        }
-    }
-
-    // Batch pop operation to retrieve multiple items at once
+    // Batch pop (consumer only)
     std::vector<T> pop_batch(size_t max_items) {
         std::vector<T> result;
-        result.reserve(max_items);
+        result.reserve(std::min(max_items, capacity_));
 
         for (size_t i = 0; i < max_items; ++i) {
             auto item = try_pop();
             if (item.has_value()) {
                 result.emplace_back(std::move(item.value()));
             } else {
-                break; // Queue is empty
+                break; // Buffer is empty
             }
         }
 
         return result;
     }
 
-    // Blocking pop with timeout for use in UI thread
+    // Drain all items (consumer only)
+    std::vector<T> drain_all() {
+        std::vector<T> result;
+        result.reserve(capacity_);
+
+        while (true) {
+            auto item = try_pop();
+            if (item.has_value()) {
+                result.emplace_back(std::move(item.value()));
+            } else {
+                break; // Buffer is empty
+            }
+        }
+
+        return result;
+    }
+
+    // Limited push - only push if there's space (prevents overwriting)
+    bool push_if_not_full(const T& value) {
+        return push(value);
+    }
+
+    bool push_if_not_full(T&& value) {
+        return push(std::move(value));
+    }
+
+    // Clear the queue (must be called when no other threads are accessing)
+    void clear() {
+        while (try_pop()) {
+            // Keep popping until empty
+        }
+    }
+
+    // Reset the queue to initial state (must be called when no other threads are accessing)
+    void reset() {
+        write_pos_.store(0, std::memory_order_release);
+        read_pos_.store(0, std::memory_order_release);
+        for (size_t i = 0; i < capacity_; ++i) {
+            buffer_[i].sequence.store(i, std::memory_order_release);
+        }
+    }
+
+    // Check if queue has data
+    bool has_data() const {
+        return !empty();
+    }
+
+    // Blocking pop with timeout (for UI thread)
     template<typename Rep, typename Period>
     std::shared_ptr<T> pop_for(const std::chrono::duration<Rep, Period>& timeout_duration) {
         auto start_time = std::chrono::steady_clock::now();
@@ -312,83 +310,15 @@ public:
             if (result) {
                 return result;
             }
-            std::this_thread::yield(); // Allow other threads to run
+            std::this_thread::yield();
         }
 
-        return nullptr; // Timeout reached
+        return nullptr;
     }
 
-    // Method to check if the queue has data without fully consuming it
-    bool has_data() const {
-        Node* head_snapshot = head_.load(std::memory_order_acquire);
-        Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-
-        return head_snapshot != tail_snapshot || head_snapshot->next.load(std::memory_order_acquire) != nullptr;
-    }
-
-    // Method to get approximate number of waiting consumers (not exact, for optimization hints)
+    // Check for waiting consumers (simplified - always returns true if not empty)
     bool has_waiting_consumers() const {
-        // This is a simplified check - in practice, you'd need more sophisticated tracking
         return !empty();
-    }
-
-    // Drain all items from the queue - useful for UI updates to prevent buildup
-    std::vector<T> drain_all() {
-        std::vector<T> result;
-
-        // Estimate size to reserve space upfront for efficiency
-        size_t estimated_size = size_approx();
-        if (estimated_size > 0) {
-            result.reserve(estimated_size);
-        }
-
-        // Keep popping until queue is empty
-        while (true) {
-            auto item = try_pop();
-            if (item.has_value()) {
-                result.emplace_back(std::move(item.value()));
-            } else {
-                break; // Queue is empty
-            }
-        }
-
-        return result;
-    }
-
-    // Limited push - only push if queue size is below threshold (prevents memory buildup)
-    bool push_if_not_full(const T& new_value, size_t max_size = 1000) {
-        (void)max_size;  // Suppress unused parameter warning
-        if (size_approx() >= max_size) {
-            return false; // Queue is too full
-        }
-        push(new_value);
-        return true;
-    }
-
-    // Limited push with rvalue reference
-    bool push_if_not_full(T&& new_value, size_t max_size = 1000) {
-        (void)max_size;  // Suppress unused parameter warning
-        if (size_approx() >= max_size) {
-            return false; // Queue is too full
-        }
-        push(std::move(new_value));
-        return true;
-    }
-
-    // Clear and reset the queue to initial state
-    void reset() {
-        Node* current = head_.load(std::memory_order_acquire);
-        Node* tail_snapshot = tail_.load(std::memory_order_acquire);
-
-        // Move head to tail position, releasing all intermediate nodes
-        while (current != tail_snapshot) {
-            Node* next = current->next.load(std::memory_order_relaxed);
-            delete current;
-            current = next;
-        }
-
-        // Ensure head and tail point to the same sentinel
-        head_.store(tail_snapshot, std::memory_order_release);
     }
 };
 

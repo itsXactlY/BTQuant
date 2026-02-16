@@ -3189,6 +3189,90 @@ void OrderbookBatcher::submitUltraOptimized(ImDrawList* draw_list) {
     clear();
 }
 
+// DOM Hardware Instancing: Render bid/ask liquidity bars via a single draw command
+// Constructs a contiguous vertex array for all bars and submits via one AddDrawCmd()
+void OrderbookBatcher::renderLiquidityBars(ImDrawList* draw_list,
+                                           const std::vector<std::pair<ImVec2, ImVec2>>& bid_bars,
+                                           const std::vector<std::pair<ImVec2, ImVec2>>& ask_bars,
+                                           ImU32 bid_color, ImU32 ask_color) {
+    if (!draw_list) {
+        return;
+    }
+
+    const size_t total_bars = bid_bars.size() + ask_bars.size();
+    if (total_bars == 0) {
+        return;
+    }
+
+    // Calculate total vertices (4 per bar) and indices (6 per bar)
+    const size_t total_vertices = total_bars * 4;
+    const size_t total_indices = total_bars * 6;
+
+    // Reserve space in the draw list upfront to minimize reallocations
+    draw_list->PrimReserve(static_cast<int>(total_indices), static_cast<int>(total_vertices));
+
+    // Build contiguous vertex array for all bars
+    // Bid bars first, then ask bars
+    size_t vertex_offset = 0;
+
+    // Process bid bars
+    for (const auto& bar : bid_bars) {
+        const ImVec2& min = bar.first;
+        const ImVec2& max = bar.second;
+
+        // Add 4 vertices for this rectangle (counter-clockwise winding)
+        ImDrawVert* vtx = draw_list->_VtxWritePtr;
+        vtx[0].pos = min; vtx[0].uv = ImVec2(0, 0); vtx[0].col = bid_color;  // Top-left
+        vtx[1].pos = ImVec2(max.x, min.y); vtx[1].uv = ImVec2(1, 0); vtx[1].col = bid_color;  // Top-right
+        vtx[2].pos = max; vtx[2].uv = ImVec2(1, 1); vtx[2].col = bid_color;  // Bottom-right
+        vtx[3].pos = ImVec2(min.x, max.y); vtx[3].uv = ImVec2(0, 1); vtx[3].col = bid_color;  // Bottom-left
+
+        // Add 6 indices for 2 triangles (0,1,2 and 0,2,3)
+        ImDrawIdx* idx = draw_list->_IdxWritePtr;
+        const ImDrawIdx base_idx = static_cast<ImDrawIdx>(vertex_offset);
+        idx[0] = base_idx + 0;
+        idx[1] = base_idx + 1;
+        idx[2] = base_idx + 2;
+        idx[3] = base_idx + 0;
+        idx[4] = base_idx + 2;
+        idx[5] = base_idx + 3;
+
+        draw_list->_VtxWritePtr += 4;
+        draw_list->_IdxWritePtr += 6;
+        vertex_offset += 4;
+    }
+
+    // Process ask bars
+    for (const auto& bar : ask_bars) {
+        const ImVec2& min = bar.first;
+        const ImVec2& max = bar.second;
+
+        // Add 4 vertices for this rectangle (counter-clockwise winding)
+        ImDrawVert* vtx = draw_list->_VtxWritePtr;
+        vtx[0].pos = min; vtx[0].uv = ImVec2(0, 0); vtx[0].col = ask_color;  // Top-left
+        vtx[1].pos = ImVec2(max.x, min.y); vtx[1].uv = ImVec2(1, 0); vtx[1].col = ask_color;  // Top-right
+        vtx[2].pos = max; vtx[2].uv = ImVec2(1, 1); vtx[2].col = ask_color;  // Bottom-right
+        vtx[3].pos = ImVec2(min.x, max.y); vtx[3].uv = ImVec2(0, 1); vtx[3].col = ask_color;  // Bottom-left
+
+        // Add 6 indices for 2 triangles (0,1,2 and 0,2,3)
+        ImDrawIdx* idx = draw_list->_IdxWritePtr;
+        const ImDrawIdx base_idx = static_cast<ImDrawIdx>(vertex_offset);
+        idx[0] = base_idx + 0;
+        idx[1] = base_idx + 1;
+        idx[2] = base_idx + 2;
+        idx[3] = base_idx + 0;
+        idx[4] = base_idx + 2;
+        idx[5] = base_idx + 3;
+
+        draw_list->_VtxWritePtr += 4;
+        draw_list->_IdxWritePtr += 6;
+        vertex_offset += 4;
+    }
+
+    // Update vertex index counter
+    draw_list->_VtxCurrentIdx += static_cast<unsigned int>(total_vertices);
+}
+
 // Ultra-efficient method to batch geometry with maximum performance and minimal GPU overhead
 void OrderbookBatcher::batchGeometryMaximumPerformance(const std::vector<OrderbookElementData>& elements) {
     if (elements.empty()) {

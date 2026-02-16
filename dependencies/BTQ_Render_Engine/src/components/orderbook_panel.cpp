@@ -9,6 +9,8 @@
 #include "imgui.h"
 #include "implot.h"
 
+#include "../../include/components/orderbook_batcher.hpp"
+
 namespace BTQuant {
 
 // Destructor to clean up the lock-free cache
@@ -620,79 +622,98 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                              std::max(aggregated_asks.size(), aggregated_bids.size()) :
                              selected_levels_count_;
 
-    // Use channel splitting to draw backgrounds before text content
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->ChannelsSplit(2); // Split into 2 channels: 0 for backgrounds, 1 for text (default)
-
-    // Switch to background channel (0) to draw heatmap backgrounds first
-    draw_list->ChannelsSetCurrent(0);
-
-    // First, we need to render the table structure to establish row positions,
-    // then we can draw the backgrounds in the correct positions
-
-    // Render Asks (Sell) - Top down, but only to calculate positions
     int ask_count = std::min((int)aggregated_asks.size(), max_levels_to_show);
+    int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
+
+    // DOM Hardware Instancing: Collect all liquidity bar rectangles for batched rendering
+    // This bypasses standard ImGui::AddRectFilled and uses a single draw command
+    struct LiquidityBar {
+        ImVec2 min;
+        ImVec2 max;
+        ImU32 color;
+    };
+    std::vector<LiquidityBar> bid_liquidity_bars;
+    std::vector<LiquidityBar> ask_liquidity_bars;
+
+    // Pre-calculate bar geometry for all levels (first pass - collect positions)
+    // We need to iterate through the table structure to get row positions
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+    // Collect ask liquidity bars (cumulative volume bars + size bars)
     for (int i = ask_count - 1; i >= 0; --i) {
-      const auto& level = aggregated_asks[i];
-      ImGui::TableNextRow();
+        ImGui::TableNextRow();
+        const auto& level = aggregated_asks[i];
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity
-      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
-      if (adjusted_intensity > 0.05f) {
-        // Calculate position for the entire row background
+        // Get row position for this level
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
-        float row_height = ImGui::GetTextLineHeightWithSpacing();
 
-        // Get the width of the table row
-        float table_width = ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX();
+        // Calculate size bar geometry (column 4)
+        ImGui::TableSetColumnIndex(4);
+        float size_col_width = ImGui::GetContentRegionAvail().x;
+        float size_bar_width = size_col_width * (float)(level.size / max_vol);
+        ImVec2 size_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x, row_pos.y);
+        ImVec2 size_bar_max = ImVec2(size_bar_min.x + size_bar_width, row_pos.y + row_height);
+        ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
+        ask_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
 
-        // Calculate the background rectangle for the entire row
-        ImVec2 pos_min = row_pos;
-        ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
-
-        // Red heatmap for asks
-        ImU32 bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, adjusted_intensity * 0.3f));
-
-        // Draw the rectangle in the background channel
-        draw_list->AddRectFilled(pos_min, pos_max, bg_color);
-      }
+        // Calculate cumulative volume bar geometry (column 2 - Price column)
+        ImGui::TableSetColumnIndex(2);
+        float cum_col_width = ImGui::GetContentRegionAvail().x;
+        float cum_bar_width = cum_col_width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f;
+        ImVec2 cum_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x, row_pos.y);
+        ImVec2 cum_bar_max = ImVec2(cum_bar_min.x + cum_bar_width, row_pos.y + row_height);
+        ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f));
+        ask_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
     }
 
-    // Spread Row - also need to account for this in positioning
+    // Spread row
     ImGui::TableNextRow();
 
-    // Render Bids (Buy) - but only to calculate positions
-    int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
+    // Collect bid liquidity bars (cumulative volume bars + size bars)
     for (int i = 0; i < bid_count; ++i) {
-      const auto& level = aggregated_bids[i];
-      ImGui::TableNextRow();
+        ImGui::TableNextRow();
+        const auto& level = aggregated_bids[i];
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity
-      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
-      if (adjusted_intensity > 0.05f) {
-        // Calculate position for the entire row background
+        // Get row position for this level
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
-        float row_height = ImGui::GetTextLineHeightWithSpacing();
 
-        // Get the width of the table row
-        float table_width = ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX();
+        // Calculate size bar geometry (column 0)
+        ImGui::TableSetColumnIndex(0);
+        float size_col_width = ImGui::GetContentRegionAvail().x;
+        float size_bar_width = size_col_width * (float)(level.size / max_vol);
+        ImVec2 size_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + size_col_width - size_bar_width, row_pos.y);
+        ImVec2 size_bar_max = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + size_col_width, row_pos.y + row_height);
+        ImU32 size_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
+        bid_liquidity_bars.push_back({size_bar_min, size_bar_max, size_bar_color});
 
-        // Calculate the background rectangle for the entire row
-        ImVec2 pos_min = row_pos;
-        ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
-
-        // Blue heatmap for bids
-        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, adjusted_intensity * 0.3f));
-
-        // Draw the rectangle in the background channel
-        draw_list->AddRectFilled(pos_min, pos_max, bg_color);
-      }
+        // Calculate cumulative volume bar geometry (column 2 - Price column)
+        ImGui::TableSetColumnIndex(2);
+        float cum_col_width = ImGui::GetContentRegionAvail().x;
+        float cum_bar_width = cum_col_width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f;
+        ImVec2 cum_bar_min = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + cum_col_width - cum_bar_width, row_pos.y);
+        ImVec2 cum_bar_max = ImVec2(row_pos.x + ImGui::GetCursorPosX() - row_pos.x + cum_col_width, row_pos.y + row_height);
+        ImU32 cum_bar_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f));
+        bid_liquidity_bars.push_back({cum_bar_min, cum_bar_max, cum_bar_color});
     }
 
-    // Switch back to the default channel (1) for text content
-    draw_list->ChannelsSetCurrent(1);
+    // Submit all liquidity bars via a single draw command (DOM Hardware Instancing)
+    OrderbookBatcher batcher;
+    std::vector<std::pair<ImVec2, ImVec2>> bid_bar_pairs, ask_bar_pairs;
+    for (const auto& bar : bid_liquidity_bars) {
+        bid_bar_pairs.push_back({bar.min, bar.max});
+    }
+    for (const auto& bar : ask_liquidity_bars) {
+        ask_bar_pairs.push_back({bar.min, bar.max});
+    }
+
+    // Use the batcher's renderLiquidityBars method for single draw command submission
+    ImU32 bid_color = ImGui::GetColorU32(ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f));
+    ImU32 ask_color = ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f));
+    batcher.renderLiquidityBars(draw_list, bid_bar_pairs, ask_bar_pairs, bid_color, ask_color);
+
+    // Reset table position for content rendering
+    ImGui::TableNextRow();
 
     // Now render the actual content in the default channel
     // Render Asks (Sell) - Top down
@@ -804,20 +825,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the right
-      if (i < static_cast<int>(cumulative_asks.size())) {
-          float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
-          ImVec2 pos = ImGui::GetCursorScreenPos();
-
-          // Position the bar to start from the left edge of the price column and extend right
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              ImVec2(pos.x, pos.y),
-              ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f)));
-      }
-
+      // Cumulative volume bar now rendered via DOM Hardware Instancing (single draw command)
+      // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
       ImGui::SameLine();
       if (is_large_order) {
         // Draw yellow background for large orders
@@ -863,14 +872,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       // 5. Ask Size (with Bar)
       ImGui::TableSetColumnIndex(4);
       {
-        float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(level.size / max_vol);
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-            ImGui::GetColorU32(
-                ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f)));
+        // Size bar now rendered via DOM Hardware Instancing (single draw command)
+        // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
 
         if (is_large_order) {
           // Draw yellow background for large orders
@@ -999,25 +1002,14 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       // 1. Bid Size (with Bar)
       ImGui::TableSetColumnIndex(0);
       {
-        // Draw bar from right to left? Standard is Left or Right aligned.
-        // Image 1 implies Right aligned for Bid? No, standard is bars grow from
-        // center spine (Price). But here Columns are separated. Let's do
-        // Standard Left-to-Right for now, or Right-to-Left if it looks better
-        // next to Price. Let's do Right-to-Left for Bid to "point" to Price.
-        float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(level.size / max_vol);
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            ImVec2(pos.x + width - bar_width, pos.y),
-            ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-            ImGui::GetColorU32(
-                ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f)));
+        // Bid size bar now rendered via DOM Hardware Instancing (single draw command)
+        // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
 
         // Text Right Aligned
         auto text = std::format("{:.4f}", level.size);
         float text_width = ImGui::CalcTextSize(text.c_str()).x;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - text_width);
+        float col_width = ImGui::GetContentRegionAvail().x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + col_width - text_width);
 
         if (is_large_order) {
           // Draw yellow background for large orders
@@ -1130,20 +1122,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the left
-      if (i < static_cast<int>(cumulative_bids.size())) {
-          float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
-          ImVec2 pos = ImGui::GetCursorScreenPos();
-
-          // Position the bar to start from the right edge of the price column and extend left
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              ImVec2(pos.x + width - bar_width, pos.y),
-              ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
-      }
-
+      // Cumulative volume bar now rendered via DOM Hardware Instancing (single draw command)
+      // Bar geometry pre-calculated and submitted via batcher.renderLiquidityBars()
       ImGui::SameLine();
       if (is_large_order) {
         // Draw yellow background for large orders
@@ -1280,9 +1260,6 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       ImGui::PopID();
     }
-
-    // Merge the channels back together
-    draw_list->ChannelsMerge();
 
     ImGui::EndTable();
   }

@@ -125,6 +125,13 @@ public:
     // Ultra-optimized submit method that implements the most efficient approach to minimize GPU overhead
     void submitUltraOptimized(ImDrawList* draw_list);
 
+    // DOM Hardware Instancing: Render bid/ask liquidity bars via a single draw command
+    // Constructs a contiguous vertex array for all bars and submits via one AddDrawCmd()
+    void renderLiquidityBars(ImDrawList* draw_list,
+                             const std::vector<std::pair<ImVec2, ImVec2>>& bid_bars,
+                             const std::vector<std::pair<ImVec2, ImVec2>>& ask_bars,
+                             ImU32 bid_color, ImU32 ask_color);
+
     // Get the number of batched elements
     size_t getBatchCount() const { return batches_.size(); }
 

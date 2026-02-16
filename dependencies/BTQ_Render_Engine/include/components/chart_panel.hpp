@@ -538,6 +538,12 @@ class ChartPanel : public PanelBase {
   double manual_y_max_ = 0.0;
   bool user_dragged_chart_ = false;  // Set to true on drag, triggers MANUAL mode
   bool show_snap_to_last_ = false;   // Show "Snap to Last" button when X-axis < current time
+
+  // --- Auto-Centering State (PriceScaleMode::Auto) ---
+  double auto_center_target_ = 0.0;        // Target center price (current market price)
+  double auto_center_current_ = 0.0;       // Current interpolated center price
+  float auto_center_threshold_ = 0.02f;    // Threshold: 2% price deviation triggers re-center
+  float auto_center_lerp_factor_ = 0.1f;   // Smooth interpolation factor (0-1, higher = faster)
   
   // --- 3.4 Right Sidebar Order Entry State ---
   double order_quantity_ = 1.0;

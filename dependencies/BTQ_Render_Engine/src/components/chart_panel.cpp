@@ -2599,6 +2599,45 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs)) {
     // ===== ALL SETUP CALLS MUST HAPPEN FIRST - BEFORE ANY LOCKING FUNCTIONS =====
+    
+    // Get the last price for auto-centering
+    double last_price = chart.closes.empty() ? 0.0 : chart.closes.back();
+    
+    // Apply price centering mode before setup (modifies y_axis_min_pre/y_axis_max_pre for AUTO mode)
+    if (price_centering_mode_ == PriceCenteringMode::AUTO && last_price > 0) {
+      // For AUTO mode with smooth interpolation, calculate the centered limits
+      double current_center = (y_axis_max_pre + y_axis_min_pre) / 2.0;
+      double price_deviation = std::abs(last_price - current_center);
+      double threshold = last_price * auto_center_threshold_;
+      
+      // Update target price
+      auto_center_target_ = last_price;
+      
+      // Only interpolate if deviation exceeds threshold
+      if (price_deviation > threshold) {
+        // Smooth interpolation (linear interpolation / lerp)
+        if (auto_center_current_ == 0.0) {
+          auto_center_current_ = current_center;
+        }
+        auto_center_current_ = auto_center_current_ + (auto_center_target_ - auto_center_current_) * auto_center_lerp_factor_;
+        
+        // Calculate new Y range centered on interpolated price
+        double y_range = y_axis_max_pre - y_axis_min_pre;
+        if (y_range <= 0) {
+          y_range = last_price * 0.1;  // 10% range fallback
+        }
+        double half_range = y_range / 2.0;
+        
+        y_axis_min_pre = auto_center_current_ - half_range;
+        y_axis_max_pre = auto_center_current_ + half_range;
+      } else {
+        // Price is within threshold, track it
+        if (auto_center_current_ == 0.0) {
+          auto_center_current_ = last_price;
+        }
+      }
+    }
+    
     // Setup primary axes
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
@@ -4386,35 +4425,67 @@ void ChartPanel::toggle_favorite_tool(const std::string& tool_name) {
 // 3.3 Price Centering Implementation
 void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double last_price) {
   if (chart.closes.empty() || last_price <= 0) return;
-  
+
   ImPlotRect limits = ImPlot::GetPlotLimits();
-  
+
   switch (price_centering_mode_) {
-    case PriceCenteringMode::AUTO:
-      // Standard ImPlot AutoFit - let ImPlot handle it
-      // This is the default behavior, no manual intervention needed
+    case PriceCenteringMode::AUTO: {
+      // Auto-centering with smooth interpolation
+      // Check if price deviation exceeds threshold
+      double current_center = (limits.Y.Max + limits.Y.Min) / 2.0;
+      double price_deviation = std::abs(last_price - current_center);
+      double threshold = last_price * auto_center_threshold_;  // Relative threshold (e.g., 2% of price)
+
+      // Update target price
+      auto_center_target_ = last_price;
+
+      // Only interpolate if deviation exceeds threshold
+      if (price_deviation > threshold) {
+        // Smooth interpolation (linear interpolation / lerp)
+        auto_center_current_ = auto_center_current_ + (auto_center_target_ - auto_center_current_) * auto_center_lerp_factor_;
+
+        // Calculate Y range to maintain
+        double y_range = limits.Y.Max - limits.Y.Min;
+        if (y_range <= 0) {
+          // Fallback: use a reasonable range based on price
+          y_range = last_price * 0.1;  // 10% range
+        }
+        double half_range = y_range / 2.0;
+
+        // Apply new limits centered on interpolated price
+        double new_y_min = auto_center_current_ - half_range;
+        double new_y_max = auto_center_current_ + half_range;
+
+        ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
+      } else {
+        // Price is within threshold, keep current center but track it
+        if (auto_center_current_ == 0.0) {
+          auto_center_current_ = last_price;
+        }
+      }
       break;
-      
+    }
+
     case PriceCenteringMode::AUTO_CENTERED: {
       // Center on last price: (Y_max + Y_min)/2 == last_price
       double y_range = limits.Y.Max - limits.Y.Min;
       double half_range = y_range / 2.0;
-      
+
       double new_y_min = last_price - half_range;
       double new_y_max = last_price + half_range;
-      
+
       ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
       break;
     }
-    
+
     case PriceCenteringMode::KEEP_IN_VIEW: {
       // Only adjust Y limits if last_price exceeds current bounds
       double y_min = limits.Y.Min;
       double y_max = limits.Y.Max;
       double margin = (y_max - y_min) * 0.1;  // 10% margin
-      
+
       bool needs_adjustment = false;
-      
+
       if (last_price < y_min + margin) {
         // Price is too low, shift down
         y_min = last_price - margin * 2;
@@ -4426,13 +4497,13 @@ void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double l
         y_min = y_max - (limits.Y.Max - limits.Y.Min);
         needs_adjustment = true;
       }
-      
+
       if (needs_adjustment) {
         ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
       }
       break;
     }
-    
+
     case PriceCenteringMode::MANUAL:
       // Disable all auto-fitting - use stored manual limits
       ImPlot::SetNextAxisLimits(ImAxis_Y1, manual_y_min_, manual_y_max_, ImGuiCond_Always);

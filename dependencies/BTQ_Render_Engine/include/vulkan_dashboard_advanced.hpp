@@ -297,9 +297,6 @@ class VulkanDashboard {
   /// @brief Initialize the GLFW window
   void init_window();
 
-  /// @brief Poll market data and feed it to the microstructure renderer
-  void pollDataToRenderer();
-
   /// @brief Render the internal performance overlay
   void render_performance_overlay();
 

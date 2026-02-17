@@ -839,7 +839,8 @@ void TapePanel::render_trade_table() {
             // Check if this trade is part of a cluster
             bool is_clustered = isTradeClustered(original_index, cached_trades_);
 
-            // Check if this trade is part of a slippage event (consecutive trades < 50ms at different prices)
+            // Check if this trade is part of a slippage event (consecutive trades < 50ms at
+            // different prices)
             bool is_slippage = isSlippageTrade(original_index, cached_trades_);
 
             // Set background color for search matches and clustered trades
@@ -986,7 +987,8 @@ void TapePanel::render_trade_table() {
               uint64_t time_diff = trade.timestamp >= next_trade.timestamp
                                        ? trade.timestamp - next_trade.timestamp
                                        : next_trade.timestamp - trade.timestamp;
-              bool price_different = std::abs(trade.price - next_trade.price) > price_match_tolerance_;
+              bool price_different =
+                  std::abs(trade.price - next_trade.price) > price_match_tolerance_;
 
               if (time_diff < SLIPPAGE_TIME_THRESHOLD_US && price_different) {
                 // Get the draw list and draw a white bracket on the right side
@@ -1001,16 +1003,21 @@ void TapePanel::render_trade_table() {
 
                 // Draw the bracket: vertical line with two horizontal caps
                 ImVec2 bracket_left = ImVec2(row_max.x + bracket_offset, row_min.y);
-                ImVec2 bracket_right = ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y);
-                ImVec2 bracket_bottom_left = ImVec2(row_max.x + bracket_offset, row_min.y + row_height);
-                ImVec2 bracket_bottom_right = ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y + row_height);
+                ImVec2 bracket_right =
+                    ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y);
+                ImVec2 bracket_bottom_left =
+                    ImVec2(row_max.x + bracket_offset, row_min.y + row_height);
+                ImVec2 bracket_bottom_right =
+                    ImVec2(row_max.x + bracket_offset + bracket_width, row_min.y + row_height);
 
                 // Top horizontal line
                 draw_list->AddLine(bracket_left, bracket_right, IM_COL32(255, 255, 255, 255), 1.0f);
                 // Vertical line
-                draw_list->AddLine(bracket_right, bracket_bottom_right, IM_COL32(255, 255, 255, 255), 1.0f);
+                draw_list->AddLine(bracket_right, bracket_bottom_right,
+                                   IM_COL32(255, 255, 255, 255), 1.0f);
                 // Bottom horizontal line
-                draw_list->AddLine(bracket_bottom_right, bracket_bottom_left, IM_COL32(255, 255, 255, 255), 1.0f);
+                draw_list->AddLine(bracket_bottom_right, bracket_bottom_left,
+                                   IM_COL32(255, 255, 255, 255), 1.0f);
               }
             }
 
@@ -1128,8 +1135,8 @@ bool BTQuant::TapePanel::isTradeClustered(
 
 // Check if a trade at the given index is part of a slippage event
 // Slippage: consecutive trades < 50ms apart at different prices
-bool BTQuant::TapePanel::isSlippageTrade(
-    int index, const std::vector<RenderEngine::TradeData>& trades) const {
+bool BTQuant::TapePanel::isSlippageTrade(int index,
+                                         const std::vector<RenderEngine::TradeData>& trades) const {
   if (index < 0 || index >= static_cast<int>(trades.size())) {
     return false;
   }

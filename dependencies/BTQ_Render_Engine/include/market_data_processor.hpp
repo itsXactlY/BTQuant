@@ -21,10 +21,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "hotspine_data_bridge.hpp"
+#include "cache_manager.hpp"
 #include "data/data_types.hpp"
 #include "data/incremental_updater.hpp"
-#include "cache_manager.hpp"
+#include "hotspine_data_bridge.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
@@ -119,7 +119,6 @@ struct AtomicBBOState {
   // Padding to ensure cache-line alignment (64 bytes total for atomic copy)
   char padding[64 - (sizeof(uint32_t) + sizeof(uint64_t) + 6 * sizeof(double))];
 };
-
 
 // Indicator cache entry
 struct IndicatorCacheEntry {

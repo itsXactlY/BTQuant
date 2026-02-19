@@ -84,6 +84,7 @@ set(LIB_SOURCES
     src/performance/regression_detector.cpp
     src/performance/cpu_profiler.cpp
     src/performance/memory_tracker.cpp
+    src/performance/global_sync.cpp
     src/ui/loading_state_integration.cpp
     src/ui/tooltips.cpp
     src/ui/context_menus.cpp
@@ -126,19 +127,14 @@ set(DASHBOARD_SOURCES
     src/components/footprint_panel.cpp
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
-    src/components/risk_analyzer_panel.cpp
     src/components/VulkanSynchronization.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
-    src/components/trading_orders_panel.cpp
-    src/components/trading_positions_panel.cpp
-    src/components/risk_metrics_panel.cpp
     src/components/histogram_panel.cpp
     src/components/scatter_plot_panel.cpp
     src/components/time_series_panel.cpp
     src/components/time_statistics_panel.cpp
     src/components/time_histogram_panel.cpp
-    src/components/screener_panel.cpp
     src/components/log_panel.cpp
     src/components/multi_vwap_panel.cpp
     src/components/performance_monitor_panel.cpp
@@ -148,12 +144,6 @@ set(DASHBOARD_SOURCES
     src/components/technical_indicators_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
-    src/trading/trading_interface.cpp
-    src/trading/trade_command_queue.cpp
-    src/trading/order_manager.cpp
-    src/trading/position_manager.cpp
-    src/trading/risk_assessment.cpp
-    src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
     src/components/theme_manager.cpp
@@ -163,8 +153,6 @@ set(DASHBOARD_SOURCES
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
     src/components/global_alert_manager.cpp
-    src/components/strategy_builder.cpp
-    src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp
@@ -264,19 +252,14 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/footprint_panel.cpp
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
-    src/components/risk_analyzer_panel.cpp
     src/components/VulkanSynchronization.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
-    src/components/trading_orders_panel.cpp
-    src/components/trading_positions_panel.cpp
-    src/components/risk_metrics_panel.cpp
     src/components/histogram_panel.cpp
     src/components/scatter_plot_panel.cpp
     src/components/time_series_panel.cpp
     src/components/time_statistics_panel.cpp
     src/components/time_histogram_panel.cpp
-    src/components/screener_panel.cpp
     src/components/log_panel.cpp
     src/components/multi_vwap_panel.cpp
     src/components/performance_monitor_panel.cpp
@@ -286,12 +269,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/technical_indicators_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
-    src/trading/trading_interface.cpp
-    src/trading/trade_command_queue.cpp
-    src/trading/order_manager.cpp
-    src/trading/position_manager.cpp
-    src/trading/risk_assessment.cpp
-    src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
     src/components/theme_manager.cpp
@@ -301,8 +278,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
     src/components/global_alert_manager.cpp
-    src/components/strategy_builder.cpp
-    src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp

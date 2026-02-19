@@ -19,23 +19,16 @@
 #include "../../include/components/metrics_panel.hpp"
 #include "../../include/components/orderbook_panel.hpp"
 #include "../../include/components/performance_monitor_panel.hpp"
-#include "../../include/components/risk_metrics_panel.hpp"
 #include "../../include/components/scatter_plot_panel.hpp"
-#include "../../include/components/screener_panel.hpp"
 #include "../../include/components/status_bar_panel.hpp"
 #include "../../include/components/tape_panel.hpp"
 #include "../../include/components/time_series_panel.hpp"
 #include "../../include/components/time_statistics_panel.hpp"
 #include "../../include/components/time_histogram_panel.hpp"
 #include "../../include/components/tpo_panel.hpp"
-#include "../../include/components/trading_orders_panel.hpp"
-#include "../../include/components/trading_positions_panel.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/watchlist_panel.hpp"
 #include "../../include/components/chart_replay_panel.hpp"
-#include "../../include/components/risk_analyzer_panel.hpp"
-#include "../../include/components/strategy_builder.hpp"
-#include "../../include/components/option_analytics_panel.hpp"
 #include "../../include/components/correlation_heatmap_panel.hpp"
 #include "../../include/components/multi_vwap_panel.hpp"
 #include "../../include/components/technical_indicators_panel.hpp"
@@ -49,26 +42,18 @@ using json = nlohmann::json;
 namespace BTQuant {
 
 PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                           std::shared_ptr<OrderManager> order_manager,
-                           std::shared_ptr<PositionManager> position_manager,
-                           std::shared_ptr<RiskAssessment> risk_assessment)
+                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge),
-      processor_(processor),
-      order_manager_(order_manager),
-      position_manager_(position_manager),
-      risk_assessment_(risk_assessment) {
+      processor_(processor) {
   // NOTE: Do NOT call apply_layout_preset() or add default panels in constructor.
   // Panel instantiation should be controlled by the layout system externally.
   // See: main_trading_terminal.cpp where workspace->set_layout() is called.
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
-  strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
 }
 
 PanelManager::~PanelManager() {
   context_menu_manager_.reset(); // Explicitly reset context menu manager before other members
-  strategy_builder_.reset(); // Explicitly reset strategy builder before other members
   panels_.clear();
 }
 
@@ -220,7 +205,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       break;
     case PanelType::METRICS:
       panel =
-          std::make_unique<MetricsPanel>(config, position_manager_, risk_assessment_, processor_);
+          std::make_unique<MetricsPanel>(config, processor_);
       break;
     case PanelType::HEATMAP:
       panel = std::make_unique<DomSurfacePanel>(processor_);
@@ -258,9 +243,6 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config);
       break;
-    case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
-      break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
       break;
@@ -270,32 +252,14 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::TIME_SERIES:
       panel = std::make_unique<TimeSeriesPanel>(config);
       break;
-    case PanelType::TRADING_ORDERS:
-      panel = std::make_unique<TradingOrdersPanel>(config, order_manager_, position_manager_);
-      break;
-    case PanelType::TRADING_POSITIONS:
-      panel = std::make_unique<TradingPositionsPanel>(config, position_manager_, risk_assessment_);
-      break;
-    case PanelType::RISK_METRICS:
-      panel = std::make_unique<RiskMetricsPanel>(config, risk_assessment_, position_manager_);
-      break;
     case PanelType::HISTOGRAM:
       panel = std::make_unique<HistogramPanel>(config);
-      break;
-    case PanelType::SCREENER:
-      panel = std::make_unique<ScreenerPanel>(config);
       break;
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
     case PanelType::CHART_REPLAY:
       panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
-      break;
-    case PanelType::RISK_ANALYZER:
-      panel = std::make_unique<RiskAnalyzerPanel>(config, bridge_, processor_);
-      break;
-    case PanelType::STRATEGY_BUILDER:
-      panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
     case PanelType::CORRELATION_HEATMAP:
       panel = std::make_unique<CorrelationHeatmapPanel>(config);
@@ -398,7 +362,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::METRICS:
       panel =
-          std::make_unique<MetricsPanel>(config, position_manager_, risk_assessment_, processor_);
+          std::make_unique<MetricsPanel>(config, processor_);
       break;
     case PanelType::HEATMAP:
       panel = std::make_unique<DomSurfacePanel>(processor_);
@@ -436,9 +400,6 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config);
       break;
-    case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
-      break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
       break;
@@ -448,32 +409,14 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     case PanelType::TIME_SERIES:
       panel = std::make_unique<TimeSeriesPanel>(config);
       break;
-    case PanelType::TRADING_ORDERS:
-      panel = std::make_unique<TradingOrdersPanel>(config, order_manager_, position_manager_);
-      break;
-    case PanelType::TRADING_POSITIONS:
-      panel = std::make_unique<TradingPositionsPanel>(config, position_manager_, risk_assessment_);
-      break;
-    case PanelType::RISK_METRICS:
-      panel = std::make_unique<RiskMetricsPanel>(config, risk_assessment_, position_manager_);
-      break;
     case PanelType::HISTOGRAM:
       panel = std::make_unique<HistogramPanel>(config);
-      break;
-    case PanelType::SCREENER:
-      panel = std::make_unique<ScreenerPanel>(config);
       break;
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
     case PanelType::CHART_REPLAY:
       panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
-      break;
-    case PanelType::RISK_ANALYZER:
-      panel = std::make_unique<RiskAnalyzerPanel>(config, bridge_, processor_);
-      break;
-    case PanelType::STRATEGY_BUILDER:
-      panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
     case PanelType::CORRELATION_HEATMAP:
       panel = std::make_unique<CorrelationHeatmapPanel>(config);
@@ -919,12 +862,6 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Metrics";
     case PanelType::HEATMAP:
       return "Heatmap";
-    case PanelType::TRADING_ORDERS:
-      return "Orders";
-    case PanelType::TRADING_POSITIONS:
-      return "Positions";
-    case PanelType::RISK_METRICS:
-      return "Risk";
     case PanelType::ALERTS:
       return "Alerts";
     case PanelType::ORDERBOOK:
@@ -935,8 +872,6 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Status";
     case PanelType::WATCHLIST:
       return "Watchlist";
-    case PanelType::SCREENER:
-      return "Screener";
     case PanelType::TAPE:
       return "Time & Sales";
     case PanelType::VOLUME_PROFILE:
@@ -955,12 +890,6 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Time Histogram";
     case PanelType::CHART_REPLAY:
       return "Chart Replay";
-    case PanelType::RISK_ANALYZER:
-      return "Risk Analyzer";
-    case PanelType::STRATEGY_BUILDER:
-      return "Strategy Builder";
-    case PanelType::OPTION_ANALYTICS:
-      return "Option Analytics";
     case PanelType::CORRELATION_HEATMAP:
       return "Correlation Heatmap";
     case PanelType::DOM_SURFACE:
@@ -1072,10 +1001,6 @@ std::string PanelManager::serialize_layout() const {
         settings_json["enable_fade_out"] = dom_panel->get_enable_fade_out();
         settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
     }
-    // Option Analytics Panel specific settings
-    else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
-        settings_json["active_tab"] = option_panel->get_active_tab();
-    }
     
     // Add settings if any were captured
     if (!settings_json.empty()) {
@@ -1174,12 +1099,6 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                         dom_panel->set_heatmap_intensity(settings["heatmap_intensity"].get<float>());
                     }
                 }
-                // Option Analytics Panel specific settings
-                else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel)) {
-                    if (settings.contains("active_tab")) {
-                        option_panel->set_active_tab(settings["active_tab"].get<int>());
-                    }
-                }
             }
         }
         
@@ -1256,10 +1175,6 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
         }
         break;
       }
-      case PanelType::OPTION_ANALYTICS: {
-        // OptionAnalyticsPanel doesn't typically require symbol-specific data
-        break;
-      }
       case PanelType::HEATMAP: {
         if (auto* dom = dynamic_cast<DomSurfacePanel*>(panel.get())) {
           dom->setSymbol(symbol_id);
@@ -1300,10 +1215,6 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
       }
       case PanelType::HISTOGRAM: {
         // Histogram panels don't typically require symbol-specific data
-        break;
-      }
-      case PanelType::SCREENER: {
-        // Screener panels don't typically require symbol-specific data
         break;
       }
       case PanelType::PERFORMANCE_MONITOR: {
@@ -1355,9 +1266,6 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       add_panel(PanelType::ORDERBOOK, "Order Book", 2, 0, 1, 2);
       add_panel(PanelType::WATCHLIST, "Watchlist", 0, 2, 1, 1);
       add_panel(PanelType::TIME_AND_SALES, "Time & Sales", 1, 2, 1, 1);
-      add_panel(PanelType::TRADING_ORDERS, "Orders", 2, 2, 1, 1);
-      add_panel(PanelType::TRADING_POSITIONS, "Positions", 0, 3, 1, 1);
-      add_panel(PanelType::RISK_METRICS, "Risk", 1, 3, 1, 1);
       add_panel(PanelType::STATUS_BAR, "Status", 2, 3, 1, 1);
       break;
       
@@ -1379,10 +1287,7 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       
     case LayoutPreset::RISK_MONITORING:
       // Layout focused on risk monitoring
-      add_panel(PanelType::RISK_METRICS, "Risk Metrics", 0, 0, 1, 2);
-      add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 0, 1, 2);
       add_panel(PanelType::CHART, "Chart", 2, 0, 1, 2);
-      add_panel(PanelType::RISK_ANALYZER, "Risk Analyzer", 0, 2, 3, 1);
       add_panel(PanelType::STATUS_BAR, "Status", 0, 3, 3, 1);
       break;
   }

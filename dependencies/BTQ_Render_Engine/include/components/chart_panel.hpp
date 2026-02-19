@@ -597,7 +597,7 @@ class ChartPanel : public PanelBase {
   void execute_market_order(bool is_buy);  // Push to SPSC queue (Phase 4)
 
   // Quick Order Buttons overlay on chart
-  void render_quick_order_buttons(const ChartInstance& chart);
+  void render_quick_order_buttons(const ChartInstance& chart, ImVec2 plot_pos, ImVec2 plot_size);
 
   // 3.5 Bottom Toolbar (Volume Analysis)
   void render_bottom_toolbar();

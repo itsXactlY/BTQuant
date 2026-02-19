@@ -16,19 +16,8 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), bridge_(bridge), processor_(processor) {
-  // Initialize Trading Systems
-  order_manager_ = std::make_shared<OrderManager>();
-  position_manager_ = std::make_shared<PositionManager>();
-  risk_assessment_ = std::make_shared<RiskAssessment>();
-
-  // Set up callbacks for order execution -> position updates
-  order_manager_->set_execution_callback([this](const OrderManager::OrderExecution& execution) {
-    position_manager_->update_position(execution);
-  });
-
   // Initialize the new panel-based system
-  panel_manager_ = std::make_unique<PanelManager>(
-      bridge_, processor_, order_manager_, position_manager_, risk_assessment_);
+  panel_manager_ = std::make_unique<PanelManager>(bridge_, processor_);
   panel_manager_->initialize();
 
   // Load symbols from shared memory for hierarchical selector
@@ -296,28 +285,16 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
         panel_manager_->add_panel(PanelType::HISTORICAL_TIME_SALES);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Screener")) {
-        panel_manager_->add_panel(PanelType::SCREENER);
-      }
+
     }
 
     // Panel management - Trading (reorganized per requirements)
     if (ImGui::CollapsingHeader("Trading")) {
-      if (ImGui::Button("Orders")) {
-        panel_manager_->add_panel(PanelType::TRADING_ORDERS);
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Positions")) {
-        panel_manager_->add_panel(PanelType::TRADING_POSITIONS);
-      }
-      ImGui::SameLine();
       if (ImGui::Button("Alerts")) {
         panel_manager_->add_panel(PanelType::ALERTS);
       }
       
-      if (ImGui::Button("Strategy Builder")) {
-        panel_manager_->add_panel(PanelType::STRATEGY_BUILDER);
-      }
+
     }
 
     // Panel management - Analysis (reorganized per requirements)
@@ -326,17 +303,11 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
         panel_manager_->add_panel(PanelType::METRICS);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Risk Metrics")) {
-        panel_manager_->add_panel(PanelType::RISK_METRICS);
-      }
+
       ImGui::SameLine();
-      if (ImGui::Button("Risk Analyzer")) {
-        panel_manager_->add_panel(PanelType::RISK_ANALYZER);
-      }
+
       
-      if (ImGui::Button("Option Analytics")) {
-        panel_manager_->add_panel(PanelType::OPTION_ANALYTICS);
-      }
+
       ImGui::SameLine();
       if (ImGui::Button("Multi VWAP")) {
         panel_manager_->add_panel(PanelType::MULTI_VWAP);

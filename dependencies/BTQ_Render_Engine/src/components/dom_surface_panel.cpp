@@ -64,6 +64,13 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
     if (type == RenderEngine::NotificationType::TRADE) {
       // For trade updates, we'll update trade bubbles specifically
       updateTradeBubbles();
+      
+      // Phase 4.3: Update live price for auto-centering
+      auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+      if (!analytics.recent_trades.empty()) {
+        // Use the most recent trade price
+        updateLivePrice(analytics.recent_trades.back().price);
+      }
     }
     markDirty();
   }
@@ -77,6 +84,25 @@ void DomSurfacePanel::updateTradeBubbles() {
   
   // Process recent trades to create trade bubbles
   processRecentTrades();
+}
+
+void DomSurfacePanel::updateLivePrice(double price) {
+  // C++26: Thread-safe update of live price using atomic
+  live_price_.store(price, std::memory_order_release);
+  
+  // If auto-centering is enabled, trigger recalculation
+  if (auto_center_enabled_ && price > 0) {
+    // Calculate deviation from current center
+    double deviation = std::abs(price - current_center_price_);
+    double price_range = bounds_max_[1] - bounds_min_[1];
+    double deviation_ratio = price_range > 0 ? deviation / price_range : 0;
+    
+    // If deviation exceeds threshold, interpolate to new center
+    if (deviation_ratio > auto_center_threshold_) {
+      // Smooth interpolation using exponential moving average
+      current_center_price_ = current_center_price_ + auto_center_smoothing_ * (price - current_center_price_);
+    }
+  }
 }
 
 void DomSurfacePanel::processRecentTrades() {

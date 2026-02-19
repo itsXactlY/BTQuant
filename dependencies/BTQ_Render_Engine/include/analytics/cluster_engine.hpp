@@ -227,5 +227,56 @@ class ClusterEngine {
 
   // Active candle cluster for CAS-based volume accumulation
   BTQuant::RenderEngine::CandleCluster active_cluster_;
+  
+  // Phase 5.5: Cumulative Volume Delta (CVD) - atomic global delta tracker
+  // Adds Ask hits (buys), subtracts Bid hits (sells)
+  std::atomic<int64_t> cumulative_volume_delta_{0};
+  
+  // Phase 5.4: Dynamic POC tracking - maintain running maximum without sorting
+  // Uses atomic compare-and-swap to update POC price level
+  std::atomic<double> poc_price_level_{0.0};
+  std::atomic<double> poc_max_volume_{0.0};
+  
+ public:
+  // Phase 5.5: Get/Set cumulative volume delta (thread-safe atomic)
+  int64_t getCumulativeVolumeDelta() const { 
+    return cumulative_volume_delta_.load(std::memory_order_acquire); 
+  }
+  
+  void addBuyVolume(int64_t volume) {
+    cumulative_volume_delta_.fetch_add(volume, std::memory_order_release);
+  }
+  
+  void addSellVolume(int64_t volume) {
+    cumulative_volume_delta_.fetch_sub(volume, std::memory_order_release);
+  }
+  
+  // Phase 5.4: Dynamic POC update using CAS
+  // Returns true if this trade set a new POC
+  bool tryUpdatePOC(double price_level, double volume) {
+    double current_max = poc_max_volume_.load(std::memory_order_acquire);
+    while (volume > current_max) {
+      if (poc_max_volume_.compare_exchange_weak(current_max, volume,
+          std::memory_order_release, std::memory_order_acquire)) {
+        poc_price_level_.store(price_level, std::memory_order_release);
+        return true;
+      }
+      // current_max is updated by CAS on failure
+    }
+    return false;
+  }
+  
+  double getPOCPriceLevel() const { 
+    return poc_price_level_.load(std::memory_order_acquire); 
+  }
+  
+  double getPOCMaxVolume() const { 
+    return poc_max_volume_.load(std::memory_order_acquire); 
+  }
+  
+  void resetPOC() {
+    poc_price_level_.store(0.0, std::memory_order_release);
+    poc_max_volume_.store(0.0, std::memory_order_release);
+  }
 };
 }  // namespace Analytics

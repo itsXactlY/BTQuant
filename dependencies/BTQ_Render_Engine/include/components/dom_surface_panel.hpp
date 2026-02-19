@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <implot.h>
 
+#include <atomic>
 #include <chrono>
 #include <deque>
 #include <memory>
@@ -109,6 +110,20 @@ class DomSurfacePanel : public PanelBase {
   double getPersistenceTimeoutMs() const { return persistence_timeout_ms_; }
   bool getShowPersistentLines() const { return show_persistent_lines_; }
 
+  // Phase 4.3: Auto-Centering Mechanism
+  // If live_price deviates from center_y by more than threshold, smooth interpolate to center
+  void setAutoCenteringEnabled(bool enable) { auto_center_enabled_ = enable; }
+  bool getAutoCenteringEnabled() const { return auto_center_enabled_; }
+  void setAutoCenterThreshold(float threshold) { auto_center_threshold_ = threshold; }
+  float getAutoCenterThreshold() const { return auto_center_threshold_; }
+  void setAutoCenterSmoothing(float smoothing) { auto_center_smoothing_ = smoothing; }
+  float getAutoCenterSmoothing() const { return auto_center_smoothing_; }
+  void setCurrentCenterPrice(double price) { current_center_price_ = price; }
+  double getCurrentCenterPrice() const { return current_center_price_; }
+
+  // Live price update (called from trade updates)
+  void updateLivePrice(double price);
+
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   uint32_t current_symbol_id_ = 0;
@@ -179,6 +194,14 @@ class DomSurfacePanel : public PanelBase {
   uint64_t persistence_threshold_ms_ = 5000;  // 5 seconds persistence threshold
   double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
   bool show_persistent_lines_ = true;         // Toggle for persistent line display
+
+  // Phase 4.3: Auto-Centering Mechanism
+  // Smoothly interpolates the view to keep live price centered
+  bool auto_center_enabled_ = true;           // Enable auto-centering
+  float auto_center_threshold_ = 0.3f;        // Deviation threshold (30% of view)
+  float auto_center_smoothing_ = 0.1f;        // Interpolation factor (0.0-1.0)
+  double current_center_price_ = 0.0;         // Current center price for interpolation
+  std::atomic<double> live_price_{0.0};     // Atomic live price from trades
 
   // Helper to refresh data buffer
   void updateHeatmapData();

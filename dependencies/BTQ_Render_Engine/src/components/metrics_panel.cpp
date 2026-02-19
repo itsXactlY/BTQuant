@@ -11,12 +11,8 @@
 namespace BTQuant {
 
 MetricsPanel::MetricsPanel(const PanelConfig& config,
-                           std::shared_ptr<PositionManager> position_manager,
-                           std::shared_ptr<RiskAssessment> risk_assessment,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config),
-      position_manager_(position_manager),
-      risk_assessment_(risk_assessment),
       processor_(processor) {
   update_metrics();
 }

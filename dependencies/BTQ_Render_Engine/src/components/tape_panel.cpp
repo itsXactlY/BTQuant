@@ -18,6 +18,41 @@
 
 namespace BTQuant {
 
+// ============================================================================
+// DYNAMIC ALPHA FADING IMPLEMENTATION (Phase 3.3)
+// ============================================================================
+
+float TapePanel::calculateTradeAlpha(uint64_t trade_timestamp_us) const {
+  if (!enable_alpha_fading_ || trade_timestamp_us == 0) {
+    return 1.0f;  // Full opacity if disabled or invalid timestamp
+  }
+
+  // Get current time as microseconds
+  auto now = std::chrono::high_resolution_clock::now();
+  uint64_t now_us = std::chrono::time_point_cast<std::chrono::microseconds>(now)
+                        .time_since_epoch()
+                        .count();
+
+  // Calculate trade age in seconds
+  double age_seconds = static_cast<double>(now_us - trade_timestamp_us) / 1'000'000.0;
+
+  // If trade is newer than fade start, full opacity
+  if (age_seconds < alpha_fade_start_seconds_) {
+    return 1.0f;
+  }
+
+  // Calculate fade progress (0.0 = just started fading, 1.0 = fully faded)
+  double fade_progress = (age_seconds - alpha_fade_start_seconds_) / alpha_fade_duration_seconds_;
+
+  // Clamp to [0, 1]
+  fade_progress = std::clamp(fade_progress, 0.0, 1.0);
+
+  // Calculate alpha: starts at 1.0, fades to alpha_fade_min_alpha_
+  float alpha = 1.0f - static_cast<float>(fade_progress) * (1.0f - alpha_fade_min_alpha_);
+
+  return alpha;
+}
+
 TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
@@ -843,17 +878,21 @@ void TapePanel::render_trade_table() {
             // different prices)
             bool is_slippage = isSlippageTrade(original_index, cached_trades_);
 
-            // Set background color for search matches and clustered trades
+            // Set background color for search matches and clustered trades (with alpha fading)
+            float trade_alpha = calculateTradeAlpha(trade.timestamp);
+            
             if (is_search_match) {
               // Highlight search results with light blue background
               const auto& colors = ThemeManager::getInstance().getColors();
+              // Apply alpha fading to search highlight
               ImU32 search_highlight_color = ImGui::GetColorU32(
-                  ImVec4(0.3f, 0.5f, 1.0f, 0.3f));  // Light blue with transparency
+                  ImVec4(0.3f, 0.5f, 1.0f, 0.3f * trade_alpha));  // Light blue with fading
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, search_highlight_color);
             } else if (is_clustered) {
               const auto& colors = ThemeManager::getInstance().getColors();
+              // Apply alpha fading to cluster highlight  
               ImU32 cluster_bg_color = ImGui::GetColorU32(
-                  ImVec4(0.8f, 0.6f, 0.2f, 0.3f));  // Light amber with transparency
+                  ImVec4(0.8f, 0.6f, 0.2f, 0.3f * trade_alpha));  // Light amber with fading
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
             }
 
@@ -888,6 +927,9 @@ void TapePanel::render_trade_table() {
             ImGui::TableSetColumnIndex(1);
             const auto& colors = ThemeManager::getInstance().getColors();
 
+            // C++26: Calculate alpha based on trade age for dynamic fading
+            float price_alpha = calculateTradeAlpha(trade.timestamp);
+
             // Determine color based on trade size and direction
             ImVec4 price_color = colors.text;  // Default color
             bool is_block_trade_price =
@@ -895,13 +937,15 @@ void TapePanel::render_trade_table() {
 
             if (is_block_trade_price) {
               // Block trades (>avg*10) in orange
-              price_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+              price_color = ImVec4(1.0f, 0.5f, 0.0f, price_alpha);  // Orange
             } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
               // Large trades (>avg*5) in yellow
-              price_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+              price_color = ImVec4(1.0f, 1.0f, 0.0f, price_alpha);  // Yellow
             } else {
-              // Regular trades: buy in green, sell in red
-              price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
+              // Regular trades: buy in green, sell in red (with dynamic alpha)
+              price_color = trade.is_buy 
+                  ? ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, price_alpha)
+                  : ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, price_alpha);
             }
 
             // Apply bold font for block trades if available
@@ -919,17 +963,17 @@ void TapePanel::render_trade_table() {
 
             // Size column
             ImGui::TableSetColumnIndex(2);
-            // Color size based on trade size thresholds
-            ImVec4 size_color = colors.text;  // Default color
+            // Color size based on trade size thresholds (with dynamic alpha)
+            ImVec4 size_color = ImVec4(colors.text.x, colors.text.y, colors.text.z, trade_alpha);  // Default color
             bool is_block_trade_size =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
             if (is_block_trade_size) {
-              // Block trades in orange
-              size_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+              // Block trades in orange (with alpha fading)
+              size_color = ImVec4(1.0f, 0.5f, 0.0f, trade_alpha);  // Orange
             } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
-              // Large trades in yellow
-              size_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+              // Large trades in yellow (with alpha fading)
+              size_color = ImVec4(1.0f, 1.0f, 0.0f, trade_alpha);  // Yellow
             }
 
             // Apply bold font for block trades if available
@@ -945,15 +989,17 @@ void TapePanel::render_trade_table() {
               ImGui::PopFont();
             }
 
-            // Side column
+            // Side column (with dynamic alpha fading)
             ImGui::TableSetColumnIndex(3);
-            ImVec4 side_color = colors.text;  // Default color
+            // Use the same alpha calculation for side column text
+            float side_alpha = calculateTradeAlpha(trade.timestamp);
+            ImVec4 side_color = ImVec4(colors.text.x, colors.text.y, colors.text.z, side_alpha);  // Default color
             bool is_block_trade_side =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
             if (is_block_trade_side) {
               // Block trades in orange
-              side_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+              side_color = ImVec4(1.0f, 0.5f, 0.0f, side_alpha);  // Orange
             } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
               // Large trades in yellow
               side_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow

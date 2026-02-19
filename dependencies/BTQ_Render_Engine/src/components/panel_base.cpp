@@ -117,20 +117,12 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Scatter";
     case PanelType::TIME_SERIES:
       return "Time Series";
-    case PanelType::TRADING_ORDERS:
-      return "Orders";
-    case PanelType::TRADING_POSITIONS:
-      return "Positions";
-    case PanelType::RISK_METRICS:
-      return "Risk";
     case PanelType::ALERTS:
       return "Alerts";
     case PanelType::ORDERBOOK:
       return "Orderbook";
     case PanelType::WATCHLIST:
       return "Watchlist";
-    case PanelType::SCREENER:
-      return "Screener";
     case PanelType::TAPE:
       return "Tape";
     case PanelType::VOLUME_PROFILE:
@@ -157,12 +149,6 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Historical T&S";
     case PanelType::CHART_REPLAY:
       return "Chart Replay";
-    case PanelType::RISK_ANALYZER:
-      return "Risk Analyzer";
-    case PanelType::STRATEGY_BUILDER:
-      return "Strategy Builder";
-    case PanelType::OPTION_ANALYTICS:
-      return "Option Analytics";
     case PanelType::CORRELATION_HEATMAP:
       return "Correlation Heatmap";
     case PanelType::DOM_SURFACE:

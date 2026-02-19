@@ -40,9 +40,6 @@
 #include "components/theme_manager.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
-#include "trading/order_manager.hpp"
-#include "trading/position_manager.hpp"
-#include "trading/risk_assessment.hpp"
 #include "ui/ui_base.hpp"
 #include "vulkan_base_types.hpp"
 

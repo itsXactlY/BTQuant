@@ -6,9 +6,6 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../symbol_registry.hpp"
-#include "../trading/order_manager.hpp"
-#include "../trading/position_manager.hpp"
-#include "../trading/risk_assessment.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
 #include "hierarchical_selector.hpp"
 #include "imgui.h"
@@ -41,11 +38,6 @@ class QuantWorkspaceComponent : public UIComponent {
   // Core systems
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
-
-  // Trading Systems
-  std::shared_ptr<OrderManager> order_manager_;
-  std::shared_ptr<PositionManager> position_manager_;
-  std::shared_ptr<RiskAssessment> risk_assessment_;
 
   // New panel-based UI system
   std::unique_ptr<PanelManager> panel_manager_;

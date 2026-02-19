@@ -12,7 +12,6 @@
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/interaction_manager.hpp"
 #include "../../include/components/historical_time_sales.hpp"
-#include "../../include/trading/trade_command_queue.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include "implot_internal.h"
@@ -3024,11 +3023,18 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx);
     }
 
+    // Store plot position and size before EndPlot for use by quick order buttons
+    ImVec2 stored_plot_pos = ImPlot::GetPlotPos();
+    ImVec2 stored_plot_size = ImPlot::GetPlotSize();
+    
     ImPlot::EndPlot();
+    
+    // Render massive BUY MKT and SELL MKT buttons overlay on chart
+    render_quick_order_buttons(chart, stored_plot_pos, stored_plot_size);
+  } else {
+    // BeginPlot failed, don't render quick order buttons
+    return;
   }
-
-  // Render massive BUY MKT and SELL MKT buttons overlay on chart
-  render_quick_order_buttons(chart);
 
   // ImPlot::PopStyleVar();
   // ImPlot::PopStyleColor(3);
@@ -4644,15 +4650,11 @@ void ChartPanel::update_cached_quotes() {
 }
 
 // Render massive BUY MKT and SELL MKT buttons overlay on chart
-void ChartPanel::render_quick_order_buttons(const ChartInstance& chart) {
+void ChartPanel::render_quick_order_buttons(const ChartInstance& chart, ImVec2 plot_pos, ImVec2 plot_size) {
   if (chart.closes.empty()) return;
 
   // Update cached quotes from atomic snapshot for live mid-price
   update_cached_quotes();
-
-  // Get plot position and size for button placement
-  ImVec2 plot_pos = ImPlot::GetPlotPos();
-  ImVec2 plot_size = ImPlot::GetPlotSize();
 
   if (plot_size.x <= 0 || plot_size.y <= 0) return;
 
@@ -4759,40 +4761,10 @@ void ChartPanel::render_quick_order_buttons(const ChartInstance& chart) {
 }
 
 void ChartPanel::execute_market_order(bool is_buy) {
-  // Phase 4.2: Push to SPSC queue for async execution
-  // The UI thread never waits for the HTTP/WebSocket response
-  
-  // Get symbol ID
-  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
-  uint32_t sym_id = symbol_id_opt.value_or(0);
-  
-  // Create the trade command
-  RenderEngine::TradeCommand cmd(
-    sym_id,
-    symbol_,
-    exchange_,
-    is_buy ? RenderEngine::OrderSide::BUY : RenderEngine::OrderSide::SELL,
-    RenderEngine::OrderType::MARKET,
-    order_quantity_,
-    static_cast<RenderEngine::TimeInForce>(selected_tif_)
-  );
-  
-  // Set additional fields
-  cmd.price = is_buy ? cached_best_ask_ : cached_best_bid_;
-  
-  // Push to the global SPSC queue (non-blocking)
-  bool pushed = RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
-  
-  if (pushed) {
-    std::cout << "[ChartPanel] Market Order QUEUED: "
-              << (is_buy ? "BUY" : "SELL") << " "
-              << order_quantity_ << " " << symbol_
-              << " @ " << (is_buy ? cached_best_ask_ : cached_best_bid_)
-              << " TIF: " << static_cast<int>(selected_tif_)
-              << std::endl;
-  } else {
-    std::cerr << "[ChartPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
-  }
+  // Trading functionality removed - retail trading bloat purged
+  (void)is_buy;
+  // This is a stub - actual trading execution has been removed
+  // The chart panel now focuses on visualization only
 }
 
 // 3.5 Bottom Toolbar (Volume Analysis) - called within BottomBar child

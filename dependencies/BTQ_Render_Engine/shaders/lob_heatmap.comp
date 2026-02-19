@@ -93,34 +93,61 @@ vec3 liquidityToColor(float liquidity) {
 // Main Compute Shader Entry
 // ========================================
 
-// Shared memory for intermediate calculations
-shared float sharedLiquidity[16];
+// Shared memory for intermediate calculations (16x16 = 256 threads)
+shared float sharedLiquidity[256];
+shared float sharedPrices[256];
+shared uint sharedVolumes[256];
 
-layout(local_size_x = 1, local_size_y = 64) in;
+// MMT Genesis: 16x16 workgroup for optimal GPU occupancy
+// 256 threads per workgroup = optimal for most GPUs
+layout(local_size_x = 16, local_size_y = 16) in;
 
 void main() {
-    uint yIndex = gl_GlobalInvocationID.y;
+    // MMT Genesis: 16x16 workgroup processes 16x16 pixel tiles
+    // Each thread handles one pixel in the heatmap
+    
+    uint xIndex = gl_GlobalInvocationID.x;  // Time axis
+    uint yIndex = gl_GlobalInvocationID.y;  // Price axis
     
     // Check if thread is within heatmap bounds
-    if (yIndex >= params.height) {
+    if (xIndex >= params.width || yIndex >= params.height) {
         return;
     }
     
     // Current time column to update (cyclic buffer)
+    // For real-time updates, only write to the current time column
+    // For full heatmap rendering, write to all columns
     uint currentCol = orderBook.currentTimeIndex % params.width;
-    ivec2 targetCoords = ivec2(currentCol, yIndex);
+    
+    // Only update the current time column for real-time updates
+    // Comment out the next line for full heatmap rendering
+    if (xIndex != currentCol) return;
+    
+    ivec2 targetCoords = ivec2(xIndex, yIndex);
     
     // Find matching price level using Binary Search (Assumes levels are sorted by price)
     float targetPrice = orderBook.basePrice + (float(yIndex) / float(params.height)) * orderBook.priceRange;
     
+    // Use shared memory for cooperative search within workgroup
+    uint localIdx = gl_LocalInvocationID.y * 16 + gl_LocalInvocationID.x;
+    
+    // Load price level data into shared memory for cooperative processing
+    // Each thread loads one price level if within bounds
+    if (localIdx < orderBook.priceLevelsCount) {
+        sharedPrices[localIdx] = orderBook.levels[localIdx].price;
+        sharedVolumes[localIdx] = orderBook.levels[localIdx].askQuantity + orderBook.levels[localIdx].bidQuantity;
+    }
+    barrier();
+    
+    // Binary search in shared memory (faster for repeated accesses)
     int low = 0;
-    int high = int(orderBook.priceLevelsCount) - 1;
+    int high = int(min(orderBook.priceLevelsCount, 256u)) - 1;
     int closestIdx = -1;
     float minDistance = 1e9;
     
     while (low <= high) {
         int mid = (low + high) / 2;
-        float levelPrice = orderBook.levels[mid].price;
+        float levelPrice = sharedPrices[mid];
         float dist = abs(levelPrice - targetPrice);
         
         if (dist < minDistance) {
@@ -140,7 +167,7 @@ void main() {
     float totalLiquidity = 0.0;
     // Only show liquidity if the match is within the pixel's price bin
     if (closestIdx != -1 && minDistance < (orderBook.priceRange / float(params.height))) {
-        totalLiquidity = float(orderBook.levels[closestIdx].askQuantity + orderBook.levels[closestIdx].bidQuantity);
+        totalLiquidity = float(sharedVolumes[closestIdx]);
     }
     
     // Compute pixel color

@@ -5,8 +5,6 @@
 #include <vector>
 
 #include "../market_data_processor.hpp"
-#include "../trading/position_manager.hpp"
-#include "../trading/risk_assessment.hpp"
 #include "panel_base.hpp"
 
 namespace BTQuant {
@@ -22,16 +20,13 @@ struct Metric {
 
 class MetricsPanel : public PanelBase {
  public:
-  MetricsPanel(const PanelConfig& config, std::shared_ptr<PositionManager> position_manager,
-               std::shared_ptr<RiskAssessment> risk_assessment,
+  MetricsPanel(const PanelConfig& config,
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt) override;
   void render_content() override;
 
  private:
-  std::shared_ptr<PositionManager> position_manager_;
-  std::shared_ptr<RiskAssessment> risk_assessment_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   std::vector<Metric> metrics_;

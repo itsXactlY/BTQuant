@@ -39,7 +39,6 @@ class HistogramPanel;
 class TimeSeriesPanel;
 class TimeStatisticsPanel;
 class TimeHistogramPanel;
-class ScreenerPanel;
 class LogPanel;
 class ChartReplayPanel;
 class HistoricalTimeSalesPanel;

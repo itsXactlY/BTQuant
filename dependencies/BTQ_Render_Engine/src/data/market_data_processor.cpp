@@ -72,6 +72,10 @@ void MarketDataProcessor::processOrderbookUpdate(const MarketDataUpdate& update)
 SymbolAnalytics MarketDataProcessor::getSymbolAnalytics(uint32_t symbol_id) const {
   auto& shard = getShard(symbol_id);
 
+  // FIX: Use shared_lock for thread-safe read access (prevents race condition
+  // with processUpdate() which holds unique_lock for writing)
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
+
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
     return it->second;
@@ -163,6 +167,9 @@ std::vector<OHLCVCandle> MarketDataProcessor::getCandles(uint32_t symbol_id,
                                                          TimeFrame timeframe) const {
   auto& shard = getShard(symbol_id);
 
+  // FIX: Use shared_lock for thread-safe read access
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
+
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
     auto tf_it = it->second.candles.find(timeframe);
@@ -191,6 +198,9 @@ std::optional<OHLCVCandle> MarketDataProcessor::getCurrentCandle(uint32_t symbol
 
 std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
   auto& shard = getShard(symbol_id);
+
+  // FIX: Use shared_lock for thread-safe read access
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end() && !it->second.recent_orderbooks.empty()) {
@@ -310,6 +320,9 @@ std::vector<VolumeProfileLevel> MarketDataProcessor::getVolumeProfile(uint32_t s
   }
 
   auto& shard = getShard(symbol_id);
+
+  // FIX: Use shared_lock for thread-safe read access
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
 
   auto it = shard.data.find(symbol_id);
   if (it != shard.data.end()) {
@@ -708,7 +721,11 @@ void MarketDataProcessor::updateCandleForTimeframe(SymbolAnalytics& symbol_data,
   if (current_candle.timestamp == 0 || candle_start != current_candle.timestamp) {
     // Save previous candle if it exists
     if (current_candle.timestamp != 0) {
-      // Keep FULL candle history (no limit)
+      // Limit candle history to prevent memory growth (max 1000 candles per timeframe)
+      constexpr size_t MAX_CANDLES = 1000;
+      if (candles.size() >= MAX_CANDLES) {
+        candles.erase(candles.begin());
+      }
       candles.push_back(current_candle);
     }
 

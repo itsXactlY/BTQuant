@@ -9,12 +9,8 @@
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
-#include "../trading/order_manager.hpp"
-#include "../trading/position_manager.hpp"
-#include "../trading/risk_assessment.hpp"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
-#include "strategy_builder.hpp"
 #include "../ui/context_menus.hpp"
 
 // Forward declaration for AlertsPanel
@@ -45,10 +41,7 @@ class PanelManager {
   using PanelRemovedCallback = std::function<void(uint32_t panel_id)>;
 
   PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-               std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-               std::shared_ptr<OrderManager> order_manager,
-               std::shared_ptr<PositionManager> position_manager,
-               std::shared_ptr<RiskAssessment> risk_assessment);
+               std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~PanelManager();
 
@@ -116,13 +109,9 @@ class PanelManager {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
-  std::shared_ptr<OrderManager> order_manager_;
-  std::shared_ptr<PositionManager> position_manager_;
-  std::shared_ptr<RiskAssessment> risk_assessment_;
 
   std::unique_ptr<ChartManager> chart_manager_;
   std::unique_ptr<ContextMenuManager> context_menu_manager_;
-  std::unique_ptr<RenderEngine::StrategyBuilder> strategy_builder_;
   GridLayout grid_layout_;
   std::unordered_map<uint32_t, std::unique_ptr<PanelBase>> panels_;
   uint32_t next_panel_id_ = 1;

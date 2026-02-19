@@ -22,18 +22,13 @@
 #include "components/log_panel.hpp"
 #include "components/metrics_panel.hpp"
 #include "components/performance_monitor_panel.hpp"
-#include "components/risk_metrics_panel.hpp"
 #include "components/scatter_plot_panel.hpp"
-#include "components/screener_panel.hpp"
 #include "components/time_and_sales.hpp"
 #include "components/time_histogram_panel.hpp"
 #include "components/time_series_panel.hpp"
 #include "components/time_statistics_panel.hpp"
 #include "components/tpo_panel.hpp"
-#include "components/trading_orders_panel.hpp"
-#include "components/trading_positions_panel.hpp"
 #include "components/volume_profile_panel.hpp"
-#include "components/risk_analyzer_panel.hpp"
 #include "components/historical_time_sales.hpp"
 #include "components/tape_panel.hpp"
 #include "components/status_bar_panel.hpp"
@@ -93,18 +88,6 @@ void ContextMenuManager::initialize_context_menus() {
     render_generic_context_menu(panel, "PerformanceMonitorContextMenu");
   };
 
-  context_menu_handlers_[PanelType::TRADING_ORDERS] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "TradingOrdersContextMenu");
-  };
-
-  context_menu_handlers_[PanelType::TRADING_POSITIONS] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "TradingPositionsContextMenu");
-  };
-
-  context_menu_handlers_[PanelType::RISK_METRICS] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "RiskMetricsContextMenu");
-  };
-
   context_menu_handlers_[PanelType::METRICS] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "MetricsContextMenu");
   };
@@ -129,20 +112,12 @@ void ContextMenuManager::initialize_context_menus() {
     render_generic_context_menu(panel, "TimeHistogramContextMenu");
   };
 
-  context_menu_handlers_[PanelType::SCREENER] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "ScreenerContextMenu");
-  };
-
   context_menu_handlers_[PanelType::LOG_PANEL] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "LogPanelContextMenu");
   };
 
   context_menu_handlers_[PanelType::CHART_REPLAY] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "ChartReplayContextMenu");
-  };
-
-  context_menu_handlers_[PanelType::RISK_ANALYZER] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "RiskAnalyzerContextMenu");
   };
 
   context_menu_handlers_[PanelType::HISTORICAL_TIME_SALES] = [this](PanelBase* panel) {
@@ -155,10 +130,6 @@ void ContextMenuManager::initialize_context_menus() {
 
   context_menu_handlers_[PanelType::STATUS_BAR] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "StatusBarContextMenu");
-  };
-
-  context_menu_handlers_[PanelType::STRATEGY_BUILDER] = [this](PanelBase* panel) {
-    render_generic_context_menu(panel, "StrategyBuilderContextMenu");
   };
 }
 
@@ -759,104 +730,8 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
         break;
 
-      case PanelType::TRADING_ORDERS:
-        ImGui::Text("Trading Orders Actions:");
-        ImGui::Separator();
-        if (dynamic_cast<TradingOrdersPanel*>(panel)) {
-          if (ImGui::MenuItem("Place New Order")) {
-            // Call specific trading orders panel method
-          }
-          if (ImGui::MenuItem("Cancel Selected")) {
-            // Call specific trading orders panel method
-          }
-          if (ImGui::MenuItem("Cancel All")) {
-            // Call specific trading orders panel method
-          }
-          if (ImGui::MenuItem("Modify Selected")) {
-            // Call specific trading orders panel method
-          }
-          if (ImGui::MenuItem("Export Orders")) {
-            // Call specific trading orders panel method
-          }
-        } else {
-          // Fallback for when cast fails - still allow generic actions
-          if (ImGui::MenuItem("Place New Order")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Cancel Selected")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Cancel All")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Modify Selected")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Export Orders")) {
-            // Generic action
-          }
-        }
-        break;
 
-      case PanelType::TRADING_POSITIONS:
-        ImGui::Text("Trading Positions Actions:");
-        ImGui::Separator();
-        if (dynamic_cast<TradingPositionsPanel*>(panel)) {
-          if (ImGui::MenuItem("Close Selected Position")) {
-            // Call specific trading positions panel method
-          }
-          if (ImGui::MenuItem("Close All Positions")) {
-            // Call specific trading positions panel method
-          }
-          if (ImGui::MenuItem("Reverse Position")) {
-            // Call specific trading positions panel method
-          }
-          if (ImGui::MenuItem("Calculate PnL")) {
-            // Call specific trading positions panel method
-          }
-        } else {
-          // Fallback for when cast fails - still allow generic actions
-          if (ImGui::MenuItem("Close Selected Position")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Close All Positions")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Reverse Position")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Calculate PnL")) {
-            // Generic action
-          }
-        }
-        break;
 
-      case PanelType::RISK_METRICS:
-        ImGui::Text("Risk Metrics Actions:");
-        ImGui::Separator();
-        if (dynamic_cast<RiskMetricsPanel*>(panel)) {
-          if (ImGui::MenuItem("Refresh Metrics")) {
-            // Call specific risk metrics panel method
-          }
-          if (ImGui::MenuItem("Export Metrics")) {
-            // Call specific risk metrics panel method
-          }
-          if (ImGui::MenuItem("Take Screenshot")) {
-            // Call specific risk metrics panel method
-          }
-        } else {
-          // Fallback for when cast fails - still allow generic actions
-          if (ImGui::MenuItem("Refresh Metrics")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Export Metrics")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Take Screenshot")) {
-            // Generic action
-          }
-        }
-        break;
 
       case PanelType::METRICS:
         ImGui::Text("Metrics Actions:");
@@ -1104,50 +979,6 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
         break;
 
-      case PanelType::SCREENER:
-        ImGui::Text("Screener Actions:");
-        ImGui::Separator();
-        if (dynamic_cast<ScreenerPanel*>(panel)) {
-          if (ImGui::MenuItem("Add Filter")) {
-            // Call specific screener panel method
-          }
-          if (ImGui::MenuItem("Edit Filters")) {
-            // Call specific screener panel method
-          }
-          if (ImGui::MenuItem("Clear Filters")) {
-            // Call specific screener panel method
-          }
-          if (ImGui::MenuItem("Sort by Column")) {
-            // Call specific screener panel method
-          }
-          if (ImGui::MenuItem("Export Results")) {
-            // Call specific screener panel method
-          }
-          if (ImGui::MenuItem("Refresh Data")) {
-            // Call specific screener panel method
-          }
-        } else {
-          // Fallback for when cast fails - still allow generic actions
-          if (ImGui::MenuItem("Add Filter")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Edit Filters")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Clear Filters")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Sort by Column")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Export Results")) {
-            // Generic action
-          }
-          if (ImGui::MenuItem("Refresh Data")) {
-            // Generic action
-          }
-        }
-        break;
 
       case PanelType::LOG_PANEL:
         ImGui::Text("Log Panel Actions:");
@@ -1350,25 +1181,6 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
         break;
 
-      case PanelType::STRATEGY_BUILDER:
-        ImGui::Text("Strategy Builder Actions:");
-        ImGui::Separator();
-        if (ImGui::MenuItem("New Strategy")) {
-          // Generic action for strategy builder
-        }
-        if (ImGui::MenuItem("Load Strategy")) {
-          // Generic action for strategy builder
-        }
-        if (ImGui::MenuItem("Save Strategy")) {
-          // Generic action for strategy builder
-        }
-        if (ImGui::MenuItem("Run Backtest")) {
-          // Generic action for strategy builder
-        }
-        if (ImGui::MenuItem("Export Strategy")) {
-          // Generic action for strategy builder
-        }
-        break;
 
       default:
         ImGui::Text("Generic Actions:");

@@ -471,69 +471,75 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
     return;
   }
 
-  // Check if this symbol is in our watchlist
-  // Use a local copy to minimize lock time
-  double new_price = 0.0;
-  double new_vwap = 0.0;
-  uint64_t new_update_ts = 0;
+  // FIX: Check if symbol is in watchlist FIRST (quick check under lock)
+  // Then release lock before calling processor_ methods to avoid deadlock
+  // with processUpdate() which holds shard.mutex and calls this callback
+  std::string symbol_name;
+  bool symbol_in_watchlist = false;
+  {
+    std::lock_guard<std::mutex> lock(watchlist_mutex_);
+    auto it = watchlist_.find(symbol_id);
+    if (it != watchlist_.end()) {
+      symbol_in_watchlist = true;
+      symbol_name = it->second.symbol;
+    }
+  }
+  
+  if (!symbol_in_watchlist) {
+    return;
+  }
+
+  // FIX: Now call processor_ methods WITHOUT holding watchlist_mutex_
+  // This prevents deadlock with UI thread that holds watchlist_mutex_ 
+  // and tries to acquire shard.mutex via getSymbolAnalytics()
+  auto analytics = processor_->getSymbolAnalytics(symbol_id);
+  if (analytics.symbol_id == 0) {
+    return;
+  }
+
+  // Get candles for 24h change calculation
+  auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+
+  // Calculate values outside of lock
+  double new_price = analytics.last_trade_price;
+  double new_vwap = analytics.vwap;
+  uint64_t new_update_ts = analytics.last_trade_time;
   double new_change_pct = 0.0;
   double new_change_dollar = 0.0;
   double new_open_24h = 0.0;
   double new_high_24h = 0.0;
   double new_low_24h = 0.0;
   double new_volume_24h = 0.0;
-  std::string symbol_name;
 
+  if (!candles.empty()) {
+    const auto& oldest_candle = candles.front();
+    const auto& newest_candle = candles.back();
+    new_change_pct = calculate_24h_change(newest_candle, oldest_candle);
+    new_change_dollar = newest_candle.close - oldest_candle.close;
+    new_open_24h = oldest_candle.open;
+    new_high_24h = oldest_candle.high;
+    new_low_24h = oldest_candle.low;
+    for (const auto& c : candles) new_volume_24h += c.volume;
+  } else {
+    new_volume_24h = analytics.volume_1m;
+  }
+
+  // Now update watchlist entry under lock
   {
     std::lock_guard<std::mutex> lock(watchlist_mutex_);
     auto it = watchlist_.find(symbol_id);
     if (it == watchlist_.end()) {
-      return;
+      return;  // Symbol was removed while we were processing
     }
-    symbol_name = it->second.symbol;
-
-    // Get the latest analytics data for this symbol
-    auto analytics = processor_->getSymbolAnalytics(symbol_id);
-    if (analytics.symbol_id != 0) {
-      // Update the entry with new data from real-time price feed
-      it->second.price = analytics.last_trade_price;
-      it->second.vwap = analytics.vwap;
-      it->second.last_update_ts = analytics.last_trade_time;
-
-      // Calculate 24h change using the longest available timeframe candles
-      auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-      if (!candles.empty()) {
-        const auto& oldest_candle = candles.front();
-        const auto& newest_candle = candles.back();
-
-        // Calculate percentage change
-        it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-        // Calculate dollar change
-        it->second.change_dollar = newest_candle.close - oldest_candle.close;
-
-        // Store open, high, low values from the oldest candle (representing 24h period)
-        it->second.open_24h = oldest_candle.open;
-        it->second.high_24h = oldest_candle.high;
-        it->second.low_24h = oldest_candle.low;
-
-        // Estimate 24h volume by summing available candles (best effort)
-        double total_vol = 0.0;
-        for (const auto& c : candles) total_vol += c.volume;
-        it->second.volume_24h = total_vol;
-      } else {
-        it->second.change_pct = 0.0;
-        it->second.change_dollar = 0.0;
-        it->second.open_24h = 0.0;
-        it->second.high_24h = 0.0;
-        it->second.low_24h = 0.0;
-        it->second.volume_24h = analytics.volume_1m;  // Fallback
-      }
-
-      // Cache values for logging
-      new_price = it->second.price;
-      new_update_ts = it->second.last_update_ts;
-    }
+    it->second.price = new_price;
+    it->second.vwap = new_vwap;
+    it->second.last_update_ts = new_update_ts;
+    it->second.change_pct = new_change_pct;
+    it->second.change_dollar = new_change_dollar;
+    it->second.open_24h = new_open_24h;
+    it->second.high_24h = new_high_24h;
+    it->second.low_24h = new_low_24h;
+    it->second.volume_24h = new_volume_24h;
   }
 
   // Log outside of lock to minimize contention

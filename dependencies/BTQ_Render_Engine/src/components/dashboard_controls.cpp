@@ -664,19 +664,6 @@ void DashboardControls::render_dashboard_controls() {
       BTQuant::UI::show_control_tooltip("add_news_panel");
       ImGui::NextColumn();
 
-      if (ImGui::Button("Add Risk Analyzer", ImVec2(-1, 30))) {
-        if (panel_manager_) {
-          panel_manager_->add_panel(PanelType::RISK_ANALYZER);
-        }
-      }
-      // Add tooltip for Risk Analyzer
-      if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::Text("Add a Risk Analyzer panel to visualize P/L vs Underlying Price");
-        ImGui::EndTooltip();
-      }
-      ImGui::NextColumn();
-
       ImGui::Columns(1);  // Reset to single column
 
       ImGui::Spacing();

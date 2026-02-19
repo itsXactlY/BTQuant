@@ -34,6 +34,19 @@ class TapePanel : public PanelBase {
   void render_content() override;
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
+  // Dynamic alpha fading configuration (Phase 3.3)
+  void setEnableAlphaFading(bool enable) { enable_alpha_fading_ = enable; }
+  bool getEnableAlphaFading() const { return enable_alpha_fading_; }
+  void setAlphaFadeStart(float seconds) { alpha_fade_start_seconds_ = seconds; }
+  float getAlphaFadeStart() const { return alpha_fade_start_seconds_; }
+  void setAlphaFadeDuration(float seconds) { alpha_fade_duration_seconds_ = seconds; }
+  float getAlphaFadeDuration() const { return alpha_fade_duration_seconds_; }
+  void setAlphaFadeMinAlpha(float alpha) { alpha_fade_min_alpha_ = alpha; }
+  float getAlphaFadeMinAlpha() const { return alpha_fade_min_alpha_; }
+
+  // Calculate alpha based on trade age
+  float calculateTradeAlpha(uint64_t trade_timestamp_us) const;
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -82,6 +95,13 @@ class TapePanel : public PanelBase {
 
   // Cached trades for rendering
   std::vector<RenderEngine::TradeData> cached_trades_;
+
+  // Dynamic alpha fading configuration (Phase 3.3: Fade-to-grey with age)
+  bool enable_alpha_fading_ = true;                    // Enable/disable dynamic alpha
+  float alpha_fade_start_seconds_ = 5.0f;              // Start fading after N seconds
+  float alpha_fade_duration_seconds_ = 30.0f;           // Fade duration
+  float alpha_fade_min_alpha_ = 0.15f;                  // Minimum alpha value for old trades
+  uint64_t fade_timestamp_reference_ = 0;               // Reference timestamp for age calculation
 
   // Trade clustering detection parameters
   static constexpr uint64_t DEFAULT_CLUSTER_TIME_WINDOW_US = 1000000;  // 1 second in microseconds

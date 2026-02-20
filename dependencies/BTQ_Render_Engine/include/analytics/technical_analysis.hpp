@@ -6,14 +6,9 @@
 #include <vector>
 
 #include "vulkan_base_types.hpp"
+#include "data/core_types.hpp"
 
 namespace BTQuant {
-
-// Forward declaration
-namespace RenderEngine {
-struct TradeData;
-struct OrderbookData;
-}  // namespace RenderEngine
 
 // ============================================================================
 // Technical Indicators
@@ -90,7 +85,7 @@ class VolumeProfileAnalyzer {
 
   VolumeProfileAnalyzer(double tick_size = 0.01);
   VolumeProfile calculate_volume_profile(const std::vector<TechnicalIndicators::OHLCV>& candles,
-                                         const std::vector<RenderEngine::TradeData>& trades);
+                                         const std::vector<BTQuant::TradeData>& trades);
   std::vector<VolumeImbalance> detect_volume_imbalances(const VolumeProfile& profile,
                                                         double threshold = 2.0);
 
@@ -140,7 +135,7 @@ class MarketDepthAnalyzer {
   };
 
   MarketDepthAnalyzer() = default;
-  MarketDepthSnapshot create_depth_snapshot(const RenderEngine::OrderbookData& orderbook);
+  MarketDepthSnapshot create_depth_snapshot(const BTQuant::OrderBookSnapshot& orderbook);
   DepthAnalysis analyze_market_depth(const MarketDepthSnapshot& snapshot);
   std::vector<LiquidityGap> detect_liquidity_gaps(const MarketDepthSnapshot& snapshot,
                                                   double min_gap_size = 0.01);

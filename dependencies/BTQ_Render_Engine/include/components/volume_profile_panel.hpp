@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
+
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "theme_manager.hpp"
@@ -39,7 +39,7 @@ struct ProfileSettings {
  */
 class VolumeProfilePanel : public PanelBase {
  public:
-  VolumeProfilePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  VolumeProfilePanel(const PanelConfig& config, 
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~VolumeProfilePanel() override;
@@ -89,7 +89,7 @@ class VolumeProfilePanel : public PanelBase {
                                            const std::vector<double>& x_coords,
                                            const std::vector<double>& y_coords_high,
                                            const std::vector<double>& y_coords_low,
-                                           const std::vector<RenderEngine::TradeData>& trades,
+                                           const std::vector<TradeData>& trades,
                                            bool show_poc_line = true,
                                            int num_buckets = 8);
 
@@ -99,7 +99,7 @@ class VolumeProfilePanel : public PanelBase {
                                                   const std::vector<double>& x_coords,
                                                   const std::vector<double>& y_coords_high,
                                                   const std::vector<double>& y_coords_low,
-                                                  const std::vector<RenderEngine::TradeData>& trades,
+                                                  const std::vector<TradeData>& trades,
                                                   bool show_poc_line = true,
                                                   int num_buckets_per_candle = 8);
 
@@ -109,7 +109,7 @@ class VolumeProfilePanel : public PanelBase {
                                                     const std::vector<double>& x_coords,
                                                     const std::vector<double>& y_coords_high,
                                                     const std::vector<double>& y_coords_low,
-                                                    const std::vector<RenderEngine::TradeData>& trades,
+                                                    const std::vector<TradeData>& trades,
                                                     bool show_poc_line = true,
                                                     int num_buckets_per_candle = 8,
                                                     float opacity_factor = 1.0f);
@@ -176,7 +176,7 @@ class VolumeProfilePanel : public PanelBase {
   double getTimeRangeAvailable();
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+  
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;

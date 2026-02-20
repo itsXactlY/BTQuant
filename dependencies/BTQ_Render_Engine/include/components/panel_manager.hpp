@@ -7,26 +7,19 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
+#include "../ui/context_menus.hpp"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
-#include "../ui/context_menus.hpp"
 
 // Forward declaration for AlertsPanel
 namespace BTQuant {
-    class AlertsPanel;
+class AlertsPanel;
 }
 
 namespace BTQuant {
 
-enum class LayoutPreset {
-  DEFAULT,
-  MODERN_TRADING,
-  DASHBOARD_ONLY,
-  CHART_FOCUS,
-  RISK_MONITORING
-};
+enum class LayoutPreset { DEFAULT, MODERN_TRADING, DASHBOARD_ONLY, CHART_FOCUS, RISK_MONITORING };
 
 struct GridLayout {
   int columns = 3;
@@ -40,8 +33,7 @@ class PanelManager {
   using PanelAddedCallback = std::function<void(uint32_t panel_id, PanelType type)>;
   using PanelRemovedCallback = std::function<void(uint32_t panel_id)>;
 
-  PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-               std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~PanelManager();
 
@@ -78,6 +70,9 @@ class PanelManager {
   void register_panel_added_callback(PanelAddedCallback callback);
   void register_panel_removed_callback(PanelRemovedCallback callback);
 
+  void set_vulkan_core(class VulkanCore* core);
+  class VulkanCore* get_vulkan_core() const { return vulkan_core_; }
+
   // Accessors
   ChartManager* get_chart_manager() const { return chart_manager_.get(); }
 
@@ -93,7 +88,6 @@ class PanelManager {
   // Get panel by ID
   PanelBase* get_panel_by_id(uint32_t panel_id) const;
 
-
   // Serialization
   std::string serialize_layout() const;
   void deserialize_layout(const std::string& layout_json);
@@ -107,7 +101,6 @@ class PanelManager {
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   std::unique_ptr<ChartManager> chart_manager_;
@@ -121,6 +114,8 @@ class PanelManager {
   // Active symbol tracking for cross-panel propagation
   uint32_t active_symbol_id_ = 0;
   std::string active_symbol_name_;
+
+  class VulkanCore* vulkan_core_ = nullptr;
 
   // Current layout tracking
   std::string current_layout_name_ = "default";

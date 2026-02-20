@@ -12,6 +12,7 @@ namespace BTQuant {
 
 // Forward declarations
 class VulkanCore;
+struct OrderBookSnapshot;  // Forward declaration for core_types.hpp type
 namespace RenderEngine {
 struct TradeData;
 struct OrderbookData;
@@ -73,7 +74,7 @@ struct UIComponent {
   void mark_dirty() { dirty_frames_ = 3; }
   bool is_dirty() const { return dirty_frames_ > 0; }
   virtual void handle_trade(const RenderEngine::TradeData&) {}
-  virtual void handle_orderbook(const RenderEngine::OrderbookData&) {}
+  virtual void handle_orderbook(const OrderBookSnapshot&) {}
   virtual void handle_input(const InputEvent&) {}
   bool is_visible() const { return visible_; }
   glm::vec2 get_position() const { return position_; }

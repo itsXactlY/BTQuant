@@ -83,7 +83,7 @@ for pattern in layout_patterns:
     content = re.sub(pattern, '', content)
 
 # Fix constructor - remove OrderManager, PositionManager, RiskAssessment parameters
-constructor_old = '''PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
+constructor_old = '''PanelManager::PanelManager(
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                            std::shared_ptr<OrderManager> order_manager,
                            std::shared_ptr<PositionManager> position_manager,
@@ -94,7 +94,7 @@ constructor_old = '''PanelManager::PanelManager(std::shared_ptr<HotSpineDataBrid
       position_manager_(position_manager),
       risk_assessment_(risk_assessment) {'''
 
-constructor_new = '''PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
+constructor_new = '''PanelManager::PanelManager(
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge),
       processor_(processor) {'''

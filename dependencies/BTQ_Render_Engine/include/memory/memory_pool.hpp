@@ -115,7 +115,7 @@ private:
 #include "../include/widgets/VolumeProfileNode.h"
 #include "../include/widgets/FootprintCell.h"
 #include "../include/analytics/trading_analytics.hpp"
-#include "../include/hotspine_data_bridge.hpp"
+
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
@@ -1217,13 +1217,13 @@ private:
     ThreadLocalObjectPool<BTQuant::Trade> pool_;
 };
 
-// HotOrderbookSnapshotPool for frequently allocated snapshots
-class HotOrderbookSnapshotPool {
+// OrderBookSnapshotPool for frequently allocated snapshots
+class OrderBookSnapshotPool {
 public:
-    static HotOrderbookSnapshotPool& getInstance();
+    static OrderBookSnapshotPool& getInstance();
 
-    BTQuant::HotOrderbookSnapshot* allocate();
-    void deallocate(BTQuant::HotOrderbookSnapshot* snapshot);
+    BTQuant::OrderBookSnapshot* allocate();
+    void deallocate(BTQuant::OrderBookSnapshot* snapshot);
     void preallocate(size_t count = 512);
 
     size_t getTotalObjects() const { return pool_.get_total_objects(); }
@@ -1231,17 +1231,17 @@ public:
     size_t getUsedObjects() const { return pool_.get_used_objects(); }
 
 private:
-    HotOrderbookSnapshotPool() = default;
-    ObjectPool<BTQuant::HotOrderbookSnapshot> pool_;
+    OrderBookSnapshotPool() = default;
+    ObjectPool<BTQuant::OrderBookSnapshot> pool_;
 };
 
-// FastHotOrderbookSnapshotPool for high-performance snapshot allocation
-class FastHotOrderbookSnapshotPool {
+// FastOrderBookSnapshotPool for high-performance snapshot allocation
+class FastOrderBookSnapshotPool {
 public:
-    static FastHotOrderbookSnapshotPool& getInstance();
+    static FastOrderBookSnapshotPool& getInstance();
 
-    BTQuant::HotOrderbookSnapshot* allocate();
-    void deallocate(BTQuant::HotOrderbookSnapshot* snapshot);
+    BTQuant::OrderBookSnapshot* allocate();
+    void deallocate(BTQuant::OrderBookSnapshot* snapshot);
     void preallocate(size_t count = 1024); // Higher count for frequent allocation
 
     size_t getTotalObjects() const { return pool_.get_total_objects(); }
@@ -1251,8 +1251,8 @@ public:
     size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
 
 private:
-    FastHotOrderbookSnapshotPool() = default;
-    ThreadLocalObjectPool<BTQuant::HotOrderbookSnapshot> pool_;
+    FastOrderBookSnapshotPool() = default;
+    ThreadLocalObjectPool<BTQuant::OrderBookSnapshot> pool_;
 };
 
 // IndicatorResultPool for frequently allocated indicator results

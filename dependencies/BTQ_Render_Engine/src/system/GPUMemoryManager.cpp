@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "../../include/vulkan_base_types.hpp"
-
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
 
@@ -80,12 +79,12 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device, VkBuff
 MemoryPool::~MemoryPool() {
   // Wait for device to be idle before destroying resources
   vkDeviceWaitIdle(device_);
-  
+
   if (mapped_ptr_) {
     vkUnmapMemory(device_, pool_memory_);
     mapped_ptr_ = nullptr;
   }
-  
+
   // Clean up any additional buffers that were created when the pool was exhausted
   for (auto buffer : cleanup_buffers_) {
     if (buffer != VK_NULL_HANDLE) {
@@ -93,14 +92,14 @@ MemoryPool::~MemoryPool() {
     }
   }
   cleanup_buffers_.clear();
-  
+
   for (auto memory : cleanup_memories_) {
     if (memory != VK_NULL_HANDLE) {
       vkFreeMemory(device_, memory, nullptr);
     }
   }
   cleanup_memories_.clear();
-  
+
   // Clean up the main pool buffer and memory
   if (pool_buffer_ != VK_NULL_HANDLE) {
     vkDestroyBuffer(device_, pool_buffer_, nullptr);
@@ -219,7 +218,8 @@ GPUMemoryManager::GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_de
 
   uniform_pool_ = std::make_unique<MemoryPool>(
       device, physical_device,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
       config.uniform_pool_size);
@@ -299,8 +299,7 @@ CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sa
 
   // Register texture with ImGui using ImGui_ImplVulkan_AddTexture
   // This returns the VkDescriptorSet which serves as the ImTextureID
-  VkDescriptorSet descriptor_set =
-      ImGui_ImplVulkan_AddTexture(sampler, image_view, image_layout);
+  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(sampler, image_view, image_layout);
 
   if (descriptor_set == VK_NULL_HANDLE) {
     std::cerr << "[GPUMemoryManager] Failed to add texture to ImGui" << std::endl;

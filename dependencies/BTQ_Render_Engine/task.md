@@ -1,7 +1,7 @@
 # TASK_ULTIMA_MMT_GENESIS.md
 
 **Objective:** The absolute, feature-for-feature reconstruction of Market Monkey Terminal (MMT).
-**Architecture:** Zero-allocation C++ memory spine. Lock-free SPSC routing. Vulkan compute for liquidity matrices. ImGui borderless presentation.
+**Architecture:** Zero-allocation C++ memory spine. Lock-free SPSC routing. Vulkan compute for liquidity matrices. ImGui borderless presentation. Only GPU ONLY rendering for DOM and Charts. No CPU-side copies of market data. Sub-millisecond UI latency. No CPU-side rendering of DOM or Charts. The Tape is the only component with direct CPU access to market data, and it must be strictly O(1) via a lock-free ring buffer. No CPU-side rendering of the DOM or Charts; all visual elements must be GPU-accelerated. The UI must be a perfect clone of MMT's deep void aesthetic, including the exact color palette, font rendering, and layout. The project will be executed in 8 distinct phases, each with specific technical milestones and target files for implementation.
 
 ---
 

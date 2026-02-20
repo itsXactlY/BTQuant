@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "hotspine_data_bridge.hpp"
+
 #include "imgui.h"
 #include "implot.h"
 #include "market_data_processor.hpp"
@@ -41,8 +41,9 @@ struct ChartInstance {
 
 class ChartManager {
  public:
-  ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
+  ChartManager(
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  ~ChartManager();
 
   uint32_t create_chart(const std::string& symbol_name, const std::string& exchange_name,
                         uint32_t symbol_id, RenderEngine::TimeFrame timeframe);
@@ -62,14 +63,11 @@ class ChartManager {
   // Helper to map symbol name to ID
   std::optional<uint32_t> getSymbolId(const std::string& symbol_name) const;
 
-  // Getter for bridge access
-  std::shared_ptr<HotSpineDataBridge> get_bridge() const { return bridge_; }
-
   // Method to update all chart timeframes
   void update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+  
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unordered_map<uint32_t, ChartInstance> charts_;
   uint32_t next_chart_id_ = 0;

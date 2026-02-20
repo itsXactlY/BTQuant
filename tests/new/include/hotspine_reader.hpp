@@ -47,7 +47,7 @@ public:
    * @param snapshot Output structure to fill with orderbook data
    * @return true if snapshot was read, false if no new data
    */
-  bool pollOrderbook(HotOrderbookSnapshot &snapshot);
+  bool pollOrderbook(OrderBookSnapshot &snapshot);
 
   /**
    * Get the shared memory name

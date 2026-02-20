@@ -1,0 +1,13 @@
+[  4%] Built target simdjson
+[  4%] Built target glm
+[  4%] Building CXX object CMakeFiles/BTQuantTerminal.dir/src/components/chart_panel.cpp.o
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp: In member function »virtual void BTQuant::ChartPanel::set_vulkan_core(BTQuant::VulkanCore*)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp:111:3: Fehler: »allocInfo« wurde in diesem Gültigkeitsbereich nicht definiert
+  111 |   allocInfo.pSetLayouts = &layout;
+      |   ^~~~~~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp:111:28: Fehler: »layout« wurde in diesem Gültigkeitsbereich nicht definiert
+  111 |   allocInfo.pSetLayouts = &layout;
+      |                            ^~~~~~
+make[2]: *** [CMakeFiles/BTQuantTerminal.dir/build.make:501: CMakeFiles/BTQuantTerminal.dir/src/components/chart_panel.cpp.o] Fehler 1
+make[1]: *** [CMakeFiles/Makefile2:220: CMakeFiles/BTQuantTerminal.dir/all] Fehler 2
+make: *** [Makefile:156: all] Fehler 2

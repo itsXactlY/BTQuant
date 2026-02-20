@@ -6,7 +6,7 @@
 #include <memory>
 #include <fstream>
 
-#include "../hotspine_data_bridge.hpp"
+
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -26,7 +26,7 @@ namespace BTQuant {
 class HistoricalTimeSalesPanel : public PanelBase {
  public:
   HistoricalTimeSalesPanel(const PanelConfig& config,
-                   std::shared_ptr<HotSpineDataBridge> bridge,
+                   
                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~HistoricalTimeSalesPanel() override;
@@ -41,7 +41,7 @@ class HistoricalTimeSalesPanel : public PanelBase {
   void show_trades_popup(uint64_t start_time, uint64_t end_time, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+  
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;
@@ -79,7 +79,7 @@ class HistoricalTimeSalesPanel : public PanelBase {
   char end_time_input_[32] = "";
 
   // Cached trades for rendering
-  std::vector<RenderEngine::TradeData> cached_trades_;
+  std::vector<TradeData> cached_trades_;
 
   // Trade clustering detection parameters
   static constexpr uint64_t DEFAULT_CLUSTER_TIME_WINDOW_US = 1000000;  // 1 second in microseconds
@@ -118,7 +118,7 @@ class HistoricalTimeSalesPanel : public PanelBase {
   void exportTradesToCSV();
 
   // Trade clustering detection
-  bool isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const;
+  bool isTradeClustered(int index, const std::vector<TradeData>& trades) const;
 
   // Trade size histogram functions
   struct LogBucket {
@@ -128,10 +128,10 @@ class HistoricalTimeSalesPanel : public PanelBase {
     double total_size;
   };
 
-  std::vector<LogBucket> computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const;
+  std::vector<LogBucket> computeLogarithmicTradeSizeHistogram(const std::vector<TradeData>& trades) const;
 
   // Methods for trade pace calculation
-  double calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const;
+  double calculateTradesPerMinute(const std::vector<TradeData>& trades, uint64_t window_microseconds) const;
   void updateTradePaceHistory();
   void renderTradePaceChart();
 };

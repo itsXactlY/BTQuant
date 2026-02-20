@@ -1,39 +1,18 @@
-#include "../../include/components/histogram_panel.hpp"
+#include "components/histogram_panel.hpp"
 
-#include <iostream>
-#include <random>
-
-#include "imgui.h"
-#include "implot.h"
+#include <imgui.h>
 
 namespace BTQuant {
 
 HistogramPanel::HistogramPanel(const PanelConfig& config) : PanelBase(config) {}
 
-void HistogramPanel::initialize() { PanelBase::initialize(); }
-
 void HistogramPanel::render_content() {
   begin_panel_window();
 
-  if (ImPlot::BeginPlot("Histogram")) {
-    // Generate sample data for demonstration
-    static float data[1000];
-    static bool first_run = true;
-
-    if (first_run) {
-      std::random_device rd;
-      std::mt19937 gen(rd());
-      std::normal_distribution<> dis(0.0, 1.0);
-
-      for (int i = 0; i < 1000; ++i) {
-        data[i] = static_cast<float>(dis(gen));  // Random values following normal distribution
-      }
-      first_run = false;
-    }
-
-    ImPlot::SetupAxes("Values", "Frequency");
-    ImPlot::PlotHistogram("Distribution", data, 1000, 50);
-    ImPlot::EndPlot();
+  ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+  if (canvas_size.x > 50.0f && canvas_size.y > 50.0f) {
+    ImGui::InvisibleButton("HistogramGPUCanvas", canvas_size);
+    ImGui::Text("GPU Hook Ready for Histogram.");
   }
 
   end_panel_window();

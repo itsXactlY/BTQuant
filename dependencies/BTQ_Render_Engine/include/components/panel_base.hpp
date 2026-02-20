@@ -5,12 +5,12 @@
 #include <string>
 
 #include "imgui.h"
-#include "theme_manager.hpp"
 #include "panel_settings_interface.hpp"
+#include "theme_manager.hpp"
 
 // Forward declaration to avoid circular dependency
 namespace BTQuant {
-    class ContextMenuManager;
+class ContextMenuManager;
 }
 
 namespace BTQuant {
@@ -47,6 +47,7 @@ enum class PanelType {
 };
 
 struct PanelConfig {
+  uint32_t id = 0;
   std::string title = "Panel";
   PanelType type = PanelType::CHART;
   ImVec2 position = ImVec2(0, 0);
@@ -86,12 +87,15 @@ class PanelBase {
   virtual void update([[maybe_unused]] float dt) {}
   virtual void render();
   virtual void initialize() {}
+  virtual void set_vulkan_core(class VulkanCore* core) { (void)core; }
 
   /**
    * Pure virtual method for panel-specific content rendering
    * Derived classes MUST override this method to render their content
    */
   virtual void render_content() = 0;
+
+  virtual void set_symbol(const std::string& symbol) { config_.symbol = symbol; }
 
   // Panel management
   void set_position(const ImVec2& pos) { config_.position = pos; }
@@ -113,7 +117,8 @@ class PanelBase {
 
   // Context menu functionality
   virtual void render_context_menu() {}  // Virtual method for context menu
-  virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
+  virtual void handle_context_menu(
+      class ContextMenuManager& manager);  // Virtual method for context menu handling
 
  protected:
   PanelConfig config_;
@@ -141,7 +146,7 @@ class PanelBase {
   // Helper methods for consistent styling
   void begin_panel_window();
   void end_panel_window();
-  void render_panel_header();
+  virtual void render_panel_header();
 
   // Glass-morphism helpers wrappers
   void push_glass_style();

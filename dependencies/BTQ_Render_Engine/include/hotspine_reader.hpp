@@ -14,7 +14,7 @@ struct HotTrade {
   char side;  // 'B' for buy, 'S' for sell
 };
 
-struct HotOrderbookSnapshot {
+struct OrderBookSnapshot {
   uint32_t symbol_id;
   uint64_t timestamp_us;
   double best_bid_price;
@@ -34,7 +34,7 @@ class HotSpineReader {
 
   std::vector<HotTrade> read_trades(size_t max_count = 100) { return {}; }
 
-  std::vector<HotOrderbookSnapshot> read_orderbooks(size_t max_count = 100) { return {}; }
+  std::vector<OrderBookSnapshot> read_orderbooks(size_t max_count = 100) { return {}; }
 
  private:
   std::string shm_name_;

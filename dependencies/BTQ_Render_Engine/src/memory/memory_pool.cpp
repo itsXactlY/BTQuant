@@ -949,39 +949,39 @@ void FastTradePool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
-// HotOrderbookSnapshotPool implementation
-HotOrderbookSnapshotPool& HotOrderbookSnapshotPool::getInstance() {
-    static HotOrderbookSnapshotPool instance;
+// OrderBookSnapshotPool implementation
+OrderBookSnapshotPool& OrderBookSnapshotPool::getInstance() {
+    static OrderBookSnapshotPool instance;
     return instance;
 }
 
-BTQuant::HotOrderbookSnapshot* HotOrderbookSnapshotPool::allocate() {
+BTQuant::OrderBookSnapshot* OrderBookSnapshotPool::allocate() {
     return pool_.allocate();
 }
 
-void HotOrderbookSnapshotPool::deallocate(BTQuant::HotOrderbookSnapshot* snapshot) {
+void OrderBookSnapshotPool::deallocate(BTQuant::OrderBookSnapshot* snapshot) {
     pool_.deallocate(snapshot);
 }
 
-void HotOrderbookSnapshotPool::preallocate(size_t count) {
+void OrderBookSnapshotPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
-// FastHotOrderbookSnapshotPool implementation
-FastHotOrderbookSnapshotPool& FastHotOrderbookSnapshotPool::getInstance() {
-    static FastHotOrderbookSnapshotPool instance;
+// FastOrderBookSnapshotPool implementation
+FastOrderBookSnapshotPool& FastOrderBookSnapshotPool::getInstance() {
+    static FastOrderBookSnapshotPool instance;
     return instance;
 }
 
-BTQuant::HotOrderbookSnapshot* FastHotOrderbookSnapshotPool::allocate() {
+BTQuant::OrderBookSnapshot* FastOrderBookSnapshotPool::allocate() {
     return pool_.allocate();
 }
 
-void FastHotOrderbookSnapshotPool::deallocate(BTQuant::HotOrderbookSnapshot* snapshot) {
+void FastOrderBookSnapshotPool::deallocate(BTQuant::OrderBookSnapshot* snapshot) {
     pool_.deallocate(snapshot);
 }
 
-void FastHotOrderbookSnapshotPool::preallocate(size_t count) {
+void FastOrderBookSnapshotPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 

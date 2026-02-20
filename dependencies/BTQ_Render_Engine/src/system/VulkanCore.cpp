@@ -460,11 +460,32 @@ void VulkanCore::create_swapchain(uint32_t width, uint32_t height) {
   }
 
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  
+  // Priority: MAILBOX > IMMEDIATE > FIFO
+  // MAILBOX: tear-free, unlimited FPS (triple buffering)
+  // IMMEDIATE: possible tearing, unlimited FPS (lowest latency)
+  // FIFO: tear-free, capped at refresh rate (60 FPS typically)
+  
+  bool hasMailbox = false;
+  bool hasImmediate = false;
+  
   for (const auto& availablePresentMode : presentModes) {
     if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-      presentMode = availablePresentMode;
-      break;
+      hasMailbox = true;
     }
+    if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+      hasImmediate = true;
+    }
+  }
+  
+  if (hasMailbox) {
+    presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    std::cout << "[VulkanCore] Using MAILBOX present mode (tear-free, uncapped FPS)" << std::endl;
+  } else if (hasImmediate) {
+    presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    std::cout << "[VulkanCore] Using IMMEDIATE present mode (lowest latency, possible tearing)" << std::endl;
+  } else {
+    std::cout << "[VulkanCore] Using FIFO present mode (vsync capped at refresh rate)" << std::endl;
   }
 
   if (capabilities.currentExtent.width != UINT32_MAX) {

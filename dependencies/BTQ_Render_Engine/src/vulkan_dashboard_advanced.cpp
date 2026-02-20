@@ -19,13 +19,11 @@
 
 namespace BTQuant {
 
-VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                 std::shared_ptr<HotSpineDataBridge> bridge,
-                                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                                 const VulkanDashboardConfig& config)
+VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height, 
+                                 std::shared_ptr<BTQuant::MarketDataProcessor> processor, 
+                                 const BTQuant::VulkanDashboardConfig& config)
     : width_(width),
       height_(height),
-      hotspine_bridge_(bridge),
       market_data_processor_(processor),
       config_(config) {}
 
@@ -68,7 +66,7 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
-  workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
+  workspace_ = std::make_unique<QuantWorkspaceComponent>(market_data_processor_);
 
   // LAYOUT BOOTSTRAP - Load saved layout or apply default preset
   if (auto* pm = workspace_->getPanelManager()) {
@@ -288,7 +286,7 @@ void VulkanDashboard::render_frame() {
   // Only dispatch compute shader if incremental_updater signaled a state change
   bool heatmap_dirty = false;
   if (market_data_processor_) {
-    heatmap_dirty = market_data_processor_->getHeatmapDirtyFlag().consume();
+    heatmap_dirty = market_data_processor_->getHeatmapDirtyFlag().exchange(false);
   }
 
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [heatmap_dirty](VkCommandBuffer cmd) {
@@ -384,8 +382,9 @@ void VulkanDashboard::render_performance_overlay() {
 
     if (market_data_processor_) {
       auto stats = market_data_processor_->getPerformanceMetrics();
-      ImGui::Text("Trades/sec: %.0f", stats.trades_per_second);
-      ImGui::Text("Orderbook Updates/sec: %.0f", stats.orderbooks_per_second);
+      ImGui::Text("Throughput/sec: %.0f", stats.throughput_per_sec);
+      ImGui::Text("Trades processed: %lu", stats.trades_processed);
+      ImGui::Text("Orderbook updates: %lu", stats.orderbook_updates);
     }
   }
 

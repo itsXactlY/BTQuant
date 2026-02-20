@@ -3,6 +3,7 @@
 // Include market_data_processor.hpp for full type definitions of SymbolAnalytics and TradeData
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <execution>
 #include <iostream>
 #include <numeric>
@@ -20,7 +21,7 @@ namespace RenderEngine {
  * @param trade The trade data to process
  * @param dirty_flag Optional dirty flag to set on state change
  */
-void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade,
+void processTradeIncrementally(SymbolAnalytics& symbol_data, const BTQuant::TradeData& trade,
                                HeatmapDirtyFlag* dirty_flag) {
   // Track if state changed for dirty flag
   bool state_changed = false;
@@ -28,12 +29,12 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
   // Update basic trade metrics incrementally
   symbol_data.trade_count++;
   symbol_data.last_trade_price = trade.price;
-  symbol_data.last_trade_size = trade.size;
-  symbol_data.last_trade_time = trade.timestamp;
+  symbol_data.last_trade_size = trade.volume;  // volume instead of size
+  symbol_data.last_trade_time = trade.timestamp_us;  // timestamp_us instead of timestamp
   state_changed = true;  // Trade update always changes state
 
   // Update buy/sell counts
-  if (trade.is_buy) {
+  if (trade.is_buy()) {  // Use is_buy() method
     symbol_data.buy_count++;
   } else {
     symbol_data.sell_count++;
@@ -46,8 +47,8 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
   }
 
   // Update VWAP incrementally using running totals
-  symbol_data.running_total_price_volume += trade.price * trade.size;
-  symbol_data.running_total_volume += trade.size;
+  symbol_data.running_total_price_volume += trade.price * trade.volume;
+  symbol_data.running_total_volume += trade.volume;
 
   // Calculate VWAP from running totals
   if (symbol_data.running_total_volume > 0.0) {
@@ -65,17 +66,17 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
                         .count();
 
   if (now_us - symbol_data.last_update_time < 60000000)  // 1 minute
-    symbol_data.volume_1m += trade.size;
+    symbol_data.volume_1m += trade.volume;
   if (now_us - symbol_data.last_update_time < 300000000)  // 5 minutes
-    symbol_data.volume_5m += trade.size;
+    symbol_data.volume_5m += trade.volume;
   if (now_us - symbol_data.last_update_time < 900000000)  // 15 minutes
-    symbol_data.volume_15m += trade.size;
+    symbol_data.volume_15m += trade.volume;
 
   // Update buy/sell volumes
-  if (trade.is_buy) {
-    symbol_data.buy_volume += trade.size;
+  if (trade.is_buy()) {
+    symbol_data.buy_volume += trade.volume;
   } else {
-    symbol_data.sell_volume += trade.size;
+    symbol_data.sell_volume += trade.volume;
   }
 
   // Update price ranges incrementally
@@ -95,11 +96,11 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
 
   // Update trade size metrics incrementally
   symbol_data.avg_trade_size =
-      (symbol_data.avg_trade_size * (symbol_data.trade_count - 1) + trade.size) /
+      (symbol_data.avg_trade_size * (symbol_data.trade_count - 1) + trade.volume) /
       symbol_data.trade_count;
 
   // Check for large trades
-  if (trade.size > 2.0 * symbol_data.avg_trade_size) {
+  if (trade.volume > 2.0 * symbol_data.avg_trade_size) {
     symbol_data.large_trade_count++;
   }
 
@@ -113,7 +114,7 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
         TimeFrame::TF_4HOUR, TimeFrame::TF_6HOUR, TimeFrame::TF_12HOUR, TimeFrame::TF_1DAY,
         TimeFrame::TF_1WEEK}) {
     uint64_t duration_us = MarketDataProcessor::getTimeFrameDuration(timeframe);
-    uint64_t candle_start = (trade.timestamp / duration_us) * duration_us;
+    uint64_t candle_start = (trade.timestamp_us / duration_us) * duration_us;
 
     auto& current_candle = symbol_data.current_candles[timeframe];
 
@@ -130,14 +131,14 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
       current_candle.high = trade.price;
       current_candle.low = trade.price;
       current_candle.close = trade.price;
-      current_candle.volume = trade.size;
+      current_candle.volume = trade.volume;
       current_candle.trade_count = 1;
     } else {
       // Update existing candle incrementally
       current_candle.high = std::max(current_candle.high, trade.price);
       current_candle.low = std::min(current_candle.low, trade.price);
       current_candle.close = trade.price;
-      current_candle.volume += trade.size;
+      current_candle.volume += trade.volume;
       current_candle.trade_count++;
     }
   }
@@ -146,11 +147,11 @@ void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& tr
   // Update the volume profile level for this price incrementally
   auto& vp_level = symbol_data.session_volume_profile[trade.price];
   vp_level.price = trade.price;
-  vp_level.total_volume += trade.size;
-  if (trade.is_buy) {
-    vp_level.buy_volume += trade.size;
+  vp_level.total_volume += trade.volume;
+  if (trade.is_buy()) {
+    vp_level.buy_volume += trade.volume;
   } else {
-    vp_level.sell_volume += trade.size;
+    vp_level.sell_volume += trade.volume;
   }
 
   // Update momentum incrementally using a sliding window

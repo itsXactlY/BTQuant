@@ -1,13 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include "core_types.hpp"
 
 namespace BTQuant {
 namespace RenderEngine {
-
-// Forward declarations
-struct SymbolAnalytics;
-struct TradeData;
 
 /**
  * @brief Atomic dirty flag for heatmap compute shader dispatch
@@ -52,7 +49,7 @@ class HeatmapDirtyFlag {
  * @param trade The trade data to process
  * @param dirty_flag Optional dirty flag to set on state change
  */
-void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade,
+void processTradeIncrementally(SymbolAnalytics& symbol_data, const BTQuant::TradeData& trade,
                                HeatmapDirtyFlag* dirty_flag = nullptr);
 
 }  // namespace RenderEngine

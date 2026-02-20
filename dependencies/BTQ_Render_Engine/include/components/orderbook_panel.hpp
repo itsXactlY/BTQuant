@@ -5,7 +5,7 @@
 #include <format>
 #include <memory>
 
-#include "../hotspine_data_bridge.hpp"
+
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -31,7 +31,7 @@ enum class OrderbookAggregationMode {
 // Real-time orderbook ladder display
 class OrderbookPanel : public PanelBase {
  public:
-  OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  OrderbookPanel(const PanelConfig& config, 
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
                  
   // Destructor to clean up the lock-free cache
@@ -44,7 +44,7 @@ class OrderbookPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+  
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;
@@ -63,8 +63,8 @@ class OrderbookPanel : public PanelBase {
   float heatmap_intensity_ = 1.0f;  // Sensitivity of color mapping for resting limit orders (default 1.0)
   
   int get_level_option_index();  // Helper to find the index of the current selection
-  void render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook);
-  void render_market_depth_chart(const RenderEngine::OrderbookData& orderbook);
+  void render_orderbook_ladder(const OrderBookSnapshot& orderbook);
+  void render_market_depth_chart(const OrderBookSnapshot& orderbook);
 
   // Getter and setter for large order threshold
   double getLargeOrderThresholdPercentage() const { return large_order_threshold_percentage_; }
@@ -84,10 +84,10 @@ class OrderbookPanel : public PanelBase {
   void reset_depth();
 
   // Helper method to detect order flow events by comparing snapshots
-  void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
+  void detectOrderFlowEvents(const OrderBookSnapshot& current_snapshot, const OrderBookSnapshot& previous_snapshot);
 
   // Helper method to track volume changes for delta calculation
-  void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
+  void trackVolumeChanges(const OrderBookSnapshot& snapshot, uint64_t timestamp);
 
   // Helper method to update the lock-free orderbook cache
   void updateOrderbookCache();
@@ -116,7 +116,7 @@ class OrderbookPanel : public PanelBase {
   std::map<double, OrderFlowActivity> order_flow_activity_;
 
   // Store previous snapshots for comparison
-  std::map<uint32_t, HotOrderbookSnapshot> previous_snapshots_;
+  std::map<uint32_t, OrderBookSnapshot> previous_snapshots_;
 
   // Batched geometry for heatmap backgrounds
   std::vector<HeatmapRect> heatmap_rects_;
@@ -249,8 +249,8 @@ class OrderbookPanel : public PanelBase {
     uint64_t timestamp = 0;
     
     // Copy constructor for thread safety
-    OrderbookCache(const RenderEngine::OrderbookData& data) 
-      : bids(data.bids), asks(data.asks), spread(data.spread), imbalance(data.imbalance), timestamp(data.timestamp) {}
+    OrderbookCache(const OrderBookSnapshot& data) 
+      : timestamp(data.timestamp_us) {}
       
     OrderbookCache() = default;
   };

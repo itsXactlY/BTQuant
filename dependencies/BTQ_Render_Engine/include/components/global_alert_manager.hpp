@@ -8,12 +8,15 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
+
 #include "../market_data_processor.hpp"
 #include "alert_common.hpp"
-#include "watchlist_alerts.hpp"
+// watchlist_alerts.hpp removed - AlertsPanel no longer available
 
 namespace BTQuant {
+
+// Forward declaration for panel base (if needed)
+class PanelBase;
 
 // Enum for different alert types
 enum class GlobalAlertType {
@@ -70,9 +73,9 @@ using GlobalAlertTriggeredCallback = std::function<void(const GlobalAlert&, doub
 
 class GlobalAlertManager {
  public:
-  GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
+  GlobalAlertManager(
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                     std::shared_ptr<AlertsPanel> alerts_panel);
+                     std::shared_ptr<PanelBase> alerts_panel = nullptr);
   ~GlobalAlertManager() = default;
 
   // Add a price alert
@@ -113,7 +116,7 @@ class GlobalAlertManager {
   }
 
   // Set the alerts panel to send notifications to
-  void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) { alerts_panel_ = alerts_panel; }
+  void set_alerts_panel(std::shared_ptr<PanelBase> alerts_panel) { alerts_panel_ = alerts_panel; }
 
   // Get statistics about alerts
   size_t get_total_alerts_count() const { return alerts_.size(); }
@@ -121,9 +124,9 @@ class GlobalAlertManager {
   size_t get_triggered_alerts_count() const;
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
-  std::shared_ptr<AlertsPanel> alerts_panel_;
+  std::shared_ptr<PanelBase> alerts_panel_;
   std::map<std::string, GlobalAlert> alerts_;
   GlobalAlertTriggeredCallback on_alert_triggered_;
   mutable std::mutex alerts_mutex_;  // Mutex for thread-safe access

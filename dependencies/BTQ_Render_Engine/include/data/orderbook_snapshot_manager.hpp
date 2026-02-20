@@ -9,12 +9,9 @@
 #include <cstring>
 #include <cstdint>
 
-// Forward declaration to avoid circular dependencies
-class HotSpineDataBridge;
-
 // Forward declaration of data types to avoid circular includes
 namespace BTQuant {
-    struct HotOrderbookSnapshot;
+    struct OrderBookSnapshot;
 }
 
 /**

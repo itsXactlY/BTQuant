@@ -15,7 +15,7 @@
 #include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/theme_manager.hpp"
-#include "hotspine_data_bridge.hpp"
+
 #include "market_data_processor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
@@ -43,21 +43,14 @@ int main(int argc, char** argv) {
   auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
   system_optimizer->optimize();
 
-  // 3. Data Bridge
-  auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
-  data_bridge->setMarketDataProcessor(market_processor);
-
-  if (auto res = data_bridge->start(); !res) {
-    std::cerr << "✗ Failed to initialize HotSpine data bridge: " << res.error() << std::endl;
-    return 1;
-  }
-  std::cout << "✓ Data Pipeline active" << std::endl;
+  // 3. Data Bridge (using same processor instance)
+  auto data_bridge = market_processor;
 
   // 4. Initialize Dashboard (Vulkan + ImGui) - Creates Workspace + PanelManager + Trading Systems internally
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, data_bridge, market_processor, dashboard_config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, market_processor, dashboard_config);
 
   if (auto res = dashboard->initialize(); !res) {
     std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error() << std::endl;
@@ -167,9 +160,6 @@ int main(int argc, char** argv) {
     (void)dt;  // Suppress unused variable warning
     last_frame_time = frame_begin;
 
-    // Data Sync - Single sync point in main loop
-    data_bridge->sync();
-
     // Event Handling
     dashboard->handle_events();
 
@@ -195,7 +185,6 @@ int main(int argc, char** argv) {
   }
 
   dashboard->shutdown();
-  data_bridge->stop();
 
   std::cout << "Shutdown complete. Goodbye!" << std::endl;
   return 0;

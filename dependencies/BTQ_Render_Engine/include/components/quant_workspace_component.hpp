@@ -3,7 +3,6 @@
 #include <atomic>
 #include <memory>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../symbol_registry.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
@@ -12,15 +11,12 @@
 #include "implot.h"
 #include "panel_manager.hpp"
 
-// Global crosshair price - shared across all chart panels for synchronized horizontal line
-extern std::atomic<double> g_crosshair_price;
-
 namespace BTQuant {
 
 class QuantWorkspaceComponent : public UIComponent {
  public:
   explicit QuantWorkspaceComponent(
-      std::shared_ptr<HotSpineDataBridge> bridge,
+
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
   virtual ~QuantWorkspaceComponent() = default;
 
@@ -36,7 +32,7 @@ class QuantWorkspaceComponent : public UIComponent {
 
  private:
   // Core systems
-  std::shared_ptr<HotSpineDataBridge> bridge_;
+
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   // New panel-based UI system
@@ -67,11 +63,10 @@ class QuantWorkspaceComponent : public UIComponent {
   void render_dashboard_controls();
   void render_orders_panel();
   void render_positions_panel();
-  
+
   // Crosshair synchronization methods
   void handle_global_crosshair_sync();
   ChartPanel* get_chart_panel_under_cursor() const;
-
 };
 
 }  // namespace BTQuant

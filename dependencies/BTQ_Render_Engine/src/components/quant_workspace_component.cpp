@@ -1,23 +1,21 @@
 #include "../../include/components/quant_workspace_component.hpp"
-#include "../../include/components/chart_panel.hpp"  // Required for complete type in dynamic_cast
 
 #include <glm/glm.hpp>
 #include <iostream>
 
+#include "../../include/components/chart_panel.hpp"  // Required for complete type in dynamic_cast
 #include "imgui.h"
 #include "implot.h"
-
-// Global crosshair price - shared across all chart panels for synchronized horizontal line
-std::atomic<double> g_crosshair_price{0.0};
+#include "performance/global_sync.hpp"
 
 namespace BTQuant {
 
 QuantWorkspaceComponent::QuantWorkspaceComponent(
-    std::shared_ptr<HotSpineDataBridge> bridge,
+
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), bridge_(bridge), processor_(processor) {
+    : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), processor_(processor) {
   // Initialize the new panel-based system
-  panel_manager_ = std::make_unique<PanelManager>(bridge_, processor_);
+  panel_manager_ = std::make_unique<PanelManager>(processor_);
   panel_manager_->initialize();
 
   // Load symbols from shared memory for hierarchical selector
@@ -28,27 +26,26 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 }
 
 void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore* core) {
-  (void)core;  // Suppress unused parameter warning
-  // Panel system handles its own Vulkan resources
+  panel_manager_->set_vulkan_core(core);
 }
 
 void QuantWorkspaceComponent::update(float dt) {
   // NOTE: Data sync is handled in main loop (main_trading_terminal.cpp)
   // to avoid double-sync per frame
   panel_manager_->update(dt);
-  
+
   // Update crosshair synchronization if enabled
   if (global_crosshair_enabled_) {
     // Check if any chart panel is currently showing crosshair info
     // This would be handled by the individual chart panels, but we can coordinate them here
     // For now, we'll just track the mouse position for potential synchronization
     ImVec2 current_mouse_pos = ImGui::GetMousePos();
-    
+
     // Only update if mouse has moved significantly
-    float mouse_move_threshold = 1.0f; // Minimum movement to trigger update
-    float distance = sqrt(pow(current_mouse_pos.x - last_crosshair_position_.x, 2) + 
+    float mouse_move_threshold = 1.0f;  // Minimum movement to trigger update
+    float distance = sqrt(pow(current_mouse_pos.x - last_crosshair_position_.x, 2) +
                           pow(current_mouse_pos.y - last_crosshair_position_.y, 2));
-    
+
     if (distance > mouse_move_threshold) {
       last_crosshair_position_ = current_mouse_pos;
       crosshair_active_ = true;
@@ -69,7 +66,7 @@ void QuantWorkspaceComponent::render_gui() {
 
   // Render all panels through the panel manager
   panel_manager_->render();
-  
+
   // Handle global crosshair synchronization after all panels are rendered
   if (global_crosshair_enabled_) {
     handle_global_crosshair_sync();
@@ -127,13 +124,12 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
         float rel_x = (mouse_pos.x - panel_pos.x) / panel_size.x;
 
         // Get the current mouse price from the active chart for global crosshair price sync
-        double current_price = 0.0;
-        if (ImPlot::IsPlotHovered()) {
-          ImPlotPoint plot_mouse = ImPlot::GetPlotMousePos();
-          current_price = plot_mouse.y;
-          // Update the global crosshair price
-          g_crosshair_price.store(current_price);
-        }
+        // NOTE: We cannot call ImPlot::IsPlotHovered() here because we are outside
+        // of a BeginPlot()/EndPlot() block. The crosshair price is updated
+        // inside the ChartPanel's render loop where ImPlot context is active.
+        // The g_crosshair_price is already set by ChartPanel::render_instrument_chart()
+        // when the mouse hovers over the plot.
+        (void)active_chart;  // Suppress unused variable warning
 
         // Synchronize this relative position to all other chart panels
         for (auto* chart_panel : chart_panels) {
@@ -176,11 +172,11 @@ void QuantWorkspaceComponent::handle_global_crosshair_sync() {
 ChartPanel* QuantWorkspaceComponent::get_chart_panel_under_cursor() const {
   ImVec2 mouse_pos = ImGui::GetMousePos();
   auto panel_ids = panel_manager_->get_all_panel_ids();
-  
+
   for (uint32_t panel_id : panel_ids) {
     auto* panel = panel_manager_->get_panel_by_id(panel_id);
     if (!panel) continue;
-    
+
     // Check if this is a chart panel
     if (panel->get_config().type == PanelType::CHART) {
       auto* chart_panel = dynamic_cast<ChartPanel*>(panel);
@@ -188,7 +184,7 @@ ChartPanel* QuantWorkspaceComponent::get_chart_panel_under_cursor() const {
         // Get the panel's position and size
         ImVec2 panel_pos = panel_manager_->get_panel_position(panel_id);
         ImVec2 panel_size = panel_manager_->get_panel_size(panel_id);
-        
+
         // Check if mouse is within the panel bounds
         if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
             mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
@@ -197,8 +193,8 @@ ChartPanel* QuantWorkspaceComponent::get_chart_panel_under_cursor() const {
       }
     }
   }
-  
-  return nullptr; // No chart panel found under cursor
+
+  return nullptr;  // No chart panel found under cursor
 }
 
 void QuantWorkspaceComponent::render_dashboard_controls() {
@@ -206,7 +202,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowSize(ImVec2(320, 400), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_)) {
-    ImGui::Text("Ultra-Quantitative Dashboard");
+    ImGui::Text("BTQ Dashboard");
     ImGui::Separator();
 
     // Layout Presets Menu
@@ -222,7 +218,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Dashboard")) {
         panel_manager_->apply_layout_preset(LayoutPreset::DASHBOARD_ONLY);
       }
-      
+
       if (ImGui::Button("Chart Focus")) {
         panel_manager_->apply_layout_preset(LayoutPreset::CHART_FOCUS);
       }
@@ -245,7 +241,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("TPO Profile")) {
         panel_manager_->add_panel(PanelType::TPO_PROFILE);
       }
-      
+
       if (ImGui::Button("Volume Profile")) {
         panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
       }
@@ -268,7 +264,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Tape")) {
         panel_manager_->add_panel(PanelType::TAPE);
       }
-      
+
       if (ImGui::Button("Watchlist")) {
         panel_manager_->add_panel(PanelType::WATCHLIST);
       }
@@ -280,12 +276,11 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("DOM Surface")) {
         panel_manager_->add_panel(PanelType::DOM_SURFACE);
       }
-      
+
       if (ImGui::Button("Hist. T&S")) {
         panel_manager_->add_panel(PanelType::HISTORICAL_TIME_SALES);
       }
       ImGui::SameLine();
-
     }
 
     // Panel management - Trading (reorganized per requirements)
@@ -293,8 +288,6 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Alerts")) {
         panel_manager_->add_panel(PanelType::ALERTS);
       }
-      
-
     }
 
     // Panel management - Analysis (reorganized per requirements)
@@ -306,13 +299,11 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
 
       ImGui::SameLine();
 
-      
-
       ImGui::SameLine();
       if (ImGui::Button("Multi VWAP")) {
         panel_manager_->add_panel(PanelType::MULTI_VWAP);
       }
-      
+
       if (ImGui::Button("Correlation")) {
         panel_manager_->add_panel(PanelType::CORRELATION_HEATMAP);
       }
@@ -320,7 +311,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Tech Indicators")) {
         panel_manager_->add_panel(PanelType::TECHNICAL_INDICATORS);
       }
-      
+
       if (ImGui::Button("Time Stats")) {
         panel_manager_->add_panel(PanelType::TIME_STATISTICS);
       }
@@ -328,7 +319,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       if (ImGui::Button("Time Histogram")) {
         panel_manager_->add_panel(PanelType::TIME_HISTOGRAM);
       }
-      
+
       if (ImGui::Button("Histogram")) {
         panel_manager_->add_panel(PanelType::HISTOGRAM);
       }

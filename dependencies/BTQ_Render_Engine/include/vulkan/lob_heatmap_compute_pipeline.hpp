@@ -80,6 +80,9 @@ class LobHeatmapComputePipeline {
   VkImageView output_view_ = VK_NULL_HANDLE;
   VkDeviceMemory output_memory_ = VK_NULL_HANDLE;
   VkSampler sampler_ = VK_NULL_HANDLE;
+
+  // State tracking
+  bool initial_layout_done_ = false;
 };
 
 }  // namespace BTQuant

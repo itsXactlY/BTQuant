@@ -198,7 +198,8 @@ class VulkanCore {
   VkResult PrepareFrame(uint32_t& imageIndex);
   VkResult PresentFrame(uint32_t imageIndex);
   void RecordCommandBuffer(uint32_t imageIndex, ImDrawData* drawData,
-                           std::function<void(VkCommandBuffer)> graphicsCallback = nullptr);
+                           std::function<void(VkCommandBuffer)> graphicsCallback = nullptr,
+                           std::function<void(VkCommandBuffer)> computeCallback = nullptr);
   void RecreateSwapchain();  // Uses internal width_/height_
 
   // Legacy/Internal frame rendering

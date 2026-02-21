@@ -332,8 +332,9 @@ void VulkanDashboard::render_frame() {
                                     [this](VkCommandBuffer cmd) {
                                       // No microstructure renderer - panels handle their own
                                       // rendering
-
-                                      // Always dispatch compute shader for now
+                                    },
+                                    [this](VkCommandBuffer cmd) {
+                                      // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
                                       // Update descriptor with current SSBO
                                       heatmap_pipeline_.update_descriptor(
                                           vulkan_core_->get_device(), ssbo_updater_.get_buffer(),
@@ -342,7 +343,7 @@ void VulkanDashboard::render_frame() {
                                       // Transition image to GENERAL layout for compute write
                                       heatmap_pipeline_.transition_to_general(cmd);
 
-                                      // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
+                                      // Dispatch compute shader
                                       HeatmapPushConstants pc{};
                                       pc.max_volume = 1.0f;
                                       pc.alpha = 0.3f;

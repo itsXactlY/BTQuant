@@ -105,7 +105,13 @@ VkResult VulkanCore::PrepareFrame(uint32_t& imageIndex) {
 }
 
 void VulkanCore::RecordCommandBuffer(uint32_t imageIndex, ImDrawData* drawData,
-                                     std::function<void(VkCommandBuffer)> graphicsCallback) {
+                                     std::function<void(VkCommandBuffer)> graphicsCallback,
+                                     std::function<void(VkCommandBuffer)> computeCallback) {
+  // Execute compute dispatch BEFORE render pass (compute operations cannot happen inside render pass)
+  if (computeCallback) {
+    computeCallback(current_command_buffer_);
+  }
+
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;

@@ -47,13 +47,13 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
   for (int attempt = 0; attempt < 3; ++attempt) {
     uint64_t seq = layout->header.global_lock.read_begin();
 
-    // Copy entire history array in one memcpy (1024 * 256 * 16 = 4MB)
+    // Copy entire history array in one memcpy (1024 columns × 256 rows × 16 bytes = 4MB)
     auto* dst = static_cast<uint8_t*>(mapped_ptr_);
     float local_max = 1.0f;
 
-    // Single memcpy for the entire history buffer
-    constexpr size_t HISTORY_SIZE = COLUMNS * ROWS * NODE_SIZE;
-    std::memcpy(dst, layout->history[0].rows, HISTORY_SIZE);
+    // Single memcpy for the entire history buffer (all 1024 ClusterColumns)
+    constexpr size_t HISTORY_SIZE = COLUMNS * sizeof(::HotSpine::V3::ClusterColumn);
+    std::memcpy(dst, layout->history, HISTORY_SIZE);
 
     // Verify consistency before computing max (avoid work on torn reads)
     if (!layout->header.global_lock.read_retry(seq)) {

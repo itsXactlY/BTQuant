@@ -380,8 +380,8 @@ void VulkanDashboard::render_frame() {
 
                                       // Dispatch compute shader with push constants
                                       HeatmapPushConstants pc{};
-                                      pc.max_volume = 1.0f;
-                                      pc.alpha = 0.3f;
+                                      pc.max_volume = 100.0f;  // Match test data scale
+                                      pc.alpha = 1.0f;         // Full opacity for visible colors
                                       heatmap_pipeline_.dispatch(cmd, pc);
 
                                       // Transition image for fragment shader read (ImGui rendering)

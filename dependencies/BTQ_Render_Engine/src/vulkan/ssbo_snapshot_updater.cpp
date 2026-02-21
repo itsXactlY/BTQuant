@@ -27,9 +27,37 @@ bool SsboSnapshotUpdater::initialize(GPUMemoryManager& mem_manager) {
   offset_ = alloc.offset;
   pool_id_ = alloc.pool_id;
 
-  // Zero-initialize the SSBO
+  // Initialize SSBO with test heatmap pattern for visualization
   if (mapped_ptr_) {
-    std::memset(mapped_ptr_, 0, SSBO_SIZE);
+    auto* nodes = reinterpret_cast<::HotSpine::V3::VolumeNode*>(mapped_ptr_);
+    constexpr size_t TOTAL_NODES = COLUMNS * ROWS;  // 1024 * 256 = 262,144
+
+    // Create a gradient test pattern with alternating buy/sell volumes
+    for (size_t i = 0; i < TOTAL_NODES; ++i) {
+      size_t col = i / ROWS;  // X coordinate (0-1023)
+      size_t row = i % ROWS;  // Y coordinate (0-255)
+
+      // Create horizontal gradient for buy volume (left to right)
+      float buy_gradient = static_cast<float>(col) / static_cast<float>(COLUMNS);
+
+      // Create vertical gradient for sell volume (bottom to top)
+      float sell_gradient = static_cast<float>(row) / static_cast<float>(ROWS);
+
+      // Create diagonal band pattern for visual interest
+      float diagonal = static_cast<float>((col + row * 4) % 256) / 256.0f;
+
+      // Alternate between buy and sell dominance in bands
+      if ((col / 64) % 2 == 0) {
+        nodes[i].buy_vol = buy_gradient * diagonal * 100.0f;
+        nodes[i].sell_vol = sell_gradient * (1.0f - diagonal) * 50.0f;
+      } else {
+        nodes[i].buy_vol = buy_gradient * (1.0f - diagonal) * 50.0f;
+        nodes[i].sell_vol = sell_gradient * diagonal * 100.0f;
+      }
+
+      nodes[i].trade_count = static_cast<uint16_t>(diagonal * 100);
+      nodes[i].tpo_bits = static_cast<uint16_t>(row % 16);
+    }
   }
 
   return mapped_ptr_ != nullptr;

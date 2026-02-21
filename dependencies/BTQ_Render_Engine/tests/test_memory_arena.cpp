@@ -99,22 +99,34 @@ TEST(test_global_arena_singleton) {
     ASSERT_EQ(g_arena.capacity_bytes(), 1ULL << 30, "g_arena capacity should be 1GB");
 }
 
+// Test: acquire(64, 64) returns 64-byte-aligned pointer on first call
+TEST(test_arena_acquire_64_64_first_call_aligned) {
+    MemoryArena arena;
+
+    // First call to acquire(64, 64) should return a 64-byte-aligned pointer
+    void* ptr = arena.acquire(64, 64);
+    ASSERT_TRUE(ptr != nullptr, "acquire(64, 64) should return valid pointer");
+
+    uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
+    ASSERT_TRUE((addr % 64) == 0, "First acquire(64, 64) should return 64-byte-aligned pointer");
+}
+
 // Test: multiple allocations with alignment
 TEST(test_arena_multiple_aligned_allocations) {
     MemoryArena arena;
-    
+
     const size_t alignment = 64;
     void* ptrs[10];
-    
+
     for (int i = 0; i < 10; ++i) {
         ptrs[i] = arena.acquire(128, alignment);
         ASSERT_TRUE(ptrs[i] != nullptr, "Allocation should succeed");
-        
+
         // Verify alignment
         uintptr_t addr = reinterpret_cast<uintptr_t>(ptrs[i]);
         ASSERT_TRUE((addr % alignment) == 0, "Pointer should be 64-byte aligned");
     }
-    
+
     // All allocations should have increased used_bytes
     ASSERT_TRUE(arena.used_bytes() > 0, "used_bytes should be > 0 after allocations");
 }
@@ -127,6 +139,7 @@ int main() {
     RUN_TEST(test_arena_acquire_increases_used);
     RUN_TEST(test_arena_release_returns_to_freelist);
     RUN_TEST(test_global_arena_singleton);
+    RUN_TEST(test_arena_acquire_64_64_first_call_aligned);
     RUN_TEST(test_arena_multiple_aligned_allocations);
 
     printf("\n=== Results ===\n");

@@ -187,7 +187,7 @@ TradeRing symbol_rings_[MAX_SYMBOLS];  // stack allocation, 100 symbols
 - [x] `SpscRingBuffer::peek()` compiles and unit-test returns last N items without modifying tail.
 - [x] `MemoryArena` constructed with 1GB. `g_arena.used_bytes()` starts at 0.
 - [x] `MemoryArena::acquire(64, 64)` returns a 64-byte-aligned pointer on first call.
-- [ ] `MarketDataProcessor` constructor allocates all `TradeRing` buffers from `g_arena` at startup without `new`.
+- [x] `MarketDataProcessor` constructor allocates all `TradeRing` buffers from `g_arena` at startup without `new`.
 
 ---
 
@@ -321,7 +321,7 @@ heatmap_imgui_descriptor_ = tex.descriptor_set;
 **[ACCEPTANCE — Phase 1]**
 - [x] `SsboSnapshotUpdater::update()` copies one full `SharedMemoryLayoutV3::history` slice into the SSBO `mapped_ptr` in under 500μs (measure with `__rdtsc()`).
 - [ ] `vkCmdDispatch(64, 16, 1)` executes without validation layer errors.
-- [ ] `GPUMemoryManager::add_texture()` returns a non-null `descriptor_set`.
+- [x] `GPUMemoryManager::add_texture()` returns a non-null `descriptor_set`.
 - [ ] `ImGui::Image((ImTextureID)tex.im_texture_id, size)` renders a colored heatmap (not a black rect).
 - [ ] Pipeline barrier: Vulkan validation layer produces zero layout-transition warnings.
 

@@ -159,8 +159,8 @@ class GPUMemoryManager {
   void deallocate_buffer(const BufferAllocation& allocation);
 
   // ImGui texture management
-  CachedTexture add_texture(VkImageView image_view, VkSampler sampler,
-                            VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  VkDescriptorSet add_texture(VkImageView image_view, VkSampler sampler,
+                              VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   void remove_texture(VkDescriptorSet descriptor_set);
   CachedTexture* get_cached_texture(VkDescriptorSet descriptor_set);
 

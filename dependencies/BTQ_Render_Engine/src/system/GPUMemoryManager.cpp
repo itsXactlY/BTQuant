@@ -288,14 +288,9 @@ GPUMemoryManager::MemoryStats GPUMemoryManager::get_memory_stats() const {
   return stats;
 }
 
-CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sampler,
-                                            VkImageLayout image_layout) {
+VkDescriptorSet GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sampler,
+                                              VkImageLayout image_layout) {
   std::lock_guard<std::mutex> lock(texture_cache_mutex_);
-
-  CachedTexture cached_tex{};
-  cached_tex.image_view = image_view;
-  cached_tex.sampler = sampler;
-  cached_tex.image_layout = image_layout;
 
   // Register texture with ImGui using ImGui_ImplVulkan_AddTexture
   // This returns the VkDescriptorSet which serves as the ImTextureID
@@ -306,16 +301,19 @@ CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sa
     throw std::runtime_error("[GPUMemoryManager] Failed to add texture to ImGui: descriptor_set is null");
   }
 
+  // Cache the texture for later retrieval
+  CachedTexture cached_tex{};
+  cached_tex.image_view = image_view;
+  cached_tex.sampler = sampler;
+  cached_tex.image_layout = image_layout;
   cached_tex.descriptor_set = descriptor_set;
   cached_tex.im_texture_id = reinterpret_cast<ImTextureID>(descriptor_set);
-
-  // Cache the texture for later retrieval
   texture_cache_[descriptor_set] = cached_tex;
 
   std::cout << "[GPUMemoryManager] Successfully added texture with descriptor_set: "
             << descriptor_set << std::endl;
 
-  return cached_tex;
+  return descriptor_set;
 }
 
 void GPUMemoryManager::remove_texture(VkDescriptorSet descriptor_set) {

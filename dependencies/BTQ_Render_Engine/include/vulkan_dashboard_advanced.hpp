@@ -322,7 +322,7 @@ class VulkanDashboard {
   // Heatmap compute pipeline
   LobHeatmapComputePipeline heatmap_pipeline_;
   SsboSnapshotUpdater ssbo_updater_;
-  CachedTexture heatmap_texture_;  // Registered texture for ImGui::Image()
+  VkDescriptorSet heatmap_texture_ = VK_NULL_HANDLE;  // Registered texture descriptor set
 
   // Customization
   std::function<void()> custom_menubar_callback_;

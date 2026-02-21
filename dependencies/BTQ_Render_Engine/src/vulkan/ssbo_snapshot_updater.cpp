@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <immintrin.h>
 #include <x86intrin.h>
 
 #include "hotspine_layout_v3.hpp"
@@ -48,7 +49,6 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
     uint64_t seq = layout->header.global_lock.read_begin();
 
     auto* dst = static_cast<uint8_t*>(mapped_ptr_);
-    float local_max = 1.0f;
 
     // Copy entire history slice using memcpy for maximum throughput
     // Total: 1024 columns × 256 rows × 16 bytes = 4,194,304 bytes
@@ -60,14 +60,67 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
       continue;  // Retry on inconsistent read
     }
 
-    // Consistent read — compute max volume for normalization
-    // Iterate through all VolumeNodes to find max combined volume
-    constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
-    auto* out_nodes = reinterpret_cast<::HotSpine::V3::VolumeNode*>(dst);
-    for (size_t i = 0; i < TOTAL_NODES; ++i) {
-      float vol = out_nodes[i].buy_vol + out_nodes[i].sell_vol;
+    // Consistent read — compute max volume for normalization using AVX2 SIMD
+    // Iterate through all VolumeNodes to find max combined volume (buy_vol + sell_vol)
+    constexpr size_t TOTAL_NODES = COLUMNS * ROWS;  // 262,144 nodes
+    auto* nodes = reinterpret_cast<const ::HotSpine::V3::VolumeNode*>(dst);
+
+    // Use AVX2 to process 8 floats at a time (256-bit register)
+    // Each VolumeNode has buy_vol and sell_vol contiguous in memory
+    float local_max = 1.0f;
+
+#ifdef __AVX2__
+    constexpr size_t SIMD_STRIDE = 4;  // 4 VolumeNodes per iteration (8 floats total)
+
+    const size_t simd_limit = (TOTAL_NODES / SIMD_STRIDE) * SIMD_STRIDE;
+
+    __m256 v_max = _mm256_set1_ps(0.0f);
+
+    for (size_t i = 0; i < simd_limit; i += SIMD_STRIDE) {
+      // Load buy_vol from 4 consecutive nodes (offset 0)
+      __m128 buy_lo = _mm_loadu_ps(reinterpret_cast<const float*>(&nodes[i]));
+      // Load buy_vol from next 4 nodes
+      __m128 buy_hi = _mm_loadu_ps(reinterpret_cast<const float*>(&nodes[i + 4]));
+
+      // Load sell_vol from 4 consecutive nodes (offset 4 bytes into each node)
+      __m128 sell_lo = _mm_loadu_ps(reinterpret_cast<const float*>(&nodes[i]) + 1);
+      // Load sell_vol from next 4 nodes
+      __m128 sell_hi = _mm_loadu_ps(reinterpret_cast<const float*>(&nodes[i + 4]) + 1);
+
+      // Convert to __m256
+      __m256 v_buy = _mm256_set_m128(buy_hi, buy_lo);
+      __m256 v_sell = _mm256_set_m128(sell_hi, sell_lo);
+
+      // Compute total volume = buy + sell
+      __m256 v_vol = _mm256_add_ps(v_buy, v_sell);
+
+      // Update max
+      v_max = _mm256_max_ps(v_max, v_vol);
+    }
+
+    // Horizontal max: reduce 8 lanes to 1
+    __m128 lo = _mm256_castps256_ps128(v_max);
+    __m128 hi = _mm256_extractf128_ps(v_max, 1);
+    __m128 max_lo = _mm_max_ps(lo, hi);
+    __m128 max_hi = _mm_shuffle_ps(max_lo, max_lo, _MM_SHUFFLE(2, 3, 0, 1));
+    __m128 max_final = _mm_max_ss(max_lo, max_hi);
+    max_hi = _mm_shuffle_ps(max_final, max_final, _MM_SHUFFLE(1, 1, 1, 1));
+    max_final = _mm_max_ss(max_final, max_hi);
+
+    local_max = std::max(local_max, _mm_cvtss_f32(max_final));
+
+    // Handle remaining nodes
+    for (size_t i = simd_limit; i < TOTAL_NODES; ++i) {
+      float vol = nodes[i].buy_vol + nodes[i].sell_vol;
       if (vol > local_max) local_max = vol;
     }
+#else
+    // Fallback: scalar implementation
+    for (size_t i = 0; i < TOTAL_NODES; ++i) {
+      float vol = nodes[i].buy_vol + nodes[i].sell_vol;
+      if (vol > local_max) local_max = vol;
+    }
+#endif
 
     // Update running max with EMA decay
     max_volume_ = std::max(max_volume_ * 0.99f, local_max);

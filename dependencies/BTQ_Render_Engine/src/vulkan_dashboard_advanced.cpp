@@ -70,7 +70,12 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     std::cerr << "[VulkanDashboard] Failed to initialize heatmap compute pipeline" << std::endl;
     return std::unexpected("Failed to initialize heatmap compute pipeline");
   }
-  
+
+  // Initialize SSBO descriptor binding once (before first use)
+  heatmap_pipeline_.update_descriptor_once(vulkan_core_->get_device(),
+                                           ssbo_updater_.get_buffer(),
+                                           ssbo_updater_.get_buffer_size());
+
   // Register heatmap output texture with ImGui for rendering
   heatmap_texture_ = vulkan_core_->get_memory_manager().add_texture(
       heatmap_pipeline_.get_output_image_view(),
@@ -363,22 +368,16 @@ void VulkanDashboard::render_frame() {
                                     },
                                     [this](VkCommandBuffer cmd) {
                                       // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
-                                      // Update descriptor with current SSBO
-                                      heatmap_pipeline_.update_descriptor(
-                                          vulkan_core_->get_device(), ssbo_updater_.get_buffer(),
-                                          ssbo_updater_.get_buffer_size());
-
                                       // Transition image to GENERAL layout for compute write
                                       heatmap_pipeline_.transition_to_general(cmd);
 
-                                      // Dispatch compute shader
+                                      // Dispatch compute shader with push constants
                                       HeatmapPushConstants pc{};
                                       pc.max_volume = 1.0f;
                                       pc.alpha = 0.3f;
                                       heatmap_pipeline_.dispatch(cmd, pc);
 
-                                      // Transition image to SHADER_READ_ONLY_OPTIMAL for ImGui
-                                      // rendering
+                                      // Transition image for fragment shader read (ImGui rendering)
                                       heatmap_pipeline_.transition_to_read(cmd);
                                     });
   vulkan_core_->PresentFrame(imageIndex);

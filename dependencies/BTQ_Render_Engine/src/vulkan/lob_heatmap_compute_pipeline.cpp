@@ -266,6 +266,15 @@ void LobHeatmapComputePipeline::update_descriptor(VkDevice device, VkBuffer ssbo
 }
 
 // ============================================================================
+// update_descriptor_once — initialize SSBO binding (call once at startup)
+// ============================================================================
+void LobHeatmapComputePipeline::update_descriptor_once(VkDevice device, VkBuffer ssbo_buffer,
+                                                       VkDeviceSize ssbo_size) {
+  // Initial descriptor update for SSBO binding 0
+  update_descriptor(device, ssbo_buffer, ssbo_size);
+}
+
+// ============================================================================
 // dispatch
 // ============================================================================
 void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushConstants& pc) {

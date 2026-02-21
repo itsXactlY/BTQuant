@@ -40,6 +40,9 @@ class LobHeatmapComputePipeline {
   /// Update the descriptor set to point at a new SSBO buffer.
   void update_descriptor(VkDevice device, VkBuffer ssbo_buffer, VkDeviceSize ssbo_size);
 
+  /// Initialize the SSBO descriptor binding (call once at startup).
+  void update_descriptor_once(VkDevice device, VkBuffer ssbo_buffer, VkDeviceSize ssbo_size);
+
   /// Record compute dispatch into the command buffer.
   /// Issues push constants + vkCmdDispatch(64, 16, 1).
   void dispatch(VkCommandBuffer cmd, const HeatmapPushConstants& pc);

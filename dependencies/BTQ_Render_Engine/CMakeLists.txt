@@ -402,6 +402,13 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     add_test(NAME SpscRingBufferPeekTest COMMAND test_spsc_ring_buffer)
+
+    # MemoryArena unit tests
+    add_executable(test_memory_arena tests/test_memory_arena.cpp)
+    target_include_directories(test_memory_arena PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    add_test(NAME MemoryArenaTest COMMAND test_memory_arena)
 else()
     message(STATUS "Building with tests disabled - test files will be excluded from build tree")
 endif()

@@ -393,12 +393,15 @@ target_link_libraries(BTQuantTerminal PRIVATE
 # Conditionally build tests if BUILD_TESTS is enabled
 if(BUILD_TESTS)
     message(STATUS "Building with tests enabled")
-    
-    # Find test framework if needed
+
     enable_testing()
-    
-    # Example test executable - in a real scenario, you'd define actual test executables here
-    # For now, we'll just ensure that test files are not accidentally included in the main build
+
+    # SpscRingBuffer unit tests
+    add_executable(test_spsc_ring_buffer tests/test_spsc_ring_buffer.cpp)
+    target_include_directories(test_spsc_ring_buffer PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    add_test(NAME SpscRingBufferPeekTest COMMAND test_spsc_ring_buffer)
 else()
     message(STATUS "Building with tests disabled - test files will be excluded from build tree")
 endif()

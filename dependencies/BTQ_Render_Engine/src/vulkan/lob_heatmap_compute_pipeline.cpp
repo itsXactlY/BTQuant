@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <vector>
 
@@ -44,6 +45,19 @@ bool LobHeatmapComputePipeline::initialize(VkDevice device, VkPhysicalDevice phy
 // ============================================================================
 bool LobHeatmapComputePipeline::create_output_image(VkDevice device,
                                                     VkPhysicalDevice physical_device) {
+  // Verify format supports required features for storage image and sampled image
+  VkFormatProperties format_props{};
+  vkGetPhysicalDeviceFormatProperties(physical_device, VK_FORMAT_R16G16B16A16_SFLOAT, &format_props);
+  
+  const VkFormatFeatureFlags required_features = 
+      VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+  
+  if ((format_props.optimalTilingFeatures & required_features) != required_features) {
+    std::cerr << "[LobHeatmapComputePipeline] VK_FORMAT_R16G16B16A16_SFLOAT does not support "
+              << "required storage/sampled image features" << std::endl;
+    return false;
+  }
+
   VkImageCreateInfo img_ci{};
   img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   img_ci.imageType = VK_IMAGE_TYPE_2D;
@@ -284,9 +298,12 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       0, 0, nullptr, 0, nullptr, 1, &barrier);
+  // Ensure compute shader writes complete before fragment shader reads
+  vkCmdPipelineBarrier(cmd,
+                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_DEPENDENCY_BY_REGION_BIT,
+                       0, nullptr, 0, nullptr, 1, &barrier);
 }
 
 void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
@@ -309,19 +326,24 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     initial_layout_done_ = true;
 
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                         &barrier);
+    vkCmdPipelineBarrier(cmd,
+                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0,
+                         0, nullptr, 0, nullptr, 1, &barrier);
   } else {
     // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL to GENERAL
+    // Wait for fragment shader reads from previous frame's ImGui rendering
     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                         &barrier);
+    vkCmdPipelineBarrier(cmd,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT,
+                         0, nullptr, 0, nullptr, 1, &barrier);
   }
 }
 

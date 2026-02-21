@@ -283,12 +283,14 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 // Image Transitions
 // ============================================================================
 void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
+  // VK_IMAGE_LAYOUT_GENERAL supports both compute storage writes and fragment shader sampled reads.
+  // Only need to ensure compute writes are complete before fragment shader reads.
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;  // Stay in GENERAL - supports all operations
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = output_image_;
@@ -332,12 +334,12 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   } else {
-    // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL to GENERAL
-    // Wait for fragment shader reads from previous frame's ImGui rendering
+    // Subsequent frames: ensure previous frame's fragment shader reads are complete
+    // before compute shader writes in this frame.
     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;  // Stay in GENERAL
 
     vkCmdPipelineBarrier(cmd,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,

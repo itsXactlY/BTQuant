@@ -292,14 +292,14 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 // Image Transitions
 // ============================================================================
 void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
-  // Transition from GENERAL (compute write) to SHADER_READ_ONLY_OPTIMAL (fragment read)
-  // This ensures the fragment shader can correctly sample the heatmap texture
+  // Keep image in GENERAL layout for both compute write and fragment read
+  // Only need execution dependency to ensure compute writes are visible to fragment shader
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = output_image_;
@@ -309,11 +309,10 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Ensure compute shader writes complete before any graphics stage reads
-  // Use ALL_COMMANDS_BIT for dstStageMask to ensure visibility across queue submissions
+  // Ensure compute shader writes complete before fragment shader reads
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                        VK_DEPENDENCY_BY_REGION_BIT,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }

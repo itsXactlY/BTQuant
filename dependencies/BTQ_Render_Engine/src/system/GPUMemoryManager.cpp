@@ -301,8 +301,9 @@ CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sa
   // This returns the VkDescriptorSet which serves as the ImTextureID
   VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(sampler, image_view, image_layout);
 
+  // Validate that we received a valid descriptor set
   if (descriptor_set == VK_NULL_HANDLE) {
-    std::cerr << "[GPUMemoryManager] Failed to add texture to ImGui" << std::endl;
+    std::cerr << "[GPUMemoryManager] Failed to add texture to ImGui: descriptor_set is null" << std::endl;
     return cached_tex;
   }
 
@@ -311,6 +312,9 @@ CachedTexture GPUMemoryManager::add_texture(VkImageView image_view, VkSampler sa
 
   // Cache the texture for later retrieval
   texture_cache_[descriptor_set] = cached_tex;
+
+  std::cout << "[GPUMemoryManager] Successfully added texture with descriptor_set: " 
+            << descriptor_set << std::endl;
 
   return cached_tex;
 }

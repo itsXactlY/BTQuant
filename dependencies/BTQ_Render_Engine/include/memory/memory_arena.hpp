@@ -68,7 +68,9 @@ class MemoryArena {
     size_t aligned;
     size_t new_offset;
     do {
-      aligned = (current + alignment - 1) & ~(alignment - 1);
+      // Align relative to base_ pointer to ensure returned pointer is properly aligned
+      aligned = ((reinterpret_cast<size_t>(base_) + current + alignment - 1) & ~(alignment - 1)) -
+                reinterpret_cast<size_t>(base_);
       new_offset = aligned + bytes;
       if (new_offset > capacity_) return nullptr;  // Exhausted
     } while (!offset_.compare_exchange_weak(current, new_offset, std::memory_order_release,

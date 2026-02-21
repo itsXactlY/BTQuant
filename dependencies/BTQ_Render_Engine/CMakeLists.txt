@@ -409,6 +409,18 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     add_test(NAME MemoryArenaTest COMMAND test_memory_arena)
+
+    # MarketDataProcessor arena allocation tests
+    add_executable(test_market_data_processor_arena tests/test_market_data_processor_arena.cpp)
+    target_include_directories(test_market_data_processor_arena PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${glm_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
+    )
+    target_link_libraries(test_market_data_processor_arena PRIVATE
+        simdjson
+    )
+    add_test(NAME MarketDataProcessorArenaTest COMMAND test_market_data_processor_arena)
 else()
     message(STATUS "Building with tests disabled - test files will be excluded from build tree")
 endif()

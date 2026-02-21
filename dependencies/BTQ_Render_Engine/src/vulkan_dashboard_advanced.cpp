@@ -59,6 +59,19 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   ImGui_ImplGlfw_InitForVulkan(window_, true);
   std::println("[VulkanDashboard] ImGui GLFW Backend initialized.");
 
+  // Initialize heatmap compute pipeline and SSBO updater
+  std::println("[VulkanDashboard] Initializing Heatmap Compute Pipeline...");
+  if (!ssbo_updater_.initialize(vulkan_core_->get_memory_manager())) {
+    std::cerr << "[VulkanDashboard] Failed to initialize SSBO updater" << std::endl;
+    return std::unexpected("Failed to initialize SSBO updater");
+  }
+  if (!heatmap_pipeline_.initialize(vulkan_core_->get_device(), vulkan_core_->get_physical_device(),
+                                    vulkan_core_->get_descriptor_pool())) {
+    std::cerr << "[VulkanDashboard] Failed to initialize heatmap compute pipeline" << std::endl;
+    return std::unexpected("Failed to initialize heatmap compute pipeline");
+  }
+  std::println("[VulkanDashboard] Heatmap Compute Pipeline initialized.");
+
   init_components();
   return {};
 }
@@ -310,19 +323,34 @@ void VulkanDashboard::render_frame() {
     heatmap_dirty = market_data_processor_->getHeatmapDirtyFlag().exchange(false);
   }
 
+  // Update SSBO with latest market data if dirty
+  // Note: For now, we skip the SSBO update since we don't have the SharedMemoryLayoutV3
+  // The compute dispatch will still execute with zero-initialized data
+  (void)heatmap_dirty;  // Suppress unused warning for now
+
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
-                                    [heatmap_dirty](VkCommandBuffer cmd) {
+                                    [this](VkCommandBuffer cmd) {
                                       // No microstructure renderer - panels handle their own
                                       // rendering
 
-                                      // Conditional heatmap compute shader dispatch
-                                      // Only dispatch if dirty flag was set by incremental_updater
-                                      if (heatmap_dirty) {
-                                        // Heatmap compute dispatch would go here when implemented
-                                        // Example: vkCmdDispatch(cmd, workgroupCountX,
-                                        // workgroupCountY, workgroupCountZ);
-                                      }
-                                      // If not dirty, skip compute dispatch to save GPU cycles
+                                      // Always dispatch compute shader for now
+                                      // Update descriptor with current SSBO
+                                      heatmap_pipeline_.update_descriptor(
+                                          vulkan_core_->get_device(), ssbo_updater_.get_buffer(),
+                                          ssbo_updater_.get_buffer_size());
+
+                                      // Transition image to GENERAL layout for compute write
+                                      heatmap_pipeline_.transition_to_general(cmd);
+
+                                      // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
+                                      HeatmapPushConstants pc{};
+                                      pc.max_volume = 1.0f;
+                                      pc.alpha = 0.3f;
+                                      heatmap_pipeline_.dispatch(cmd, pc);
+
+                                      // Transition image to SHADER_READ_ONLY_OPTIMAL for ImGui
+                                      // rendering
+                                      heatmap_pipeline_.transition_to_read(cmd);
                                     });
   vulkan_core_->PresentFrame(imageIndex);
 }
@@ -342,6 +370,12 @@ void VulkanDashboard::shutdown() {
 
   if (vulkan_core_) {
     vulkan_core_->wait_idle();
+  }
+
+  // Clean up heatmap compute pipeline resources
+  if (vulkan_core_) {
+    heatmap_pipeline_.destroy(vulkan_core_->get_device());
+    ssbo_updater_.destroy();
   }
 
   workspace_.reset();

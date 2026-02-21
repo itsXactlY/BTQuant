@@ -16,6 +16,11 @@
 
 namespace BTQuant {
 
+// Forward declaration
+namespace HotSpine::V3 {
+struct SharedMemoryLayoutV3;
+}
+
 class HotspineBridge {
  public:
   HotspineBridge() = default;

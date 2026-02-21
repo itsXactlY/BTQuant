@@ -41,6 +41,8 @@
 
 #include "market_data_processor.hpp"
 #include "ui/ui_base.hpp"
+#include "vulkan/lob_heatmap_compute_pipeline.hpp"
+#include "vulkan/ssbo_snapshot_updater.hpp"
 #include "vulkan_base_types.hpp"
 
 namespace BTQuant {
@@ -316,6 +318,10 @@ class VulkanDashboard {
   std::unique_ptr<QuantWorkspaceComponent> workspace_;
   std::unique_ptr<VulkanSyncContext> sync_context_;
   std::unique_ptr<TimelineSemaphore> timeline_semaphore_;
+
+  // Heatmap compute pipeline
+  LobHeatmapComputePipeline heatmap_pipeline_;
+  SsboSnapshotUpdater ssbo_updater_;
 
   // Customization
   std::function<void()> custom_menubar_callback_;

@@ -15,7 +15,7 @@
 #include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/theme_manager.hpp"
-
+#include "hotspine_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
@@ -35,7 +35,8 @@ int main(int argc, char** argv) {
   std::cout << "  BTQuant Trading Terminal v1.0.0" << std::endl;
   std::cout << "========================================" << std::endl;
 
-  // 1. Initialize MarketDataProcessor (The Data Core) - Created ABSOLUTELY FIRST to be destroyed LAST
+  // 1. Initialize MarketDataProcessor (The Data Core) - Created ABSOLUTELY FIRST to be destroyed
+  // LAST
   std::cout << "Initializing Data Layer..." << std::endl;
   auto market_processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
 
@@ -46,11 +47,13 @@ int main(int argc, char** argv) {
   // 3. Data Bridge (using same processor instance)
   auto data_bridge = market_processor;
 
-  // 4. Initialize Dashboard (Vulkan + ImGui) - Creates Workspace + PanelManager + Trading Systems internally
+  // 4. Initialize Dashboard (Vulkan + ImGui) - Creates Workspace + PanelManager + Trading Systems
+  // internally
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, market_processor, dashboard_config);
+  auto dashboard =
+      std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, market_processor, dashboard_config);
 
   if (auto res = dashboard->initialize(); !res) {
     std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error() << std::endl;
@@ -58,8 +61,7 @@ int main(int argc, char** argv) {
   }
   std::cout << "✓ Vulkan Dashboard initialized" << std::endl;
 
-  // 5. Configure Theme
-  ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
+  // MMT Deep Void aesthetic is applied inside VulkanDashboard::initialize()
 
   // 5.1 Apply default layout preset (MODERN_TRADING)
   if (auto* workspace = dashboard->get_workspace_component()) {
@@ -67,6 +69,15 @@ int main(int argc, char** argv) {
       panel_mgr->apply_layout_preset(LayoutPreset::MODERN_TRADING);
       std::cout << "✓ Applied MODERN_TRADING layout preset" << std::endl;
     }
+  }
+
+  // 5.2 Start the HotSpine data bridge (live shared memory -> MarketDataProcessor)
+  BTQuant::HotspineBridge hotspine_bridge;
+  if (hotspine_bridge.start(market_processor.get())) {
+    std::cout << "✓ HotSpine data bridge connected" << std::endl;
+  } else {
+    std::cerr << "⚠ HotSpine data bridge failed to start (continuing without live data)"
+              << std::endl;
   }
 
   // 6. Setup Custom Menu Bar
@@ -163,6 +174,9 @@ int main(int argc, char** argv) {
     // Event Handling
     dashboard->handle_events();
 
+    // Process market data queue -> ring buffers (call BEFORE render)
+    market_processor->process_queues();
+
     // Render
     dashboard->render_frame();
 
@@ -183,6 +197,9 @@ int main(int argc, char** argv) {
       pm->save_layout("default_layout.json");
     }
   }
+
+  // Stop data bridge
+  hotspine_bridge.stop();
 
   dashboard->shutdown();
 

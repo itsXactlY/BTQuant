@@ -20,7 +20,7 @@ void PanelBase::begin_panel_window() {
   std::string window_title =
       config_.title + "###panel_" + std::to_string(reinterpret_cast<uintptr_t>(this));
 
-  ImGui::Begin(window_title.c_str(), &config_.visible, flags);
+  ImGui::Begin(window_title.c_str(), nullptr, flags);  // No close button (no way to re-show)
 }
 
 void PanelBase::end_panel_window() {
@@ -64,20 +64,14 @@ void PanelBase::render_panel_header() {
   // Settings button (left of close button)
   if (get_settings_interface() != nullptr) {
     float button_size = ImGui::GetTextLineHeight();
-    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 - 15.0f);  // Position before close button
+    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 -
+                    15.0f);  // Position before close button
     if (ImGui::Button("⚙", ImVec2(button_size, button_size))) {
       open_settings();
     }
   }
 
-  // Close button (right aligned)
-  if (config_.visible) {
-    float close_size = ImGui::GetTextLineHeight();
-    ImGui::SameLine(ImGui::GetWindowWidth() - close_size - 10.0f);
-    if (ImGui::Button("X", ImVec2(close_size, close_size))) {
-      config_.visible = false;
-    }
-  }
+  // Close button removed — panels have no re-show mechanism
 
   // Right-click context menu
   if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {

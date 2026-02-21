@@ -12,10 +12,14 @@
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 
-// Forward declaration for AlertsPanel
+// Forward declarations
 namespace BTQuant {
 class AlertsPanel;
+class ClusterEngine;
+namespace Rendering {
+class VulkanChartPipeline;
 }
+}  // namespace BTQuant
 
 namespace BTQuant {
 
@@ -116,6 +120,12 @@ class PanelManager {
   std::string active_symbol_name_;
 
   class VulkanCore* vulkan_core_ = nullptr;
+
+  // GPU Pipeline — created in set_vulkan_core(), shared by all ChartPanels
+  std::unique_ptr<Rendering::VulkanChartPipeline> chart_pipeline_;
+
+  // Cluster Engine — shared by Footprint and Volume Profile panels
+  std::unique_ptr<ClusterEngine> cluster_engine_;
 
   // Current layout tracking
   std::string current_layout_name_ = "default";

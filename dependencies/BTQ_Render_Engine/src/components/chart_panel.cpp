@@ -57,7 +57,7 @@ void ChartPanel::render_content() {
   }
 
   // 3. Sicherheits-Check: Ist die Pipeline gebunden?
-  if (!chart_pipeline_ || descriptor_set_ == VK_NULL_HANDLE) {
+  if (!chart_pipeline_) {
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Awaiting GPU Memory Allocation...");
     return;
   }

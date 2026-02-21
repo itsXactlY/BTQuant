@@ -185,6 +185,7 @@ set(DASHBOARD_SOURCES
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp
+    src/data/hotspine_bridge.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
@@ -243,6 +244,8 @@ set(DASHBOARD_SOURCES
     src/data/orderbook_snapshot_manager.cpp
     src/performance/panel_profiler.cpp
     src/ui/performance_settings.cpp
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 
@@ -281,6 +284,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp
+    src/data/hotspine_bridge.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
@@ -339,6 +343,8 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/orderbook_snapshot_manager.cpp
     src/performance/panel_profiler.cpp
     src/ui/performance_settings.cpp
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 

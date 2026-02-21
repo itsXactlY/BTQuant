@@ -14,6 +14,7 @@ using namespace BTQuant::Rendering;
 #include <vector>
 
 #include "data/core_types.hpp"
+#include "memory/memory_arena.hpp"
 #include "rendering/candlestick_instancing.hpp"
 #include "rendering/vulkan_chart_pipeline.hpp"
 #include "threading/lockfree_queue.hpp"
@@ -38,6 +39,14 @@ class MarketDataProcessor {
       latest_prices_[i].store(0.0, std::memory_order_relaxed);
       active_books_[i].store(nullptr, std::memory_order_relaxed);
     }
+    // Allocate all TradeRing buffers from g_arena at startup — zero heap allocs on hot path
+    for (size_t i = 0; i < MAX_SYMBOLS; ++i) {
+      void* mem = g_arena.acquire(TradeRing::CAP * sizeof(TradeData), 64);
+      if (mem) {
+        symbol_rings_[i].buf = static_cast<TradeData*>(mem);
+        std::memset(mem, 0, TradeRing::CAP * sizeof(TradeData));
+      }
+    }
   }
 
   virtual ~MarketDataProcessor() = default;
@@ -48,6 +57,12 @@ class MarketDataProcessor {
 
   // Pusht einen Trade in die lock-free Queue (Sub-Mikrosekunde)
   bool enqueue_trade(const TradeData& trade) { return trade_queue_.push(trade); }
+
+  // Non-consuming read of most recent N trades for symbol (Tape panel reads here)
+  size_t peek_trades(uint32_t symbol_id, size_t n, TradeData* out) const noexcept {
+    if (symbol_id >= MAX_SYMBOLS) return 0;
+    return symbol_rings_[symbol_id].peek(n, out);
+  }
 
   // Setzt das aktive Orderbuch über einen atomaren Pointer-Swap (Double-Buffering)
   void update_orderbook(uint32_t symbol_id, OrderBookSnapshot* new_snapshot) {
@@ -91,15 +106,9 @@ class MarketDataProcessor {
         // UI-Pointer aktualisieren
         latest_prices_[trade.symbol_id].store(trade.price, std::memory_order_release);
 
-        // Store in recent trades for analytics
-        {
-          std::lock_guard<std::mutex> lock(analytics_mutex_);
-          auto& trades = symbol_trades_[trade.symbol_id];
-          trades.push_back(trade);
-          // Keep only last 1000 trades per symbol
-          if (trades.size() > 1000) {
-            trades.erase(trades.begin(), trades.begin() + (trades.size() - 1000));
-          }
+        // Store in arena-backed ring — NO mutex, NO heap alloc
+        if (symbol_rings_[trade.symbol_id].buf) {
+          symbol_rings_[trade.symbol_id].push(trade);
         }
 
         // Zero-Copy GPU Buffer Ingestion:
@@ -112,9 +121,6 @@ class MarketDataProcessor {
           if (binding.buffer && binding.capacity > 0) {
             uint32_t current_idx = binding.current_count.load(std::memory_order_relaxed);
             if (current_idx < binding.capacity) {
-              // Convert trade to a basic Candlestick for visualization
-              // In a real scenario, this would aggregate OHLCV data over time windows,
-              // but for this phase we map single trades to visual instances instantly.
               binding.buffer[current_idx].open = trade.price;
               binding.buffer[current_idx].high = trade.price;
               binding.buffer[current_idx].low = trade.price;
@@ -224,24 +230,25 @@ class MarketDataProcessor {
     analytics.symbol_name = getSymbolName(symbol_id);
     analytics.latest_price = latest_prices_[symbol_id].load(std::memory_order_acquire);
 
-    auto trades_it = symbol_trades_.find(symbol_id);
-    if (trades_it != symbol_trades_.end()) {
-      analytics.recent_trades = trades_it->second;
+    if (symbol_id < MAX_SYMBOLS) {
+      const auto& ring = symbol_rings_[symbol_id];
+      if (ring.buf && ring.count > 0) {
+        // Copy recent trades from ring into analytics vector
+        analytics.recent_trades.resize(ring.count);
+        ring.peek(ring.count, analytics.recent_trades.data());
 
-      // Calculate VWAP from recent trades
-      double total_volume = 0.0;
-      double volume_weighted_price = 0.0;
-      for (const auto& trade : trades_it->second) {
-        volume_weighted_price += trade.price * trade.volume;
-        total_volume += trade.volume;
-      }
-      if (total_volume > 0) {
-        analytics.vwap = volume_weighted_price / total_volume;
-      }
-      analytics.volume_24h = total_volume;
-
-      if (!trades_it->second.empty()) {
-        analytics.last_update_ts = trades_it->second.back().timestamp_us;
+        // Calculate VWAP from recent trades
+        double total_volume = 0.0;
+        double volume_weighted_price = 0.0;
+        for (const auto& trade : analytics.recent_trades) {
+          volume_weighted_price += trade.price * trade.volume;
+          total_volume += trade.volume;
+        }
+        if (total_volume > 0) {
+          analytics.vwap = volume_weighted_price / total_volume;
+        }
+        analytics.volume_24h = total_volume;
+        analytics.last_update_ts = analytics.recent_trades.back().timestamp_us;
       }
     }
 
@@ -378,10 +385,31 @@ class MarketDataProcessor {
   uint64_t next_subscription_id_ = 1;
 
   // ==========================================
-  // ANALYTICS STORAGE
+  // ANALYTICS STORAGE — Arena-backed TradeRings (zero heap alloc on hot path)
   // ==========================================
-  mutable std::mutex analytics_mutex_;
-  std::unordered_map<uint32_t, std::vector<TradeData>> symbol_trades_;
+  mutable std::mutex analytics_mutex_;  // Only guards symbol_names_ and getSymbolAnalytics()
+  struct TradeRing {
+    TradeData* buf = nullptr;  // Backed by g_arena
+    uint32_t head = 0;
+    uint32_t count = 0;
+    static constexpr uint32_t CAP = 1024;
+
+    void push(const TradeData& t) noexcept {
+      buf[head] = t;
+      head = (head + 1) % CAP;
+      if (count < CAP) ++count;
+    }
+
+    size_t peek(size_t n, TradeData* out) const noexcept {
+      const size_t c = (n < count) ? n : count;
+      for (size_t i = 0; i < c; ++i) {
+        const size_t idx = (head - c + i + CAP) % CAP;
+        out[i] = buf[idx];
+      }
+      return c;
+    }
+  };
+  TradeRing symbol_rings_[MAX_SYMBOLS];
   std::unordered_map<uint32_t, std::string> symbol_names_;
 
   // ==========================================

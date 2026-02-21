@@ -92,4 +92,5 @@ struct SharedMemoryLayoutV3 {
 
 static_assert(sizeof(VolumeNode) == 16);
 static_assert(alignof(ClusterColumn) == 64);
+
 }  // namespace HotSpine::V3

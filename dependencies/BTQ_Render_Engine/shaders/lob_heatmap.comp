@@ -1,178 +1,82 @@
-// LOB Heatmap Compute Shader
-// Vulkan 1.3 - Market Microstructure Renderer
-// Computes limit order book depth evolution as a cyclic heatmap texture
-// Price level -> Y-coordinate, Time -> X-coordinate
+// LOB Heatmap Compute Shader — VolumeNode Cluster Edition
+// Vulkan 1.3 — Market Microstructure Terminal
+// Reads HotSpine::V3::VolumeNode SSBO, outputs RGBA16F heatmap texture
+// X = column index (time), Y = row index (price level)
 
 #version 460 core
-#extension GL_EXT_nonuniform_qualifier : enable
-#extension GL_EXT_scalar_block_layout : enable
 
 // ========================================
-// SSBO Structures (GPU-CPU aligned)
+// SSBO: Flat VolumeNode array (std430)
 // ========================================
+// Matches HotSpine::V3::VolumeNode exactly:
+//   float    buy_vol;      // offset 0, 4B
+//   float    sell_vol;     // offset 4, 4B
+//   uint     trade_count;  // offset 8, 4B (uint16 packed as uint32 in std430)
+//   uint     tpo_bits;     // offset 12, 4B (uint16 packed as uint32 in std430)
+// sizeof = 16 bytes per node
 
-// Order Book Level Structure (std430 aligned)
-struct OrderBookLevel {
-    float price;           // Price level
-    uint askQuantity;      // Ask volume at this price
-    uint bidQuantity;      // Bid volume at this price
-    uint numOrders;        // Number of orders at this price
+struct VolumeNode {
+    float buy_vol;
+    float sell_vol;
+    uint  trade_count;  // std430: uint16_t → uint
+    uint  tpo_bits;     // std430: uint16_t → uint
 };
 
-// Hotspine Order Book Snapshot (SSBO)
-layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshot {
-    uint currentTimeIndex;     // Current cyclic time index
-    uint priceLevelsCount;     // Number of price levels
-    float basePrice;           // Base price for rendering
-    float priceRange;          // Price range to display
-    OrderBookLevel levels[];   // Variable-length price levels
-} orderBook;
+layout(set = 0, binding = 0, std430) readonly buffer ClusterSSBO {
+    VolumeNode nodes[];  // Flat array: column * 256 + row
+} ssbo;
 
-// Heatmap Texture Output (Image2D)
-layout(binding = 1, rgba32f) uniform image2D heatmapOutput;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D heatmap_out;
 
 // ========================================
-// Uniforms
+// Push Constants
 // ========================================
-
-layout(std140, set = 1, binding = 0) uniform HeatmapParams {
-    uint width;             // Heatmap texture width (time steps)
-    uint height;            // Heatmap texture height (price levels)
-    float maxLiquidity;     // Maximum liquidity for normalization
-    float timeOffset;       // Time offset for rolling window
-    bool invertYAxis;       // Invert Y-axis (price increasing downward)
-} params;
-
-// Specialization constants for heatmap parameters
-layout(constant_id = 0) const uint MAX_LIQUIDITY = 1000;
-layout(constant_id = 1) const bool INVERT_Y_AXIS = true;
+layout(push_constant) uniform PushConstants {
+    float max_volume;   // Running max from CPU side for normalization
+    float alpha;        // Overall heatmap opacity (default 0.3)
+} pc;
 
 // ========================================
-// Constants
+// Workgroup Configuration
 // ========================================
-
-const vec3 COOL_COLOR = vec3(0.0, 0.0, 0.5);    // Blue for low liquidity
-const vec3 WARM_COLOR = vec3(1.0, 0.0, 0.0);    // Red for high liquidity
-const vec3 NEUTRAL_COLOR = vec3(0.2, 0.2, 0.2); // Dark gray for no liquidity
-
-// ========================================
-// Helper Functions
-// ========================================
-
-// Normalize price to [0, height] coordinate
-float priceToY(float price) {
-    float normalizedPrice = (price - orderBook.basePrice) / orderBook.priceRange;
-    float y = normalizedPrice * params.height;
-    
-    if (params.invertYAxis) {
-        return params.height - 1.0 - y;
-    }
-    return y;
-}
-
-// Get color based on liquidity density (Professional multi-stop gradient)
-vec3 liquidityToColor(float liquidity) {
-    float normalized = clamp(liquidity / params.maxLiquidity, 0.0, 1.0);
-    
-    // 0.0: Deep Blue (Low) -> 0.2: Cyan -> 0.4: Green -> 0.6: Yellow -> 0.8: Orange -> 1.0: Fire Red (High)
-    vec3 c1 = vec3(0.02, 0.02, 0.15); // Deep Blue/Black
-    vec3 c2 = vec3(0.0, 0.6, 1.0);   // Bright Cyan
-    vec3 c3 = vec3(0.0, 1.0, 0.4);   // Vibrant Green 
-    vec3 c4 = vec3(1.0, 1.0, 0.0);   // Pure Yellow
-    vec3 c5 = vec3(1.0, 0.4, 0.0);   // Deep Orange
-    vec3 c6 = vec3(1.0, 0.05, 0.0);  // Fire Red
-    
-    if (normalized < 0.2) return mix(c1, c2, normalized / 0.2);
-    if (normalized < 0.4) return mix(c2, c3, (normalized - 0.2) / 0.2);
-    if (normalized < 0.6) return mix(c3, c4, (normalized - 0.4) / 0.2);
-    if (normalized < 0.8) return mix(c4, c5, (normalized - 0.6) / 0.2);
-    return mix(c5, c6, (normalized - 0.8) / 0.2);
-}
-
-// ========================================
-// Main Compute Shader Entry
-// ========================================
-
-// Shared memory for intermediate calculations (16x16 = 256 threads)
-shared float sharedLiquidity[256];
-shared float sharedPrices[256];
-shared uint sharedVolumes[256];
-
-// MMT Genesis: 16x16 workgroup for optimal GPU occupancy
-// 256 threads per workgroup = optimal for most GPUs
+// 1024 columns × 256 rows
+// local_size: 16×16 = 256 threads per workgroup
+// Dispatch: (1024/16, 256/16, 1) = (64, 16, 1)
 layout(local_size_x = 16, local_size_y = 16) in;
 
+// ========================================
+// MMT Color Palette
+// ========================================
+const vec3 VOID_COLOR   = vec3(0.043, 0.055, 0.067);  // #0B0E11 — Deep Void background
+const vec3 NEON_MINT    = vec3(0.0, 0.9, 0.4);        // Buy-side (bid hit)
+const vec3 FIRE_ORANGE  = vec3(1.0, 0.5, 0.0);        // Sell-side (ask hit)
+
+// ========================================
+// Main
+// ========================================
 void main() {
-    // MMT Genesis: 16x16 workgroup processes 16x16 pixel tiles
-    // Each thread handles one pixel in the heatmap
-    
-    uint xIndex = gl_GlobalInvocationID.x;  // Time axis
-    uint yIndex = gl_GlobalInvocationID.y;  // Price axis
-    
-    // Check if thread is within heatmap bounds
-    if (xIndex >= params.width || yIndex >= params.height) {
-        return;
+    uint col = gl_GlobalInvocationID.x;
+    uint row = gl_GlobalInvocationID.y;
+
+    // Bounds check: 1024 columns × 256 rows
+    if (col >= 1024 || row >= 256) return;
+
+    uint idx = col * 256 + row;
+    VolumeNode node = ssbo.nodes[idx];
+
+    float denom = max(pc.max_volume, 1.0);
+    float bid_intensity = node.buy_vol  / denom;
+    float ask_intensity = node.sell_vol / denom;
+
+    // Start from void, additively blend buy (mint) and sell (orange)
+    vec4 color = vec4(VOID_COLOR, 0.0);
+
+    if (bid_intensity > 0.0) {
+        color = mix(color, vec4(NEON_MINT,  pc.alpha), clamp(bid_intensity, 0.0, 1.0));
     }
-    
-    // Current time column to update (cyclic buffer)
-    // For real-time updates, only write to the current time column
-    // For full heatmap rendering, write to all columns
-    uint currentCol = orderBook.currentTimeIndex % params.width;
-    
-    // Only update the current time column for real-time updates
-    // Comment out the next line for full heatmap rendering
-    if (xIndex != currentCol) return;
-    
-    ivec2 targetCoords = ivec2(xIndex, yIndex);
-    
-    // Find matching price level using Binary Search (Assumes levels are sorted by price)
-    float targetPrice = orderBook.basePrice + (float(yIndex) / float(params.height)) * orderBook.priceRange;
-    
-    // Use shared memory for cooperative search within workgroup
-    uint localIdx = gl_LocalInvocationID.y * 16 + gl_LocalInvocationID.x;
-    
-    // Load price level data into shared memory for cooperative processing
-    // Each thread loads one price level if within bounds
-    if (localIdx < orderBook.priceLevelsCount) {
-        sharedPrices[localIdx] = orderBook.levels[localIdx].price;
-        sharedVolumes[localIdx] = orderBook.levels[localIdx].askQuantity + orderBook.levels[localIdx].bidQuantity;
+    if (ask_intensity > 0.0) {
+        color = mix(color, vec4(FIRE_ORANGE, pc.alpha), clamp(ask_intensity, 0.0, 1.0));
     }
-    barrier();
-    
-    // Binary search in shared memory (faster for repeated accesses)
-    int low = 0;
-    int high = int(min(orderBook.priceLevelsCount, 256u)) - 1;
-    int closestIdx = -1;
-    float minDistance = 1e9;
-    
-    while (low <= high) {
-        int mid = (low + high) / 2;
-        float levelPrice = sharedPrices[mid];
-        float dist = abs(levelPrice - targetPrice);
-        
-        if (dist < minDistance) {
-            minDistance = dist;
-            closestIdx = mid;
-        }
-        
-        if (levelPrice < targetPrice) {
-            low = mid + 1;
-        } else if (levelPrice > targetPrice) {
-            high = mid - 1;
-        } else {
-            break; // Exact match
-        }
-    }
-    
-    float totalLiquidity = 0.0;
-    // Only show liquidity if the match is within the pixel's price bin
-    if (closestIdx != -1 && minDistance < (orderBook.priceRange / float(params.height))) {
-        totalLiquidity = float(sharedVolumes[closestIdx]);
-    }
-    
-    // Compute pixel color
-    vec3 color = liquidityToColor(totalLiquidity);
-    
-    // Write to heatmap texture at the current cyclic column
-    imageStore(heatmapOutput, targetCoords, vec4(color, 1.0));
+
+    imageStore(heatmap_out, ivec2(col, row), color);
 }

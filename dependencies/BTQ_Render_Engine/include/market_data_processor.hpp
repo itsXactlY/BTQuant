@@ -4,6 +4,7 @@ using namespace BTQuant::Rendering;
 
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <mutex>

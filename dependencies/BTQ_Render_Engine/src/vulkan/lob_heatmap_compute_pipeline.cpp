@@ -309,10 +309,11 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Ensure compute shader writes complete before fragment shader reads
+  // Ensure compute shader writes complete before any graphics stage reads
+  // Use ALL_COMMANDS_BIT for dstStageMask to ensure visibility across queue submissions
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                        VK_DEPENDENCY_BY_REGION_BIT,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }

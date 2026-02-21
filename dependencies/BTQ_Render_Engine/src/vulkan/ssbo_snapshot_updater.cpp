@@ -47,27 +47,27 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
   for (int attempt = 0; attempt < 3; ++attempt) {
     uint64_t seq = layout->header.global_lock.read_begin();
 
-    // Copy all VolumeNode rows from all 1024 ClusterColumns
-    // Each ClusterColumn has rows[256], each VolumeNode is 16 bytes
+    // Copy entire history array in one memcpy (1024 * 256 * 16 = 4MB)
     auto* dst = static_cast<uint8_t*>(mapped_ptr_);
     float local_max = 1.0f;
 
-    for (size_t col = 0; col < COLUMNS; ++col) {
-      const auto& cluster = layout->history[col];
-      const size_t byte_offset = col * ROWS * NODE_SIZE;
+    // Single memcpy for the entire history buffer
+    constexpr size_t HISTORY_SIZE = COLUMNS * ROWS * NODE_SIZE;
+    std::memcpy(dst, layout->history[0].rows, HISTORY_SIZE);
 
-      std::memcpy(dst + byte_offset, cluster.rows, ROWS * NODE_SIZE);
+    // Verify consistency before computing max (avoid work on torn reads)
+    if (!layout->header.global_lock.read_retry(seq)) {
+      // Consistent read — compute max volume for normalization
+      // Iterate through all VolumeNodes to find max combined volume
+      const auto* nodes = reinterpret_cast<const ::HotSpine::V3::VolumeNode*>(dst);
+      constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
 
-      // Track max volume for normalization push constant
-      for (size_t row = 0; row < ROWS; ++row) {
-        float vol = cluster.rows[row].buy_vol + cluster.rows[row].sell_vol;
+      for (size_t i = 0; i < TOTAL_NODES; ++i) {
+        float vol = nodes[i].buy_vol + nodes[i].sell_vol;
         if (vol > local_max) local_max = vol;
       }
-    }
 
-    // Verify consistency
-    if (!layout->header.global_lock.read_retry(seq)) {
-      // Consistent read — update running max with EMA decay
+      // Update running max with EMA decay
       max_volume_ = std::max(max_volume_ * 0.99f, local_max);
 
       // Measure elapsed time and verify < 500μs budget

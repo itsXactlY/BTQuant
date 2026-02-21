@@ -35,6 +35,8 @@ struct alignas(64) TradeData {
 };
 #pragma pack(pop)
 
+static_assert(sizeof(TradeData) == 64, "TradeData must be exactly 64 bytes");
+
 // Helper functions for flag manipulation
 inline void set_flag(uint8_t& flags, TradeFlags flag) { flags |= static_cast<uint8_t>(flag); }
 

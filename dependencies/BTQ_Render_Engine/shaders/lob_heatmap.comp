@@ -68,8 +68,8 @@ void main() {
     float bid_intensity = node.buy_vol  / denom;
     float ask_intensity = node.sell_vol / denom;
 
-    // Start from void, additively blend buy (mint) and sell (orange)
-    vec4 color = vec4(VOID_COLOR, 0.0);
+    // Start from void background with full alpha (so it's visible even with no volume)
+    vec4 color = vec4(VOID_COLOR, pc.alpha);
 
     if (bid_intensity > 0.0) {
         color = mix(color, vec4(NEON_MINT,  pc.alpha), clamp(bid_intensity, 0.0, 1.0));

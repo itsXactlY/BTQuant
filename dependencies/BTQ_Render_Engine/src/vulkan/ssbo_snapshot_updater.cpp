@@ -55,29 +55,31 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
     constexpr size_t COPY_SIZE = COLUMNS * ROWS * NODE_SIZE;
     std::memcpy(dst, layout->history, COPY_SIZE);
 
-    // Verify consistency before computing max (avoid work on torn reads)
-    if (!layout->header.global_lock.read_retry(seq)) {
-      // Consistent read — compute max volume for normalization
-      // Iterate through all VolumeNodes to find max combined volume
-      constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
-      auto* out_nodes = reinterpret_cast<::HotSpine::V3::VolumeNode*>(dst);
-      for (size_t i = 0; i < TOTAL_NODES; ++i) {
-        float vol = out_nodes[i].buy_vol + out_nodes[i].sell_vol;
-        if (vol > local_max) local_max = vol;
-      }
-
-      // Update running max with EMA decay
-      max_volume_ = std::max(max_volume_ * 0.99f, local_max);
-
-      // Measure elapsed time and verify < 500μs budget
-      uint64_t tsc_end = __rdtsc();
-      constexpr double TSC_FREQ = 3'400'000'000.0;  // 3.4 GHz typical
-      double elapsed_us = static_cast<double>(tsc_end - tsc_start) /
-                          (TSC_FREQ / 1'000'000.0);
-      (void)elapsed_us;  // Used for performance verification
-
-      return true;
+    // Verify consistency (retry if seq changed - torn read detected)
+    if (layout->header.global_lock.read_retry(seq)) {
+      continue;  // Retry on inconsistent read
     }
+
+    // Consistent read — compute max volume for normalization
+    // Iterate through all VolumeNodes to find max combined volume
+    constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
+    auto* out_nodes = reinterpret_cast<::HotSpine::V3::VolumeNode*>(dst);
+    for (size_t i = 0; i < TOTAL_NODES; ++i) {
+      float vol = out_nodes[i].buy_vol + out_nodes[i].sell_vol;
+      if (vol > local_max) local_max = vol;
+    }
+
+    // Update running max with EMA decay
+    max_volume_ = std::max(max_volume_ * 0.99f, local_max);
+
+    // Measure elapsed time and verify < 500μs budget
+    uint64_t tsc_end = __rdtsc();
+    constexpr double TSC_FREQ = 3'400'000'000.0;  // 3.4 GHz typical
+    double elapsed_us = static_cast<double>(tsc_end - tsc_start) /
+                        (TSC_FREQ / 1'000'000.0);
+    (void)elapsed_us;  // Used for performance verification
+
+    return true;
   }
 
   return false;  // All attempts had torn reads

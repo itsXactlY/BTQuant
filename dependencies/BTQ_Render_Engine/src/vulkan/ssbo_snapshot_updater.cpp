@@ -47,23 +47,28 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
   for (int attempt = 0; attempt < 3; ++attempt) {
     uint64_t seq = layout->header.global_lock.read_begin();
 
-    // Copy entire history array in one memcpy (1024 columns × 256 rows × 16 bytes = 4MB)
     auto* dst = static_cast<uint8_t*>(mapped_ptr_);
     float local_max = 1.0f;
 
-    // Single memcpy for the entire history buffer (all 1024 ClusterColumns)
-    constexpr size_t HISTORY_SIZE = COLUMNS * sizeof(::HotSpine::V3::ClusterColumn);
-    std::memcpy(dst, layout->history, HISTORY_SIZE);
+    // Copy only VolumeNode data from all ClusterColumns into contiguous SSBO buffer
+    // Layout: [col0_row0, col0_row1, ..., col0_row255, col1_row0, ..., col1023_row255]
+    // Total: 1024 columns × 256 rows × 16 bytes = 4,194,304 bytes
+    constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
+    auto* out_nodes = reinterpret_cast<::HotSpine::V3::VolumeNode*>(dst);
+
+    for (size_t col = 0; col < COLUMNS; ++col) {
+      const auto& cluster = layout->history[col];
+      for (size_t row = 0; row < ROWS; ++row) {
+        out_nodes[col * ROWS + row] = cluster.rows[row];
+      }
+    }
 
     // Verify consistency before computing max (avoid work on torn reads)
     if (!layout->header.global_lock.read_retry(seq)) {
       // Consistent read — compute max volume for normalization
       // Iterate through all VolumeNodes to find max combined volume
-      const auto* nodes = reinterpret_cast<const ::HotSpine::V3::VolumeNode*>(dst);
-      constexpr size_t TOTAL_NODES = COLUMNS * ROWS;
-
       for (size_t i = 0; i < TOTAL_NODES; ++i) {
-        float vol = nodes[i].buy_vol + nodes[i].sell_vol;
+        float vol = out_nodes[i].buy_vol + out_nodes[i].sell_vol;
         if (vol > local_max) local_max = vol;
       }
 

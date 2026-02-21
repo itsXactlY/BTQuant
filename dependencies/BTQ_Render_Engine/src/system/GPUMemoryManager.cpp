@@ -227,7 +227,8 @@ GPUMemoryManager::GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_de
   storage_pool_ = std::make_unique<MemoryPool>(
       device, physical_device,
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, config.storage_pool_size);
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      config.storage_pool_size);
 }
 
 GPUMemoryManager::~GPUMemoryManager() {

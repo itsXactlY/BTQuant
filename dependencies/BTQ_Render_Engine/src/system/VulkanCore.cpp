@@ -55,6 +55,11 @@ void VulkanCore::cleanup() {
   }
 
   vkDestroyCommandPool(device_, command_pool_, nullptr);
+  
+  // Destroy compute command pool if it was created
+  if (compute_command_pool_ != VK_NULL_HANDLE) {
+    vkDestroyCommandPool(device_, compute_command_pool_, nullptr);
+  }
 
   vkDestroyDevice(device_, nullptr);
   vkDestroySurfaceKHR(instance_, surface_, nullptr);
@@ -99,6 +104,12 @@ VkResult VulkanCore::PrepareFrame(uint32_t& imageIndex) {
     beginInfo.flags =
         config_.enable_command_buffer_recycling ? VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT : 0;
     vkBeginCommandBuffer(current_command_buffer_, &beginInfo);
+    
+    // Reset compute command buffer if using separate compute queue
+    if (compute_command_pool_ != VK_NULL_HANDLE) {
+      current_compute_command_buffer_ = compute_command_buffers_[current_frame_];
+      vkResetCommandBuffer(current_compute_command_buffer_, 0);
+    }
   }
 
   return result;
@@ -107,9 +118,32 @@ VkResult VulkanCore::PrepareFrame(uint32_t& imageIndex) {
 void VulkanCore::RecordCommandBuffer(uint32_t imageIndex, ImDrawData* drawData,
                                      std::function<void(VkCommandBuffer)> graphicsCallback,
                                      std::function<void(VkCommandBuffer)> computeCallback) {
+  // Determine if we need to use a separate compute command buffer
+  bool use_separate_compute = (compute_command_pool_ != VK_NULL_HANDLE);
+  
+  // Get the appropriate command buffer for compute work
+  VkCommandBuffer computeCmd = use_separate_compute 
+                                ? compute_command_buffers_[current_frame_]
+                                : current_command_buffer_;
+  
+  // Begin compute command buffer if using separate queue
+  if (use_separate_compute) {
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(computeCmd, &beginInfo);
+  }
+
   // Execute compute dispatch BEFORE render pass (compute operations cannot happen inside render pass)
   if (computeCallback) {
-    computeCallback(current_command_buffer_);
+    computeCallback(computeCmd);
+  }
+  
+  // End compute command buffer if using separate queue
+  if (use_separate_compute) {
+    if (vkEndCommandBuffer(computeCmd) != VK_SUCCESS) {
+      throw std::runtime_error("failed to record compute command buffer!");
+    }
   }
 
   VkRenderPassBeginInfo renderPassInfo{};
@@ -145,6 +179,22 @@ void VulkanCore::RecordCommandBuffer(uint32_t imageIndex, ImDrawData* drawData,
 }
 
 VkResult VulkanCore::PresentFrame(uint32_t imageIndex) {
+  // Submit compute work first if we have a separate compute queue
+  if (compute_command_pool_ != VK_NULL_HANDLE) {
+    VkSubmitInfo computeSubmitInfo{};
+    computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    computeSubmitInfo.commandBufferCount = 1;
+    computeSubmitInfo.pCommandBuffers = &compute_command_buffers_[current_frame_];
+    
+    // Submit to compute queue and wait for completion before graphics work
+    if (vkQueueSubmit(compute_queue_, 1, &computeSubmitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+      throw std::runtime_error("failed to submit compute command buffer!");
+    }
+    
+    // Wait for compute to complete before proceeding with graphics
+    vkQueueWaitIdle(compute_queue_);
+  }
+
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -737,6 +787,18 @@ void VulkanCore::create_command_pool() {
   if (vkCreateCommandPool(device_, &poolInfo, nullptr, &command_pool_) != VK_SUCCESS) {
     throw std::runtime_error("failed to create command pool!");
   }
+
+  // Create separate compute command pool if compute queue family differs from graphics
+  if (compute_queue_family_ != graphics_queue_family_) {
+    VkCommandPoolCreateInfo computePoolInfo{};
+    computePoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    computePoolInfo.queueFamilyIndex = compute_queue_family_;
+    computePoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    if (vkCreateCommandPool(device_, &computePoolInfo, nullptr, &compute_command_pool_) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create compute command pool!");
+    }
+  }
 }
 
 void VulkanCore::create_command_buffers() {
@@ -750,6 +812,21 @@ void VulkanCore::create_command_buffers() {
 
   if (vkAllocateCommandBuffers(device_, &allocInfo, command_buffers_.data()) != VK_SUCCESS) {
     throw std::runtime_error("failed to allocate command buffers!");
+  }
+
+  // Allocate compute command buffers if compute queue family differs from graphics
+  if (compute_command_pool_ != VK_NULL_HANDLE) {
+    compute_command_buffers_.resize(MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo computeAllocInfo{};
+    computeAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    computeAllocInfo.commandPool = compute_command_pool_;
+    computeAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    computeAllocInfo.commandBufferCount = (uint32_t)compute_command_buffers_.size();
+
+    if (vkAllocateCommandBuffers(device_, &computeAllocInfo, compute_command_buffers_.data()) != VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate compute command buffers!");
+    }
   }
 }
 

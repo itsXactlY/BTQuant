@@ -285,6 +285,11 @@ class VulkanCore {
   std::vector<bool> command_buffer_in_use_;
   VkCommandBuffer current_command_buffer_ = VK_NULL_HANDLE;
 
+  // Compute command buffers (for separate compute queue submission)
+  VkCommandPool compute_command_pool_ = VK_NULL_HANDLE;
+  std::vector<VkCommandBuffer> compute_command_buffers_;
+  VkCommandBuffer current_compute_command_buffer_ = VK_NULL_HANDLE;
+
   // Descriptor pools
   VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
   VkDescriptorPool imgui_descriptor_pool_ = VK_NULL_HANDLE;

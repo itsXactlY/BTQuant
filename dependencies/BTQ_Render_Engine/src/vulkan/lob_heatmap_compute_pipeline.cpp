@@ -341,7 +341,7 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
     vkCmdPipelineBarrier(cmd,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         0,
+                         VK_DEPENDENCY_BY_REGION_BIT,
                          0, nullptr, 0, nullptr, 1, &barrier);
   } else {
     // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL (previous frame's fragment read)

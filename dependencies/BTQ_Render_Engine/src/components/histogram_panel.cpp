@@ -6,6 +6,8 @@ namespace BTQuant {
 
 HistogramPanel::HistogramPanel(const PanelConfig& config) : PanelBase(config) {}
 
+void HistogramPanel::initialize() {}
+
 void HistogramPanel::render_content() {
   begin_panel_window();
 

@@ -70,6 +70,20 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     std::cerr << "[VulkanDashboard] Failed to initialize heatmap compute pipeline" << std::endl;
     return std::unexpected("Failed to initialize heatmap compute pipeline");
   }
+  
+  // Register heatmap output texture with ImGui for rendering
+  heatmap_texture_ = vulkan_core_->get_memory_manager().add_texture(
+      heatmap_pipeline_.get_output_image_view(),
+      heatmap_pipeline_.get_sampler(),
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  
+  if (heatmap_texture_.descriptor_set == VK_NULL_HANDLE) {
+    std::cerr << "[VulkanDashboard] Failed to register heatmap texture with ImGui" << std::endl;
+  } else {
+    std::println("[VulkanDashboard] Heatmap texture registered with ImGui (im_texture_id={})",
+                 heatmap_texture_.im_texture_id);
+  }
+  
   std::println("[VulkanDashboard] Heatmap Compute Pipeline initialized.");
 
   init_components();
@@ -313,6 +327,20 @@ void VulkanDashboard::render_frame() {
     workspace_->render_gui();
   }
 
+  // Render heatmap visualization (debug/verification)
+  if (heatmap_texture_.im_texture_id != 0) {
+    ImGui::SetNextWindowPos(ImVec2(10, 250), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(512, 256), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Heatmap Visualization", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+      // Render the heatmap texture using ImGui::Image
+      // The texture contains the colored heatmap output from the compute shader
+      ImVec2 heatmap_size(static_cast<float>(LobHeatmapComputePipeline::HEATMAP_WIDTH),
+                          static_cast<float>(LobHeatmapComputePipeline::HEATMAP_HEIGHT));
+      ImGui::Image((ImTextureID)heatmap_texture_.im_texture_id, heatmap_size);
+    }
+    ImGui::End();
+  }
+
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
@@ -377,6 +405,10 @@ void VulkanDashboard::shutdown() {
   if (vulkan_core_) {
     heatmap_pipeline_.destroy(vulkan_core_->get_device());
     ssbo_updater_.destroy();
+    // Remove heatmap texture from ImGui
+    if (heatmap_texture_.descriptor_set != VK_NULL_HANDLE) {
+      vulkan_core_->get_memory_manager().remove_texture(heatmap_texture_.descriptor_set);
+    }
   }
 
   workspace_.reset();

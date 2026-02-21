@@ -186,7 +186,7 @@ TradeRing symbol_rings_[MAX_SYMBOLS];  // stack allocation, 100 symbols
 - [x] `static_assert(std::is_trivial_v<TradeData>)` passes.
 - [x] `SpscRingBuffer::peek()` compiles and unit-test returns last N items without modifying tail.
 - [x] `MemoryArena` constructed with 1GB. `g_arena.used_bytes()` starts at 0.
-- [ ] `MemoryArena::acquire(64, 64)` returns a 64-byte-aligned pointer on first call.
+- [x] `MemoryArena::acquire(64, 64)` returns a 64-byte-aligned pointer on first call.
 - [ ] `MarketDataProcessor` constructor allocates all `TradeRing` buffers from `g_arena` at startup without `new`.
 
 ---

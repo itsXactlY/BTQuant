@@ -320,10 +320,10 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
   }
 
   // Source stage: COMPUTE_SHADER_BIT (compute shader writes to storage image)
-  // Destination stage: FRAGMENT_SHADER_BIT (ImGui fragment shader samples the texture)
+  // Destination stage: ALL_COMMANDS_BIT to ensure the transition completes before any graphics usage
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }

@@ -10,6 +10,7 @@
 #include "components/quant_workspace_component.hpp"
 #include "components/tpo_panel.hpp"
 #include "data/incremental_updater.hpp"
+#include "hotspine_layout_v3.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "implot.h"
@@ -356,17 +357,34 @@ void VulkanDashboard::render_frame() {
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
-  // Check dirty flag for heatmap compute shader dispatch optimization
-  // Only dispatch compute shader if incremental_updater signaled a state change
-  bool heatmap_dirty = false;
-  if (market_data_processor_) {
-    heatmap_dirty = market_data_processor_->getHeatmapDirtyFlag().exchange(false);
+  // Generate test data for heatmap visualization
+  // Creates a sine wave pattern to demonstrate the colored heatmap rendering
+  static HotSpine::V3::SharedMemoryLayoutV3 test_data{};
+  static bool test_data_initialized = false;
+  
+  if (!test_data_initialized) {
+    // Initialize test data with visible volume patterns
+    for (uint32_t col = 0; col < 1024; ++col) {
+      for (uint32_t row = 0; row < 256; ++row) {
+        // Create a diagonal sine wave pattern for visual interest
+        float phase = static_cast<float>(col) * 0.05f + static_cast<float>(row) * 0.02f;
+        float buy_wave = (std::sin(phase) + 1.0f) * 50.0f;
+        float sell_wave = (std::sin(phase + 3.14159f) + 1.0f) * 50.0f;
+        
+        // Add some noise for realism
+        float noise = static_cast<float>(rand() % 20) - 10.0f;
+        
+        test_data.history[col].rows[row].buy_vol = std::max(0.0f, buy_wave + noise);
+        test_data.history[col].rows[row].sell_vol = std::max(0.0f, sell_wave - noise);
+        test_data.history[col].rows[row].trade_count = static_cast<uint16_t>(10 + rand() % 50);
+        test_data.history[col].rows[row].tpo_bits = 0;
+      }
+    }
+    test_data_initialized = true;
   }
 
-  // Update SSBO with latest market data if dirty
-  // Note: For now, we skip the SSBO update since we don't have the SharedMemoryLayoutV3
-  // The compute dispatch will still execute with zero-initialized data
-  (void)heatmap_dirty;  // Suppress unused warning for now
+  // Update SSBO with test data
+  ssbo_updater_.update(&test_data);
 
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
                                     [this](VkCommandBuffer cmd) {

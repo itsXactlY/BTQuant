@@ -38,7 +38,7 @@ struct HotOrderbookLevel {
   double size;
 };
 
-struct OrderBookSnapshot {
+struct alignas(64) OrderBookSnapshot {
   uint64_t ts_exchange;
   uint64_t ts_local;
   uint32_t symbol_id;
@@ -48,6 +48,10 @@ struct OrderBookSnapshot {
   std::array<HotOrderbookLevel, 200> bids;
   std::array<HotOrderbookLevel, 200> asks;
 };
+
+static_assert(sizeof(OrderBookSnapshot) % 64 == 0, "OrderBookSnapshot size must be multiple of 64 bytes for alignas(64)");
+static_assert(std::is_trivial_v<OrderBookSnapshot>, "OrderBookSnapshot MUST be trivial");
+static_assert(std::is_standard_layout_v<OrderBookSnapshot>, "OrderBookSnapshot MUST be standard layout");
 
 struct SharedMemoryHeader {
   uint32_t magic;    // "BTQU"

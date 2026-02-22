@@ -2,25 +2,34 @@
 
 #include <memory>
 
-#include "data/cluster_engine.hpp"
-#include "panel_base.hpp"
+#include "components/panel_base.hpp"
+#include "data/core_types.hpp"
+
+namespace BTQuant {
+class ClusterEngine;
+}
 
 namespace BTQuant {
 
+/**
+ * @brief Footprint Panel - Visualizes trade clusters and volume imbalances
+ * 
+ * Displays a heatmap showing buy/sell volume distribution across price levels,
+ * with special highlighting for diagonal imbalances and key metrics like CVD.
+ */
 class FootprintPanel : public PanelBase {
- public:
-  FootprintPanel(const PanelConfig& config, ClusterEngine* engine);
+public:
+    explicit FootprintPanel(const PanelConfig& config,
+                         std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                         std::shared_ptr<ClusterEngine> cluster_engine);
 
-  void update(float dt) override;
-  void render_content() override;
+    void render_content() override;
 
-  uint32_t get_symbol_id() const { return symbol_id_; }
-  void set_symbol_id(uint32_t id) { symbol_id_ = id; }
+    void set_cluster_engine(std::shared_ptr<ClusterEngine> engine);
 
- private:
-  ClusterEngine* engine_ = nullptr;
-  uint32_t symbol_id_ = 0;
-  float scroll_x_ = 0.0f;  // Horizontal scroll offset
+private:
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+    std::shared_ptr<ClusterEngine> cluster_engine_;
 };
 
 }  // namespace BTQuant

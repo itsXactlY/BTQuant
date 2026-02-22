@@ -78,10 +78,12 @@ bool SsboSnapshotUpdater::update(const ::HotSpine::V3::SharedMemoryLayoutV3* lay
 
     auto* dst = static_cast<uint8_t*>(mapped_ptr_);
 
-    // Copy entire history slice using memcpy for maximum throughput
+    // Copy only the VolumeNode rows from each ClusterColumn (skip metadata)
     // Total: 1024 columns × 256 rows × 16 bytes = 4,194,304 bytes
-    constexpr size_t COPY_SIZE = COLUMNS * ROWS * NODE_SIZE;
-    std::memcpy(dst, layout->history, COPY_SIZE);
+    // Note: We must copy each column's rows array separately to skip the ClusterColumn metadata
+    for (size_t col = 0; col < COLUMNS; ++col) {
+      std::memcpy(dst + col * ROWS * NODE_SIZE, layout->history[col].rows, ROWS * NODE_SIZE);
+    }
 
     // Verify consistency (retry if seq changed - torn read detected)
     if (layout->header.global_lock.read_retry(seq)) {

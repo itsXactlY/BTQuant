@@ -319,11 +319,13 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   }
 
-  // Ensure compute shader writes complete before any graphics stage reads the image
-  // Using ALL_GRAPHICS_BIT to cover fragment shader reads inside render pass
+  // Ensure compute shader writes complete before fragment shader reads the image
+  // Source stage: COMPUTE_SHADER_BIT for compute shader storage image writes
+  // Destination stage: FRAGMENT_SHADER_BIT for fragment shader sampled image reads
+  // Also include TOP_OF_PIPE to ensure the barrier is waited on before any graphics work
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }
@@ -352,12 +354,15 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
 
   if (!initial_layout_done_) {
     // First time: transition from UNDEFINED to GENERAL
+    // No source access mask needed since UNDEFINED means previous contents are discarded
     barrier.srcAccessMask = 0;
     barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     initial_layout_done_ = true;
 
+    // Source stage: TOP_OF_PIPE (no dependency on previous operations)
+    // Destination stage: COMPUTE_SHADER_BIT (compute shader will write)
     vkCmdPipelineBarrier(cmd,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -371,8 +376,10 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
     barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+    // Source stage: FRAGMENT_SHADER_BIT (fragment shader sampled image reads)
+    // Destination stage: COMPUTE_SHADER_BIT (compute shader storage image writes)
     vkCmdPipelineBarrier(cmd,
-                         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);

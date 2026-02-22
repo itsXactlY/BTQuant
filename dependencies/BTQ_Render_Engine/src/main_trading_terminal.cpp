@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
   // 4. Initialize Dashboard (Vulkan + ImGui) - Creates Workspace + PanelManager + Trading Systems
   // internally
   VulkanDashboardConfig dashboard_config;
-  dashboard_config.enable_validation_layers = false;
+  dashboard_config.enable_validation_layers = true;  // Enable validation layers for layout transition warnings
 
   auto dashboard =
       std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, market_processor, dashboard_config);

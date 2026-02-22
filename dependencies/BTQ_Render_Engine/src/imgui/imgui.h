@@ -1035,6 +1035,10 @@ IMGUI_API bool TextLinkOpenURL(
 // now supported by the ImageWithBg() function.
 IMGUI_API void Image(ImTextureRef tex_ref, const ImVec2& image_size,
                      const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1));
+inline void Image(ImTextureID tex_id, const ImVec2& image_size,
+                  const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1)) {
+  Image(ImTextureRef(tex_id), image_size, uv0, uv1);
+}
 IMGUI_API void ImageWithBg(ImTextureRef tex_ref, const ImVec2& image_size,
                            const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1),
                            const ImVec4& bg_col = ImVec4(0, 0, 0, 0),

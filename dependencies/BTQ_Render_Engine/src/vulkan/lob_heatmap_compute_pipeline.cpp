@@ -291,22 +291,33 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 // ============================================================================
 // Image Transitions
 // ============================================================================
-void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
+void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
+                                                    uint32_t compute_queue_family,
+                                                    uint32_t graphics_queue_family) {
   // Transition image from GENERAL (compute write) to SHADER_READ_ONLY_OPTIMAL (fragment read)
+  // Handle queue family ownership transfer if compute and graphics are on different queue families
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = output_image_;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;
   barrier.subresourceRange.levelCount = 1;
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
+
+  if (compute_queue_family != graphics_queue_family) {
+    // Transfer ownership from compute queue family to graphics queue family
+    barrier.srcQueueFamilyIndex = compute_queue_family;
+    barrier.dstQueueFamilyIndex = graphics_queue_family;
+  } else {
+    // Same queue family - no ownership transfer needed
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  }
 
   // Ensure compute shader writes complete before any graphics stage reads the image
   // Using ALL_GRAPHICS_BIT to cover fragment shader reads inside render pass
@@ -317,17 +328,27 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
                        0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
+void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
+                                                       uint32_t compute_queue_family,
+                                                       uint32_t graphics_queue_family) {
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = output_image_;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;
   barrier.subresourceRange.levelCount = 1;
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
+
+  if (compute_queue_family != graphics_queue_family) {
+    // Transfer ownership from graphics queue family to compute queue family
+    barrier.srcQueueFamilyIndex = graphics_queue_family;
+    barrier.dstQueueFamilyIndex = compute_queue_family;
+  } else {
+    // Same queue family - no ownership transfer needed
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  }
 
   if (!initial_layout_done_) {
     // First time: transition from UNDEFINED to GENERAL

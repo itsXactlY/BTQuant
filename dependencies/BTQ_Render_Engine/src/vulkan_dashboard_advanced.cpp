@@ -109,18 +109,22 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     vkBeginCommandBuffer(init_cmd, &begin_info);
-    
+
     // Transition to GENERAL for compute write
-    heatmap_pipeline_.transition_to_general(init_cmd);
-    
+    uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE 
+                          ? vulkan_core_->get_compute_queue_family() 
+                          : vulkan_core_->get_graphics_queue_family();
+    uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
+    heatmap_pipeline_.transition_to_general(init_cmd, compute_qf, graphics_qf);
+
     // Dispatch compute shader with initial data
     HeatmapPushConstants pc{};
     pc.max_volume = 100.0f;
     pc.alpha = 1.0f;
     heatmap_pipeline_.dispatch(init_cmd, pc);
-    
+
     // Transition to SHADER_READ_ONLY_OPTIMAL for ImGui rendering
-    heatmap_pipeline_.transition_to_read(init_cmd);
+    heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
     
     vkEndCommandBuffer(init_cmd);
     
@@ -436,7 +440,11 @@ void VulkanDashboard::render_frame() {
                                     [this](VkCommandBuffer cmd) {
                                       // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
                                       // Transition image to GENERAL layout for compute write
-                                      heatmap_pipeline_.transition_to_general(cmd);
+                                      uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE 
+                                                            ? vulkan_core_->get_compute_queue_family() 
+                                                            : vulkan_core_->get_graphics_queue_family();
+                                      uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
+                                      heatmap_pipeline_.transition_to_general(cmd, compute_qf, graphics_qf);
 
                                       // Dispatch compute shader with push constants
                                       HeatmapPushConstants pc{};
@@ -445,7 +453,7 @@ void VulkanDashboard::render_frame() {
                                       heatmap_pipeline_.dispatch(cmd, pc);
 
                                       // Transition image for fragment shader read (ImGui rendering)
-                                      heatmap_pipeline_.transition_to_read(cmd);
+                                      heatmap_pipeline_.transition_to_read(cmd, compute_qf, graphics_qf);
                                     });
   vulkan_core_->PresentFrame(imageIndex);
 }

@@ -48,10 +48,18 @@ class LobHeatmapComputePipeline {
   void dispatch(VkCommandBuffer cmd, const HeatmapPushConstants& pc);
 
   /// Transition output image: GENERAL → SHADER_READ_ONLY_OPTIMAL (after compute, before ImGui).
-  void transition_to_read(VkCommandBuffer cmd);
+  /// @param cmd Command buffer to record the barrier into
+  /// @param compute_queue_family Queue family index for compute operations
+  /// @param graphics_queue_family Queue family index for graphics operations
+  void transition_to_read(VkCommandBuffer cmd, uint32_t compute_queue_family,
+                          uint32_t graphics_queue_family);
 
   /// Transition output image: SHADER_READ_ONLY_OPTIMAL → GENERAL (before next compute dispatch).
-  void transition_to_general(VkCommandBuffer cmd);
+  /// @param cmd Command buffer to record the barrier into
+  /// @param compute_queue_family Queue family index for compute operations
+  /// @param graphics_queue_family Queue family index for graphics operations
+  void transition_to_general(VkCommandBuffer cmd, uint32_t compute_queue_family,
+                             uint32_t graphics_queue_family);
 
   /// Clean up all Vulkan resources.
   void destroy(VkDevice device);

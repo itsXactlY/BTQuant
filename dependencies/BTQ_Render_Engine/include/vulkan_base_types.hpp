@@ -214,6 +214,8 @@ class VulkanCore {
   VkQueue get_graphics_queue() const { return graphics_queue_; }
   VkQueue get_present_queue() const { return present_queue_; }
   VkQueue get_compute_queue() const { return compute_queue_; }
+  uint32_t get_graphics_queue_family() const { return graphics_queue_family_; }
+  uint32_t get_compute_queue_family() const { return compute_queue_family_; }
   VkRenderPass get_render_pass() const { return render_pass_; }
   VkExtent2D get_swapchain_extent() const { return swapchain_extent_; }
   VkCommandPool get_command_pool() const { return command_pool_; }

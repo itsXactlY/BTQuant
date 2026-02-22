@@ -47,7 +47,7 @@ class LobHeatmapComputePipeline {
   /// Issues push constants + vkCmdDispatch(64, 16, 1).
   void dispatch(VkCommandBuffer cmd, const HeatmapPushConstants& pc);
 
-  /// Transition output image: GENERAL → SHADER_READ_ONLY_OPTIMAL (after compute, before ImGui).
+  /// Transition output image: keeps GENERAL layout for both compute write and fragment read.
   /// @param cmd Command buffer to record the barrier into
   /// @param compute_queue_family Queue family index for compute operations
   /// @param graphics_queue_family Queue family index for graphics operations

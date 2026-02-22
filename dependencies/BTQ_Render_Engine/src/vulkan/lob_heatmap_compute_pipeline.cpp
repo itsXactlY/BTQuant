@@ -294,14 +294,14 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
                                                     uint32_t compute_queue_family,
                                                     uint32_t graphics_queue_family) {
-  // Transition from GENERAL (compute write) to SHADER_READ_ONLY_OPTIMAL (fragment read)
-  // This layout is required by ImGui's Vulkan backend for proper texture sampling
+  // Keep image in GENERAL layout - supports both storage image writes and sampled image reads
+  // This avoids layout transitions and allows ImGui to sample the texture directly
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.image = output_image_;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;

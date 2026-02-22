@@ -122,7 +122,7 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     pc.alpha = 1.0f;
     heatmap_pipeline_.dispatch(init_cmd, pc);
 
-    // Transition for ImGui rendering (SHADER_READ_ONLY_OPTIMAL for fragment shader sampling)
+    // Transition for ImGui rendering - keep GENERAL layout for sampled image access
     heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
 
     vkEndCommandBuffer(init_cmd);
@@ -140,11 +140,12 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   }
 
   // Register heatmap output texture with ImGui for rendering
-  // Use SHADER_READ_ONLY_OPTIMAL layout for proper fragment shader sampling in ImGui
+  // Use GENERAL layout since the image is written by compute shader and sampled by fragment shader
+  // The GENERAL layout supports both storage image writes and sampled image reads
   heatmap_texture_ = vulkan_core_->get_memory_manager().add_texture(
       heatmap_pipeline_.get_output_image_view(),
       heatmap_pipeline_.get_sampler(),
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      VK_IMAGE_LAYOUT_GENERAL);
 
   if (heatmap_texture_ == VK_NULL_HANDLE) {
     std::cerr << "[VulkanDashboard] Failed to register heatmap texture with ImGui" << std::endl;
@@ -444,6 +445,7 @@ void VulkanDashboard::render_frame() {
                                       heatmap_pipeline_.dispatch(cmd, pc);
 
                                       // Transition image for fragment shader read (ImGui rendering)
+                                      // Keep GENERAL layout which supports both storage and sampled image access
                                       heatmap_pipeline_.transition_to_read(cmd, compute_qf, graphics_qf);
                                     });
   vulkan_core_->PresentFrame(imageIndex);

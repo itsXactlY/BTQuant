@@ -308,11 +308,12 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Ensure compute shader writes complete before fragment shader reads
+  // Ensure compute shader writes complete before any graphics stage reads the image
+  // Using ALL_GRAPHICS_BIT to cover fragment shader reads inside render pass
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                       VK_DEPENDENCY_BY_REGION_BIT,
+                       VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                       0,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }
 
@@ -339,7 +340,7 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
     vkCmdPipelineBarrier(cmd,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_DEPENDENCY_BY_REGION_BIT,
+                         0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   } else {
     // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL (previous frame's fragment read)
@@ -350,9 +351,9 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd) {
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     vkCmdPipelineBarrier(cmd,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_DEPENDENCY_BY_REGION_BIT,
+                         0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   }
 }

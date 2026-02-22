@@ -314,11 +314,10 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
   barrier.srcQueueFamilyIndex = compute_queue_family;
   barrier.dstQueueFamilyIndex = graphics_queue_family;
 
-  // Ensure compute shader writes complete before fragment shader reads the image
-  // Source stage: COMPUTE_SHADER_BIT for compute shader storage image writes
+  // Source stage: ALL_COMMANDS_BIT to synchronize with prior compute queue submission
   // Destination stage: ALL_GRAPHICS_BIT to cover fragment shader sampling inside render pass
   vkCmdPipelineBarrier(cmd,
-                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);

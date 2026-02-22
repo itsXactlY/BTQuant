@@ -94,6 +94,7 @@ class LobHeatmapComputePipeline {
 
   // State tracking
   bool initial_layout_done_ = false;
+  VkImageLayout current_layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 
 }  // namespace BTQuant

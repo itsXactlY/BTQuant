@@ -300,7 +300,7 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+  barrier.oldLayout = current_layout_;
   barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;  // Stay in GENERAL for both compute and fragment
   barrier.image = output_image_;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -326,6 +326,8 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);
+  
+  current_layout_ = VK_IMAGE_LAYOUT_GENERAL;
 }
 
 void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
@@ -366,10 +368,11 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   } else {
-    // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL (ImGui sampling) to GENERAL (compute write)
+    // Subsequent frames: transition from GENERAL (after fragment read) to GENERAL (for compute write)
+    // Keep GENERAL layout but update access masks for proper synchronization
     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.oldLayout = current_layout_;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     // Source stage: ALL_COMMANDS_BIT (ensure all previous reads complete)
@@ -380,6 +383,8 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   }
+  
+  current_layout_ = VK_IMAGE_LAYOUT_GENERAL;
 }
 
 // ============================================================================
@@ -417,6 +422,7 @@ void LobHeatmapComputePipeline::destroy(VkDevice device) {
   // descriptor_set_ is freed when the pool is destroyed/reset
   descriptor_set_ = VK_NULL_HANDLE;
   initial_layout_done_ = false;
+  current_layout_ = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
 }  // namespace BTQuant

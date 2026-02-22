@@ -108,7 +108,7 @@ inline void ApplyMMTStyle(ImGuiStyle* style = nullptr) {
   ImVec4* colors = style->Colors;
 
   // Background
-  colors[ImGuiCol_WindowBg] = ImColor(COLOR_WINDOW_BG);
+  colors[ImGuiCol_WindowBg] = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);
   colors[ImGuiCol_ChildBg] = ImColor(COLOR_CHILD_BG);
   colors[ImGuiCol_PopupBg] = ImColor(COLOR_POPUP_BG);
   colors[ImGuiCol_Border] = ImColor(COLOR_BORDER);

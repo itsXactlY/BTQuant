@@ -55,7 +55,7 @@ void VulkanCore::cleanup() {
   }
 
   vkDestroyCommandPool(device_, command_pool_, nullptr);
-  
+
   // Destroy compute command pool if it was created
   if (compute_command_pool_ != VK_NULL_HANDLE) {
     vkDestroyCommandPool(device_, compute_command_pool_, nullptr);
@@ -63,6 +63,12 @@ void VulkanCore::cleanup() {
 
   vkDestroyDevice(device_, nullptr);
   vkDestroySurfaceKHR(instance_, surface_, nullptr);
+  
+  // Clean up debug messenger before destroying instance
+  if (config_.enable_validation_layers) {
+    VulkanErrorHandler::cleanup_debug_messenger(instance_);
+  }
+  
   vkDestroyInstance(instance_, nullptr);
 }
 
@@ -335,14 +341,37 @@ void VulkanCore::create_instance() {
   if (config_.enable_validation_layers) {
     createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
+    
+    // Set up debug messenger for validation layer messages
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+    debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debugCreateInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debugCreateInfo.messageType =
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    debugCreateInfo.pfnUserCallback = VulkanErrorHandler::debug_callback;
+    debugCreateInfo.pUserData = nullptr;
+    
+    createInfo.pNext = &debugCreateInfo;
   } else {
     createInfo.enabledLayerCount = 0;
+    createInfo.pNext = nullptr;
   }
 
   VkResult result = vkCreateInstance(&createInfo, nullptr, &instance_);
   if (result != VK_SUCCESS) {
     std::cerr << "[VulkanCore] vkCreateInstance failed with error: " << result << std::endl;
     throw std::runtime_error("failed to create instance!");
+  }
+  
+  // Set up debug messenger after instance creation (for persistence beyond create_instance)
+  if (config_.enable_validation_layers) {
+    VulkanErrorHandler::setup_debug_messenger(instance_);
   }
 }
 
@@ -1264,6 +1293,111 @@ void VulkanCore::create_depth_resources() {
 
   if (vkCreateImageView(device_, &viewInfo, nullptr, &depth_image_view_) != VK_SUCCESS) {
     throw std::runtime_error("failed to create depth image view!");
+  }
+}
+
+// ============================================================================
+// VulkanErrorHandler - Debug Messenger Implementation
+// ============================================================================
+
+VkDebugUtilsMessengerEXT VulkanErrorHandler::debug_messenger_ = VK_NULL_HANDLE;
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanErrorHandler::debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT message_type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data) {
+  
+  // Map severity to readable string
+  const char* severity_str = "UNKNOWN";
+  if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+    severity_str = "VERBOSE";
+  } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+    severity_str = "INFO";
+  } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+    severity_str = "WARNING";
+  } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+    severity_str = "ERROR";
+  }
+
+  // Map type to readable string
+  const char* type_str = "UNKNOWN";
+  if (message_type & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
+    type_str = "GENERAL";
+  } else if (message_type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+    type_str = "VALIDATION";
+  } else if (message_type & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
+    type_str = "PERFORMANCE";
+  }
+
+  // Print validation messages to stderr for visibility
+  std::cerr << "[" << severity_str << "][" << type_str << "] " 
+            << callback_data->pMessage << std::endl;
+  
+  if (callback_data->objectCount > 0) {
+    std::cerr << "  Objects involved: " << callback_data->objectCount << std::endl;
+  }
+  if (callback_data->queueLabelCount > 0) {
+    std::cerr << "  Queue labels: " << callback_data->queueLabelCount << std::endl;
+  }
+  if (callback_data->cmdBufLabelCount > 0) {
+    std::cerr << "  Command buffer labels: " << callback_data->cmdBufLabelCount << std::endl;
+  }
+
+  // Return VK_FALSE to avoid triggering the validation layer error
+  return VK_FALSE;
+}
+
+void VulkanErrorHandler::setup_debug_messenger(VkInstance instance) {
+  if (debug_messenger_ != VK_NULL_HANDLE) {
+    return;  // Already set up
+  }
+
+  VkDebugUtilsMessengerCreateInfoEXT create_info{};
+  create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  
+  // Capture all severity levels to ensure we see layout transition warnings
+  create_info.messageSeverity = 
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  
+  // Capture all message types including validation
+  create_info.messageType = 
+      VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  
+  create_info.pfnUserCallback = debug_callback;
+  create_info.pUserData = nullptr;
+
+  // Use vkCreateDebugUtilsMessengerEXT from the extension
+  auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+      vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+  
+  if (func != nullptr) {
+    VkResult result = func(instance, &create_info, nullptr, &debug_messenger_);
+    if (result != VK_SUCCESS) {
+      std::cerr << "[VulkanErrorHandler] Failed to create debug messenger: " 
+                << result << std::endl;
+    } else {
+      std::cout << "[VulkanErrorHandler] Debug messenger created successfully" << std::endl;
+    }
+  } else {
+    std::cerr << "[VulkanErrorHandler] vkCreateDebugUtilsMessengerEXT not available" << std::endl;
+  }
+}
+
+void VulkanErrorHandler::cleanup_debug_messenger(VkInstance instance) {
+  if (debug_messenger_ != VK_NULL_HANDLE) {
+    auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+    
+    if (func != nullptr) {
+      func(instance, debug_messenger_, nullptr);
+      debug_messenger_ = VK_NULL_HANDLE;
+      std::cout << "[VulkanErrorHandler] Debug messenger destroyed" << std::endl;
+    }
   }
 }
 

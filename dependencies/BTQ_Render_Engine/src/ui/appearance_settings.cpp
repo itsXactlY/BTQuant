@@ -649,7 +649,7 @@ void AppearanceSettings::apply_border_settings() {
 
     // Set border size based on style
     style.FrameBorderSize = (border_style == 4) ? 0.0f : static_cast<float>(border_width);  // None style means no border
-    style.WindowBorderSize = (border_style == 4) ? 0.0f : static_cast<float>(border_width);
+    style.WindowBorderSize = 0.0f;  // Always no window borders
     style.ChildBorderSize = (border_style == 4) ? 0.0f : static_cast<float>(border_width);
     style.PopupBorderSize = (border_style == 4) ? 0.0f : static_cast<float>(border_width);
 

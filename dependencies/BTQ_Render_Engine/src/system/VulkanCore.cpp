@@ -1091,6 +1091,9 @@ std::vector<const char*> VulkanCore::get_required_extensions() {
   // surface extensions. references: VK_KHR_XLIB_SURFACE_EXTENSION_NAME removed.
   if (config_.enable_validation_layers) {
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    // Enable validation features extension for synchronization validation
+    // This is required to receive image layout transition warnings from the validation layer
+    extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
   }
   return extensions;
 }

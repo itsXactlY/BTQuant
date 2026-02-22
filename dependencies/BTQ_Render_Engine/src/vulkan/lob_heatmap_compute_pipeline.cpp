@@ -97,7 +97,7 @@ bool LobHeatmapComputePipeline::create_output_image(VkDevice device,
   view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   view_ci.image = output_image_;
   view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  view_ci.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+  view_ci.format = VK_FORMAT_R8G8B8A8_UNORM;
   view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   view_ci.subresourceRange.baseMipLevel = 0;
   view_ci.subresourceRange.levelCount = 1;

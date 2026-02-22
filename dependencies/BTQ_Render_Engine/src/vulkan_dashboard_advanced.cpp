@@ -111,20 +111,18 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     vkBeginCommandBuffer(init_cmd, &begin_info);
 
-    // Transition to GENERAL for compute write
-    uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE
-                          ? vulkan_core_->get_compute_queue_family()
-                          : vulkan_core_->get_graphics_queue_family();
+    // Transition to GENERAL for compute write - use consistent queue family indices
+    uint32_t compute_qf = vulkan_core_->get_compute_queue_family();
     uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
     heatmap_pipeline_.transition_to_general(init_cmd, compute_qf, graphics_qf);
 
-    // Dispatch compute shader with initial data
+    // Dispatch compute shader with initial data: vkCmdDispatch(64, 16, 1)
     HeatmapPushConstants pc{};
     pc.max_volume = 100.0f;
     pc.alpha = 1.0f;
     heatmap_pipeline_.dispatch(init_cmd, pc);
 
-    // Transition for ImGui rendering (keeps image in GENERAL layout with proper memory barrier)
+    // Transition for ImGui rendering (SHADER_READ_ONLY_OPTIMAL for fragment shader sampling)
     heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
 
     vkEndCommandBuffer(init_cmd);

@@ -420,33 +420,52 @@ void VulkanDashboard::render_frame() {
     ImGui::End();
   }
 
-  // Finalize ImGui and Record Graphics commands
-  ImGui::Render();
-
   // Update SSBO with test data (already initialized during startup)
   ssbo_updater_.update(&initial_test_data_);
+
+  // Dispatch compute shader and transition image layout BEFORE ImGui::Render()
+  // This ensures the heatmap texture is updated and in SHADER_READ_ONLY_OPTIMAL layout
+  // when ImGui records its draw commands
+  uint32_t frame_index = vulkan_core_->get_current_frame_index();
+  VkCommandBuffer compute_cmd = vulkan_core_->get_compute_command_buffer(frame_index);
+  VkCommandBufferBeginInfo begin_info{};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  vkBeginCommandBuffer(compute_cmd, &begin_info);
+
+  // Transition image from SHADER_READ_ONLY_OPTIMAL to GENERAL for compute write
+  uint32_t compute_qf = vulkan_core_->get_compute_queue_family();
+  uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
+  heatmap_pipeline_.transition_to_general(compute_cmd, compute_qf, graphics_qf);
+
+  // Dispatch compute shader with push constants
+  HeatmapPushConstants pc{};
+  pc.max_volume = 100.0f;  // Match test data scale
+  pc.alpha = 1.0f;         // Full opacity for visible colors
+  heatmap_pipeline_.dispatch(compute_cmd, pc);
+
+  // Transition image to SHADER_READ_ONLY_OPTIMAL for fragment shader read (ImGui rendering)
+  heatmap_pipeline_.transition_to_read(compute_cmd, compute_qf, graphics_qf);
+
+  vkEndCommandBuffer(compute_cmd);
+
+  // Submit compute work and wait for completion before rendering
+  VkSubmitInfo compute_submit{};
+  compute_submit.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+  compute_submit.commandBufferCount = 1;
+  compute_submit.pCommandBuffers = &compute_cmd;
+  vkQueueSubmit(vulkan_core_->get_compute_queue(), 1, &compute_submit, VK_NULL_HANDLE);
+  vkQueueWaitIdle(vulkan_core_->get_compute_queue());
+
+  // Finalize ImGui and Record Graphics commands
+  ImGui::Render();
 
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
                                     [this](VkCommandBuffer cmd) {
                                       // No microstructure renderer - panels handle their own
                                       // rendering
                                     },
-                                    [this](VkCommandBuffer cmd) {
-                                      // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
-                                      // Transition image from SHADER_READ_ONLY_OPTIMAL to GENERAL for compute write
-                                      uint32_t compute_qf = vulkan_core_->get_compute_queue_family();
-                                      uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
-                                      heatmap_pipeline_.transition_to_general(cmd, compute_qf, graphics_qf);
-
-                                      // Dispatch compute shader with push constants
-                                      HeatmapPushConstants pc{};
-                                      pc.max_volume = 100.0f;  // Match test data scale
-                                      pc.alpha = 1.0f;         // Full opacity for visible colors
-                                      heatmap_pipeline_.dispatch(cmd, pc);
-
-                                      // Transition image to SHADER_READ_ONLY_OPTIMAL for fragment shader read (ImGui rendering)
-                                      heatmap_pipeline_.transition_to_read(cmd, compute_qf, graphics_qf);
-                                    });
+                                    nullptr);  // No compute callback - already executed above
   vulkan_core_->PresentFrame(imageIndex);
 }
 

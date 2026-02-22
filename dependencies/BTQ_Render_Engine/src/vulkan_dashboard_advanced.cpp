@@ -402,12 +402,15 @@ void VulkanDashboard::render_frame() {
   // Render heatmap visualization (debug/verification)
   if (heatmap_texture_ != VK_NULL_HANDLE) {
     ImGui::SetNextWindowPos(ImVec2(10, 250), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(512, 256), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(550, 320), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Heatmap Visualization", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
       // Render the heatmap texture using ImGui::Image
       // The texture contains the colored heatmap output from the compute shader
-      ImVec2 heatmap_size(static_cast<float>(LobHeatmapComputePipeline::HEATMAP_WIDTH),
-                          static_cast<float>(LobHeatmapComputePipeline::HEATMAP_HEIGHT));
+      // Scale image to fit within window while preserving aspect ratio
+      constexpr float display_width = 512.0f;
+      constexpr float aspect_ratio = static_cast<float>(LobHeatmapComputePipeline::HEATMAP_WIDTH) /
+                                     static_cast<float>(LobHeatmapComputePipeline::HEATMAP_HEIGHT);
+      ImVec2 heatmap_size(display_width, display_width / aspect_ratio);
       auto* cached_tex = vulkan_core_->get_memory_manager().get_cached_texture(heatmap_texture_);
       if (cached_tex) {
         ImGui::Image((ImTextureID)cached_tex->im_texture_id, heatmap_size);

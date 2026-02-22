@@ -294,14 +294,14 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
                                                     uint32_t compute_queue_family,
                                                     uint32_t graphics_queue_family) {
-  // Keep image in GENERAL layout which supports both storage and sampled image access.
-  // Only need to update access masks to ensure compute writes are visible to fragment reads.
+  // Transition from GENERAL (compute write) to SHADER_READ_ONLY_OPTIMAL (fragment shader read)
+  // This is required for proper texture sampling in ImGui
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = current_layout_;
-  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;  // Stay in GENERAL for both compute and fragment
+  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   barrier.image = output_image_;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;
@@ -310,7 +310,6 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
   barrier.subresourceRange.layerCount = 1;
 
   // Use VK_QUEUE_FAMILY_IGNORED when queue families are the same (no ownership transfer)
-  // Use explicit indices only when transferring between different queue families
   if (compute_queue_family == graphics_queue_family) {
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -321,14 +320,13 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
 
   // Source stage: COMPUTE_SHADER_BIT (compute shader writes to storage image)
   // Destination stage: FRAGMENT_SHADER_BIT (fragment shader reads from sampled image)
-  // Using explicit stages enables validation layer to detect layout transition issues
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);
 
-  current_layout_ = VK_IMAGE_LAYOUT_GENERAL;
+  current_layout_ = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 }
 
 void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
@@ -369,8 +367,7 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   } else {
-    // Subsequent frames: transition from GENERAL (after fragment read) to GENERAL (for compute write)
-    // Keep GENERAL layout but update access masks for proper synchronization
+    // Subsequent frames: transition from SHADER_READ_ONLY_OPTIMAL (after fragment read) to GENERAL (for compute write)
     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.oldLayout = current_layout_;
@@ -378,14 +375,13 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
 
     // Source stage: FRAGMENT_SHADER_BIT (fragment shader reads from sampled image)
     // Destination stage: COMPUTE_SHADER_BIT (compute shader storage image writes)
-    // Using explicit stages enables validation layer to detect layout transition issues
     vkCmdPipelineBarrier(cmd,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);
   }
-  
+
   current_layout_ = VK_IMAGE_LAYOUT_GENERAL;
 }
 

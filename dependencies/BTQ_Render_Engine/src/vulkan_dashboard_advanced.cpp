@@ -122,7 +122,7 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
     pc.alpha = 1.0f;
     heatmap_pipeline_.dispatch(init_cmd, pc);
 
-    // Transition for ImGui rendering - keep GENERAL layout for sampled image access
+    // Transition to SHADER_READ_ONLY_OPTIMAL for ImGui rendering (sampled image)
     heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
 
     vkEndCommandBuffer(init_cmd);
@@ -140,12 +140,12 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   }
 
   // Register heatmap output texture with ImGui for rendering
-  // Use GENERAL layout which supports both storage (compute write) and sampled (fragment read) access
-  // This avoids unnecessary layout transitions between compute and graphics passes
+  // Use SHADER_READ_ONLY_OPTIMAL layout which is optimal for sampled image access in fragment shader
+  // This ensures proper texture sampling in ImGui::Image() calls
   heatmap_texture_ = vulkan_core_->get_memory_manager().add_texture(
       heatmap_pipeline_.get_output_image_view(),
       heatmap_pipeline_.get_sampler(),
-      VK_IMAGE_LAYOUT_GENERAL);
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
   if (heatmap_texture_ == VK_NULL_HANDLE) {
     std::cerr << "[VulkanDashboard] Failed to register heatmap texture with ImGui" << std::endl;
@@ -407,7 +407,7 @@ void VulkanDashboard::render_frame() {
     if (ImGui::Begin("Heatmap Visualization", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
       // Render the heatmap texture using ImGui::Image
       // The texture contains the colored heatmap output from the compute shader
-      // Scale image to fit within window while preserving aspect ratio
+      // Image is in SHADER_READ_ONLY_OPTIMAL layout for proper sampling
       constexpr float display_width = 512.0f;
       constexpr float aspect_ratio = static_cast<float>(LobHeatmapComputePipeline::HEATMAP_WIDTH) /
                                      static_cast<float>(LobHeatmapComputePipeline::HEATMAP_HEIGHT);
@@ -433,7 +433,7 @@ void VulkanDashboard::render_frame() {
                                     },
                                     [this](VkCommandBuffer cmd) {
                                       // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
-                                      // Transition image to GENERAL layout for compute write
+                                      // Transition image from SHADER_READ_ONLY_OPTIMAL to GENERAL for compute write
                                       uint32_t compute_qf = vulkan_core_->get_compute_queue_family();
                                       uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
                                       heatmap_pipeline_.transition_to_general(cmd, compute_qf, graphics_qf);
@@ -444,8 +444,7 @@ void VulkanDashboard::render_frame() {
                                       pc.alpha = 1.0f;         // Full opacity for visible colors
                                       heatmap_pipeline_.dispatch(cmd, pc);
 
-                                      // Transition image for fragment shader read (ImGui rendering)
-                                      // Keep GENERAL layout which supports both storage and sampled image access
+                                      // Transition image to SHADER_READ_ONLY_OPTIMAL for fragment shader read (ImGui rendering)
                                       heatmap_pipeline_.transition_to_read(cmd, compute_qf, graphics_qf);
                                     });
   vulkan_core_->PresentFrame(imageIndex);

@@ -47,7 +47,7 @@ class LobHeatmapComputePipeline {
   /// Issues push constants + vkCmdDispatch(64, 16, 1).
   void dispatch(VkCommandBuffer cmd, const HeatmapPushConstants& pc);
 
-  /// Transition output image: keeps GENERAL layout for both compute write and fragment read.
+  /// Transition output image: GENERAL → SHADER_READ_ONLY_OPTIMAL (for fragment shader / ImGui read).
   /// @param cmd Command buffer to record the barrier into
   /// @param compute_queue_family Queue family index for compute operations
   /// @param graphics_queue_family Queue family index for graphics operations
@@ -60,6 +60,9 @@ class LobHeatmapComputePipeline {
   /// @param graphics_queue_family Queue family index for graphics operations
   void transition_to_general(VkCommandBuffer cmd, uint32_t compute_queue_family,
                              uint32_t graphics_queue_family);
+
+  /// Get the current image layout (for ImGui texture registration).
+  VkImageLayout get_current_layout() const { return current_layout_; }
 
   /// Clean up all Vulkan resources.
   void destroy(VkDevice device);

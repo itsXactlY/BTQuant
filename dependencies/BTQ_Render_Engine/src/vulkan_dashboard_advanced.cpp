@@ -410,7 +410,7 @@ void VulkanDashboard::render_frame() {
                           static_cast<float>(LobHeatmapComputePipeline::HEATMAP_HEIGHT));
       auto* cached_tex = vulkan_core_->get_memory_manager().get_cached_texture(heatmap_texture_);
       if (cached_tex) {
-        ImGui::Image(reinterpret_cast<ImTextureID>(cached_tex->descriptor_set), heatmap_size);
+        ImGui::Image((ImTextureID)cached_tex->im_texture_id, heatmap_size);
       }
     }
     ImGui::End();

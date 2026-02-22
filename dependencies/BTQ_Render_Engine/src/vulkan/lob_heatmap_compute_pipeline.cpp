@@ -251,7 +251,7 @@ void LobHeatmapComputePipeline::update_descriptor(VkDevice device, VkBuffer ssbo
   VkDescriptorBufferInfo buffer_info{};
   buffer_info.buffer = ssbo_buffer;
   buffer_info.offset = 0;
-  buffer_info.range = ssbo_size;
+  buffer_info.range = VK_WHOLE_SIZE;  // Use VK_WHOLE_SIZE for storage buffers
 
   VkWriteDescriptorSet write{};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

@@ -316,10 +316,10 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
 
   // Ensure compute shader writes complete before fragment shader reads the image
   // Source stage: COMPUTE_SHADER_BIT for compute shader storage image writes
-  // Destination stage: FRAGMENT_SHADER_BIT for fragment shader sampled image reads
+  // Destination stage: ALL_GRAPHICS_BIT to cover fragment shader sampling inside render pass
   vkCmdPipelineBarrier(cmd,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                        0,
                        0, nullptr, 0, nullptr, 1, &barrier);
 }
@@ -363,10 +363,10 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
     barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-    // Source stage: FRAGMENT_SHADER_BIT (fragment shader sampled image reads)
+    // Source stage: ALL_GRAPHICS_BIT to cover fragment shader sampled image reads inside render pass
     // Destination stage: COMPUTE_SHADER_BIT (compute shader storage image writes)
     vkCmdPipelineBarrier(cmd,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          0,
                          0, nullptr, 0, nullptr, 1, &barrier);

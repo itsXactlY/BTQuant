@@ -341,7 +341,17 @@ void VulkanCore::create_instance() {
   if (config_.enable_validation_layers) {
     createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
-    
+
+    // Enable synchronization validation to catch layout transition issues
+    // This is required for the validation layer to report image layout transition warnings
+    VkValidationFeatureEnableEXT enabledValidationFeatures[] = {
+        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+    };
+    VkValidationFeaturesEXT validationFeatures{};
+    validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+    validationFeatures.enabledValidationFeatureCount = 1;
+    validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures;
+
     // Set up debug messenger for validation layer messages
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -356,7 +366,9 @@ void VulkanCore::create_instance() {
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     debugCreateInfo.pfnUserCallback = VulkanErrorHandler::debug_callback;
     debugCreateInfo.pUserData = nullptr;
-    
+
+    // Chain validation features into debug messenger, which is chained into createInfo
+    debugCreateInfo.pNext = &validationFeatures;
     createInfo.pNext = &debugCreateInfo;
   } else {
     createInfo.enabledLayerCount = 0;
@@ -368,7 +380,7 @@ void VulkanCore::create_instance() {
     std::cerr << "[VulkanCore] vkCreateInstance failed with error: " << result << std::endl;
     throw std::runtime_error("failed to create instance!");
   }
-  
+
   // Set up debug messenger after instance creation (for persistence beyond create_instance)
   if (config_.enable_validation_layers) {
     VulkanErrorHandler::setup_debug_messenger(instance_);
@@ -489,13 +501,20 @@ void VulkanCore::create_logical_device() {
   deviceFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;  // Allow storage image reads without format restriction
   deviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;  // Allow storage image writes without format restriction
 
+  // Enable synchronization2 features for better validation layer tracking of layout transitions
+  VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+  sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+  sync2Features.synchronization2 = VK_TRUE;
+
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  createInfo.pNext = &sync2Features;  // Chain synchronization2 features
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
   createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pEnabledFeatures = &deviceFeatures;
 
-  std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                                                VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME};
   createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 

@@ -292,14 +292,13 @@ void LobHeatmapComputePipeline::dispatch(VkCommandBuffer cmd, const HeatmapPushC
 // Image Transitions
 // ============================================================================
 void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd) {
-  // Keep image in GENERAL layout for both compute write and fragment read
-  // Only need execution dependency to ensure compute writes are visible to fragment shader
+  // Transition image from GENERAL (compute write) to SHADER_READ_ONLY_OPTIMAL (fragment read)
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
   barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
   barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = output_image_;

@@ -428,6 +428,10 @@ void VulkanDashboard::render_frame() {
   // when ImGui records its draw commands
   uint32_t frame_index = vulkan_core_->get_current_frame_index();
   VkCommandBuffer compute_cmd = vulkan_core_->get_compute_command_buffer(frame_index);
+  
+  // Reset command buffer before reuse to avoid validation layer errors
+  vkResetCommandBuffer(compute_cmd, 0);
+  
   VkCommandBufferBeginInfo begin_info{};
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;

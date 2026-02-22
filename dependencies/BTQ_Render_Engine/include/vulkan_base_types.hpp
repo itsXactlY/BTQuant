@@ -216,6 +216,7 @@ class VulkanCore {
   VkQueue get_compute_queue() const { return compute_queue_; }
   VkRenderPass get_render_pass() const { return render_pass_; }
   VkExtent2D get_swapchain_extent() const { return swapchain_extent_; }
+  VkCommandPool get_command_pool() const { return command_pool_; }
 
   // Memory management
   GPUMemoryManager& get_memory_manager() { return *memory_manager_; }

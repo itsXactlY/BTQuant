@@ -309,10 +309,15 @@ void LobHeatmapComputePipeline::transition_to_read(VkCommandBuffer cmd,
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Always use explicit queue family indices for proper ownership transfer
-  // This ensures validation layers accept the barrier even when queues are same family
-  barrier.srcQueueFamilyIndex = compute_queue_family;
-  barrier.dstQueueFamilyIndex = graphics_queue_family;
+  // Use VK_QUEUE_FAMILY_IGNORED when queue families are the same (no ownership transfer)
+  // Use explicit indices only when transferring between different queue families
+  if (compute_queue_family == graphics_queue_family) {
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  } else {
+    barrier.srcQueueFamilyIndex = compute_queue_family;
+    barrier.dstQueueFamilyIndex = graphics_queue_family;
+  }
 
   // Source stage: COMPUTE_SHADER_BIT (compute shader writes to storage image)
   // Destination stage: FRAGMENT_SHADER_BIT (ImGui fragment shader samples the texture)
@@ -335,9 +340,14 @@ void LobHeatmapComputePipeline::transition_to_general(VkCommandBuffer cmd,
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Always use explicit queue family indices for proper ownership transfer
-  barrier.srcQueueFamilyIndex = graphics_queue_family;
-  barrier.dstQueueFamilyIndex = compute_queue_family;
+  // Use VK_QUEUE_FAMILY_IGNORED when queue families are the same (no ownership transfer)
+  if (compute_queue_family == graphics_queue_family) {
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  } else {
+    barrier.srcQueueFamilyIndex = graphics_queue_family;
+    barrier.dstQueueFamilyIndex = compute_queue_family;
+  }
 
   if (!initial_layout_done_) {
     // First time: transition from UNDEFINED to GENERAL

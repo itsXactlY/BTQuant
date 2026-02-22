@@ -432,9 +432,7 @@ void VulkanDashboard::render_frame() {
                                     [this](VkCommandBuffer cmd) {
                                       // Dispatch compute shader: vkCmdDispatch(64, 16, 1)
                                       // Transition image to GENERAL layout for compute write
-                                      uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE 
-                                                            ? vulkan_core_->get_compute_queue_family() 
-                                                            : vulkan_core_->get_graphics_queue_family();
+                                      uint32_t compute_qf = vulkan_core_->get_compute_queue_family();
                                       uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
                                       heatmap_pipeline_.transition_to_general(cmd, compute_qf, graphics_qf);
 

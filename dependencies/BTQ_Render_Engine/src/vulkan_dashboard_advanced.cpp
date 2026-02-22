@@ -77,8 +77,54 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
                                            ssbo_updater_.get_buffer(),
                                            ssbo_updater_.get_buffer_size());
 
+  // Initialize texture with valid data by running compute shader once
+  // This ensures the heatmap displays correctly on the first frame (not a black rect)
+  {
+    VkCommandBuffer init_cmd;
+    VkCommandBufferAllocateInfo cmd_alloc_info{};
+    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_alloc_info.commandPool = vulkan_core_->get_command_pool();
+    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_alloc_info.commandBufferCount = 1;
+
+    vkAllocateCommandBuffers(vulkan_core_->get_device(), &cmd_alloc_info, &init_cmd);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(init_cmd, &begin_info);
+
+    // Transition to GENERAL for compute write
+    uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE
+                          ? vulkan_core_->get_compute_queue_family()
+                          : vulkan_core_->get_graphics_queue_family();
+    uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
+    heatmap_pipeline_.transition_to_general(init_cmd, compute_qf, graphics_qf);
+
+    // Dispatch compute shader with initial data
+    HeatmapPushConstants pc{};
+    pc.max_volume = 100.0f;
+    pc.alpha = 1.0f;
+    heatmap_pipeline_.dispatch(init_cmd, pc);
+
+    // Transition to SHADER_READ_ONLY_OPTIMAL for ImGui rendering
+    heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
+
+    vkEndCommandBuffer(init_cmd);
+
+    // Submit and wait for completion
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &init_cmd;
+
+    vkQueueSubmit(vulkan_core_->get_graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(vulkan_core_->get_graphics_queue());
+
+    vkFreeCommandBuffers(vulkan_core_->get_device(), vulkan_core_->get_command_pool(), 1, &init_cmd);
+  }
+
   // Register heatmap output texture with ImGui for rendering
-  // Image is transitioned to SHADER_READ_ONLY_OPTIMAL after compute write for fragment shader sampling
+  // Image is now in SHADER_READ_ONLY_OPTIMAL layout after compute write for fragment shader sampling
   heatmap_texture_ = vulkan_core_->get_memory_manager().add_texture(
       heatmap_pipeline_.get_output_image_view(),
       heatmap_pipeline_.get_sampler(),
@@ -92,52 +138,6 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
       std::println("[VulkanDashboard] Heatmap texture registered with ImGui (im_texture_id={})",
                    cached_tex->im_texture_id);
     }
-  }
-
-  // Initialize texture with valid data by running compute shader once
-  // This ensures the heatmap displays correctly on the first frame (not a black rect)
-  {
-    VkCommandBuffer init_cmd;
-    VkCommandBufferAllocateInfo cmd_alloc_info{};
-    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_alloc_info.commandPool = vulkan_core_->get_command_pool();
-    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_alloc_info.commandBufferCount = 1;
-    
-    vkAllocateCommandBuffers(vulkan_core_->get_device(), &cmd_alloc_info, &init_cmd);
-    
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(init_cmd, &begin_info);
-
-    // Transition to GENERAL for compute write
-    uint32_t compute_qf = vulkan_core_->get_compute_queue() != VK_NULL_HANDLE 
-                          ? vulkan_core_->get_compute_queue_family() 
-                          : vulkan_core_->get_graphics_queue_family();
-    uint32_t graphics_qf = vulkan_core_->get_graphics_queue_family();
-    heatmap_pipeline_.transition_to_general(init_cmd, compute_qf, graphics_qf);
-
-    // Dispatch compute shader with initial data
-    HeatmapPushConstants pc{};
-    pc.max_volume = 100.0f;
-    pc.alpha = 1.0f;
-    heatmap_pipeline_.dispatch(init_cmd, pc);
-
-    // Transition to SHADER_READ_ONLY_OPTIMAL for ImGui rendering
-    heatmap_pipeline_.transition_to_read(init_cmd, compute_qf, graphics_qf);
-    
-    vkEndCommandBuffer(init_cmd);
-    
-    // Submit and wait for completion
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &init_cmd;
-    
-    vkQueueSubmit(vulkan_core_->get_graphics_queue(), 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(vulkan_core_->get_graphics_queue());
-    
-    vkFreeCommandBuffers(vulkan_core_->get_device(), vulkan_core_->get_command_pool(), 1, &init_cmd);
   }
 
   std::println("[VulkanDashboard] Heatmap Compute Pipeline initialized.");

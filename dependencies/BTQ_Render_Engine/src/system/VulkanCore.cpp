@@ -483,7 +483,11 @@ void VulkanCore::create_logical_device() {
     }
   }
 
+  // Enable required features for compute shader with storage images and buffers
   VkPhysicalDeviceFeatures deviceFeatures{};
+  deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;  // Required for VK_FORMAT_R16G16B16A16_SFLOAT storage image
+  deviceFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;  // Allow storage image reads without format restriction
+  deviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;  // Allow storage image writes without format restriction
 
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

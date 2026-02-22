@@ -77,6 +77,24 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
                                            ssbo_updater_.get_buffer(),
                                            ssbo_updater_.get_buffer_size());
 
+  // Generate initial test data for heatmap visualization (colored sine wave pattern)
+  // This ensures the heatmap displays colors on the first frame (not a black rect)
+  for (uint32_t col = 0; col < 1024; ++col) {
+    for (uint32_t row = 0; row < 256; ++row) {
+      // Create a diagonal sine wave pattern for visual interest
+      float phase = static_cast<float>(col) * 0.05f + static_cast<float>(row) * 0.02f;
+      float buy_wave = (std::sin(phase) + 1.0f) * 50.0f;
+      float sell_wave = (std::sin(phase + 3.14159f) + 1.0f) * 50.0f;
+      // Add some noise for realism
+      float noise = static_cast<float>(rand() % 20) - 10.0f;
+      initial_test_data_.history[col].rows[row].buy_vol = std::max(0.0f, buy_wave + noise);
+      initial_test_data_.history[col].rows[row].sell_vol = std::max(0.0f, sell_wave - noise);
+      initial_test_data_.history[col].rows[row].trade_count = static_cast<uint16_t>(10 + rand() % 50);
+      initial_test_data_.history[col].rows[row].tpo_bits = 0;
+    }
+  }
+  ssbo_updater_.update(&initial_test_data_);
+
   // Initialize texture with valid data by running compute shader once
   // This ensures the heatmap displays correctly on the first frame (not a black rect)
   {
@@ -403,34 +421,8 @@ void VulkanDashboard::render_frame() {
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
-  // Generate test data for heatmap visualization
-  // Creates a sine wave pattern to demonstrate the colored heatmap rendering
-  static HotSpine::V3::SharedMemoryLayoutV3 test_data{};
-  static bool test_data_initialized = false;
-  
-  if (!test_data_initialized) {
-    // Initialize test data with visible volume patterns
-    for (uint32_t col = 0; col < 1024; ++col) {
-      for (uint32_t row = 0; row < 256; ++row) {
-        // Create a diagonal sine wave pattern for visual interest
-        float phase = static_cast<float>(col) * 0.05f + static_cast<float>(row) * 0.02f;
-        float buy_wave = (std::sin(phase) + 1.0f) * 50.0f;
-        float sell_wave = (std::sin(phase + 3.14159f) + 1.0f) * 50.0f;
-        
-        // Add some noise for realism
-        float noise = static_cast<float>(rand() % 20) - 10.0f;
-        
-        test_data.history[col].rows[row].buy_vol = std::max(0.0f, buy_wave + noise);
-        test_data.history[col].rows[row].sell_vol = std::max(0.0f, sell_wave - noise);
-        test_data.history[col].rows[row].trade_count = static_cast<uint16_t>(10 + rand() % 50);
-        test_data.history[col].rows[row].tpo_bits = 0;
-      }
-    }
-    test_data_initialized = true;
-  }
-
-  // Update SSBO with test data
-  ssbo_updater_.update(&test_data);
+  // Update SSBO with test data (already initialized during startup)
+  ssbo_updater_.update(&initial_test_data_);
 
   vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(),
                                     [this](VkCommandBuffer cmd) {

@@ -39,6 +39,7 @@
 #include "components/VulkanSynchronization.h"
 #include "components/theme_manager.hpp"
 
+#include "hotspine_layout_v3.hpp"
 #include "market_data_processor.hpp"
 #include "ui/ui_base.hpp"
 #include "vulkan/lob_heatmap_compute_pipeline.hpp"
@@ -323,6 +324,9 @@ class VulkanDashboard {
   LobHeatmapComputePipeline heatmap_pipeline_;
   SsboSnapshotUpdater ssbo_updater_;
   VkDescriptorSet heatmap_texture_ = VK_NULL_HANDLE;  // Registered texture descriptor set
+
+  // Initial test data for heatmap visualization (populated during initialization)
+  HotSpine::V3::SharedMemoryLayoutV3 initial_test_data_{};
 
   // Customization
   std::function<void()> custom_menubar_callback_;

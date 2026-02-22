@@ -1,6 +1,6 @@
 // LOB Heatmap Compute Shader — VolumeNode Cluster Edition
 // Vulkan 1.3 — Market Microstructure Terminal
-// Reads HotSpine::V3::VolumeNode SSBO, outputs RGBA16F heatmap texture
+// Reads HotSpine::V3::VolumeNode SSBO, outputs RGBA8 heatmap texture for ImGui rendering
 // X = column index (time), Y = row index (price level)
 
 #version 460 core
@@ -26,7 +26,7 @@ layout(set = 0, binding = 0, std430) readonly buffer ClusterSSBO {
     VolumeNode nodes[];  // Flat array: column * 256 + row
 } ssbo;
 
-layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D heatmap_out;
+layout(set = 0, binding = 1, rgba8) writeonly uniform image2D heatmap_out;
 
 // ========================================
 // Push Constants

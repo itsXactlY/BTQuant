@@ -41,19 +41,19 @@ bool LobHeatmapComputePipeline::initialize(VkDevice device, VkPhysicalDevice phy
 }
 
 // ============================================================================
-// Output Image: VK_FORMAT_R16G16B16A16_SFLOAT, 1024×256
+// Output Image: VK_FORMAT_R8G8B8A8_UNORM, 1024×256
 // ============================================================================
 bool LobHeatmapComputePipeline::create_output_image(VkDevice device,
                                                     VkPhysicalDevice physical_device) {
   // Verify format supports required features for storage image and sampled image
   VkFormatProperties format_props{};
-  vkGetPhysicalDeviceFormatProperties(physical_device, VK_FORMAT_R16G16B16A16_SFLOAT, &format_props);
-  
-  const VkFormatFeatureFlags required_features = 
+  vkGetPhysicalDeviceFormatProperties(physical_device, VK_FORMAT_R8G8B8A8_UNORM, &format_props);
+
+  const VkFormatFeatureFlags required_features =
       VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-  
+
   if ((format_props.optimalTilingFeatures & required_features) != required_features) {
-    std::cerr << "[LobHeatmapComputePipeline] VK_FORMAT_R16G16B16A16_SFLOAT does not support "
+    std::cerr << "[LobHeatmapComputePipeline] VK_FORMAT_R8G8B8A8_UNORM does not support "
               << "required storage/sampled image features" << std::endl;
     return false;
   }
@@ -61,7 +61,7 @@ bool LobHeatmapComputePipeline::create_output_image(VkDevice device,
   VkImageCreateInfo img_ci{};
   img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   img_ci.imageType = VK_IMAGE_TYPE_2D;
-  img_ci.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+  img_ci.format = VK_FORMAT_R8G8B8A8_UNORM;
   img_ci.extent = {HEATMAP_WIDTH, HEATMAP_HEIGHT, 1};
   img_ci.mipLevels = 1;
   img_ci.arrayLayers = 1;

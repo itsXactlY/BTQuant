@@ -47,14 +47,12 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int /
       break;
     case PanelType::FOOTPRINT_CHART: {
       config.title = title.empty() ? "Footprint" : title;
-      panels_[current_id] = std::make_unique<FootprintPanel>(config, cluster_engine_.get());
+      panels_[current_id] = std::make_unique<FootprintPanel>(config, processor_, nullptr);
       break;
     }
     case PanelType::VOLUME_PROFILE: {
       config.title = title.empty() ? "Volume Profile" : title;
-      auto vp = std::make_unique<VolumeProfilePanel>(config, processor_);
-      vp->set_cluster_engine(cluster_engine_.get());
-      panels_[current_id] = std::move(vp);
+      panels_[current_id] = std::make_unique<VolumeProfilePanel>(config, processor_, nullptr, nullptr);
       break;
     }
     default:

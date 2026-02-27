@@ -4,10 +4,7 @@
 #include <cstddef>
 
 #include "data/core_types.hpp"
-
-namespace HotSpine::V3 {
-    struct VolumeNode;
-}
+#include "hotspine_layout_v3.hpp"
 
 namespace BTQuant {
 

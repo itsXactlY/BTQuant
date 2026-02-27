@@ -187,6 +187,7 @@ set(DASHBOARD_SOURCES
     src/data/hotspine_data_bridge.cpp
     src/data/hotspine_bridge.cpp
     src/data/cluster_engine.cpp
+    src/analytics/cluster_engine.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
@@ -287,6 +288,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/data/hotspine_data_bridge.cpp
     src/data/hotspine_bridge.cpp
     src/data/cluster_engine.cpp
+    src/analytics/cluster_engine.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp

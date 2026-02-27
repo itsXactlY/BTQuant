@@ -42,7 +42,6 @@ class WatchlistAlertManager {
 public:
     using AlertTriggeredCallback = std::function<void(const WatchlistPriceAlert&, double current_price)>;
 
-    // DEPRECATED - Legacy hotspine
     WatchlistAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
                          std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                          std::shared_ptr<AlertsPanel> alerts_panel);
@@ -90,7 +89,6 @@ public:
     }
 
 private:
-    // DEPRECATED - Legacy hotspine
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     std::shared_ptr<AlertsPanel> alerts_panel_;

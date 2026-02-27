@@ -36,10 +36,7 @@ FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git G
 # ImPlot
 FetchContent_Declare(implot GIT_REPOSITORY https://github.com/epezent/implot.git GIT_TAG master)
 
-# MiniAudio for audio acoustics
-FetchContent_Declare(miniaudio GIT_REPOSITORY https://github.com/mackron/miniaudio.git GIT_TAG 0.11.22)
-
-FetchContent_MakeAvailable(glm json concurrentqueue readerwriterqueue imgui implot miniaudio)
+FetchContent_MakeAvailable(glm json concurrentqueue readerwriterqueue imgui implot)
 
 # Path Configuration
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
@@ -155,7 +152,6 @@ set(DASHBOARD_SOURCES
     src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
-    src/components/market_depth_table_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
@@ -164,9 +160,6 @@ set(DASHBOARD_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
-    src/texture/texture_atlas_manager.cpp
-    src/vulkan/ssbo_snapshot_updater.cpp
-    src/vulkan/lob_heatmap_compute_pipeline.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -304,7 +297,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/theme_customization_panel.cpp
     src/components/keyboard_shortcuts_panel.cpp
     src/components/drawing_tools_panel.cpp
-    src/components/market_depth_table_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/trade_command_queue.cpp
     src/trading/order_manager.cpp
@@ -313,9 +305,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
-    src/texture/texture_atlas_manager.cpp
-    src/vulkan/ssbo_snapshot_updater.cpp
-    src/vulkan/lob_heatmap_compute_pipeline.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -353,7 +342,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp
-    src/analytics/tpoengine.cpp
     src/analytics/volume_calculator.cpp
     src/indicators/session_vwap.cpp
     src/indicators/rolling_vwap.cpp
@@ -367,66 +355,40 @@ set(BTQUANT_TERMINAL_SOURCES
     ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 
-# Create a library containing the ImGui implementation
-add_library(btq_render_lib STATIC
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMPLOT_DIR}/implot.cpp
-    ${IMPLOT_DIR}/implot_items.cpp
-    src/rendering/imgui_optimizer.cpp
-    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
-)
-
-target_include_directories(btq_render_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/vulkan
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
-    ${json_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-# Create the executable
 add_executable(BTQuantTerminal ${BTQUANT_TERMINAL_SOURCES} ${COMPILED_SHADERS})
 
 target_include_directories(BTQuantTerminal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
+    ${json_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
     ${readerwriterqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/readerwriterqueue-src
-    ${miniaudio_SOURCE_DIR}
 )
 
 find_package(TBB REQUIRED)
 
 target_link_libraries(BTQuantTerminal PRIVATE
-    btq_render_lib
     Vulkan::Vulkan
     glfw
     dl
     pthread
     TBB::tbb
 )
-
-# Note: MINIAUDIO_IMPLEMENTATION is defined only in market_data_processor.cpp
-# to avoid multiple definition errors. Do not add it here as a global definition.
 
 # Conditionally build tests if BUILD_TESTS is enabled
 if(BUILD_TESTS)

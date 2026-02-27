@@ -421,7 +421,7 @@ std::vector<VolumeProfileAnalyzer::VolumeImbalance> VolumeProfileAnalyzer::detec
 // ============================================================================
 
 MarketDepthAnalyzer::MarketDepthSnapshot MarketDepthAnalyzer::create_depth_snapshot(
-    const OrderbookData& /*orderbook*/) {
+    const RenderEngine::OrderbookData& /*orderbook*/) {
   MarketDepthSnapshot snapshot;
   // Note: OrderbookData is forward-declared, so we can't access its members
   // This is a placeholder implementation

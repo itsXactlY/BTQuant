@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <memory>
 
 #include "../hotspine_data_bridge.hpp"
@@ -14,23 +13,11 @@
 #include "imgui.h"
 #include "implot.h"
 #include "panel_manager.hpp"
-#include "symbol_selector.hpp"
 
 namespace BTQuant {
 
-// Global crosshair synchronization data
-struct GlobalCrosshair {
-    std::atomic<double> price{0.0};
-    std::atomic<uint64_t> time{0};
-    std::atomic<bool> active{false};
-    
-    GlobalCrosshair() = default;
-    GlobalCrosshair(double p, uint64_t t, bool a) : price(p), time(t), active(a) {}
-};
-
 class QuantWorkspaceComponent : public UIComponent {
  public:
-  // DEPRECATED - Legacy hotspine
   explicit QuantWorkspaceComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
@@ -46,44 +33,8 @@ class QuantWorkspaceComponent : public UIComponent {
 
   void refresh_hierarchical_selector();  // Made public for workspace manager
 
-  // Public access to global crosshair
-  static GlobalCrosshair g_crosshair;
-
-  // Additional global crosshair price variable
-  static std::atomic<double> g_crosshair_price;
-  
-  // Additional global crosshair time variable
-  static std::atomic<uint64_t> g_crosshair_time;
-
-  // Helper methods for accessing global crosshair state
-  static double get_global_crosshair_price() { return g_crosshair.price.load(); }
-  static uint64_t get_global_crosshair_time() { return g_crosshair.time.load(); }
-  static bool get_global_crosshair_active() { return g_crosshair.active.load(); }
-  static void set_global_crosshair_price(double price) { g_crosshair.price.store(price); }
-  static void set_global_crosshair_time(uint64_t time) { g_crosshair.time.store(time); }
-  static void set_global_crosshair_active(bool active) { g_crosshair.active.store(active); }
-
-  // Global atomic active symbol ID for cross-panel synchronization
-  static std::atomic<uint32_t> g_active_symbol_id;
-
-  // Helper methods for accessing global active symbol ID
-  static uint32_t get_global_active_symbol_id() { return g_active_symbol_id.load(); }
-  static void set_global_active_symbol_id(uint32_t symbol_id) { g_active_symbol_id.store(symbol_id); }
-
-  // Global USD mode flag for currency display
-  static std::atomic<bool> g_usd_mode;
-
-  // Helper methods for accessing global USD mode
-  static bool get_global_usd_mode() { return g_usd_mode.load(); }
-  static void set_global_usd_mode(bool usd_mode) { g_usd_mode.store(usd_mode); }
-
-  // Global SymbolSelector instance
-  static BTQuant::SymbolSelector g_symbol_selector;
-  static BTQuant::SymbolSelectorState g_symbol_selector_state;
-
  private:
   // Core systems
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -120,7 +71,7 @@ class QuantWorkspaceComponent : public UIComponent {
   void render_dashboard_controls();
   void render_orders_panel();
   void render_positions_panel();
-
+  
   // Crosshair synchronization methods
   void handle_global_crosshair_sync();
   ChartPanel* get_chart_panel_under_cursor() const;

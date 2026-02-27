@@ -9,8 +9,6 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
-#include "../texture/texture_atlas_manager.hpp"
-#include "../trading/trade_command_queue.hpp"
 
 namespace BTQuant {
 
@@ -28,8 +26,7 @@ namespace BTQuant {
  */
 class TimeAndSalesPanel : public PanelBase {
  public:
-  // DEPRECATED - Legacy hotspine
-  TimeAndSalesPanel(const PanelConfig& config,
+  TimeAndSalesPanel(const PanelConfig& config, 
                    std::shared_ptr<HotSpineDataBridge> bridge,
                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -39,11 +36,8 @@ class TimeAndSalesPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
-  std::unique_ptr<TextureAtlasManager> texture_atlas_manager_;
-  VulkanCore* vulkan_core_ = nullptr;  // Store reference to VulkanCore for texture registration
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";
@@ -120,13 +114,6 @@ class TimeAndSalesPanel : public PanelBase {
   void render_trade_size_histogram();
   uint64_t parseTimeString(const std::string& time_str);
   void subscribe_to_updates();
-  
-  // Trade command routing functionality
-  void render_trade_action_buttons(const RenderEngine::TradeData& trade);
-  void place_order_from_trade(const RenderEngine::TradeData& trade, BTQuant::RenderEngine::OrderSide side);
-  
-  // Override the base class method for Vulkan resource initialization
-  void initialize_vulkan_resources(VulkanCore* core) override;
 
   // Audio alert methods
   void checkForLargeTradesAndAlert();

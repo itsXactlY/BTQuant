@@ -344,7 +344,7 @@ void AppearanceSettings::apply_current_theme() {
             style.Colors[ImGuiCol_Text] = ImVec4(0.95f, 0.96f, 0.98f, 1.00f);
             style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.10f, 0.94f);
-            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);  // #15191E (Panel Surface)
+            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
             style.Colors[ImGuiCol_PopupBg] = ImVec4(0.10f, 0.10f, 0.10f, 0.94f);
             style.Colors[ImGuiCol_Border] = ImVec4(0.30f, 0.30f, 0.30f, 0.50f);
             style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
@@ -401,7 +401,7 @@ void AppearanceSettings::apply_current_theme() {
             style.Colors[ImGuiCol_Text] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
             style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.94f, 0.94f, 0.94f, 1.00f);
-            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);  // #15191E (Panel Surface)
+            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
             style.Colors[ImGuiCol_PopupBg] = ImVec4(1.00f, 1.00f, 1.00f, 0.98f);
             style.Colors[ImGuiCol_Border] = ImVec4(0.00f, 0.00f, 0.00f, 0.30f);
             style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
@@ -458,7 +458,7 @@ void AppearanceSettings::apply_current_theme() {
             style.Colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
             style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
             style.Colors[ImGuiCol_WindowBg] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);  // #15191E (Panel Surface)
+            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
             style.Colors[ImGuiCol_PopupBg] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
             style.Colors[ImGuiCol_Border] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
             style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
@@ -521,7 +521,7 @@ void AppearanceSettings::apply_current_theme() {
 
             // Apply custom theme to ImGui
             style.Colors[ImGuiCol_WindowBg] = bg_primary;
-            style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);  // #15191E (Panel Surface)
+            style.Colors[ImGuiCol_ChildBg] = bg_secondary;
             style.Colors[ImGuiCol_PopupBg] = bg_secondary;
             style.Colors[ImGuiCol_Text] = text_primary;
             style.Colors[ImGuiCol_Button] = accent_primary;
@@ -536,8 +536,7 @@ void AppearanceSettings::apply_current_theme() {
 
     // Adjust opacities for different elements
     style.Colors[ImGuiCol_WindowBg].w = window_opacity;
-    // For ChildBg, preserve the RGB values but adjust alpha as needed
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.082f, 0.098f, 0.118f, panel_opacity);  // #15191E (Panel Surface) with adjusted opacity
+    style.Colors[ImGuiCol_ChildBg].w = panel_opacity;
     style.Colors[ImGuiCol_PopupBg].w = panel_opacity;
     style.Colors[ImGuiCol_FrameBg].w = panel_opacity;
     style.Colors[ImGuiCol_FrameBgHovered].w = panel_opacity;
@@ -606,8 +605,6 @@ void AppearanceSettings::apply_font_settings() {
     // Configure base font
     ImFontConfig config;
     config.SizePixels = static_cast<float>(base_font_size);
-    config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
-    config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
 
     // Add the selected font to ImGui
     // For now, we'll use the default font with the selected size
@@ -616,15 +613,11 @@ void AppearanceSettings::apply_font_settings() {
     // Configure header font (larger size)
     ImFontConfig header_config;
     header_config.SizePixels = static_cast<float>(base_font_size * header_scale);
-    header_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
-    header_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     ImFont* header_font = io.Fonts->AddFontDefault(&header_config);
 
     // Configure monospace font for code/data display
     ImFontConfig mono_config;
     mono_config.SizePixels = static_cast<float>(mono_font_size);
-    mono_config.OversampleH = 4;  // Increase oversampling to eliminate sub-pixel aliasing
-    mono_config.OversampleV = 4;  // Increase oversampling to eliminate sub-pixel aliasing
     ImFont* mono_font = io.Fonts->AddFontDefault(&mono_config);
 
     // In a real implementation, we would load actual font files:

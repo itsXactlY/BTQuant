@@ -7,7 +7,7 @@
 #include "performance/debug_overlay.hpp"
 #include "../include/performance_monitor.hpp"
 #include "../include/performance/memory_tracker.hpp"
-#include "ui/ui_base.hpp"
+#include "../src/imgui/imgui.h"
 #include <sstream>
 #include <iomanip>
 #include <chrono>
@@ -187,11 +187,14 @@ void DebugOverlay::render() {
     // Create an always-topmost, borderless window for the debug overlay
     ImGui::Begin("Performance Debug Overlay",
                  nullptr,
-                 UI::OVERLAY_FLAGS |
+                 ImGuiWindowFlags_NoTitleBar |
+                 ImGuiWindowFlags_NoResize |
+                 ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoScrollbar |
                  ImGuiWindowFlags_NoScrollWithMouse |
                  ImGuiWindowFlags_NoCollapse |
                  ImGuiWindowFlags_AlwaysAutoResize |
+                 ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoFocusOnAppearing |
                  ImGuiWindowFlags_NoNav);
 
@@ -265,15 +268,15 @@ void DebugOverlay::render() {
 
     ImGui::Separator();
 
-    // Active Features/Components Information (from g_debug_overlay)
+    // Active Features/Components Information
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== ACTIVE FEATURES ===");
 
-    // Show active panels/component counts from g_debug_overlay
-    ImGui::Text("Panels: %zu", active_panels_count_);
-    ImGui::Text("Indicators: %zu", active_indicators_count_);
-    ImGui::Text("Alerts: %zu", active_alerts_count_);
+    // Show active panels/components count
+    ImGui::Text("Active Panels: %zu", active_panels_count_);
+    ImGui::Text("Active Indicators: %zu", active_indicators_count_);
+    ImGui::Text("Active Alerts: %zu", active_alerts_count_);
 
-    // Data processing metrics from g_performance_monitor
+    // Data processing metrics
     size_t data_processed = g_performance_monitor.get_data_processed_count();
     size_t indicators_calculated = g_performance_monitor.get_indicators_calculated_count();
     double data_processing_time = g_performance_monitor.get_data_processing_time_ms();
@@ -282,17 +285,7 @@ void DebugOverlay::render() {
     ImGui::Text("Indicators Calc: %zu", indicators_calculated);
     ImGui::Text("Processing Time: %.2f ms", data_processing_time);
 
-    // Debug Overlay Internal State
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== DEBUG OVERLAY STATUS ===");
-
-    // Overlay state from g_debug_overlay
-    ImGui::Text("Visible: %s", is_visible() ? "Yes" : "No");
-    ImGui::Text("Position: (%.1f, %.1f)", position_x_, position_y_);
-    ImGui::Text("Window Size: (%.1f x %.1f)", window_width_, window_height_);
-    ImGui::Text("Refresh Rate: %.1f Hz", refresh_rate_);
-
-    // Renderer stats from g_debug_overlay
+    // Renderer Stats
     ImGui::Text("Frames Rendered: %s", format_large_number(frames_rendered_).c_str());
     ImGui::Text("LOB Updates: %s", format_large_number(lob_updates_).c_str());
     ImGui::Text("Trade Updates: %s", format_large_number(trade_updates_).c_str());

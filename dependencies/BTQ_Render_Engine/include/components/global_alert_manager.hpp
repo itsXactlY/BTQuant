@@ -70,7 +70,6 @@ using GlobalAlertTriggeredCallback = std::function<void(const GlobalAlert&, doub
 
 class GlobalAlertManager {
  public:
-  // DEPRECATED - Legacy hotspine
   GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                      std::shared_ptr<AlertsPanel> alerts_panel);
@@ -122,7 +121,6 @@ class GlobalAlertManager {
   size_t get_triggered_alerts_count() const;
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<AlertsPanel> alerts_panel_;

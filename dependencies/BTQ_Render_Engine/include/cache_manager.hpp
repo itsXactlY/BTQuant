@@ -11,15 +11,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "data/core_types.hpp"
+#include "data/data_types.hpp"
 
 namespace BTQuant {
 namespace RenderEngine {
-
-// Type aliases for backward compatibility
-using TimeFrame = BTQuant::TimeFrame;
-using VolumeProfileLevel = BTQuant::VolumeProfileLevel;
-// OHLCVCandle is already defined in data_types.hpp for RenderEngine namespace
 
 // Enum for different types of cached data
 enum class CacheType {

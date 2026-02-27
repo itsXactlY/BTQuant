@@ -31,7 +31,6 @@ class SymbolSelector {
   bool render(SymbolSelectorState& state);
 
   // Refresh available symbols from the data bridge
-  // DEPRECATED - Legacy hotspine
   void refresh_symbols(SymbolSelectorState& state, std::shared_ptr<HotSpineDataBridge> bridge,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 

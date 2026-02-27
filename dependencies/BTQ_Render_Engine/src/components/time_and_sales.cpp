@@ -3,11 +3,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-
-#include "backends/imgui_impl_vulkan.h"
 #include <sstream>
-
-#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,7 +16,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 TimeAndSalesPanel::TimeAndSalesPanel(const PanelConfig& config,
                                      std::shared_ptr<HotSpineDataBridge> bridge,
                                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
@@ -41,53 +36,11 @@ TimeAndSalesPanel::TimeAndSalesPanel(const PanelConfig& config,
   subscribe_to_updates();
 }
 
-void TimeAndSalesPanel::initialize_vulkan_resources(VulkanCore* core) {
-  if (!core) return;
-  
-  // Store the VulkanCore reference for later use during rendering
-  vulkan_core_ = core;
-  
-  // Initialize the texture atlas manager with GPU memory manager
-  // For now, we'll create a basic texture atlas with placeholder data
-  // In a real implementation, this would load actual exchange icon data
-  
-  // Create a simple placeholder texture atlas
-  std::vector<std::vector<uint8_t>> icon_data;
-  std::vector<std::string> exchange_names = {"BINANCE", "COINBASE", "FTX", "BYBIT"};
-  
-  // Create simple 16x16 pixel icons (RGBA format) - placeholder data
-  for (size_t i = 0; i < exchange_names.size(); ++i) {
-    std::vector<uint8_t> icon_bytes(16 * 16 * 4); // 16x16 RGBA
-    
-    // Fill with a simple pattern based on index
-    for (size_t j = 0; j < icon_bytes.size(); j += 4) {
-      icon_bytes[j] = static_cast<uint8_t>((i * 50) % 255);     // R
-      icon_bytes[j + 1] = static_cast<uint8_t>((i * 75) % 255); // G
-      icon_bytes[j + 2] = static_cast<uint8_t>((i * 100) % 255); // B
-      icon_bytes[j + 3] = 255; // A
-    }
-    
-    icon_data.push_back(icon_bytes);
-  }
-  
-  // Create the texture atlas manager
-  texture_atlas_manager_ = std::make_unique<TextureAtlasManager>(core->get_memory_manager());
-  
-  // Initialize the exchange icon atlas
-  texture_atlas_manager_->initializeExchangeIconAtlas(icon_data, 16, 16, exchange_names);
-  
-  // Upload the texture data to GPU
-  texture_atlas_manager_->uploadTextureData(core);
-}
-
 TimeAndSalesPanel::~TimeAndSalesPanel() {
   // Clean up subscription
   if (processor_ && subscription_id_ != 0) {
     processor_->unsubscribe(subscription_id_);
   }
-  
-  // Clean up texture atlas manager
-  texture_atlas_manager_.reset();
 }
 
 void TimeAndSalesPanel::subscribe_to_updates() {
@@ -281,9 +234,7 @@ void TimeAndSalesPanel::render_panel_header() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-scroll", &auto_scroll_);
   ImGui::SameLine();
-  ImGui::Text("| Trades: ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderNumericalValue(static_cast<int>(cached_trades_.size()));
+  ImGui::Text("| Trades: %zu", cached_trades_.size());
   ImGui::SameLine();
 
   // Display trade pace information in the header
@@ -295,15 +246,7 @@ void TimeAndSalesPanel::render_panel_header() {
     double tpm_15min =
         calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000);  // 15 minutes in microseconds
 
-    ImGui::Text("| TPM: 1m:");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_1min, "%.1f");
-    ImGui::Text(" 5m:");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_5min, "%.1f");
-    ImGui::Text(" 15m:");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(tpm_15min, "%.1f");
+    ImGui::Text("| TPM: 1m:%.1f 5m:%.1f 15m:%.1f", tpm_1min, tpm_5min, tpm_15min);
   }
 }
 
@@ -571,17 +514,11 @@ void TimeAndSalesPanel::render_controls() {
 
     ImGui::Separator();
     ImGui::Text("Current clustering stats:");
-    ImGui::Text("- Total trades: ");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderNumericalValue(total_trades);
-    ImGui::Text("- Clustered trades: ");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderNumericalValue(clustered_trades);
+    ImGui::Text("- Total trades: %d", total_trades);
+    ImGui::Text("- Clustered trades: %d", clustered_trades);
     if (total_trades > 0) {
       float percentage = (static_cast<float>(clustered_trades) / total_trades) * 100.0f;
-      ImGui::Text("- Cluster percentage: ");
-      ImGui::SameLine();
-      BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(percentage, "%.2f%%");
+      ImGui::Text("- Cluster percentage: %.2f%%", percentage);
     }
 
     ImGui::Unindent();
@@ -819,25 +756,23 @@ void TimeAndSalesPanel::render_trade_size_histogram() {
         // Range column
         ImGui::TableSetColumnIndex(0);
         if (&bucket == &histogram.back()) {
-          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.lower_bound, ">=%.3f");
+          ImGui::Text(">=%.3f", bucket.lower_bound);
         } else {
-          char range_str[64];
-          snprintf(range_str, sizeof(range_str), "%.3f-%.3f", bucket.lower_bound, bucket.upper_bound);
-          ImGui::Text("%s", range_str);
+          ImGui::Text("%.3f-%.3f", bucket.lower_bound, bucket.upper_bound);
         }
 
         // Count column
         ImGui::TableSetColumnIndex(1);
-        BTQuant::UI::FontManager::getInstance().renderNumericalValue(bucket.count);
+        ImGui::Text("%d", bucket.count);
 
         // Total Size column
         ImGui::TableSetColumnIndex(2);
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.total_size, "%.2f");
+        ImGui::Text("%.2f", bucket.total_size);
 
         // Average Size column
         ImGui::TableSetColumnIndex(3);
         if (bucket.count > 0) {
-          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bucket.total_size / bucket.count, "%.3f");
+          ImGui::Text("%.3f", bucket.total_size / bucket.count);
         } else {
           ImGui::Text("0.000");
         }
@@ -846,7 +781,7 @@ void TimeAndSalesPanel::render_trade_size_histogram() {
         ImGui::TableSetColumnIndex(4);
         if (total_trades > 0) {
           double percentage = (static_cast<double>(bucket.count) / total_trades) * 100.0;
-          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(percentage, "%.2f%%");
+          ImGui::Text("%.2f%%", percentage);
         } else {
           ImGui::Text("0.00%%");
         }
@@ -940,14 +875,13 @@ void TimeAndSalesPanel::render_trade_table() {
   double large_trade_threshold = avg_trade_size * 5.0;
   double block_trade_threshold = avg_trade_size * 10.0;
 
-  if (ImGui::BeginTable(table_id, 5,  // Changed from 4 to 5 columns to add action buttons
+  if (ImGui::BeginTable(table_id, 4,
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
-    ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 100.0f);  // New Actions column
+    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthFixed, 40.0f);
     ImGui::TableHeadersRow();
 
     // Count filtered trades to determine the total for the clipper
@@ -1030,34 +964,31 @@ void TimeAndSalesPanel::render_trade_table() {
               ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
             }
 
-            // Exchange column - render icon from texture atlas
+            // Time column (HH:MM:SS.mmm)
             ImGui::TableSetColumnIndex(0);
+            bool is_block_trade_time =
+                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
-            // Get exchange name to determine which icon to render
-            std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+            if (is_block_trade_time) {
+              // Make block trades stand out with a more prominent visual indicator
+              // Using a heavier font weight if available, or a different approach
+              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
+                                  ? ThemeManager::getInstance().getLargeFont()
+                                  : ThemeManager::getInstance().getMainFont());
+            }
 
-            // If texture atlas manager is available, render exchange icon
-            if (texture_atlas_manager_) {
-                // Get UV coordinates for this exchange
-                auto uv_coords = texture_atlas_manager_->getExchangeIconUV(exchange);
-
-                // Get the texture atlas for rendering
-                ImTextureID texture_id = texture_atlas_manager_->getImGuiTextureID(vulkan_core_);
-
-                // Render the exchange icon using the texture atlas
-                ImVec2 icon_size(16.0f, 16.0f); // Size of the icon to display
-                ImVec2 uv_min(uv_coords[0], uv_coords[1]); // UV coordinates for top-left
-                ImVec2 uv_max(uv_coords[2], uv_coords[3]); // UV coordinates for bottom-right
-
-                ImGui::Image(texture_id, icon_size, uv_min, uv_max);
-
-                // Add tooltip with exchange name
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("%s", exchange.c_str());
-                }
+            if (trade.timestamp > 0) {
+              time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
+              uint64_t millis = (trade.timestamp / 1000) % 1000;
+              char time_str[16];
+              strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
+              ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
             } else {
-                // Fallback to text if texture atlas is not available
-                ImGui::Text("%s", exchange.c_str());
+              ImGui::Text("-");
+            }
+
+            if (is_block_trade_time) {
+              ImGui::PopFont();
             }
 
             // Price column - Enhanced coloring based on trade size
@@ -1076,16 +1007,8 @@ void TimeAndSalesPanel::render_trade_table() {
               // Large trades (>avg*5) in yellow
               price_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
             } else {
-              // Regular trades: Ask hits (BUY) in Neon Mint, Bid hits (SELL) in Crimson
-              // Ask hit: buyer takes liquidity at ask price (is_buy = true)
-              // Bid hit: seller takes liquidity at bid price (is_buy = false)
-              if (trade.is_buy) {
-                // Ask hit - Neon Mint (#00E676)
-                price_color = ImVec4(0.0f, 0.902f, 0.443f, 1.0f);  // #00E676 converted to 0-1 range
-              } else {
-                // Bid hit - Crimson (#FF3B69)
-                price_color = ImVec4(1.0f, 0.231f, 0.412f, 1.0f);  // #FF3B69 converted to 0-1 range
-              }
+              // Regular trades: buy in green, sell in red
+              price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
             }
 
             // Apply bold font for block trades if available
@@ -1095,84 +1018,73 @@ void TimeAndSalesPanel::render_trade_table() {
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            // Apply the determined color to the price text
-            ImGui::PushStyleColor(ImGuiCol_Text, price_color);
-            
-            // Use monospaced font for price
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.price, "%.4f");
-
-            // Restore original text color
-            ImGui::PopStyleColor();
+            ImGui::TextColored(price_color, "%.4f", trade.price);
 
             if (is_block_trade_price) {
               ImGui::PopFont();
             }
 
-            // Qty column (previously Size)
+            // Size column
             ImGui::TableSetColumnIndex(2);
-            // Color qty based on trade size thresholds
-            ImVec4 qty_color = colors.text;  // Default color
-            bool is_block_trade_qty =
+            // Color size based on trade size thresholds
+            ImVec4 size_color = colors.text;  // Default color
+            bool is_block_trade_size =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
-            if (is_block_trade_qty) {
+            if (is_block_trade_size) {
               // Block trades in orange
-              qty_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+              size_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
             } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
               // Large trades in yellow
-              qty_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+              size_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
             }
 
             // Apply bold font for block trades if available
-            if (is_block_trade_qty) {
+            if (is_block_trade_size) {
               ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
                                   ? ThemeManager::getInstance().getLargeFont()
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            // Use monospaced font for quantity
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(trade.size, "%.4f");
+            ImGui::TextColored(size_color, "%.4f", trade.size);
 
-            if (is_block_trade_qty) {
+            if (is_block_trade_size) {
               ImGui::PopFont();
             }
 
-            // Time column (HH:MM:SS.mmm) - moved to last position
+            // Side column
             ImGui::TableSetColumnIndex(3);
-            bool is_block_trade_time =
+            ImVec4 side_color = colors.text;  // Default color
+            bool is_block_trade_side =
                 (trade.size >= block_trade_threshold && block_trade_threshold > 0);
 
-            if (is_block_trade_time) {
-              // Make block trades stand out with a more prominent visual indicator
-              // Using a heavier font weight if available, or a different approach
+            if (is_block_trade_side) {
+              // Block trades in orange
+              side_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+            } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
+              // Large trades in yellow
+              side_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+            } else {
+              // Regular trades: buy in green, sell in red
+              side_color = trade.is_buy ? colors.accent_green : colors.accent_red;
+            }
+
+            // Apply bold font for block trades if available
+            if (is_block_trade_side) {
               ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
                                   ? ThemeManager::getInstance().getLargeFont()
                                   : ThemeManager::getInstance().getMainFont());
             }
 
-            if (trade.timestamp > 0) {
-              time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
-              uint64_t millis = (trade.timestamp / 1000) % 1000;
-              char time_str[16];
-              strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-              
-              // Format the time string with milliseconds
-              char formatted_time[32];
-              snprintf(formatted_time, sizeof(formatted_time), "%s.%03lu", time_str, static_cast<unsigned long>(millis));
-              
-              // Use monospaced font for time
-              ImGui::Text("%s", formatted_time);
+            if (trade.is_buy) {
+              ImGui::TextColored(side_color, "BUY");
             } else {
-              ImGui::Text("-");
+              ImGui::TextColored(side_color, "SELL");
             }
 
-            if (is_block_trade_time) {
+            if (is_block_trade_side) {
               ImGui::PopFont();
             }
-
-            // Action buttons column
-            ImGui::TableSetColumnIndex(4);
-            render_trade_action_buttons(trade);
 
             ImGui::PopID();
 
@@ -1502,64 +1414,6 @@ void TimeAndSalesPanel::exportTradesToCSV() {
   }
 
   file.close();
-}
-
-void TimeAndSalesPanel::render_trade_action_buttons(const RenderEngine::TradeData& trade) {
-  // Create buy/sell buttons based on the current trade
-  // If the trade was a buy, offer a sell button to close position
-  // If the trade was a sell, offer a buy button to close position
-  
-  // Buy button - for taking the opposite side of the trade
-  ImVec4 buy_button_color = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);  // Green
-  ImGui::PushStyleColor(ImGuiCol_Button, buy_button_color);
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.6f, 0.0f, 1.0f));
-  
-  if (ImGui::SmallButton("Buy##buy_btn")) {
-    place_order_from_trade(trade, BTQuant::RenderEngine::OrderSide::BUY);
-  }
-  
-  ImGui::PopStyleColor(3);
-  
-  ImGui::SameLine();
-  
-  // Sell button - for taking the opposite side of the trade
-  ImVec4 sell_button_color = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);  // Red
-  ImGui::PushStyleColor(ImGuiCol_Button, sell_button_color);
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
-  
-  if (ImGui::SmallButton("Sell##sell_btn")) {
-    place_order_from_trade(trade, BTQuant::RenderEngine::OrderSide::SELL);
-  }
-  
-  ImGui::PopStyleColor(3);
-  
-  // Add tooltip for the buttons
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("Click to place an order based on this trade");
-  }
-}
-
-void TimeAndSalesPanel::place_order_from_trade(const RenderEngine::TradeData& trade, BTQuant::RenderEngine::OrderSide side) {
-  // Use the new routing method to create and push the trade command
-  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_market_order(
-    trade.symbol_id,
-    symbol_name_,  // Use the current symbol name
-    bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown",
-    side,
-    trade.size,  // Use the same size as the trade
-    BTQuant::RenderEngine::TimeInForce::GTC    // Default to Good Till Cancel
-  );
-
-  if (pushed) {
-    std::cout << "[TimeAndSalesPanel] Order queued: "
-              << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
-              << " " << trade.size << " " << symbol_name_
-              << " based on observed trade" << std::endl;
-  } else {
-    std::cerr << "[TimeAndSalesPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
-  }
 }
 
 }  // namespace BTQuant

@@ -96,7 +96,6 @@ bool SymbolSelector::render(SymbolSelectorState& state) {
   return changed;
 }
 
-// DEPRECATED - Legacy hotspine
 void SymbolSelector::refresh_symbols(SymbolSelectorState& state,
                                      std::shared_ptr<HotSpineDataBridge> bridge,
                                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {

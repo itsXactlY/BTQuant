@@ -36,8 +36,7 @@ struct OrderbookSnapshot {
 // Component for managing historical order book snapshots
 class OrderbookHistoryPanel : public PanelBase {
 public:
-    // DEPRECATED - Legacy hotspine
-    OrderbookHistoryPanel(const PanelConfig& config,
+    OrderbookHistoryPanel(const PanelConfig& config, 
                          std::shared_ptr<HotSpineDataBridge> bridge,
                          std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -72,7 +71,6 @@ public:
     bool isPlaying() const { return is_playing_; }
 
 private:
-    // DEPRECATED - Legacy hotspine
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     

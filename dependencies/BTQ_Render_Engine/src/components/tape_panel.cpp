@@ -18,7 +18,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {

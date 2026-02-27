@@ -242,46 +242,22 @@ void ThemeCustomizationPanel::render_actions() {
 }
 
 void ThemeCustomizationPanel::apply_theme() {
-ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4* colors = style.Colors;
-
-    // 1. THE BRUTALIST FRAME (KILL THE BORDERS)
-    style.WindowBorderSize  = 0.0f;
-    style.ChildBorderSize   = 0.0f;
-    style.PopupBorderSize   = 1.0f;
-    style.FrameBorderSize   = 0.0f;
-    style.WindowRounding    = 0.0f; // Flush edges like Quantower
-    style.ChildRounding     = 0.0f;
-    style.FrameRounding     = 2.0f;
-    style.WindowPadding     = ImVec2(0, 0); // No gaps between docked panels
-    style.ItemSpacing       = ImVec2(8, 4);
-
-    // 2. BTQ COLOR PALETTE
-    // The Void
-    colors[ImGuiCol_WindowBg]       = ImColor(11, 14, 17, 255);    // #0B0E11 Deep Void
-    colors[ImGuiCol_ChildBg]        = ImColor(21, 25, 30, 255);    // #15191E Panels
-    colors[ImGuiCol_PopupBg]        = ImColor(21, 25, 30, 255);
+    // Update the stored theme
+    themes_[current_theme_] = working_colors_;
     
-    // Elements
-    colors[ImGuiCol_FrameBg]        = ImColor(30, 35, 41, 255);    // #1E2329 Inputs
-    colors[ImGuiCol_FrameBgHovered] = ImColor(43, 49, 57, 255);
-    colors[ImGuiCol_FrameBgActive]  = ImColor(55, 63, 73, 255);
-    
-    // Headers & Tabs
-    colors[ImGuiCol_TitleBg]        = ImColor(21, 25, 30, 255);
-    colors[ImGuiCol_TitleBgActive]  = ImColor(21, 25, 30, 255);
-    colors[ImGuiCol_Tab]            = ImColor(21, 25, 30, 255);
-    colors[ImGuiCol_TabHovered]     = ImColor(43, 49, 57, 255);
-    colors[ImGuiCol_TabActive]      = ImColor(30, 35, 41, 255);
-    
-    // Order Flow Accents (The BTQ Signals)
-    colors[ImGuiCol_Text]           = ImColor(209, 212, 220, 255); // #D1D4DC
-    colors[ImGuiCol_Separator]      = ImColor(43, 48, 56, 150);    // Subtle Grid Lines
-    
-    // Custom Buttons (Can be pushed manually later)
-    colors[ImGuiCol_Button]         = ImColor(30, 35, 41, 255);
-    colors[ImGuiCol_ButtonHovered]  = ImColor(43, 49, 57, 255);
-    colors[ImGuiCol_ButtonActive]   = ImColor(55, 63, 73, 255);
+    // Apply to ImGui style (stub - would need full implementation)
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_WindowBg] = working_colors_.window_bg;
+    style.Colors[ImGuiCol_ChildBg] = working_colors_.child_bg;
+    style.Colors[ImGuiCol_Border] = working_colors_.border;
+    style.Colors[ImGuiCol_Text] = working_colors_.text;
+    style.Colors[ImGuiCol_Button] = working_colors_.accent;
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(
+        working_colors_.accent.x * 1.2f,
+        working_colors_.accent.y * 1.2f,
+        working_colors_.accent.z * 1.2f,
+        working_colors_.accent.w
+    );
 }
 
 void ThemeCustomizationPanel::save_theme(const std::string& name) {

@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <map>
+#include <mutex>
 #include <tuple>
 
 namespace Analytics {
@@ -50,21 +51,23 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
   // Get reference to the cluster cell for this price level and time bucket
   auto& cell = cluster_canvas_[relative_index][adjusted_time_bucket];
 
-  // Atomically update the volume counters and price statistics
-  cell.addTotalVolume(trade.quantity);
-  cell.addSumOfVolumes(trade.quantity);
+  // Thread-safely update the volume counters and price statistics using mutex
+  {
+    std::lock_guard<std::mutex> lock(cell.volume_mutex);
+    cell.total_volume += trade.quantity;
+    cell.sum_of_volumes += trade.quantity;
 
-  if (trade.is_buyer_maker) {
-    cell.addSellVolume(trade.quantity);
-  } else {
-    cell.addBuyVolume(trade.quantity);
+    if (trade.is_buyer_maker) {
+      cell.sell_volume += trade.quantity;
+    } else {
+      cell.buy_volume += trade.quantity;
+    }
+
+    // Update price statistics for standard deviation and median calculations
+    cell.prices.push_back(trade.price);
+    cell.sum_of_prices += trade.price;
+    cell.sum_of_squared_prices += trade.price * trade.price;
   }
-
-  // Update price statistics for standard deviation and median calculations
-  // Using atomic operations for the sums
-  cell.addSumOfPrices(trade.price);
-  cell.addSumOfSquaredPrices(trade.price * trade.price);
-  cell.price_count.fetch_add(1, std::memory_order_relaxed);
 
   // Atomically update trade count counters
   if (trade.is_buyer_maker) {
@@ -76,16 +79,13 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
   cell.trade_count.fetch_add(1, std::memory_order_relaxed);
 
   // Atomically update max single trade volume using compare-and-swap
-  double current_max = cell.getMaxSingleTradeVolume();
+  double current_max = cell.max_single_trade_volume.load(std::memory_order_acquire);
   double new_value = trade.quantity;
   while (new_value > current_max) {
-    uint64_t expected = cell.max_single_trade_volume_raw.load(std::memory_order_acquire);
-    uint64_t new_raw_val = *reinterpret_cast<const uint64_t*>(&new_value);
-    if (cell.max_single_trade_volume_raw.compare_exchange_weak(
-            expected, new_raw_val, std::memory_order_release, std::memory_order_acquire)) {
+    if (cell.max_single_trade_volume.compare_exchange_weak(
+            current_max, new_value, std::memory_order_release, std::memory_order_acquire)) {
       break;
     }
-    current_max = *reinterpret_cast<const double*>(&expected);
   }
 }
 
@@ -98,13 +98,23 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
   for (size_t price_idx = 1; price_idx < cluster_canvas_.size();
        ++price_idx) {  // Start from 1 to compare with P-1
     for (int time_bucket = 0; time_bucket < 16; ++time_bucket) {
-      // Get buy volume at current price level P (using atomic loads)
-      double buy_volume_at_p = cluster_canvas_[price_idx][time_bucket].getBuyVolume();
-      double sell_volume_at_p = cluster_canvas_[price_idx][time_bucket].getSellVolume();
+      // Get buy volume at current price level P (with mutex protection)
+      double buy_volume_at_p;
+      double sell_volume_at_p;
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+        buy_volume_at_p = cluster_canvas_[price_idx][time_bucket].buy_volume;
+        sell_volume_at_p = cluster_canvas_[price_idx][time_bucket].sell_volume;
+      }
 
-      // Get sell volume at previous price level P-1 (using atomic loads)
-      double sell_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].getSellVolume();
-      double buy_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].getBuyVolume();
+      // Get sell volume at previous price level P-1 (with mutex protection)
+      double sell_volume_at_p_minus_1;
+      double buy_volume_at_p_minus_1;
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 1][time_bucket].volume_mutex);
+        sell_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].sell_volume;
+        buy_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].buy_volume;
+      }
 
       // Calculate ratio of buy_volume at P to sell_volume at P-1
       if (sell_volume_at_p_minus_1 > 0) {
@@ -132,15 +142,19 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
               time_bucket, sell_volume_at_p, buy_volume_at_p_minus_1, reverse_ratio);
         }
       }
-
+      
       // Enhanced diagonal detection: Look for multi-level diagonal patterns
       // Check for buy volume at P compared to sell volume at P-2 (extended diagonal)
       if (price_idx >= 2) {
-        double sell_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].getSellVolume();
-
+        double sell_volume_at_p_minus_2;
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 2][time_bucket].volume_mutex);
+          sell_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].sell_volume;
+        }
+        
         if (sell_volume_at_p_minus_2 > 0) {
           double extended_ratio = buy_volume_at_p / sell_volume_at_p_minus_2;
-
+          
           if (extended_ratio > threshold * 1.5) { // Higher threshold for extended patterns
             imbalances.emplace_back(
                 static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
@@ -148,14 +162,18 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
           }
         }
       }
-
+      
       // Check for sell volume at P compared to buy volume at P-2 (reverse extended diagonal)
       if (price_idx >= 2) {
-        double buy_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].getBuyVolume();
-
+        double buy_volume_at_p_minus_2;
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 2][time_bucket].volume_mutex);
+          buy_volume_at_p_minus_2 = cluster_canvas_[price_idx - 2][time_bucket].buy_volume;
+        }
+        
         if (buy_volume_at_p_minus_2 > 0) {
           double reverse_extended_ratio = sell_volume_at_p / buy_volume_at_p_minus_2;
-
+          
           if (reverse_extended_ratio > threshold * 1.5) { // Higher threshold for extended patterns
             imbalances.emplace_back(
                 static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
@@ -179,13 +197,23 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
     // Compare consecutive time buckets for the same price level
     for (int time_bucket = 1; time_bucket < 16;
          ++time_bucket) {  // Start from 1 to compare with previous time bucket
-      // Get buy and sell volumes for current time bucket (using atomic loads)
-      double buy_volume_current = cluster_canvas_[price_idx][time_bucket].getBuyVolume();
-      double sell_volume_current = cluster_canvas_[price_idx][time_bucket].getSellVolume();
+      // Get buy and sell volumes for current time bucket (with mutex protection)
+      double buy_volume_current;
+      double sell_volume_current;
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+        buy_volume_current = cluster_canvas_[price_idx][time_bucket].buy_volume;
+        sell_volume_current = cluster_canvas_[price_idx][time_bucket].sell_volume;
+      }
 
-      // Get buy and sell volumes for previous time bucket (using atomic loads)
-      double buy_volume_previous = cluster_canvas_[price_idx][time_bucket - 1].getBuyVolume();
-      double sell_volume_previous = cluster_canvas_[price_idx][time_bucket - 1].getSellVolume();
+      // Get buy and sell volumes for previous time bucket (with mutex protection)
+      double buy_volume_previous;
+      double sell_volume_previous;
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 1].volume_mutex);
+        buy_volume_previous = cluster_canvas_[price_idx][time_bucket - 1].buy_volume;
+        sell_volume_previous = cluster_canvas_[price_idx][time_bucket - 1].sell_volume;
+      }
 
       // Primary stacked imbalance detection: Compare buy/sell at same price across consecutive bars
       // Bullish stacked imbalance: Significant increase in buy volume compared to previous bar's
@@ -319,21 +347,24 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
             threshold                                           // High ratio indicator
         );
       }
-
+      
       // Enhanced stacked imbalance: Look for multi-timeframe patterns
       // Compare current time bucket with multiple previous time buckets to detect sustained imbalances
       double buy_volume_2_bars_ago = 0.0, sell_volume_2_bars_ago = 0.0;
       bool has_2_bars_ago = false;
-
+      
       if (time_bucket >= 2) {
         has_2_bars_ago = true;
-        // Get data from 2 time buckets ago (using atomic loads)
-        buy_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].getBuyVolume();
-        sell_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].getSellVolume();
-
+        // Get data from 2 time buckets ago
+        {
+          std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 2].volume_mutex);
+          buy_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].buy_volume;
+          sell_volume_2_bars_ago = cluster_canvas_[price_idx][time_bucket - 2].sell_volume;
+        }
+        
         // Detect sustained bullish pressure: increasing buy volume over 3 consecutive periods
-        if (buy_volume_2_bars_ago > 0 && buy_volume_previous > buy_volume_2_bars_ago &&
-            buy_volume_current > buy_volume_previous &&
+        if (buy_volume_2_bars_ago > 0 && buy_volume_previous > buy_volume_2_bars_ago && 
+            buy_volume_current > buy_volume_previous && 
             buy_volume_current > buy_volume_2_bars_ago * threshold) {
           double sustained_bullish_ratio = buy_volume_current / buy_volume_2_bars_ago;
           imbalances.emplace_back(
@@ -344,10 +375,10 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
               sustained_bullish_ratio                            // Sustained bullish ratio
           );
         }
-
+        
         // Detect sustained bearish pressure: increasing sell volume over 3 consecutive periods
-        if (sell_volume_2_bars_ago > 0 && sell_volume_previous > sell_volume_2_bars_ago &&
-            sell_volume_current > sell_volume_previous &&
+        if (sell_volume_2_bars_ago > 0 && sell_volume_previous > sell_volume_2_bars_ago && 
+            sell_volume_current > sell_volume_previous && 
             sell_volume_current > sell_volume_2_bars_ago * threshold) {
           double sustained_bearish_ratio = sell_volume_current / sell_volume_2_bars_ago;
           imbalances.emplace_back(
@@ -359,15 +390,15 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
           );
         }
       }
-
+      
       // Enhanced exhaustion detection within stacked patterns
       // Detect when strong momentum suddenly weakens
       if (has_2_bars_ago) {
         double avg_buy_prev_2 = (buy_volume_2_bars_ago + buy_volume_previous) / 2.0;
         double avg_sell_prev_2 = (sell_volume_2_bars_ago + sell_volume_previous) / 2.0;
-
+        
         // Potential bullish exhaustion: strong previous buying followed by current weakness
-        if (avg_buy_prev_2 > 0 && buy_volume_current < avg_buy_prev_2 / threshold &&
+        if (avg_buy_prev_2 > 0 && buy_volume_current < avg_buy_prev_2 / threshold && 
             sell_volume_current > avg_sell_prev_2 * threshold) {
           double exh_ratio = (avg_buy_prev_2 / buy_volume_current) * (sell_volume_current / avg_sell_prev_2);
           imbalances.emplace_back(
@@ -378,9 +409,9 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
               exh_ratio                                          // Exhaustion ratio
           );
         }
-
+        
         // Potential bearish exhaustion: strong previous selling followed by current weakness
-        if (avg_sell_prev_2 > 0 && sell_volume_current < avg_sell_prev_2 / threshold &&
+        if (avg_sell_prev_2 > 0 && sell_volume_current < avg_sell_prev_2 / threshold && 
             buy_volume_current > avg_buy_prev_2 * threshold) {
           double exh_ratio = (avg_sell_prev_2 / sell_volume_current) * (buy_volume_current / avg_buy_prev_2);
           imbalances.emplace_back(
@@ -410,20 +441,30 @@ ClusterEngine::detect_exhaustion_moves(double threshold) const {
   
   for (size_t price_idx = 0; price_idx < cluster_canvas_.size(); ++price_idx) {
     for (int time_bucket = 1; time_bucket < 16; ++time_bucket) {
-      // Get current and previous time bucket data (using atomic loads)
-      double current_buy_volume = cluster_canvas_[price_idx][time_bucket].getBuyVolume();
-      double current_sell_volume = cluster_canvas_[price_idx][time_bucket].getSellVolume();
-      double prev_buy_volume = cluster_canvas_[price_idx][time_bucket - 1].getBuyVolume();
-      double prev_sell_volume = cluster_canvas_[price_idx][time_bucket - 1].getSellVolume();
-
+      // Get current and previous time bucket data
+      double current_buy_volume, current_sell_volume;
+      double prev_buy_volume, prev_sell_volume;
+      
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+        current_buy_volume = cluster_canvas_[price_idx][time_bucket].buy_volume;
+        current_sell_volume = cluster_canvas_[price_idx][time_bucket].sell_volume;
+      }
+      
+      {
+        std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 1].volume_mutex);
+        prev_buy_volume = cluster_canvas_[price_idx][time_bucket - 1].buy_volume;
+        prev_sell_volume = cluster_canvas_[price_idx][time_bucket - 1].sell_volume;
+      }
+      
       // Calculate total volumes
       double current_total_volume = current_buy_volume + current_sell_volume;
       double prev_total_volume = prev_buy_volume + prev_sell_volume;
-
+      
       // Calculate deltas
       double current_delta = current_buy_volume - current_sell_volume;
       double prev_delta = prev_buy_volume - prev_sell_volume;
-
+      
       // Bullish exhaustion: Strong buying pressure followed by weakness or reversal
       if (prev_delta > 0 && std::abs(prev_delta) > threshold * 100) { // Strong previous buying
         if (current_delta < 0 && std::abs(current_delta) > threshold * 50) { // Reversal to selling
@@ -448,7 +489,7 @@ ClusterEngine::detect_exhaustion_moves(double threshold) const {
           );
         }
       }
-
+      
       // Bearish exhaustion: Strong selling pressure followed by weakness or reversal
       if (prev_delta < 0 && std::abs(prev_delta) > threshold * 100) { // Strong previous selling
         if (current_delta > 0 && std::abs(current_delta) > threshold * 50) { // Reversal to buying
@@ -473,7 +514,7 @@ ClusterEngine::detect_exhaustion_moves(double threshold) const {
           );
         }
       }
-
+      
       // Hidden exhaustion: Extreme volume in one direction but price doesn't move proportionally
       if (current_total_volume > 0 && std::abs(current_delta) / current_total_volume < 0.1) {
         // High volume but little directional bias - potential exhaustion
@@ -586,7 +627,7 @@ void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& tra
 // Calculate standard deviation for a specific price level and time bucket
 double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_bucket) const {
   // Check if the price level and time bucket are valid
-  if (price_level < min_tick_index_ ||
+  if (price_level < min_tick_index_ || 
       static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
       time_bucket < 0 || time_bucket >= 16) {
     return 0.0;  // Return 0 if invalid indices
@@ -595,21 +636,21 @@ double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_b
   int64_t relative_index = price_level - min_tick_index_;
   const auto& cell = cluster_canvas_[relative_index][time_bucket];
 
-  // Use atomic loads to get the values
-  double sum_of_prices = cell.getSumOfPrices();
-  double sum_of_squared_prices = cell.getSumOfSquaredPrices();
-  int n = cell.price_count.load(std::memory_order_acquire);
+  // Lock the mutex to safely access the price data
+  std::lock_guard<std::mutex> lock(cell.volume_mutex);
 
+  int n = static_cast<int>(cell.prices.size());
+  
   if (n <= 1) {
     return 0.0;  // Standard deviation is undefined for 0 or 1 data points
   }
 
   // Calculate mean
-  double mean = sum_of_prices / n;
+  double mean = cell.sum_of_prices / n;
 
   // Calculate variance using the formula: variance = E[X^2] - (E[X])^2
-  double variance = (sum_of_squared_prices / n) - (mean * mean);
-
+  double variance = (cell.sum_of_squared_prices / n) - (mean * mean);
+  
   // Ensure variance is not negative due to floating-point precision issues
   if (variance < 0.0) {
     variance = 0.0;
@@ -622,7 +663,7 @@ double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_b
 // Calculate median price for a specific price level and time bucket
 double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket) const {
   // Check if the price level and time bucket are valid
-  if (price_level < min_tick_index_ ||
+  if (price_level < min_tick_index_ || 
       static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
       time_bucket < 0 || time_bucket >= 16) {
     return 0.0;  // Return 0 if invalid indices
@@ -631,133 +672,24 @@ double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket)
   int64_t relative_index = price_level - min_tick_index_;
   const auto& cell = cluster_canvas_[relative_index][time_bucket];
 
-  // Use atomic loads to get the values
-  double sum_of_prices = cell.getSumOfPrices();
-  int n = cell.price_count.load(std::memory_order_acquire);
+  // Lock the mutex to safely access the price data
+  std::lock_guard<std::mutex> lock(cell.volume_mutex);
 
-  if (n == 0) {
+  if (cell.prices.empty()) {
     return 0.0;  // Return 0 if no prices recorded
   }
 
-  // Since we can't efficiently store and sort individual prices atomically,
-  // we'll return the mean price as an approximation of the median
-  // In a truly lock-free system, calculating the exact median would require
-  // a more complex data structure or algorithm
-  return sum_of_prices / n;
-}
+  // Create a copy of the prices vector to sort without affecting the original
+  std::vector<double> sorted_prices = cell.prices;
+  std::sort(sorted_prices.begin(), sorted_prices.end());
 
-// Method to pull VolumeData from ClusterEngine without mutexes using atomic operations
-double ClusterEngine::getVolumeDataAt(int64_t price_level, int time_bucket, BTQuant::Data::VolumeAnalysisType vol_type) const {
-  // Check if the price level and time bucket are valid
-  if (price_level < min_tick_index_ ||
-      static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
-      time_bucket < 0 || time_bucket >= 16) {
-    return 0.0;  // Return 0 if invalid indices
-  }
-
-  int64_t relative_index = price_level - min_tick_index_;
-  const auto& cell = cluster_canvas_[relative_index][time_bucket];
-
-  // Use atomic loads to get the values based on the volume analysis type
-  switch (vol_type) {
-    case BTQuant::Data::VolumeAnalysisType::Trades:
-      return static_cast<double>(cell.trade_count.load(std::memory_order_acquire));
-      
-    case BTQuant::Data::VolumeAnalysisType::BuyTrades:
-      return static_cast<double>(cell.buy_trade_count.load(std::memory_order_acquire));
-      
-    case BTQuant::Data::VolumeAnalysisType::SellTrades:
-      return static_cast<double>(cell.sell_trade_count.load(std::memory_order_acquire));
-      
-    case BTQuant::Data::VolumeAnalysisType::Volume:
-      return cell.getTotalVolume();
-      
-    case BTQuant::Data::VolumeAnalysisType::BuyVolume:
-      return cell.getBuyVolume();
-      
-    case BTQuant::Data::VolumeAnalysisType::SellVolume:
-      return cell.getSellVolume();
-      
-    case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
-      {
-        double buy_vol = cell.getBuyVolume();
-        double total_vol = cell.getTotalVolume();
-        return (total_vol > 0.0) ? (buy_vol / total_vol) * 100.0 : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
-      {
-        double sell_vol = cell.getSellVolume();
-        double total_vol = cell.getTotalVolume();
-        return (total_vol > 0.0) ? (sell_vol / total_vol) * 100.0 : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
-      {
-        double buy_vol = cell.getBuyVolume();
-        double sell_vol = cell.getSellVolume();
-        return buy_vol - sell_vol;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::Delta:
-      {
-        double buy_vol = cell.getBuyVolume();
-        double sell_vol = cell.getSellVolume();
-        return buy_vol - sell_vol;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
-      {
-        double buy_vol = cell.getBuyVolume();
-        double sell_vol = cell.getSellVolume();
-        double total_vol = cell.getTotalVolume();
-        double delta = buy_vol - sell_vol;
-        return (total_vol > 0.0) ? (delta / total_vol) * 100.0 : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
-      {
-        // For cumulative delta, we need to sum up all deltas from the beginning
-        // For this implementation, we'll return the current delta value
-        double buy_vol = cell.getBuyVolume();
-        double sell_vol = cell.getSellVolume();
-        return buy_vol - sell_vol;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::AverageSize:
-      {
-        double total_vol = cell.getTotalVolume();
-        int trade_count = cell.trade_count.load(std::memory_order_acquire);
-        return (trade_count > 0) ? total_vol / static_cast<double>(trade_count) : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
-      {
-        double buy_vol = cell.getBuyVolume();
-        int buy_count = cell.buy_trade_count.load(std::memory_order_acquire);
-        return (buy_count > 0) ? buy_vol / static_cast<double>(buy_count) : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
-      {
-        double sell_vol = cell.getSellVolume();
-        int sell_count = cell.sell_trade_count.load(std::memory_order_acquire);
-        return (sell_count > 0) ? sell_vol / static_cast<double>(sell_count) : 0.0;
-      }
-      
-    case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
-      return cell.getMaxSingleTradeVolume();
-      
-    case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
-      // For filtered volume, returning total volume as default
-      return cell.getTotalVolume();
-      
-    case BTQuant::Data::VolumeAnalysisType::SplitVolume:
-      // For split volume, returning total volume as default
-      return cell.getTotalVolume();
-      
-    default:
-      return 0.0;
+  size_t n = sorted_prices.size();
+  if (n % 2 == 0) {
+    // Even number of elements: average of the two middle elements
+    return (sorted_prices[n/2 - 1] + sorted_prices[n/2]) / 2.0;
+  } else {
+    // Odd number of elements: return the middle element
+    return sorted_prices[n/2];
   }
 }
 

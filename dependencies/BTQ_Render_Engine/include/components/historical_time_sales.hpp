@@ -25,7 +25,6 @@ namespace BTQuant {
  */
 class HistoricalTimeSalesPanel : public PanelBase {
  public:
-  // DEPRECATED - Legacy hotspine
   HistoricalTimeSalesPanel(const PanelConfig& config,
                    std::shared_ptr<HotSpineDataBridge> bridge,
                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
@@ -42,7 +41,6 @@ class HistoricalTimeSalesPanel : public PanelBase {
   void show_trades_popup(uint64_t start_time, uint64_t end_time, const std::string& symbol_name);
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 

@@ -3,7 +3,6 @@
 #include <iostream>
 
 #include "../../include/ui/unified_theme_system.hpp"
-#include "../../include/ui/font_manager.hpp"
 
 namespace BTQuant {
 
@@ -13,15 +12,15 @@ void ThemeManager::initialize() {
 }
 
 void ThemeManager::loadFonts() {
-  // Use the centralized FontManager for font loading and DPI scaling
-  auto& font_manager = UI::FontManager::getInstance();
-  if (!font_manager.isInitialized()) {
-    font_manager.initialize();
+  // Ideally, we would load "Inter" font here.
+  // For now, we rely on ImGui's default font or current setup.
+  // If the IO has fonts loaded, we pick them.
+  ImGuiIO& io = ImGui::GetIO();
+  if (!io.Fonts->Fonts.empty()) {
+    main_font_ = io.Fonts->Fonts[0];
+    // If there's a second font loaded, assume it's large, otherwise reuse main
+    large_font_ = (io.Fonts->Fonts.size() > 1) ? io.Fonts->Fonts[1] : main_font_;
   }
-  
-  // Get fonts from the FontManager
-  main_font_ = font_manager.getMainFont();
-  large_font_ = font_manager.getHeaderFont();
 }
 
 void ThemeManager::applyTheme(ThemeType type) {
@@ -77,8 +76,7 @@ void ThemeManager::updateImGuiStyle() {
   style.Colors[ImGuiCol_Text] = c.text;
   style.Colors[ImGuiCol_TextDisabled] = c.text_dim;
   style.Colors[ImGuiCol_WindowBg] = c.panel_bg;
-  // ImGuiCol_ChildBg is set by the unified theme system to #15191E (Panel Surface)
-  // Do not override it here to maintain consistency
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.09f, 0.11f, 0.15f, 0.0f);  // Transparent child bg matching panel with enhanced contrast
   style.Colors[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.11f, 0.15f, 0.97f);  // Popup background matching panel with enhanced contrast
   style.Colors[ImGuiCol_Border] = c.border;
   style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);

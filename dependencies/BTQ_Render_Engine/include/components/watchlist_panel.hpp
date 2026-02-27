@@ -33,7 +33,6 @@ class WatchlistPanel : public PanelBase {
  public:
   using SymbolSelectedCallback = std::function<void(uint32_t symbol_id, const std::string& symbol)>;
 
-  // DEPRECATED - Legacy hotspine
   WatchlistPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
   ~WatchlistPanel();
@@ -72,7 +71,6 @@ class WatchlistPanel : public PanelBase {
   void set_sorting(int column_id, bool ascending);
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 

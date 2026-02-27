@@ -21,13 +21,8 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declaration for miniaudio types to avoid including the header in the interface
-#ifdef MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
-#endif
-
 #include "hotspine_data_bridge.hpp"
-#include "data/core_types.hpp"
+#include "data/data_types.hpp"
 #include "cache_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
@@ -38,14 +33,20 @@
 namespace BTQuant {
 namespace RenderEngine {
 
-// Type aliases for backward compatibility with core_types.hpp
-using MarketDataType = BTQuant::MarketDataType;
-using MarketDataUpdate = BTQuant::MarketDataUpdate;
-using OrderbookData = BTQuant::OrderbookData;
-using PriceLevel = BTQuant::PriceLevel;
-using TimeFrame = BTQuant::TimeFrame;
-using OHLCVCandle = BTQuant::OHLCVCandle;
-using VolumeProfileLevel = BTQuant::VolumeProfileLevel;
+// Market data update type
+enum class MarketDataType { TRADE, ORDERBOOK };
+
+// Market data update structure
+struct MarketDataUpdate {
+  MarketDataType type;
+  uint32_t symbol_id;
+  uint64_t timestamp;
+  double price;
+  double size;
+  std::string side;
+  std::vector<PriceLevel> bids;
+  std::vector<PriceLevel> asks;
+};
 
 // Trade data for analytics
 struct TradeData {
@@ -57,89 +58,42 @@ struct TradeData {
   bool is_buy;
 };
 
-// Standard Layout POD OrderBookSnapshot for ring buffer
-struct OrderBookSnapshot {
+// Orderbook data for analytics
+struct OrderbookData {
+  std::string symbol;
+  uint32_t symbol_id = 0;
   uint64_t timestamp;
-  uint32_t symbol_id;
-  double best_bid;
-  double best_ask;
-  double best_bid_size;
-  double best_ask_size;
+  std::vector<PriceLevel> bids;
+  std::vector<PriceLevel> asks;
   double spread;
-  double total_bid_volume;
-  double total_ask_volume;
-  uint32_t bid_levels_count;
-  uint32_t ask_levels_count;
-  
-  // Fixed-size arrays for top N price levels (Standard Layout POD)
-  static constexpr size_t MAX_LEVELS = 20;  // Top 20 levels per side
-  
-  struct Level {
-    double price;
-    double size;
-  };
-  
-  Level bids[MAX_LEVELS];
-  Level asks[MAX_LEVELS];
-  
-  // Constructor to initialize the struct
-  OrderBookSnapshot() : timestamp(0), symbol_id(0), best_bid(0.0), best_ask(0.0), 
-                        best_bid_size(0.0), best_ask_size(0.0), spread(0.0),
-                        total_bid_volume(0.0), total_ask_volume(0.0),
-                        bid_levels_count(0), ask_levels_count(0) {
-    // Initialize arrays to zero
-    for (size_t i = 0; i < MAX_LEVELS; ++i) {
-      bids[i] = Level{0.0, 0.0};
-      asks[i] = Level{0.0, 0.0};
-    }
-  }
+  double spread_percent;
+  double bid_depth;
+  double ask_depth;
+  double total_depth;
+  double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
 // Atomic L2 Snapshot for lock-free UI reads (Phase 4.1)
 // This structure is designed for single-read atomic access from UI threads
-// Atomic version of the snapshot for lock-free access
-struct alignas(64) AtomicSymbolInfo {
-  std::atomic<uint32_t> symbol_id{0};
-  std::atomic<uint64_t> timestamp{0};
-
-  // Best bid/ask (top of book)
-  std::atomic<double> best_bid{0.0};
-  std::atomic<double> best_ask{0.0};
-  std::atomic<double> best_bid_size{0.0};
-  std::atomic<double> best_ask_size{0.0};
-
-  // Spread info
-  std::atomic<double> spread{0.0};
-  std::atomic<double> spread_percent{0.0};
-
-  // Last trade info
-  std::atomic<double> last_trade_price{0.0};
-  std::atomic<double> last_trade_size{0.0};
-  std::atomic<uint64_t> last_trade_time{0};
-
-  // Mid price for convenience
-  std::atomic<double> mid_price{0.0};
-};
-
 struct AtomicL2Snapshot {
   uint32_t symbol_id = 0;
   uint64_t timestamp = 0;
-
+  
   // Best bid/ask (top of book)
   double best_bid = 0.0;
   double best_ask = 0.0;
   double best_bid_size = 0.0;
   double best_ask_size = 0.0;
-
+  
   // Spread info
   double spread = 0.0;
   double spread_percent = 0.0;
-
+  
   // Last trade info
   double last_trade_price = 0.0;
   double last_trade_size = 0.0;
   uint64_t last_trade_time = 0;
-
+  
   // Mid price for convenience
   double mid_price = 0.0;
 };
@@ -309,16 +263,6 @@ class MarketDataProcessor {
   MarketDataProcessor(MarketDataProcessor&&) = delete;
   MarketDataProcessor& operator=(MarketDataProcessor&&) = delete;
 
-  // Audio control methods for order flow acoustics
-  void setAudioEnabled(bool enabled);
-  bool isAudioEnabled() const;
-  void setBasePitch(double pitch);
-  void setMinPitch(double pitch);
-  void setMaxPitch(double pitch);
-  
-  // Audio statistics
-  size_t getAudioEventQueueSize() const;
-
   /**
    * Process a trade update (asynchronous)
    * @param update Market data update containing trade information
@@ -405,12 +349,6 @@ class MarketDataProcessor {
    */
   std::optional<AtomicL2Snapshot> get_atomic_snapshot(uint32_t symbol_id) const;
 
-  // Ring buffer methods for OrderBookSnapshot
-  void addOrderBookSnapshot(const OrderBookSnapshot& snapshot);
-  std::vector<OrderBookSnapshot> getOrderBookSnapshots(size_t count) const;
-  std::optional<OrderBookSnapshot> getLatestOrderBookSnapshot() const;
-  size_t getOrderBookSnapshotCount() const;
-  
   // Methods required by multi_vwap_panel
   bool hasData() const {
     // Check if we have any active symbols with data
@@ -605,41 +543,8 @@ class MarketDataProcessor {
   std::shared_ptr<SubscriberList> subscribers_{std::make_shared<SubscriberList>()};
   std::atomic<uint64_t> next_subscription_id_{1};
 
-  // Ring buffer for OrderBookSnapshot (Standard Layout POD)
-  static constexpr size_t ORDERBOOK_SNAPSHOT_BUFFER_SIZE = 10000;  // Buffer for 10,000 snapshots
-  std::vector<OrderBookSnapshot> orderbook_snapshot_buffer_;
-  mutable std::mutex snapshot_buffer_mutex_;  // Mutex to protect concurrent access
-  std::atomic<size_t> snapshot_write_index_{0};
-  std::atomic<size_t> snapshot_count_{0};
-
-  // Atomic snapshot array for lock-free access (Phase 4.1)
-  // Pre-allocated array of atomic symbol info for zero-lock reads
-  static constexpr size_t MAX_SYMBOLS = 100000;  // Maximum number of symbols supported
-  std::vector<AtomicSymbolInfo> atomic_snapshots_;
-
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
-
-  // Audio acoustics functionality for order flow (5.2: Order Flow Acoustics)
-  // Implements real-time audio feedback for market activity with pitch scaling
-  // based on trade volume (large trades = low pitch/bass, small trades = high pitch)
-  void initializeAudioEngine();
-  void shutdownAudioEngine();
-  void playTradeSound(double volume, bool is_buy);  // Core method for triggering trade sounds
-
- private:
-  // Audio helper methods
-  void processAudioEvents();
-  
-  // Audio engine variables
-  bool audio_enabled_ = false;
-  void* audio_engine_ = nullptr;  // Placeholder for miniaudio engine
-  double base_pitch_ = 440.0;     // Base pitch (A4 note)
-  double min_pitch_ = 220.0;      // Minimum pitch for large trades
-  double max_pitch_ = 880.0;      // Maximum pitch for small trades (inverse relationship)
-  
-  // Audio event queue for batch processing in the main loop
-  moodycamel::ConcurrentQueue<std::pair<double, bool>> audio_event_queue_; // Queue of (volume, is_buy) pairs
 };
 
 }  // namespace RenderEngine

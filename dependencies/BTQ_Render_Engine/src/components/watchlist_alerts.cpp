@@ -9,7 +9,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 WatchlistAlertManager::WatchlistAlertManager(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,

@@ -11,7 +11,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 OrderbookHistoryPanel::OrderbookHistoryPanel(const PanelConfig& config,
                                            std::shared_ptr<HotSpineDataBridge> bridge,
                                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

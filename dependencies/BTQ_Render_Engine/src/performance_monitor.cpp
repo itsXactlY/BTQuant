@@ -33,7 +33,7 @@ PerformanceMonitor::PerformanceMonitor()
     frame_time_history_.reserve(MAX_HISTORY_SIZE);
 }
 
-// Destructor is defaulted in header - no need to define here
+PerformanceMonitor::~PerformanceMonitor() = default;
 
 void PerformanceMonitor::start_frame() {
     if (!enabled_) return;

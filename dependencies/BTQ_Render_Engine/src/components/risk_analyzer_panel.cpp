@@ -9,7 +9,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 RiskAnalyzerPanel::RiskAnalyzerPanel(const PanelConfig& config,
                                    std::shared_ptr<HotSpineDataBridge> bridge,
                                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

@@ -6,7 +6,6 @@
 
 #include "../analytics/cluster_engine.hpp"    // For ClusterEngine and imbalance/exhaustion detection
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
-#include "../market_data_processor.hpp"       // For MarketDataProcessor
 #include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "panel_base.hpp"
 
@@ -59,9 +58,7 @@ enum class NumberFormat {
 
 class FootprintPanel : public PanelBase {
  public:
-  FootprintPanel(const PanelConfig& config,
-                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
-  ~FootprintPanel() override;
+  FootprintPanel(const PanelConfig& config);
 
   void update(float dt) override;
   void render() override;
@@ -132,7 +129,6 @@ class FootprintPanel : public PanelBase {
   double getZoomSensitivity() const { return zoom_sensitivity_; }
 
  private:
-  std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   uint32_t symbol_id_ = 0;
 
   // Volume Data Type for Footprint Visualization
@@ -173,14 +169,8 @@ class FootprintPanel : public PanelBase {
   // Zoom sensitivity for cell size adjustment
   float zoom_sensitivity_ = 1.0f;  // Default: normal sensitivity
 
-  // Flag to control display of market buy indicators
-  bool show_market_buys_ = true;   // Default: show market buy indicators
-
   // Data dirty flag for immediate rendering updates
   std::atomic<bool> data_dirty_{true};
-
-  // Method to feed trade data to the ClusterEngine for analysis
-  void feedTradeToClusterEngine(const MarketData::Trade& trade);
 
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;

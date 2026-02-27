@@ -1,1 +1,0 @@
-Hardcoding config IDS are obsolete now.

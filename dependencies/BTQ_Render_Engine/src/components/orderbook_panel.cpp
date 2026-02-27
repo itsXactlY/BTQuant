@@ -8,12 +8,8 @@
 
 #include "imgui.h"
 #include "implot.h"
-#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
-#include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
 
 namespace BTQuant {
-
-// DEPRECATED - Legacy hotspine
 
 // Destructor to clean up the lock-free cache
 OrderbookPanel::~OrderbookPanel() {
@@ -21,9 +17,6 @@ OrderbookPanel::~OrderbookPanel() {
     if (cache) {
         delete cache;
     }
-
-    // Clean up any resources associated with the atomic snapshots if needed
-    // Note: We don't delete the snapshots since they point to data owned elsewhere
 }
 
 // Helper function to round to nearest multiple
@@ -196,27 +189,20 @@ void OrderbookPanel::update(float /*dt*/) {
 
 void OrderbookPanel::updateOrderbookCache() {
   auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
-
+  
   if (orderbook_opt.has_value()) {
     const auto& orderbook = orderbook_opt.value();
-
+    
     // Create a new cache object with the latest data
     OrderbookCache* new_cache = new OrderbookCache(orderbook);
-
+    
     // Atomically swap the old cache with the new one
     OrderbookCache* old_cache = latest_orderbook_cache_.exchange(new_cache, std::memory_order_acq_rel);
-
+    
     // Clean up the old cache
     if (old_cache) {
       delete old_cache;
     }
-
-    // Update the atomic snapshots for asks and bids using memory_order_release
-    const std::vector<PriceLevel>* new_asks_snapshot = &orderbook.asks;
-    const std::vector<PriceLevel>* new_bids_snapshot = &orderbook.bids;
-    
-    snapshot_asks_.store(new_asks_snapshot, std::memory_order_release);
-    snapshot_bids_.store(new_bids_snapshot, std::memory_order_release);
   }
 }
 
@@ -458,8 +444,6 @@ void OrderbookPanel::render() {
         ImGui::InputDouble("##CustomAggValue", &custom_aggregation_value_, 0.01f, 1.0f, "%.4f");
         ImGui::PopItemWidth();
     }
-    
-    // USD/COIN toggle - moved to header section as per requirement
   } else {
     const auto& colors = ThemeManager::getInstance().getColors();
     ImGui::TextColored(colors.accent_red, "No active symbols detected in SHM!");
@@ -480,11 +464,7 @@ void OrderbookPanel::render() {
 
   // Get orderbook data from the lock-free cache
   OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
-
-  // Access snapshot_asks_ and snapshot_bids_ via std::memory_order_acquire as required by task
-  const std::vector<PriceLevel>* asks_snapshot = snapshot_asks_.load(std::memory_order_acquire);
-  const std::vector<PriceLevel>* bids_snapshot = snapshot_bids_.load(std::memory_order_acquire);
-
+  
   if (!cache || cache->bids.empty() || cache->asks.empty()) {
     ImGui::Text("Waiting for Orderbook: %s", symbol_name_.c_str());
     ImGui::Text("ID: %u", symbol_id_);
@@ -518,26 +498,21 @@ void OrderbookPanel::render() {
 
   // Statistics Header
   ImGui::Columns(3, "Stats", false);
-  ImGui::Text("Spread: "); ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(orderbook.spread, "%.4f");
+  ImGui::Text("Spread: %.4f", orderbook.spread);
   ImGui::NextColumn();
-  ImGui::Text("Imbalance: "); ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(orderbook.imbalance, "%.2f");
+  ImGui::Text("Imbalance: %.2f", orderbook.imbalance);
   ImGui::NextColumn();
 
   // Display bid/ask ratio with colored arrow
   if (bid_ask_ratio > 1.0) {
     // Bid heavy - green arrow pointing up
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "▲ Ratio: "); ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "▲ Ratio: %.2f", bid_ask_ratio);
   } else if (bid_ask_ratio < 1.0) {
     // Ask heavy - red arrow pointing down
-    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "▼ Ratio: "); ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
+    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "▼ Ratio: %.2f", bid_ask_ratio);
   } else {
     // Balanced - white arrow
-    ImGui::Text("■ Ratio: "); ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bid_ask_ratio, "%.2f");
+    ImGui::Text("■ Ratio: %.2f", bid_ask_ratio);
   }
 
   ImGui::Columns(1);
@@ -563,8 +538,7 @@ void OrderbookPanel::render() {
 
   ImGui::Spacing();
   ImGui::Separator();
-  ImGui::Text("Market Depth Visualization");
-  ImGui::Text("Asks (Red) descend from top | Bids (Green) ascend from bottom");
+  ImGui::Text("Market Depth (Cumulative)");
   render_market_depth_chart(orderbook);
 
   end_panel_window();
@@ -584,110 +558,38 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   std::vector<PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
   std::vector<PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
 
-  // Sort asks in descending order (highest price first) to render from top
-  std::sort(aggregated_asks.begin(), aggregated_asks.end(), [](const PriceLevel& a, const PriceLevel& b) {
-      return a.price > b.price; // Descending order (highest price first)
-  });
-
-  // Sort bids in ascending order (lowest price first) to render from bottom
-  std::sort(aggregated_bids.begin(), aggregated_bids.end(), [](const PriceLevel& a, const PriceLevel& b) {
-      return a.price < b.price; // Ascending order (lowest price first)
-  });
-
-  // Calculate average order size for large order detection based on selected unit
+  // Calculate average order size for large order detection
   size_t total_levels = aggregated_bids.size() + aggregated_asks.size();
   if (total_levels > 0) {
     double total_size = 0.0;
-    for (const auto& level : aggregated_bids) {
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          total_size += level.size * snapshot_opt->last_trade_price;
-        } else {
-          total_size += level.size * level.price;
-        }
-      } else {
-        total_size += level.size;
-      }
-    }
-    for (const auto& level : aggregated_asks) {
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          total_size += level.size * snapshot_opt->last_trade_price;
-        } else {
-          total_size += level.size * level.price;
-        }
-      } else {
-        total_size += level.size;
-      }
-    }
+    for (const auto& level : aggregated_bids) total_size += level.size;
+    for (const auto& level : aggregated_asks) total_size += level.size;
     average_order_size_ = total_size / total_levels;
   } else {
     average_order_size_ = 0.0;
   }
 
-  // Calculate max volume for relative scaling based on selected unit
+  // Calculate max volume for relative scaling
   double max_vol = 1.0;
-  for (const auto& level : aggregated_bids) {
-    double display_size = level.size;
-    if (volume_unit_ == VolumeUnit::USD) {
-      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-      if (snapshot_opt.has_value()) {
-        display_size = level.size * snapshot_opt->last_trade_price;
-      } else {
-        display_size = level.size * level.price;
-      }
-    }
-    max_vol = std::max(max_vol, display_size);
-  }
-  for (const auto& level : aggregated_asks) {
-    double display_size = level.size;
-    if (volume_unit_ == VolumeUnit::USD) {
-      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-      if (snapshot_opt.has_value()) {
-        display_size = level.size * snapshot_opt->last_trade_price;
-      } else {
-        display_size = level.size * level.price;
-      }
-    }
-    max_vol = std::max(max_vol, display_size);
-  }
+  for (const auto& level : aggregated_bids) max_vol = std::max(max_vol, level.size);
+  for (const auto& level : aggregated_asks) max_vol = std::max(max_vol, level.size);
   if (max_vol < 1.0) max_vol = 1.0;
 
-  // Calculate cumulative volumes for liquidity bars based on selected unit
+  // Calculate cumulative volumes for liquidity bars
   std::vector<double> cumulative_bids(aggregated_bids.size());
   std::vector<double> cumulative_asks(aggregated_asks.size());
 
   // Calculate cumulative bid volumes (from best bid outward)
   double bid_sum = 0.0;
   for (size_t i = 0; i < aggregated_bids.size(); ++i) {
-    double display_size = aggregated_bids[i].size;
-    if (volume_unit_ == VolumeUnit::USD) {
-      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-      if (snapshot_opt.has_value()) {
-        display_size = aggregated_bids[i].size * snapshot_opt->last_trade_price;
-      } else {
-        display_size = aggregated_bids[i].size * aggregated_bids[i].price;
-      }
-    }
-    bid_sum += display_size;
+    bid_sum += aggregated_bids[i].size;
     cumulative_bids[i] = bid_sum;
   }
 
   // Calculate cumulative ask volumes (from best ask outward)
   double ask_sum = 0.0;
   for (size_t i = 0; i < aggregated_asks.size(); ++i) {
-    double display_size = aggregated_asks[i].size;
-    if (volume_unit_ == VolumeUnit::USD) {
-      auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-      if (snapshot_opt.has_value()) {
-        display_size = aggregated_asks[i].size * snapshot_opt->last_trade_price;
-      } else {
-        display_size = aggregated_asks[i].size * aggregated_asks[i].price;
-      }
-    }
-    ask_sum += display_size;
+    ask_sum += aggregated_asks[i].size;
     cumulative_asks[i] = ask_sum;
   }
 
@@ -697,7 +599,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   if (!cumulative_asks.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
 
   // Use Table instead of Columns for modern layout (C++26 style UI)
-  if (ImGui::BeginTable("OrderbookTable", 9,
+  if (ImGui::BeginTable("OrderbookTable", 8,
                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchSame)) {
     // Setup Columns
@@ -709,7 +611,6 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60); // New column for volume delta over last 5 seconds
     ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
-    ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 40); // New column for order placement buttons
     ImGui::TableHeadersRow();
 
     const auto& colors = ThemeManager::getInstance().getColors();
@@ -731,21 +632,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
     // Render Asks (Sell) - Top down, but only to calculate positions
     int ask_count = std::min((int)aggregated_asks.size(), max_levels_to_show);
-    for (int i = 0; i < ask_count; ++i) {  // Changed to iterate from 0 to ask_count (top-down rendering)
+    for (int i = ask_count - 1; i >= 0; --i) {
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity based on selected unit
-      double display_size = level.size;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          display_size = level.size * snapshot_opt->last_trade_price;
-        } else {
-          display_size = level.size * level.price;
-        }
-      }
-      float raw_intensity = std::clamp((float)(display_size / max_vol), 0.0f, 1.0f);
+      // Calculate heatmap intensity for this level with adjustable sensitivity
+      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
       float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
@@ -770,23 +662,14 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     // Spread Row - also need to account for this in positioning
     ImGui::TableNextRow();
 
-    // Render Bids (Buy) - but only to calculate positions - in reverse order for ascending from bottom
+    // Render Bids (Buy) - but only to calculate positions
     int bid_count = std::min((int)aggregated_bids.size(), max_levels_to_show);
-    for (int i = bid_count - 1; i >= 0; --i) {
+    for (int i = 0; i < bid_count; ++i) {
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level with adjustable sensitivity based on selected unit
-      double display_size = level.size;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          display_size = level.size * snapshot_opt->last_trade_price;
-        } else {
-          display_size = level.size * level.price;
-        }
-      }
-      float raw_intensity = std::clamp((float)(display_size / max_vol), 0.0f, 1.0f);
+      // Calculate heatmap intensity for this level with adjustable sensitivity
+      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
       float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
@@ -814,39 +697,15 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     // Now render the actual content in the default channel
     // Render Asks (Sell) - Top down
 
-    // Render Asks (Sell) - Top down, displaying highest price first (descending order)
-    for (int i = 0; i < ask_count; ++i) {  // Changed to iterate from 0 to ask_count (top-down rendering)
+    // Render Asks (Sell) - Top down
+    for (int i = ask_count - 1; i >= 0; --i) {
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
       ImGui::PushID(i);  // Unique ID for this row/side
 
-      // Calculate display size for large order detection based on selected unit
-      double display_size = level.size;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          display_size = level.size * snapshot_opt->last_trade_price;
-        } else {
-          display_size = level.size * level.price;
-        }
-      }
-      
-      // Calculate average order size based on selected unit for large order detection
-      double avg_display_size = average_order_size_;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          avg_display_size = average_order_size_ * snapshot_opt->last_trade_price;
-        } else {
-          // Use a representative price for the symbol
-          // For now, we'll use the current level's price as a fallback
-          avg_display_size = average_order_size_ * level.price;
-        }
-      }
-      
       // Check if this is a large order
-      bool is_large_order = avg_display_size > 0 &&
-                           (display_size / avg_display_size) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = average_order_size_ > 0 &&
+                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
 
       // 1. Bid (Empty)
       ImGui::TableSetColumnIndex(0);
@@ -867,10 +726,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
           }
         }
       }
@@ -941,31 +800,22 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                         ImGuiSelectableFlags_SpanAllColumns);
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
         ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-        ImGui::Text("Price: "); ImGui::SameLine();
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::Text("Price: %.2f", level.price);
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the right (for asks)
+      // Draw cumulative volume bar extending from price column to the right
       if (i < static_cast<int>(cumulative_asks.size())) {
           float width = ImGui::GetContentRegionAvail().x;
           float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Position the bar to start from the left edge of the price column and extend right
-          // This represents cumulative depth from the best ask downward
           ImGui::GetWindowDrawList()->AddRectFilled(
               ImVec2(pos.x, pos.y),
               ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
               ImGui::GetColorU32(
                   ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f)));
-          
-          // Add a subtle border to make the depth bar more visible
-          ImGui::GetWindowDrawList()->AddRect(
-              ImVec2(pos.x, pos.y),
-              ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_red.x * 0.8f, colors.accent_red.y * 0.8f, colors.accent_red.z * 0.8f, 0.5f)), 1.0f);
       }
 
       ImGui::SameLine();
@@ -980,10 +830,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
         // Draw text with increased weight effect
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::TextColored(colors.accent_red, "%.2f", level.price);
         ImGui::PopStyleColor();
       } else {
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::TextColored(colors.accent_red, "%.2f", level.price);
       }
 
       // 4. Bought (Accumulated)
@@ -1002,10 +852,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
           }
         }
       }
@@ -1013,38 +863,19 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       // 5. Ask Size (with Bar)
       ImGui::TableSetColumnIndex(4);
       {
-        // Get the last price for conversion if needed
-        double display_size = level.size;
-        if (volume_unit_ == VolumeUnit::USD) {
-          // Get the last trade price for conversion to USD
-          auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-          if (snapshot_opt.has_value()) {
-            display_size = level.size * snapshot_opt->last_trade_price;
-          } else {
-            // Fallback to current price level if no snapshot available
-            display_size = level.size * level.price;
-          }
-        }
-
         float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(display_size / max_vol);
+        float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
 
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
             ImGui::GetColorU32(
                 ImVec4(colors.accent_red.x, colors.accent_red.y, colors.accent_red.z, 0.2f)));
-        
-        // Add a subtle border to make the individual volume bar more visible
-        ImGui::GetWindowDrawList()->AddRect(
-            pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-            ImGui::GetColorU32(
-                ImVec4(colors.accent_red.x * 0.8f, colors.accent_red.y * 0.8f, colors.accent_red.z * 0.8f, 0.4f)), 1.0f);
 
         if (is_large_order) {
           // Draw yellow background for large orders
           ImVec2 text_pos = ImGui::GetCursorScreenPos();
-          ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", display_size).c_str());
+          ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", level.size).c_str());
           ImGui::GetWindowDrawList()->AddRectFilled(
               text_pos,
               ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
@@ -1053,10 +884,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           // Draw text with increased weight effect by drawing it multiple times slightly offset
           // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(display_size, "%.4f");
+          ImGui::Text("%.4f", level.size);
           ImGui::PopStyleColor();
         } else {
-          BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(display_size, "%.4f");
+          ImGui::Text("%.4f", level.size);
         }
       }
 
@@ -1078,10 +909,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
+            ImGui::TextColored(color, "%+.0f", delta);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
+            ImGui::TextColored(color, "%+.0f", delta);
           }
         }
       }
@@ -1113,10 +944,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
               // Draw text with increased weight effect
               ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
+              ImGui::TextColored(color, "%+.2f", volume_delta);
               ImGui::PopStyleColor();
             } else {
-              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
+              ImGui::TextColored(color, "%+.2f", volume_delta);
             }
           }
         }
@@ -1139,17 +970,13 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
+            ImGui::Text("%.0f", total);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
+            ImGui::Text("%.0f", total);
           }
         }
       }
-
-      // 9. Action Buttons
-      ImGui::TableSetColumnIndex(8);
-      render_order_placement_buttons(level, false); // false for ask (sell order)
 
       ImGui::PopID();
     }
@@ -1159,63 +986,26 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TableSetColumnIndex(2);
     ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "--- %.1f ---", orderbook.spread);
 
-    // Render Bids (Buy) - Bottom up (reverse order to show ascending from bottom)
-    for (int i = bid_count - 1; i >= 0; --i) {
+    // Render Bids (Buy)
+    for (int i = 0; i < bid_count; ++i) {
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
       ImGui::PushID(i + 1000);  // Offset to ensure uniqueness from Asks
 
-      // Calculate display size for large order detection based on selected unit
-      double display_size = level.size;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          display_size = level.size * snapshot_opt->last_trade_price;
-        } else {
-          display_size = level.size * level.price;
-        }
-      }
-      
-      // Calculate average order size based on selected unit for large order detection
-      double avg_display_size = average_order_size_;
-      if (volume_unit_ == VolumeUnit::USD) {
-        auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-        if (snapshot_opt.has_value()) {
-          avg_display_size = average_order_size_ * snapshot_opt->last_trade_price;
-        } else {
-          // Use a representative price for the symbol
-          // For now, we'll use the current level's price as a fallback
-          avg_display_size = average_order_size_ * level.price;
-        }
-      }
-      
       // Check if this is a large order
-      bool is_large_order = avg_display_size > 0 &&
-                           (display_size / avg_display_size) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = average_order_size_ > 0 &&
+                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
 
       // 1. Bid Size (with Bar)
       ImGui::TableSetColumnIndex(0);
       {
-        // Get the last price for conversion if needed
-        double display_size = level.size;
-        if (volume_unit_ == VolumeUnit::USD) {
-          // Get the last trade price for conversion to USD
-          auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id_);
-          if (snapshot_opt.has_value()) {
-            display_size = level.size * snapshot_opt->last_trade_price;
-          } else {
-            // Fallback to current price level if no snapshot available
-            display_size = level.size * level.price;
-          }
-        }
-
         // Draw bar from right to left? Standard is Left or Right aligned.
         // Image 1 implies Right aligned for Bid? No, standard is bars grow from
         // center spine (Price). But here Columns are separated. Let's do
         // Standard Left-to-Right for now, or Right-to-Left if it looks better
         // next to Price. Let's do Right-to-Left for Bid to "point" to Price.
         float width = ImGui::GetContentRegionAvail().x;
-        float bar_width = width * (float)(display_size / max_vol);
+        float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
 
         ImGui::GetWindowDrawList()->AddRectFilled(
@@ -1223,16 +1013,9 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
             ImGui::GetColorU32(
                 ImVec4(colors.accent_green.x, colors.accent_green.y, colors.accent_green.z, 0.2f)));
-        
-        // Add a subtle border to make the individual volume bar more visible
-        ImGui::GetWindowDrawList()->AddRect(
-            ImVec2(pos.x + width - bar_width, pos.y),
-            ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-            ImGui::GetColorU32(
-                ImVec4(colors.accent_green.x * 0.8f, colors.accent_green.y * 0.8f, colors.accent_green.z * 0.8f, 0.4f)), 1.0f);
 
         // Text Right Aligned
-        auto text = std::format("{:.4f}", display_size);
+        auto text = std::format("{:.4f}", level.size);
         float text_width = ImGui::CalcTextSize(text.c_str()).x;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - text_width);
 
@@ -1270,10 +1053,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(sold, "%.0f");
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
           }
         }
       }
@@ -1343,31 +1126,22 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
                         ImGuiSelectableFlags_SpanAllColumns);
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
         ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-        ImGui::Text("Price: "); ImGui::SameLine();
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::Text("Price: %.2f", level.price);
         ImGui::EndDragDropSource();
       }
 
-      // Draw cumulative volume bar extending from price column to the left (for bids)
+      // Draw cumulative volume bar extending from price column to the left
       if (i < static_cast<int>(cumulative_bids.size())) {
           float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_bids[bid_count - 1 - i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
+          float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Position the bar to start from the right edge of the price column and extend left
-          // This represents cumulative depth from the best bid upward
           ImGui::GetWindowDrawList()->AddRectFilled(
               ImVec2(pos.x + width - bar_width, pos.y),
               ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
               ImGui::GetColorU32(
                   ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
-
-          // Add a subtle border to make the depth bar more visible
-          ImGui::GetWindowDrawList()->AddRect(
-              ImVec2(pos.x + width - bar_width, pos.y),
-              ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_green.x * 0.8f, colors.accent_green.y * 0.8f, colors.accent_green.z * 0.8f, 0.5f)), 1.0f);
       }
 
       ImGui::SameLine();
@@ -1382,10 +1156,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
         // Draw text with increased weight effect
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::TextColored(colors.accent_green, "%.2f",
+                           level.price);  // Green for Bid Price
         ImGui::PopStyleColor();
       } else {
-        BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(level.price, "%.2f");
+        ImGui::TextColored(colors.accent_green, "%.2f",
+                           level.price);  // Green for Bid Price
       }
 
       // 4. Bought
@@ -1404,10 +1180,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(bought, "%.0f");
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
           }
         }
       }
@@ -1433,10 +1209,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
+            ImGui::TextColored(color, "%+.0f", delta);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(delta, "%+.0f");
+            ImGui::TextColored(color, "%+.0f", delta);
           }
         }
       }
@@ -1468,10 +1244,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
               // Draw text with increased weight effect
               ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
+              ImGui::TextColored(color, "%+.2f", volume_delta);
               ImGui::PopStyleColor();
             } else {
-              BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume_delta, "%+.2f");
+              ImGui::TextColored(color, "%+.2f", volume_delta);
             }
           }
         }
@@ -1494,17 +1270,13 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
             // Draw text with increased weight effect
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
+            ImGui::Text("%.0f", total);
             ImGui::PopStyleColor();
           } else {
-            BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(total, "%.0f");
+            ImGui::Text("%.0f", total);
           }
         }
       }
-
-      // 9. Action Buttons
-      ImGui::TableSetColumnIndex(8);
-      render_order_placement_buttons(level, true); // true for bid (buy order)
 
       ImGui::PopID();
     }
@@ -1524,9 +1296,9 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
   if (aggregated_bids.empty() || aggregated_asks.empty()) return;
 
   if (ImPlot::BeginPlot("##Depth", ImVec2(-1, 150), ImPlotFlags_CanvasOnly)) {
-    ImPlot::SetupAxes("Price", "Volume", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
 
-    // Handle Bids - Cumulative depth from best bid down (Green area)
+    // Handle Bids - Cumulative depth from best bid down
     std::vector<double> bx, by;
     if (!aggregated_bids.empty()) {
       double cumulative_depth = 0.0;
@@ -1549,12 +1321,16 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
       by.push_back(0.0);
     }
 
-    // Handle Asks - Cumulative depth from best ask up (Red area)
+    const auto& colors = ThemeManager::getInstance().getColors();
+    // ImPlot::SetNextFillStyle(colors.accent_green);
+    ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
+
+    // Handle Asks - Cumulative depth from best ask up
     std::vector<double> ax, ay;
     if (!aggregated_asks.empty()) {
       double cumulative_depth = 0.0;
 
-      // Add points from best ask to worst ask (Red area - descending from top)
+      // Add points from best ask to worst ask
       for (const auto& ask : aggregated_asks) {
         cumulative_depth += ask.size;
         ax.push_back(ask.price);
@@ -1572,53 +1348,8 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
       ay.insert(ay.begin(), 0.0);
     }
 
-    // Plot shaded area for bids (Green - ascending from bottom)
-    ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
-
-    // Plot shaded area for asks (Red - descending from top)
+    // ImPlot::SetNextFillStyle(colors.accent_red);
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
-
-    // Draw 1px dashed line when g_crosshair.active == true
-    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
-      ImPlotRect limits = ImPlot::GetPlotLimits();
-      
-      // For orderbook depth chart, use the crosshair price to draw a vertical line
-      double crosshair_price = QuantWorkspaceComponent::g_crosshair.price.load();
-      
-      // Draw vertical dashed line at crosshair price position
-      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-      ImVec2 top = ImPlot::PlotToPixels(crosshair_price, limits.Y.Max);
-      ImVec2 bottom = ImPlot::PlotToPixels(crosshair_price, limits.Y.Min);
-
-      // Draw the synchronized crosshair line as a 1px dashed line
-      const float dash_length = 4.0f;
-      const float gap_length = 2.0f;
-      const float line_thickness = 1.0f;
-
-      // Draw dashed line
-      float current_y = top.y;
-      bool draw_segment = true;
-
-      while (current_y < bottom.y) {
-          float next_y = current_y + (draw_segment ? dash_length : gap_length);
-
-          if (next_y > bottom.y) {
-              next_y = bottom.y;
-          }
-
-          if (draw_segment) {
-              draw_list->AddLine(
-                  ImVec2(top.x, current_y),
-                  ImVec2(top.x, next_y),
-                  IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
-                  line_thickness
-              );
-          }
-
-          current_y = next_y;
-          draw_segment = !draw_segment;
-      }
-    }
 
     ImPlot::EndPlot();
   }
@@ -1628,10 +1359,6 @@ void OrderbookPanel::center_price() {
   // This method would center the view on the current mid-price
   // For now, we'll just log that the action was triggered
   OrderbookCache* cache = latest_orderbook_cache_.load(std::memory_order_acquire);
-
-  // Access snapshot_asks_ and snapshot_bids_ via std::memory_order_acquire as required by task
-  const std::vector<PriceLevel>* asks_snapshot = snapshot_asks_.load(std::memory_order_acquire);
-  const std::vector<PriceLevel>* bids_snapshot = snapshot_bids_.load(std::memory_order_acquire);
 
   if (cache && !cache->bids.empty() && !cache->asks.empty()) {
     // Calculate mid price (average of best bid and best ask)
@@ -1657,25 +1384,6 @@ void OrderbookPanel::render_panel_header() {
   // Call parent implementation to render the default header
   PanelBase::render_panel_header();
 
-  // Add USD/COIN toggle to the panel header
-  ImGui::Separator();
-  ImGui::Text("Units:");
-  ImGui::SameLine();
-  ImGui::PushItemWidth(80);
-  const char* unit_options[] = {"COIN", "USD"};
-  int current_unit = static_cast<int>(volume_unit_);
-  if (ImGui::BeginCombo("##UnitToggle", unit_options[current_unit])) {
-      for (int i = 0; i < 2; ++i) {
-          bool is_selected = (current_unit == i);
-          if (ImGui::Selectable(unit_options[i], is_selected)) {
-              volume_unit_ = static_cast<VolumeUnit>(i);
-          }
-          if (is_selected) ImGui::SetItemDefaultFocus();
-      }
-      ImGui::EndCombo();
-  }
-  ImGui::PopItemWidth();
-
   // Add heatmap intensity slider to the panel header
   ImGui::Separator();
   ImGui::Text("Heatmap Intensity:");
@@ -1688,74 +1396,6 @@ void OrderbookPanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
-}
-
-void OrderbookPanel::place_order_at_price(double price, RenderEngine::OrderSide side, double quantity) {
-  // Use the new routing method to create and push the trade command
-  double actual_quantity = (quantity > 0.0) ? quantity : 0.001;  // Default small quantity
-  
-  bool pushed = BTQuant::RenderEngine::GlobalTradeQueue::push_market_order(
-    symbol_id_,
-    symbol_name_,
-    bridge_ ? bridge_->getExchangeName(symbol_id_) : "Unknown",
-    side,
-    actual_quantity,
-    BTQuant::RenderEngine::TimeInForce::GTC
-  );
-
-  if (pushed) {
-    std::cout << "[OrderbookPanel] Order queued: "
-              << (side == BTQuant::RenderEngine::OrderSide::BUY ? "BUY" : "SELL")
-              << " " << actual_quantity << " " << symbol_name_
-              << " from orderbook level" << std::endl;
-  } else {
-    std::cerr << "[OrderbookPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
-  }
-}
-
-void OrderbookPanel::render_order_placement_buttons(const PriceLevel& level, bool is_bid) {
-  // Create buy/sell buttons for each price level
-  // For bids, show a buy button (to buy at the bid price)
-  // For asks, show a sell button (to sell at the ask price)
-
-  // Button size
-  ImVec2 button_size(30, 18);
-
-  // Buy button - for bids (to buy at bid price) or for placing buy limit orders at ask prices
-  if (is_bid) {
-    ImVec4 buy_button_color = ImVec4(0.0f, 0.8f, 0.0f, 0.6f);  // Semi-transparent green
-    ImGui::PushStyleColor(ImGuiCol_Button, buy_button_color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 1.0f, 0.0f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.6f, 0.0f, 0.9f));
-
-    if (ImGui::Button("B##buy_btn", button_size)) {
-      place_order_at_price(level.price, BTQuant::RenderEngine::OrderSide::BUY);
-    }
-
-    ImGui::PopStyleColor(3);
-
-    // Add tooltip for the buy button
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Buy at %.4f", level.price);
-    }
-  } else {
-    // Sell button - for asks (to sell at ask price)
-    ImVec4 sell_button_color = ImVec4(0.8f, 0.0f, 0.0f, 0.6f);  // Semi-transparent red
-    ImGui::PushStyleColor(ImGuiCol_Button, sell_button_color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.0f, 0.0f, 0.9f));
-
-    if (ImGui::Button("S##sell_btn", button_size)) {
-      place_order_at_price(level.price, BTQuant::RenderEngine::OrderSide::SELL);
-    }
-
-    ImGui::PopStyleColor(3);
-
-    // Add tooltip for the sell button
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Sell at %.4f", level.price);
-    }
-  }
 }
 
 }  // namespace BTQuant

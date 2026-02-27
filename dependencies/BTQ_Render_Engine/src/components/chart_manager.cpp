@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../../include/data/data_types.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
@@ -12,7 +11,6 @@
 
 namespace BTQuant {
 
-// DEPRECATED - Legacy hotspine
 ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge), processor_(processor), next_chart_id_(0) {}
@@ -20,13 +18,6 @@ ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
 uint32_t ChartManager::create_chart(const std::string& symbol_name,
                                     const std::string& exchange_name, uint32_t symbol_id,
                                     RenderEngine::TimeFrame timeframe) {
-  // Check if a chart already exists for this symbol and timeframe
-  for (const auto& [id, chart] : charts_) {
-    if (chart.symbol_name == symbol_name && chart.timeframe == timeframe) {
-      return id;
-    }
-  }
-
   ChartInstance chart;
   chart.symbol_name = symbol_name;
   chart.exchange_name = exchange_name;
@@ -164,8 +155,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     return;
   }
 
-  // Incremental Update Logic: Only append or update the latest
-  // candle
+  // Incremental Update Logic: Only append or update the latest candle
   size_t start_idx = 0;
   if (chart.dates.empty()) {
     chart.dates.reserve(candles.size());
@@ -190,12 +180,11 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     // Search from the end for the last matching candle
     for (int i = (int)candles.size() - 1; i >= 0; --i) {
       double candle_ts = static_cast<double>(candles[i].timestamp) / 1000000.0;
-      // Precision-safe comparison for Unix timestamps in
-      // seconds (approx 1.7e9) Double precision is sufficient
-      // for ~0.001s, but let's be robust (1ms = 1e-3)
+      // Precision-safe comparison for Unix timestamps in seconds (approx 1.7e9)
+      // Double precision is sufficient for ~0.001s, but let's be robust (1ms =
+      // 1e-3)
       if (std::abs(candle_ts - last_stored_ts) < 0.001) {
-        // Update the last candle as it might still be
-        // aggregating
+        // Update the last candle as it might still be aggregating
         chart.opens.back() = static_cast<float>(candles[i].open);
         chart.highs.back() = static_cast<float>(candles[i].high);
         chart.lows.back() = static_cast<float>(candles[i].low);
@@ -208,13 +197,11 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     }
 
     if (!found_overlap) {
-      // If we didn't find an overlap, it could be a gap or a
-      // reset. APPEND if the new data is strictly after our
-      // last data.
+      // If we didn't find an overlap, it could be a gap or a reset.
+      // APPEND if the new data is strictly after our last data.
       if (!candles.empty() &&
           (static_cast<double>(candles[0].timestamp) / 1000000.0 > last_stored_ts)) {
-        start_idx = 0;  // Prepare to append everything from the
-                        // new batch
+        start_idx = 0;  // Prepare to append everything from the new batch
       } else {
         // Real reset or backwards jump, clear and re-populate
         chart.dates.clear();
@@ -249,8 +236,7 @@ void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timef
     // Update the timeframe
     chart.timeframe = new_timeframe;
 
-    // Clear the old chart data to force a reload with the new
-    // timeframe
+    // Clear the old chart data to force a reload with the new timeframe
     chart.dates.clear();
     chart.opens.clear();
     chart.highs.clear();

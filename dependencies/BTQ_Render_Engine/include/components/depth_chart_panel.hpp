@@ -32,7 +32,6 @@ enum class DepthChartVisualizationMode {
  */
 class DepthChartPanel : public PanelBase {
  public:
-  // DEPRECATED - Legacy hotspine
   DepthChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
@@ -42,7 +41,6 @@ class DepthChartPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 

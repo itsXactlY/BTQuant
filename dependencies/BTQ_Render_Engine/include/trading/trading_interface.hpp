@@ -11,8 +11,6 @@
 #include "order_manager.hpp"
 #include "position_manager.hpp"
 #include "risk_assessment.hpp"
-#include "market_data_processor.hpp"
-#include "../components/chart_manager.hpp"
 
 namespace BTQuant {
 
@@ -84,17 +82,10 @@ class TradingInterface {
   void update_market_price(const std::string& symbol, double price);
   void update_market_prices(const std::unordered_map<std::string, double>& prices);
 
-  // Atomic Market Data Access
-  void set_market_data_processor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
-  void set_chart_manager(class ChartManager* chart_manager);
-  std::pair<double, double> get_atomic_best_bid_ask(const std::string& symbol) const;
-
  private:
   std::unique_ptr<OrderManager> order_manager_;
   std::unique_ptr<PositionManager> position_manager_;
   std::unique_ptr<RiskAssessment> risk_assessment_;
-  std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
-  class ChartManager* chart_manager_;
 
   // Internal callbacks
   void on_order_update(const OrderManager::Order& order);

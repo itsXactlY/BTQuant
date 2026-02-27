@@ -7,54 +7,19 @@
 #include <numeric>
 
 #include <imgui.h>
-#include "backends/imgui_impl_vulkan.h"
-#include "symbol_registry.hpp"
-#include "../../include/analytics/cluster_engine.hpp"
-#include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
-#include "vulkan/ssbo_snapshot_updater.h"  // Include for SSBO snapshot updater
 
 namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
-      processor_(processor),
-      heatmap_texture_{},
-      ssbo_snapshot_updater_(nullptr),
-      lob_heatmap_pipeline_(nullptr) {
-  // Initialize Vulkan texture if Vulkan core is available
-  // Vulkan compute removed - using CPU-based heatmap rendering initially
-  // But we'll prepare for Vulkan-accelerated texture rendering
-
-  // Subscribe to ORDERBOOK and TRADE updates in constructor
-  if (processor_) {
-    // Subscribe to ORDERBOOK updates
-    subscription_id_ = processor_->subscribe(
-        0, RenderEngine::NotificationType::ORDERBOOK,
-        [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
-          this->markDirty();
-        });
-
-    // Also subscribe to TRADE updates for trade bubbles
-    processor_->subscribe(0, RenderEngine::NotificationType::TRADE,
-                          [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
-                            this->markDirty();
-                          });
-  }
+      processor_(processor) {
+  // Vulkan compute removed - using CPU-based heatmap rendering
 }
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
     processor_->unsubscribe(subscription_id_);
   }
-
-  // Clean up Vulkan texture if initialized
-  destroyVulkanTexture();
-
-  // Clean up cluster engine
-  cluster_engine_.reset();
-  
-  // Clean up LOB heatmap compute pipeline
-  lob_heatmap_pipeline_.reset();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -74,23 +39,12 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
                               [this](uint32_t sym, RenderEngine::NotificationType type) {
                                 this->onDataUpdate(sym, type);
                               });
-
+    
     // Also subscribe to trade updates for trade bubbles
     processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
                           [this](uint32_t sym, RenderEngine::NotificationType type) {
                             this->onDataUpdate(sym, type);
                           });
-  }
-
-  // Initialize cluster engine with appropriate tick size for the symbol
-  if (processor_) {
-    auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(current_symbol_id_);
-    if (symbol_info_opt) {
-      double tick_size = symbol_info_opt->tick_size > 0.0 ? symbol_info_opt->tick_size : 0.25; // Default tick size
-      cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(tick_size);
-    } else {
-      cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size
-    }
   }
 
   // Clear existing data to prevent mixing symbols
@@ -104,31 +58,9 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
 void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type) {
   if (symbol_id == current_symbol_id_) {
-    // Update SSBO with latest snapshot buffer data
-    updateSSBOSnapshotBuffer();
-    
     if (type == RenderEngine::NotificationType::TRADE) {
       // For trade updates, we'll update trade bubbles specifically
       updateTradeBubbles();
-
-      // Process trade through cluster engine for cumulative volume data
-      if (cluster_engine_ && processor_) {
-        auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
-        // Process the most recent trade through the cluster engine
-        if (!analytics.recent_trades.empty()) {
-          const auto& latest_trade = analytics.recent_trades.back();
-
-          // Convert RenderEngine::TradeData to MarketData::Trade for cluster engine
-          MarketData::Trade converted_trade;
-          converted_trade.price = latest_trade.price;
-          converted_trade.quantity = latest_trade.size;  // Use 'size' instead of 'quantity'
-          converted_trade.timestamp_us = latest_trade.timestamp;
-          converted_trade.is_buyer_maker = latest_trade.is_buy;  // Use 'is_buy' instead of 'is_buyer_maker'
-          
-          // Process trade with default time bucket (0 for now)
-          cluster_engine_->processTrade(converted_trade, 0);
-        }
-      }
     }
     markDirty();
   }
@@ -268,17 +200,6 @@ void DomSurfacePanel::renderTradeBubbles() {
 void DomSurfacePanel::updateHeatmapData() {
   if (current_symbol_id_ == 0 || !processor_) return;
 
-  // If multi-exchange aggregation is enabled, aggregate data from multiple exchanges
-  if (multi_exchange_aggregation_enabled_ && !selected_exchanges_.empty()) {
-    // Aggregate data from multiple exchanges
-    aggregateMultiExchangeData();
-  } else {
-    // Use single exchange data (original behavior)
-    aggregateSingleExchangeData();
-  }
-}
-
-void DomSurfacePanel::aggregateSingleExchangeData() {
   // Request ALL available orderbook history (0 = no limit)
   auto history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
   if (history.empty()) return;
@@ -397,164 +318,6 @@ void DomSurfacePanel::aggregateSingleExchangeData() {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
         if (bin >= 0 && bin < price_bins_) {
-          heatmap_data_[bin * time_steps + t] += level.size;
-          max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
-        }
-      }
-    }
-  }
-
-  bounds_min_[0] = 0;
-  bounds_min_[1] = min_price;
-  bounds_max_[0] = static_cast<double>(time_steps);
-  bounds_max_[1] = max_price;
-
-  scale_max_ = max_vol > 0 ? max_vol : 1.0;
-}
-
-void DomSurfacePanel::aggregateMultiExchangeData() {
-  // For multi-exchange aggregation, we need to get data from multiple exchanges
-  // This is a simplified implementation - in a real system, we'd need to:
-  // 1. Get historical data for the same symbol from multiple exchanges
-  // 2. Align timestamps across exchanges
-  // 3. Aggregate volumes appropriately
-  
-  std::vector<RenderEngine::OrderbookData> combined_history;
-  
-  // Get the symbol name for the current symbol ID to find equivalent symbols on other exchanges
-  std::string base_symbol_name = "UNKNOWN";
-  auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(current_symbol_id_);
-  if (symbol_info_opt) {
-    base_symbol_name = symbol_info_opt->symbol;
-  }
-  
-  // If we have selected exchanges, try to get data from them
-  if (!selected_exchanges_.empty()) {
-    // For each selected exchange, get the corresponding symbol data
-    for (const auto& exchange : selected_exchanges_) {
-      // Find the symbol ID for the same symbol on this exchange
-      auto exchange_symbol_id_opt = SymbolRegistry::instance().get_symbol_id(exchange, base_symbol_name);
-      
-      if (exchange_symbol_id_opt.has_value()) {
-        auto exchange_history = processor_->getHistoricalOrderbooks(exchange_symbol_id_opt.value(), 0);
-        
-        // For now, we'll just append the data from each exchange
-        // In a real implementation, we would need to align timestamps and merge the data properly
-        combined_history.insert(combined_history.end(), exchange_history.begin(), exchange_history.end());
-      }
-    }
-  } else {
-    // If no specific exchanges are selected, use the current symbol's data as a fallback
-    auto base_history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
-    combined_history = base_history;
-  }
-  
-  // If no data was found, return early
-  if (combined_history.empty()) {
-    auto base_history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
-    if (base_history.empty()) return;
-    combined_history = base_history;
-  }
-  
-  // Sort combined history by timestamp to ensure proper chronological order
-  std::sort(combined_history.begin(), combined_history.end(), 
-            [](const auto& a, const auto& b) {
-              return a.timestamp < b.timestamp;
-            });
-  
-  // Determine price range across all exchanges
-  double min_price = std::numeric_limits<double>::max();
-  double max_price = std::numeric_limits<double>::lowest();
-
-  if (auto_scale_price_) {
-    for (const auto& book : combined_history) {
-      if (!book.bids.empty())
-        min_price = std::min(min_price, book.bids.back().price);  // Lowest bid (deepest)
-      if (!book.bids.empty()) max_price = std::max(max_price, book.bids.front().price);
-      if (!book.asks.empty()) min_price = std::min(min_price, book.asks.front().price);
-      if (!book.asks.empty())
-        max_price = std::max(max_price,
-                             book.asks.back().price);  // Highest ask (deepest)
-    }
-    // Add some padding
-    if (min_price < max_price) {
-      double spread = max_price - min_price;
-      min_price -= spread * 0.05;
-      max_price += spread * 0.05;
-    } else {
-      // Fallback
-      auto latest = combined_history.back();
-      double mid = 0;
-      if (!latest.bids.empty())
-        mid = latest.bids.front().price;
-      else if (!latest.asks.empty())
-        mid = latest.asks.front().price;
-      min_price = mid * 0.98;
-      max_price = mid * 1.02;
-    }
-  } else {
-    // Legacy fixed range logic
-    const auto& latest = combined_history.back();
-    double mid_price = 0;
-    if (!latest.bids.empty() && !latest.asks.empty()) {
-      mid_price = (latest.bids.front().price + latest.asks.front().price) / 2.0;
-    } else if (!latest.bids.empty()) {
-      mid_price = latest.bids.front().price;
-    } else if (!latest.asks.empty()) {
-      mid_price = latest.asks.front().price;
-    } else {
-      return;
-    }
-    min_price = mid_price * (1.0 - price_range_);
-    max_price = mid_price * (1.0 + price_range_);
-  }
-
-  if (max_price <= min_price) return;
-
-  // Time bounds (X-axis)
-  if (!combined_history.empty()) {
-    history_start_timestamp_ = combined_history.front().timestamp;
-    history_end_timestamp_ = combined_history.back().timestamp;
-  }
-
-  // Ensure valid time range
-  if (history_end_timestamp_ <= history_start_timestamp_) {
-    history_end_timestamp_ = history_start_timestamp_ + 1;
-  }
-
-  double price_step = (max_price - min_price) / static_cast<double>(price_bins_);
-  int time_steps = static_cast<int>(combined_history.size());
-  size_t total_size = static_cast<size_t>(price_bins_) * static_cast<size_t>(time_steps);
-
-  if (heatmap_data_.size() != total_size) {
-    heatmap_data_.assign(total_size, 0.0);
-  } else {
-    std::fill(heatmap_data_.begin(), heatmap_data_.end(), 0.0);
-  }
-
-  double max_vol = 0;
-
-  // Aggregate data from all exchanges at each time step
-  for (int t = 0; t < time_steps; ++t) {
-    const auto& book = combined_history[t];
-
-    // Bids
-    for (const auto& level : book.bids) {
-      if (level.price >= min_price && level.price < max_price) {
-        int bin = static_cast<int>((level.price - min_price) / price_step);
-        if (bin >= 0 && bin < price_bins_) {
-          // In multi-exchange mode, we aggregate volumes from all exchanges
-          heatmap_data_[bin * time_steps + t] += level.size;
-          max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
-        }
-      }
-    }
-    // Asks
-    for (const auto& level : book.asks) {
-      if (level.price >= min_price && level.price < max_price) {
-        int bin = static_cast<int>((level.price - min_price) / price_step);
-        if (bin >= 0 && bin < price_bins_) {
-          // In multi-exchange mode, we aggregate volumes from all exchanges
           heatmap_data_[bin * time_steps + t] += level.size;
           max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
         }
@@ -789,66 +552,12 @@ void DomSurfacePanel::render() {
     if (orderbook_opt) {
       updatePersistentLevels(*orderbook_opt);
     }
-
-    // Initialize Vulkan texture if not already done and if we have the Vulkan core
-    if (!texture_initialized_ && vulkan_core_) {
-      initializeVulkanTexture();
-      
-      // Initialize the LOB heatmap compute pipeline
-      try {
-        lob_heatmap_pipeline_ = std::make_unique<btq::vulkan::LOBHeatmapComputePipeline>(vulkan_core_.get());
-        lob_heatmap_pipeline_->initialize(1024, 1024); // Default size, can be adjusted based on needs
-      } catch (const std::exception& e) {
-        std::cerr << "[DomSurfacePanel] Failed to initialize LOB heatmap compute pipeline: " << e.what() << std::endl;
-      }
-    }
-
-    // Update Vulkan texture if available
-    if (texture_initialized_) {
-      updateVulkanTexture();
-    }
-
-    // Update BTQ layout data if enabled
-    if (show_BTQ_layout_) {
-      updateBTQLayoutData();
-    }
   }
 
   begin_panel_window();
 
-  // Render background image if enabled using channel splitting to ensure it's behind other content
-  if (get_use_background_image() && get_background_image() != 0) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    // Split the draw list into channels: 0 for background, 1 for foreground
-    draw_list->ChannelsSplit(2);
-
-    // Switch to background channel (0)
-    draw_list->ChannelsSetCurrent(0);
-
-    // Get the current window position and size
-    ImVec2 window_pos = ImGui::GetWindowPos();
-    ImVec2 window_size = ImGui::GetWindowSize();
-
-    // Define the rectangle for the background image spanning the entire window
-    ImVec2 bg_min = window_pos;
-    ImVec2 bg_max = ImVec2(window_pos.x + window_size.x, window_pos.y + window_size.y);
-
-    // Add the image to the draw list, spanning the entire panel background
-    draw_list->AddImage(get_background_image(), bg_min, bg_max,
-                       ImVec2(0, 0), ImVec2(1, 1));  // UV coordinates default to full texture
-
-    // Switch back to foreground channel (1) for normal rendering
-    draw_list->ChannelsSetCurrent(1);
-  }
-
   if (current_symbol_id_ == 0) {
     ImGui::Text("No Data / Select Symbol");
-    // Merge channels back together if we were using background image
-    if (get_use_background_image() && get_background_image() != 0) {
-      ImDrawList* draw_list = ImGui::GetWindowDrawList();
-      draw_list->ChannelsMerge();
-    }
     end_panel_window();
     return;
   }
@@ -860,201 +569,58 @@ void DomSurfacePanel::render() {
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
-  ImGui::Checkbox("Show BTQ 5-Column Layout", &show_BTQ_layout_);
-  ImGui::SameLine();
   ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
               large_order_markers_.size(), trade_bubbles_.size());
 
-  // If BTQ layout is enabled, render it instead of the heatmap
-  if (show_BTQ_layout_) {
-    renderBTQLayout();
-  } else {
-    // Enable Pan/Zoom for DOM Surface
-    std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
-    if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
-      ImPlot::SetupAxes("Time", "Price");
+  // Enable Pan/Zoom for DOM Surface
+  std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
+  if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
+    ImPlot::SetupAxes("Time", "Price");
 
-      // Allow user to pan and zoom
-      ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
-      ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
+    // Allow user to pan and zoom
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
+    ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
 
-      // Set axis limits with option for user interaction
-      ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
-                              ImPlotCond_Once);
-      // Apply center mode if enabled
-      if (BTQ_center_mode_) {
-        // Calculate center price
-        double center_price = 0.0;
-        auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
-        if (orderbook_opt && !orderbook_opt->bids.empty() && !orderbook_opt->asks.empty()) {
-          center_price = (orderbook_opt->bids.front().price + orderbook_opt->asks.front().price) / 2.0;
-        } else if (orderbook_opt && !orderbook_opt->bids.empty()) {
-          center_price = orderbook_opt->bids.front().price;
-        } else if (orderbook_opt && !orderbook_opt->asks.empty()) {
-          center_price = orderbook_opt->asks.front().price;
-        } else {
-          // Fallback if no orderbook data available
-          center_price = (bounds_min_[1] + bounds_max_[1]) / 2.0;
-        }
+    // Set axis limits with option for user interaction
+    ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
+                            ImPlotCond_Once);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
+                            ImPlotCond_Once);
 
-        // Calculate range based on center price and BTQ_center_range_
-        double range = center_price * BTQ_center_range_;
-        ImPlot::SetupAxisLimits(ImAxis_Y1, center_price - range, center_price + range,
-                                ImPlotCond_Always); // Use Always to enforce center mode
-      } else {
-        ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
-                                ImPlotCond_Once);
-      }
+    // Use Vulkan-accelerated heatmap texture if available
+    // CPU-based heatmap rendering
+    int rows = price_bins_;
+    int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
-      // Use Vulkan-accelerated heatmap texture if available
-      if (texture_initialized_ && heatmap_texture_id_) {
-        // Render the heatmap using the Vulkan texture
-        // First, ensure the texture is updated with current data
-        updateVulkanTexture();
-
-        // Render the texture as an image overlay on the plot
-        // We'll use ImPlot::PlotImage to draw the texture
-        ImPlot::PlotImage("Liquidity",
-                          heatmap_texture_id_,
+    if (cols > 0 && rows > 0) {
+      ImPlot::PushColormap(ImPlotColormap_Viridis);
+      // Apply heatmap intensity to adjust color mapping sensitivity
+      double adjusted_scale_max = scale_max_ / heatmap_intensity_;
+      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
                           ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                           ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-      } else {
-        // Fallback to CPU-based heatmap rendering if Vulkan texture is not available
-        int rows = price_bins_;
-        int cols = static_cast<int>(heatmap_data_.size()) / rows;
-
-        if (cols > 0 && rows > 0) {
-          ImPlot::PushColormap(ImPlotColormap_Viridis);
-          // Apply heatmap intensity to adjust color mapping sensitivity
-          double adjusted_scale_max = scale_max_ / heatmap_intensity_;
-          ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
-                              ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                              ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-          ImPlot::PopColormap();
-        }
-      }
-
-      // Retrieve the ImTextureID from GPUMemoryManager and set it as the background image
-      // This implements the functionality requested in task #32
-      if (texture_initialized_ && vulkan_core_) {
-        try {
-          // Get the memory manager from the vulkan core
-          GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-
-          // Retrieve the ImTextureID using the new method in GPUMemoryManager
-          ImTextureID texture_id_from_manager = memory_manager.getImTextureID(
-              heatmap_sampler_,
-              heatmap_texture_,
-              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-          );
-
-          // Set the retrieved texture as the background image for the panel
-          set_background_image(texture_id_from_manager);
-          set_use_background_image(true);
-        } catch (const std::exception& e) {
-          // Handle any exceptions gracefully
-          std::cerr << "[DomSurfacePanel] Error retrieving ImTextureID from GPUMemoryManager: " << e.what() << std::endl;
-        }
-      }
-
-      // Render Persistent Level Lines OVER the heatmap
-      if (show_persistent_lines_) {
-        renderPersistentLevels();
-      }
-
-      // Render Large Order Markers OVER the heatmap and persistent lines
-      renderLargeOrderMarkers();
-
-      // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
-      renderTradeBubbles();
-
-      // Render Flush DOM Ruler OVER everything else - showing live orderbook at the right edge
-      renderFlushDOMRuler();
-
-      // Draw 1px dashed line when g_crosshair.active == true
-      if (QuantWorkspaceComponent::g_crosshair.active.load()) {
-        ImPlotRect limits = ImPlot::GetPlotLimits();
-
-        // Get the global crosshair time position
-        uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
-        double global_time_seconds = static_cast<double>(global_time) / 1000000.0; // Convert microseconds to seconds
-
-        // Draw vertical dashed line at the global crosshair time position
-        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-        ImVec2 top = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Max);
-        ImVec2 bottom = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Min);
-
-        // Draw the synchronized crosshair line as a 1px dashed line
-        const float dash_length = 4.0f;
-        const float gap_length = 2.0f;
-        const float line_thickness = 1.0f;
-
-        // Draw dashed line
-        float current_y = top.y;
-        bool draw_segment = true;
-
-        while (current_y < bottom.y) {
-            float next_y = current_y + (draw_segment ? dash_length : gap_length);
-
-            if (next_y > bottom.y) {
-                next_y = bottom.y;
-            }
-
-            if (draw_segment) {
-                draw_list->AddLine(
-                    ImVec2(top.x, current_y),
-                    ImVec2(top.x, next_y),
-                    IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
-                    line_thickness
-                );
-            }
-
-            current_y = next_y;
-            draw_segment = !draw_segment;
-        }
-
-        // Draw horizontal dashed line at g_crosshair_price
-        double crosshair_price = QuantWorkspaceComponent::g_crosshair_price.load(std::memory_order_relaxed);
-        ImVec2 left = ImPlot::PlotToPixels(limits.X.Min, crosshair_price);
-        ImVec2 right = ImPlot::PlotToPixels(limits.X.Max, crosshair_price);
-
-        // Draw the horizontal crosshair line as a 1px dashed line with ImGuiCol_TextDisabled color
-        const float h_dash_length = 4.0f;
-        const float h_gap_length = 2.0f;
-        const float h_line_thickness = 1.0f;
-        ImU32 h_line_color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-
-        // Draw horizontal dashed line
-        float current_x = left.x;
-        bool h_draw_segment = true;
-
-        while (current_x < right.x) {
-            float next_x = current_x + (h_draw_segment ? h_dash_length : h_gap_length);
-
-            if (next_x > right.x) {
-                next_x = right.x;
-            }
-
-            if (h_draw_segment) {
-                draw_list->AddLine(
-                    ImVec2(current_x, left.y),
-                    ImVec2(next_x, left.y),
-                    h_line_color, // Horizontal dashed line using ImGuiCol_TextDisabled
-                    h_line_thickness
-                );
-            }
-
-            current_x = next_x;
-            h_draw_segment = !h_draw_segment;
-        }
-      }
-
-      ImPlot::EndPlot();
+      ImPlot::PopColormap();
     }
+
+    // Render Persistent Level Lines OVER the heatmap
+    if (show_persistent_lines_) {
+      renderPersistentLevels();
+    }
+
+    // Render Large Order Markers OVER the heatmap and persistent lines
+    renderLargeOrderMarkers();
+
+    // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
+    renderTradeBubbles();
+
+    // Render Flush DOM Ruler OVER everything else - showing live orderbook at the right edge
+    renderFlushDOMRuler();
+
+    ImPlot::EndPlot();
   }
 
   // Debug Overlay for DOM troubleshooting
-  if (heatmap_data_.size() > 0 && !show_BTQ_layout_) {
+  if (heatmap_data_.size() > 0) {
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
@@ -1065,12 +631,6 @@ void DomSurfacePanel::render() {
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
   }
 
-  // Merge channels back together if we were using background image
-  if (get_use_background_image() && get_background_image() != 0) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->ChannelsMerge();
-  }
-  
   end_panel_window();
 }
 
@@ -1211,90 +771,6 @@ void DomSurfacePanel::render_panel_header() {
   // Call parent implementation to render the default header
   PanelBase::render_panel_header();
 
-  // Create a dummy invisible button to capture right-clicks for the context menu
-  // This ensures the context menu appears when right-clicking anywhere in the header area
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));  // Transparent button
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.2f));  // Slightly highlighted on hover
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.4f, 0.3f));   // More highlighted when active
-  
-  // Invisible button that spans the entire header area to capture right-clicks
-  if (ImGui::InvisibleButton("##DOMHeaderArea", ImVec2(ImGui::GetContentRegionAvail().x, 25.0f))) {
-    // Left click action - could be used for other interactions if needed
-  }
-  
-  // Add context menu for the DOM header area
-  if (ImGui::BeginPopupContextItem("##DOMHeaderArea")) {
-    if (ImGui::MenuItem("Aggregated Heatmap", nullptr, &multi_exchange_aggregation_enabled_)) {
-      // Toggle multi-exchange aggregation
-    }
-
-    // Add exchange selection submenu if multi-exchange aggregation is enabled
-    if (multi_exchange_aggregation_enabled_) {
-      if (ImGui::BeginMenu("Select Exchanges")) {
-        // Get available exchanges from the processor or symbol registry
-        std::vector<std::string> available_exchanges;
-
-        // Try to get exchanges from the processor if available
-        if (processor_) {
-          // Attempt to get exchanges from the processor's symbol registry
-          // This assumes the processor has access to a symbol registry
-          auto& registry = SymbolRegistry::instance();
-          available_exchanges = registry.get_exchanges();
-
-          // If no exchanges were found, use a default list
-          if (available_exchanges.empty()) {
-            available_exchanges = {
-              "Binance", "Coinbase", "Kraken", "Bybit", "OKX", "Bitfinex", "Huobi"
-            };
-          }
-        } else {
-          // Use default exchanges if processor is not available
-          available_exchanges = {
-            "Binance", "Coinbase", "Kraken", "Bybit", "OKX", "Bitfinex", "Huobi"
-          };
-        }
-
-        for (auto& exchange : available_exchanges) {
-          bool is_selected = std::find(selected_exchanges_.begin(), selected_exchanges_.end(), exchange) != selected_exchanges_.end();
-          if (ImGui::MenuItem(exchange.c_str(), nullptr, &is_selected)) {
-            if (is_selected) {
-              // Add exchange to selection if not already present
-              if (std::find(selected_exchanges_.begin(), selected_exchanges_.end(), exchange) == selected_exchanges_.end()) {
-                selected_exchanges_.push_back(exchange);
-              }
-            } else {
-              // Remove exchange from selection
-              selected_exchanges_.erase(
-                std::remove(selected_exchanges_.begin(), selected_exchanges_.end(), exchange),
-                selected_exchanges_.end()
-              );
-            }
-          }
-        }
-        ImGui::EndMenu();
-      }
-    }
-    
-    // Add BTQ layout options to the context menu
-    if (ImGui::BeginMenu("BTQ Layout")) {
-      ImGui::MenuItem("Enable 5-Column Layout", nullptr, &show_BTQ_layout_);
-      ImGui::MenuItem("Center Mode", nullptr, &BTQ_center_mode_);
-      if (ImGui::BeginMenu("Display Levels")) {
-        if (ImGui::MenuItem("5 Levels", nullptr, BTQ_display_levels_ == 5)) BTQ_display_levels_ = 5;
-        if (ImGui::MenuItem("10 Levels", nullptr, BTQ_display_levels_ == 10)) BTQ_display_levels_ = 10;
-        if (ImGui::MenuItem("20 Levels", nullptr, BTQ_display_levels_ == 20)) BTQ_display_levels_ = 20;
-        if (ImGui::MenuItem("30 Levels", nullptr, BTQ_display_levels_ == 30)) BTQ_display_levels_ = 30;
-        if (ImGui::MenuItem("50 Levels", nullptr, BTQ_display_levels_ == 50)) BTQ_display_levels_ = 50;
-        ImGui::EndMenu();
-      }
-      ImGui::EndMenu();
-    }
-
-    ImGui::EndPopup();
-  }
-
-  ImGui::PopStyleColor(3); // Restore button colors
-
   // Add heatmap intensity slider to the panel header
   ImGui::Separator();
   ImGui::Text("Heatmap Intensity:");
@@ -1307,11 +783,10 @@ void DomSurfacePanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
-
+  
   // Add Large Order Tracker controls
   ImGui::Text("Large Order Tracker:");
   ImGui::SameLine();
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderFloat("##Threshold", &large_order_threshold_, 1.0f, 50.0f, "Threshold: %.1fx", ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
@@ -1321,26 +796,11 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::PopItemWidth();
   ImGui::SameLine();
   ImGui::Checkbox("Fade Out", &enable_fade_out_);
-  ImGui::PopStyleVar();
   ImGui::Separator();
-
-  // Add Multi-Exchange Aggregation controls
-  if (multi_exchange_aggregation_enabled_) {
-    ImGui::Text("Multi-Exchange Aggregation:");
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "ACTIVE"); // Green indicator
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Configure##Exchanges")) {
-      // This would open a modal dialog or expand controls, but for now we'll just show the context menu
-      ImGui::OpenPopup("##DOMHeaderArea");
-    }
-    ImGui::Separator();
-  }
-
+  
   // Add Persistent Level controls
   ImGui::Text("Persistent Levels:");
   ImGui::SameLine();
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 1000, 30000, "%d ms");
   ImGui::PopItemWidth();
@@ -1348,7 +808,6 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::PushItemWidth(150);
   ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 10000, 120000, "%d ms");
   ImGui::PopItemWidth();
-  ImGui::PopStyleVar();
   ImGui::Separator();
 
   // Add Flush DOM Ruler controls
@@ -1356,21 +815,9 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::SameLine();
   ImGui::Checkbox("Show##FlushDOMRuler", &show_flush_dom_ruler_);
   ImGui::SameLine();
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 0));
   ImGui::PushItemWidth(150);
   ImGui::SliderFloat("Width##FlushDOMRuler", &flush_dom_ruler_width_, 0.01f, 0.2f, "%.2f%%", ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
-  ImGui::PopStyleVar();
-  ImGui::Separator();
-
-  // Add BTQ Layout controls
-  ImGui::Text("BTQ Layout:");
-  ImGui::SameLine();
-  ImGui::Checkbox("Show##BTQLayout", &show_BTQ_layout_);
-  ImGui::SameLine();
-  if (show_BTQ_layout_) {
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "ACTIVE"); // Cyan indicator when active
-  }
   ImGui::Separator();
 }
 
@@ -1378,746 +825,6 @@ void DomSurfacePanel::renderFlushDOMRuler() {
   // TODO: Implement Flush DOM Ruler rendering
   // This function should render the live orderbook at the right edge of the heatmap panel
   // For now, this is a stub implementation
-}
-
-void DomSurfacePanel::initializeVulkanTexture() {
-  // This method would be called when we have access to the VulkanCore
-  // For now, we'll implement it assuming we have access to vulkan_core_
-  if (!vulkan_core_ || texture_initialized_) {
-    return;
-  }
-
-  try {
-    // If we have the LOB heatmap compute pipeline, use its output texture
-    if (lob_heatmap_pipeline_) {
-      // Get the output image from the compute pipeline
-      // Create an ImageAllocation struct with the appropriate values
-      heatmap_texture_.image = lob_heatmap_pipeline_->get_output_image();
-      heatmap_texture_.memory = lob_heatmap_pipeline_->get_output_image_memory();
-      heatmap_texture_.view = lob_heatmap_pipeline_->get_output_image_view();
-      heatmap_texture_.format = VK_FORMAT_R32G32B32A32_SFLOAT; // Same as used in the pipeline
-      heatmap_texture_.width = 1024; // Default size, should match pipeline initialization
-      heatmap_texture_.height = 1024;
-      heatmap_texture_.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-      
-      heatmap_image_view_ = lob_heatmap_pipeline_->get_output_image_view();
-      heatmap_sampler_ = lob_heatmap_pipeline_->get_output_sampler();
-    } else {
-      // Fallback: Allocate a texture for the heatmap (initial size, will be resized as needed)
-      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-
-      uint32_t width = 1024;  // Default width
-      uint32_t height = 1024; // Default height
-
-      heatmap_texture_ = memory_manager.allocate_image(
-          width, height,
-          VK_FORMAT_R32G32B32A32_SFLOAT,  // Format for heatmap data
-          VK_IMAGE_TILING_OPTIMAL,
-          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-      );
-
-      // Create image view for the heatmap texture
-      VkImageViewCreateInfo view_info = {};
-      view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-      view_info.image = heatmap_texture_.image;
-      view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-      view_info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-      view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      view_info.subresourceRange.baseMipLevel = 0;
-      view_info.subresourceRange.levelCount = 1;
-      view_info.subresourceRange.baseArrayLayer = 0;
-      view_info.subresourceRange.layerCount = 1;
-
-      VkResult result = vkCreateImageView(vulkan_core_->get_device(), &view_info, nullptr, &heatmap_image_view_);
-      if (result != VK_SUCCESS) {
-          throw std::runtime_error("Failed to create image view for heatmap texture");
-      }
-
-      // Create sampler for the heatmap texture
-      VkSamplerCreateInfo sampler_info = {};
-      sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-      sampler_info.magFilter = VK_FILTER_LINEAR;
-      sampler_info.minFilter = VK_FILTER_LINEAR;
-      sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      sampler_info.anisotropyEnable = VK_FALSE;
-      sampler_info.maxAnisotropy = 1.0f;
-      sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-      sampler_info.unnormalizedCoordinates = VK_FALSE;
-      sampler_info.compareEnable = VK_FALSE;
-      sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-      sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-
-      result = vkCreateSampler(vulkan_core_->get_device(), &sampler_info, nullptr, &heatmap_sampler_);
-      if (result != VK_SUCCESS) {
-          throw std::runtime_error("Failed to create sampler for heatmap texture");
-      }
-    }
-
-    // Register the texture with ImGui using ImGui_ImplVulkan_AddTexture
-    // This creates a descriptor set that can be used with ImGui
-    VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(
-        heatmap_sampler_,
-        heatmap_image_view_,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  // Use appropriate layout for reading in fragment shader
-    );
-    
-    // Convert the descriptor set to ImTextureID (they are typically the same in newer ImGui versions)
-    heatmap_texture_id_ = (ImTextureID)(intptr_t)descriptor_set;
-
-    texture_initialized_ = true;
-    std::cout << "[DomSurfacePanel] Vulkan texture initialized successfully" << std::endl;
-  } catch (const std::exception& e) {
-    std::cerr << "[DomSurfacePanel] Failed to initialize Vulkan texture: " << e.what() << std::endl;
-    texture_initialized_ = false;
-  }
-}
-
-void DomSurfacePanel::updateVulkanTexture() {
-  if (!texture_initialized_) {
-    return;
-  }
-
-  // Calculate dimensions based on heatmap data
-  int rows = price_bins_;
-  int cols = static_cast<int>(heatmap_data_.size()) / rows;
-
-  if (rows <= 0 || cols <= 0) {
-    return; // Invalid dimensions
-  }
-
-  try {
-    // If we have the LOB heatmap compute pipeline, use it to dispatch the shader
-    if (lob_heatmap_pipeline_) {
-      // Update the pipeline parameters based on current data
-      lob_heatmap_pipeline_->update_parameters(cols, rows, scale_max_ / heatmap_intensity_);
-      
-      // Get a command buffer to dispatch the compute shader
-      VkCommandBuffer command_buffer = vulkan_core_->begin_single_time_commands();
-      
-      // Get descriptor sets for the compute pipeline
-      // These would come from the SSBO snapshot updater and other resources
-      VkDescriptorSet orderbook_descriptor_set = VK_NULL_HANDLE;
-      VkDescriptorSet atomic_depth_descriptor_set = VK_NULL_HANDLE;
-      VkDescriptorSet output_image_descriptor_set = VK_NULL_HANDLE;
-      
-      // Get the orderbook descriptor set from the SSBO snapshot updater if available
-      if (ssbo_snapshot_updater_) {
-          orderbook_descriptor_set = ssbo_snapshot_updater_->get_descriptor_set();
-      }
-      
-      // For now, we'll use the output image from the compute pipeline directly
-      // The pipeline handles its own output image descriptor set internally
-      
-      // Dispatch the compute pipeline to generate the heatmap
-      lob_heatmap_pipeline_->dispatch(command_buffer, cols, rows);
-      
-      // End the command buffer
-      vulkan_core_->end_single_time_commands(command_buffer);
-      
-      std::cout << "[DomSurfacePanel] Dispatched LOB heatmap compute shader with Viridis/Magma gradient" << std::endl;
-    } else {
-      // Fallback: Prepare heatmap data for GPU upload (CPU-based approach)
-      if (heatmap_data_.empty()) {
-        return; // Nothing to update
-      }
-
-      // Get Vulkan device and memory manager
-      VkDevice device = vulkan_core_->get_device();
-      GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-
-      // Prepare heatmap data for GPU upload
-      // Convert double values to RGBA float format for the texture
-      std::vector<float> texture_data(rows * cols * 4, 0.0f); // 4 channels (RGBA)
-
-      // Map heatmap values to color based on intensity and colormap
-      double max_val = scale_max_ / heatmap_intensity_;
-      if (max_val <= 0.0) max_val = 1.0; // Prevent division by zero
-
-      for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-          size_t idx = i * cols + j;
-          double val = (idx < heatmap_data_.size()) ? heatmap_data_[idx] : 0.0;
-
-          // Normalize value to [0, 1]
-          float norm_val = static_cast<float>(std::min(val / max_val, 1.0));
-
-          // Map to Viridis-like color (simplified)
-          // This is a simplified approximation of the Viridis colormap
-          float r = std::min(1.0f, 0.8f * norm_val);
-          float g = std::min(1.0f, 0.9f * norm_val * norm_val);
-          float b = std::min(1.0f, norm_val * norm_val * norm_val);
-          float a = norm_val; // Alpha based on intensity
-
-          // Set RGBA values
-          size_t tex_idx = (i * cols + j) * 4;
-          texture_data[tex_idx + 0] = r; // R
-          texture_data[tex_idx + 1] = g; // G
-          texture_data[tex_idx + 2] = b; // B
-          texture_data[tex_idx + 3] = a; // A
-        }
-      }
-
-      // Upload data to the GPU texture
-      // This would typically involve:
-      // 1. Creating a staging buffer
-      // 2. Copying data to the staging buffer
-      // 3. Submitting a command buffer to copy from staging to the texture
-      // 4. Properly transitioning image layouts
-
-      // For now, we'll just log that the update should happen
-      std::cout << "[DomSurfacePanel] Prepared " << rows << "x" << cols
-                << " texture data for GPU upload (fallback)" << std::endl;
-    }
-
-  } catch (const std::exception& e) {
-    std::cerr << "[DomSurfacePanel] Failed to update Vulkan texture: " << e.what() << std::endl;
-  }
-}
-
-void DomSurfacePanel::destroyVulkanTexture() {
-  if (texture_initialized_ && vulkan_core_) {
-    try {
-      // Remove the texture from ImGui's texture registry if needed
-      // Note: ImGui_ImplVulkan_RemoveTexture is available but typically not needed
-      // as the descriptor sets are managed by the pool
-
-      // If we're using the compute pipeline's texture, don't destroy it here
-      // since the compute pipeline manages its own resources
-      if (!lob_heatmap_pipeline_) {
-        // Destroy sampler
-        if (heatmap_sampler_ != VK_NULL_HANDLE) {
-          vkDestroySampler(vulkan_core_->get_device(), heatmap_sampler_, nullptr);
-          heatmap_sampler_ = VK_NULL_HANDLE;
-        }
-
-        // Destroy image view
-        if (heatmap_image_view_ != VK_NULL_HANDLE) {
-          vkDestroyImageView(vulkan_core_->get_device(), heatmap_image_view_, nullptr);
-          heatmap_image_view_ = VK_NULL_HANDLE;
-        }
-
-        // Deallocate the image
-        GPUMemoryManager& memory_manager = vulkan_core_->get_memory_manager();
-        memory_manager.deallocate_image(heatmap_texture_);
-      }
-
-      texture_initialized_ = false;
-      std::cout << "[DomSurfacePanel] Vulkan texture destroyed successfully" << std::endl;
-    } catch (const std::exception& e) {
-      std::cerr << "[DomSurfacePanel] Failed to destroy Vulkan texture: " << e.what() << std::endl;
-    }
-  }
-}
-
-void DomSurfacePanel::updateSSBOSnapshotBuffer() {
-  if (!processor_ || !vulkan_core_) {
-    return; // Cannot update without processor or Vulkan core
-  }
-
-  try {
-    // Get the latest snapshots from the market data processor
-    size_t snapshot_count = 100; // Get up to 100 most recent snapshots
-    std::vector<RenderEngine::OrderBookSnapshot> snapshots = processor_->getOrderBookSnapshots(snapshot_count);
-    
-    if (snapshots.empty()) {
-      return; // Nothing to update
-    }
-
-    // Initialize the SSBO snapshot updater if not already done
-    if (!ssbo_snapshot_updater_) {
-      ssbo_snapshot_updater_ = std::make_unique<SSBOSnapshotUpdater>(vulkan_core_.get());
-      ssbo_snapshot_updater_->initialize(snapshot_count); // Initialize with capacity for snapshot_count snapshots
-    }
-
-    // Update the SSBO with the latest snapshots
-    ssbo_snapshot_updater_->updateSSBO(snapshots);
-    
-    std::cout << "[DomSurfacePanel] SSBO updated with " << snapshots.size() << " snapshots" << std::endl;
-    
-  } catch (const std::exception& e) {
-    std::cerr << "[DomSurfacePanel] Failed to update SSBO snapshot buffer: " << e.what() << std::endl;
-  }
-}
-
-void DomSurfacePanel::initialize_vulkan_resources(VulkanCore* core) {
-  if (!core) return;
-
-  // Store the VulkanCore reference for SSBO updates and other Vulkan operations
-  vulkan_core_ = std::shared_ptr<VulkanCore>(core, [](VulkanCore*){});
-
-  std::cout << "[DomSurfacePanel] Vulkan resources initialized successfully" << std::endl;
-}
-
-void DomSurfacePanel::updateBTQLayoutData() {
-  // Update data for the 5-column BTQ layout
-  // This method prepares the data needed for the BTQ-style table view
-  if (current_symbol_id_ == 0 || !processor_) return;
-
-  // Get the latest orderbook data for the current symbol
-  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
-  if (!orderbook_opt) return;
-
-  const auto& orderbook = *orderbook_opt;
-  
-  // The data is already available in the orderbook, so we just need to prepare for rendering
-  // The BTQ layout will render the orderbook data in 5 columns: [Buys | Asks | Price | Bids | Sells]
-}
-
-void DomSurfacePanel::renderHorizontalVolumeBars(ImDrawList* draw_list, ImVec2 pos, float width, float height, 
-                                                 double buy_volume, double sell_volume, 
-                                                 double max_possible_volume) {
-  // Calculate normalized bar widths based on volumes
-  float normalized_buy_width = 0.0f;
-  float normalized_sell_width = 0.0f;
-  
-  if (max_possible_volume > 0.0) {
-    normalized_buy_width = static_cast<float>(buy_volume / max_possible_volume) * width;
-    normalized_sell_width = static_cast<float>(sell_volume / max_possible_volume) * width;
-  }
-  
-  // Draw buy volume bar (green, extending right from the left side)
-  ImVec2 buy_bar_start = ImVec2(pos.x, pos.y);
-  ImVec2 buy_bar_end = ImVec2(pos.x + normalized_buy_width, pos.y + height);
-  if (normalized_buy_width > 0) {
-    draw_list->AddRectFilled(buy_bar_start, buy_bar_end, IM_COL32(0, 255, 0, 100)); // Green with transparency
-  }
-  
-  // Draw sell volume bar (red, extending left from the right side)
-  ImVec2 sell_bar_start = ImVec2(pos.x + width - normalized_sell_width, pos.y);
-  ImVec2 sell_bar_end = ImVec2(pos.x + width, pos.y + height);
-  if (normalized_sell_width > 0) {
-    draw_list->AddRectFilled(sell_bar_start, sell_bar_end, IM_COL32(255, 0, 0, 100)); // Red with transparency
-  }
-}
-
-void DomSurfacePanel::renderBTQLayout() {
-  // Render the 5-column BTQ layout as a table
-  if (current_symbol_id_ == 0 || !processor_) return;
-
-  // Get the latest orderbook data for the current symbol
-  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
-  if (!orderbook_opt) {
-    ImGui::Text("No orderbook data available");
-    return;
-  }
-
-  const auto& orderbook = *orderbook_opt;
-
-  // Calculate how many levels to display
-  int display_levels = std::min(BTQ_display_levels_, static_cast<int>(std::max(orderbook.bids.size(), orderbook.asks.size()))); // Use a reasonable default
-
-  // Create the 5-column table
-  if (ImGui::BeginTable("BTQLayoutTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)) {
-    ImGui::TableSetupColumn("Buys", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-    ImGui::TableSetupColumn("Asks", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-    ImGui::TableSetupColumn("Bids", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-    ImGui::TableSetupColumn("Sells", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-
-    ImGui::TableHeadersRow();
-
-    // Calculate midpoint price for reference
-    double mid_price = 0.0;
-    if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
-      mid_price = (orderbook.bids.front().price + orderbook.asks.front().price) / 2.0;
-    } else if (!orderbook.bids.empty()) {
-      mid_price = orderbook.bids.front().price;
-    } else if (!orderbook.asks.empty()) {
-      mid_price = orderbook.asks.front().price;
-    }
-
-    // Find maximum volume for normalization across all displayed levels
-    double max_volume = 0.0;
-    for (int i = 0; i < display_levels; ++i) {
-      if (i < orderbook.bids.size()) {
-        max_volume = std::max(max_volume, orderbook.bids[i].size);
-      }
-      if (i < orderbook.asks.size()) {
-        max_volume = std::max(max_volume, orderbook.asks[i].size);
-      }
-    }
-
-    // Render the orderbook levels in the 5-column format
-    for (int i = 0; i < display_levels; ++i) {
-      ImGui::TableNextRow();
-
-      // Column 1: Buys (aggregated buy volume from recent trades)
-      ImGui::TableSetColumnIndex(0);
-      if (i < orderbook.bids.size()) {
-        // Calculate buy pressure based on bid size and recent trades
-        double buy_pressure = orderbook.bids[i].size; // Placeholder for actual buy pressure calculation
-
-        // Get cumulative buy volume from ClusterEngine if available
-        double cumulative_buy_volume = 0.0;
-        if (cluster_engine_) {
-          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.bids[i].price / cluster_engine_->get_tick_size()));
-          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
-
-          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
-            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
-              cumulative_buy_volume += time_bucket.getBuyVolume();
-            }
-          }
-        }
-
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-        ImGui::Text("%.4f", cumulative_buy_volume > 0 ? cumulative_buy_volume : buy_pressure);
-        ImGui::PopStyleColor();
-
-        // Render cumulative volume bar extending right for buys using helper function
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
-        float max_bar_width = 100.0f; // Maximum width for the bar
-
-        // Calculate normalized volume for the bar width based on cumulative volume if available
-        double volume_for_bar = cumulative_buy_volume > 0 ? cumulative_buy_volume : buy_pressure;
-        
-        // Use the helper function to render horizontal bars
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        renderHorizontalVolumeBars(draw_list,
-                                  ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2),
-                                  max_bar_width,
-                                  bar_height,
-                                  volume_for_bar,  // buy volume
-                                  0.0,             // no sell volume in this column
-                                  max_volume);
-      } else {
-        ImGui::Text("--");
-      }
-
-      // Column 2: Asks (from orderbook asks)
-      ImGui::TableSetColumnIndex(1);
-      if (i < orderbook.asks.size()) {
-        // Show ask volume in red
-        double ask_volume = orderbook.asks[i].size;
-
-        // Get cumulative sell volume from ClusterEngine if available
-        double cumulative_sell_volume = 0.0;
-        if (cluster_engine_) {
-          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.asks[i].price / cluster_engine_->get_tick_size()));
-          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
-
-          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
-            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
-              cumulative_sell_volume += time_bucket.getSellVolume();
-            }
-          }
-        }
-
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
-        ImGui::Text("%.4f", cumulative_sell_volume > 0 ? cumulative_sell_volume : ask_volume);
-        ImGui::PopStyleColor();
-
-        // Render cumulative volume bar extending left for sells using helper function
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
-        float max_bar_width = 100.0f; // Maximum width for the bar
-
-        // Calculate normalized volume for the bar width based on cumulative volume if available
-        double volume_for_bar = cumulative_sell_volume > 0 ? cumulative_sell_volume : ask_volume;
-        
-        // Use the helper function to render horizontal bars
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        renderHorizontalVolumeBars(draw_list,
-                                  ImVec2(pos.x - max_bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2),
-                                  max_bar_width,
-                                  bar_height,
-                                  0.0,             // no buy volume in this column
-                                  volume_for_bar,  // sell volume
-                                  max_volume);
-      } else {
-        ImGui::Text("--");
-      }
-
-      // Column 3: Price (center column - actual price level)
-      ImGui::TableSetColumnIndex(2);
-      // Show the price in the middle - this represents the actual price level
-      if (i < orderbook.bids.size() && i < orderbook.asks.size()) {
-        // Average of bid and ask at this level
-        double avg_price = (orderbook.bids[i].price + orderbook.asks[i].price) / 2.0;
-        // Highlight if center mode is active and this is near the center
-        if (BTQ_center_mode_) {
-          double center_price = (orderbook.bids.front().price + orderbook.asks.front().price) / 2.0;
-          double range = center_price * BTQ_center_range_;
-          if (avg_price >= (center_price - range) && avg_price <= (center_price + range)) {
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255)); // Yellow for center
-          }
-        }
-        ImGui::Text("%.4f", avg_price);
-        if (BTQ_center_mode_) {
-          ImGui::PopStyleColor(); // Pop the yellow color if we pushed it
-        }
-      } else if (i < orderbook.bids.size()) {
-        // Only bid exists at this level
-        ImGui::Text("%.4f", orderbook.bids[i].price);
-      } else if (i < orderbook.asks.size()) {
-        // Only ask exists at this level
-        ImGui::Text("%.4f", orderbook.asks[i].price);
-      } else {
-        ImGui::Text("--");
-      }
-
-      // Column 4: Bids (from orderbook bids)
-      ImGui::TableSetColumnIndex(3);
-      if (i < orderbook.bids.size()) {
-        // Show bid volume in green
-        double bid_volume = orderbook.bids[i].size;
-
-        // Get cumulative bid volume from ClusterEngine if available
-        double cumulative_bid_volume = 0.0;
-        if (cluster_engine_) {
-          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.bids[i].price / cluster_engine_->get_tick_size()));
-          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
-
-          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
-            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
-              cumulative_bid_volume += time_bucket.getBuyVolume();
-            }
-          }
-        }
-
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-        ImGui::Text("%.4f", cumulative_bid_volume > 0 ? cumulative_bid_volume : bid_volume);
-        ImGui::PopStyleColor();
-
-        // Render cumulative volume bar extending right for bids using helper function
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
-        float max_bar_width = 100.0f; // Maximum width for the bar
-
-        // Calculate normalized volume for the bar width based on cumulative volume if available
-        double volume_for_bar = cumulative_bid_volume > 0 ? cumulative_bid_volume : bid_volume;
-        
-        // Use the helper function to render horizontal bars
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        renderHorizontalVolumeBars(draw_list,
-                                  ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2),
-                                  max_bar_width,
-                                  bar_height,
-                                  volume_for_bar,  // buy volume
-                                  0.0,             // no sell volume in this column
-                                  max_volume);
-      } else {
-        ImGui::Text("--");
-      }
-
-      // Column 5: Sells (aggregated sell volume from recent trades)
-      ImGui::TableSetColumnIndex(4);
-      if (i < orderbook.asks.size()) {
-        // Calculate sell pressure based on ask size and recent trades
-        double sell_pressure = orderbook.asks[i].size; // Placeholder for actual sell pressure calculation
-
-        // Get cumulative sell volume from ClusterEngine if available
-        double cumulative_sell_volume_col5 = 0.0;
-        if (cluster_engine_) {
-          int64_t tick_index = static_cast<int64_t>(std::round(orderbook.asks[i].price / cluster_engine_->get_tick_size()));
-          int64_t relative_index = tick_index - cluster_engine_->get_min_tick_index();
-
-          if (relative_index >= 0 && static_cast<size_t>(relative_index) < cluster_engine_->getClusterCanvas().size()) {
-            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_index]) {
-              cumulative_sell_volume_col5 += time_bucket.getSellVolume();
-            }
-          }
-        }
-
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255));
-        ImGui::Text("%.4f", cumulative_sell_volume_col5 > 0 ? cumulative_sell_volume_col5 : sell_pressure);
-        ImGui::PopStyleColor();
-
-        // Render cumulative volume bar extending left for sells using helper function
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        float bar_height = ImGui::GetTextLineHeight() * 0.8f;
-        float max_bar_width = 100.0f; // Maximum width for the bar
-
-        // Calculate normalized volume for the bar width based on cumulative volume if available
-        double volume_for_bar = cumulative_sell_volume_col5 > 0 ? cumulative_sell_volume_col5 : sell_pressure;
-        
-        // Use the helper function to render horizontal bars
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        renderHorizontalVolumeBars(draw_list,
-                                  ImVec2(pos.x - max_bar_width, pos.y + (ImGui::GetTextLineHeight() - bar_height) / 2),
-                                  max_bar_width,
-                                  bar_height,
-                                  0.0,                    // no buy volume in this column
-                                  volume_for_bar,         // sell volume
-                                  max_volume);
-      } else {
-        ImGui::Text("--");
-      }
-    }
-
-    ImGui::EndTable();
-  }
-
-  // Add controls for the BTQ layout
-  ImGui::Separator();
-  ImGui::Text("BTQ Layout Controls:");
-  ImGui::SameLine();
-  ImGui::PushItemWidth(100);
-  ImGui::SliderInt("##Levels", &BTQ_display_levels_, 5, 50, "Levels: %d");
-  ImGui::PopItemWidth();
-  ImGui::SameLine();
-  ImGui::Checkbox("Center##BTQCenter", &BTQ_center_mode_);
-  ImGui::SameLine();
-  if (ImGui::Button("Refresh")) {
-    markDirty();
-  }
-
-  // Add center mode range control if center mode is enabled
-  if (BTQ_center_mode_) {
-    ImGui::Separator();
-    ImGui::Text("Center Mode Range:");
-    ImGui::SameLine();
-    ImGui::PushItemWidth(150);
-    ImGui::SliderFloat("##CenterRange", reinterpret_cast<float*>(&BTQ_center_range_), 0.001f, 0.1f, "%.3f", ImGuiSliderFlags_Logarithmic);
-    ImGui::PopItemWidth();
-    ImGui::SameLine();
-    ImGui::Text("(%.2f%%)", BTQ_center_range_ * 100);
-  }
-
-  // Display cumulative volume information from ClusterEngine if available
-  if (cluster_engine_) {
-    ImGui::Separator();
-    ImGui::Text("Cumulative Volume Data:");
-
-    // Show a simple representation of cumulative volume data
-    const auto& cluster_canvas = cluster_engine_->getClusterCanvas();
-    if (!cluster_canvas.empty()) {
-      // Show some summary statistics
-      double total_buy_volume = 0.0;
-      double total_sell_volume = 0.0;
-
-      for (const auto& price_level : cluster_canvas) {
-        for (const auto& time_bucket : price_level) {
-          // Access the data without mutex since we're just reading using atomic operations
-          total_buy_volume += time_bucket.getBuyVolume();
-          total_sell_volume += time_bucket.getSellVolume();
-        }
-      }
-
-      ImGui::Text("Total Buy Volume: %.2f", total_buy_volume);
-      ImGui::Text("Total Sell Volume: %.2f", total_sell_volume);
-      ImGui::Text("Net Delta: %.2f", total_buy_volume - total_sell_volume);
-    }
-
-    // Enhanced cumulative volume columns rendering
-    ImGui::Separator();
-    ImGui::Text("Cumulative Volume Columns:");
-
-    // Render cumulative volume bars for each price level
-    if (cluster_engine_) {
-      // Calculate the current viewport to determine which price levels to display
-      // Get the current orderbook to determine the price range
-      auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
-      if (orderbook_opt) {
-        const auto& orderbook = *orderbook_opt;
-
-        // Determine the price range to display
-        double min_price = std::numeric_limits<double>::max();
-        double max_price = std::numeric_limits<double>::lowest();
-
-        for (const auto& bid : orderbook.bids) {
-          min_price = std::min(min_price, bid.price);
-          max_price = std::max(max_price, bid.price);
-        }
-        for (const auto& ask : orderbook.asks) {
-          min_price = std::min(min_price, ask.price);
-          max_price = std::max(max_price, ask.price);
-        }
-
-        // Add some padding to the range
-        double price_range = max_price - min_price;
-        if (price_range > 0) {
-          min_price -= price_range * 0.1;
-          max_price += price_range * 0.1;
-        } else {
-          // Fallback if no price range
-          if (!orderbook.bids.empty()) {
-            min_price = orderbook.bids.front().price * 0.99;
-            max_price = orderbook.bids.front().price * 1.01;
-          } else if (!orderbook.asks.empty()) {
-            min_price = orderbook.asks.front().price * 0.99;
-            max_price = orderbook.asks.front().price * 1.01;
-          }
-        }
-
-        // Calculate the conversion factor from price to index
-        int64_t min_tick_index = static_cast<int64_t>(std::round(min_price / cluster_engine_->get_tick_size()));
-        int64_t max_tick_index = static_cast<int64_t>(std::round(max_price / cluster_engine_->get_tick_size()));
-
-        // Calculate cumulative volumes for the displayed price levels
-        std::vector<std::pair<double, std::pair<double, double>>> cumulative_data; // {price, {cumulative_buy, cumulative_sell}}
-
-        // Iterate through the price levels in the cluster canvas that correspond to our display range
-        for (int64_t tick_idx = min_tick_index; tick_idx <= max_tick_index; ++tick_idx) {
-          int64_t relative_idx = tick_idx - cluster_engine_->get_min_tick_index();
-
-          if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < cluster_engine_->getClusterCanvas().size()) {
-            // Calculate cumulative volumes for this price level across all time buckets
-            double level_buy_volume = 0.0;
-            double level_sell_volume = 0.0;
-
-            for (const auto& time_bucket : cluster_engine_->getClusterCanvas()[relative_idx]) {
-              level_buy_volume += time_bucket.getBuyVolume();
-              level_sell_volume += time_bucket.getSellVolume();
-            }
-
-            double price = tick_idx * cluster_engine_->get_tick_size();
-            cumulative_data.push_back({price, {level_buy_volume, level_sell_volume}});
-          }
-        }
-
-        // Render the cumulative volume bars
-        if (!cumulative_data.empty()) {
-          // Find the maximum cumulative volume for normalization
-          double max_volume = 0.0;
-          for (const auto& data : cumulative_data) {
-            max_volume = std::max(max_volume, std::max(data.second.first, data.second.second));
-          }
-
-          if (max_volume > 0.0) {
-            // Create a child window to contain the cumulative volume visualization
-            ImGui::BeginChild("CumulativeVolumeVisualization", ImVec2(0, 200), true);
-
-            // Draw the cumulative volume bars
-            for (const auto& data : cumulative_data) {
-              double price = data.first;
-              double buy_vol = data.second.first;
-              double sell_vol = data.second.second;
-
-              // Calculate bar widths based on volumes
-              float bar_width = 200.0f; // Maximum width for both bars
-
-              // Draw the price label
-              ImGui::Text("%.2f", price);
-              ImGui::SameLine();
-
-              // Draw buy and sell volume bars using the helper function
-              ImVec2 pos = ImGui::GetCursorScreenPos();
-              ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-              // Call the helper function to render horizontal bars
-              renderHorizontalVolumeBars(draw_list,
-                                        ImVec2(pos.x, pos.y + (ImGui::GetTextLineHeight() - ImGui::GetTextLineHeight() * 0.6f) / 2),
-                                        bar_width,
-                                        ImGui::GetTextLineHeight() * 0.6f,
-                                        buy_vol,
-                                        sell_vol,
-                                        max_volume);
-
-              // Add some spacing
-              ImGui::Dummy(ImVec2(0, ImGui::GetTextLineHeight() * 0.2f));
-            }
-
-            ImGui::EndChild();
-          }
-        }
-      }
-    }
-  }
 }
 
 }  // namespace BTQuant

@@ -1,30 +1,24 @@
 #include "../../include/components/chart_panel.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <iostream>
-#include <limits>
 #include <numeric>
 #include <optional>
+#include <limits>
 
-#include "../../include/analytics/volume_calculator.hpp"
-#include "../../include/components/chart_panel_settings.hpp"
-#include "../../include/components/drawing_tools.hpp"
-#include "../../include/components/historical_time_sales.hpp"
-#include "../../include/components/interaction_manager.hpp"
-#include "../../include/components/quant_workspace_component.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
-#include "../../include/data/TradeData.h"
-#include "../../include/indicators/anchored_vwap.hpp"
-#include "../../include/indicators/session_vwap.hpp"
-#include "../../include/symbol_registry.hpp"
+#include "../../include/components/interaction_manager.hpp"
+#include "../../include/components/historical_time_sales.hpp"
 #include "../../include/trading/trade_command_queue.hpp"
-#include "../../include/ui/font_manager.hpp"  // Include font manager for monospaced font
 #include "imgui.h"
 #include "implot.h"
 #include "implot_internal.h"
+#include "../../include/indicators/anchored_vwap.hpp"
+#include "../../include/indicators/session_vwap.hpp"
+#include "../../include/components/drawing_tools.hpp"
+#include "../../include/components/chart_panel_settings.hpp"
 
 namespace BTQuant {
 
@@ -52,20 +46,20 @@ void ChartPanel::calculate_all_indicators(const ChartInstance& chart) {
   // Calculate Bollinger Bands
   if (indicator_config_.show_bollinger) {
     calculate_cached_bollinger_bands(chart.closes, indicator_config_.bollinger_period,
-                                     indicator_config_.bollinger_std_dev);
+                                   indicator_config_.bollinger_std_dev);
   }
 
   // Calculate MACD
   if (indicator_config_.show_macd) {
     calculate_cached_macd(chart.closes, indicator_config_.macd_fast_period,
-                          indicator_config_.macd_slow_period, indicator_config_.macd_signal_period);
+                        indicator_config_.macd_slow_period, indicator_config_.macd_signal_period);
   }
 
   // Calculate Stochastic
   if (indicator_config_.show_stochastic) {
     calculate_cached_stochastic(chart.highs, chart.lows, chart.closes,
-                                indicator_config_.stochastic_k_period,
-                                indicator_config_.stochastic_d_period);
+                              indicator_config_.stochastic_k_period,
+                              indicator_config_.stochastic_d_period);
   }
 
   // Calculate ATR
@@ -123,18 +117,11 @@ static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
   }
 }
 
-// DEPRECATED - Legacy hotspine
 ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                       ChartManager* chart_manager, std::shared_ptr<ChartSuperNode> super_node,
-                       PanelManager* panel_manager, TradingInterface* trading_interface)
-    : PanelBase(config),
-      bridge_(bridge),
-      processor_(processor),
-      chart_manager_(chart_manager),
-      super_node_(super_node),
-      panel_manager_(panel_manager),
-      trading_interface_(trading_interface) {
+                       ChartManager* chart_manager,
+                       PanelManager* panel_manager)
+    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 
@@ -146,10 +133,8 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
     hts_config.position = ImVec2(100, 100);
     hts_config.size = ImVec2(600, 400);
 
-    historical_time_sales_panel_ =
-        std::make_shared<HistoricalTimeSalesPanel>(hts_config, bridge_, processor_);
-    historical_time_sales_panel_->set_symbol(chart_manager_->getSymbolId(symbol_).value_or(0),
-                                             symbol_);
+    historical_time_sales_panel_ = std::make_shared<HistoricalTimeSalesPanel>(hts_config, bridge_, processor_);
+    historical_time_sales_panel_->set_symbol(chart_manager_->getSymbolId(symbol_).value_or(0), symbol_);
   }
 
   // Initialize drawing tools manager
@@ -159,132 +144,93 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
   settings_ = std::make_unique<ChartPanelSettings>(static_cast<void*>(this));
 }
 
-ChartPanel::~ChartPanel() {
-  // Unsubscribe from MarketDataProcessor if we have an active subscription
-  if (processor_ && subscription_id_ != 0) {
-    processor_->unsubscribe(subscription_id_);
-    subscription_id_ = 0;
-  }
-
-  // Clean up the indicator renderer
-  if (indicator_renderer_) {
-    delete indicator_renderer_;
-    indicator_renderer_ = nullptr;
-  }
-}
-
 void ChartPanel::initialize_active_indicators() {
   // Clear existing indicators
   active_indicators_.clear();
 
   // Add SMA indicators - Required: (9,20,50,200)
   if (indicator_config_.show_sma_9) {
-    active_indicators_.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 9.0f;
   }
   if (indicator_config_.show_sma_20) {
-    active_indicators_.emplace_back("SMA 20", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("SMA 20", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 20.0f;
   }
   if (indicator_config_.show_sma_50) {
-    active_indicators_.emplace_back("SMA 50", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("SMA 50", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 50.0f;
   }
   if (indicator_config_.show_sma_200) {
-    active_indicators_.emplace_back("SMA 200", true, ImVec4(0.5f, 0.0f, 0.5f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("SMA 200", true, ImVec4(0.5f, 0.0f, 0.5f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 200.0f;
   }
 
   // Add EMA indicators - Required: (9,21,50,200)
   if (indicator_config_.show_ema_9) {
-    active_indicators_.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 9.0f;
   }
   if (indicator_config_.show_ema_21) {
-    active_indicators_.emplace_back("EMA 21", true, ImVec4(0.0f, 0.75f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("EMA 21", true, ImVec4(0.0f, 0.75f, 1.0f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 21.0f;
   }
   if (indicator_config_.show_ema_50) {
-    active_indicators_.emplace_back("EMA 50", true, ImVec4(0.25f, 0.41f, 0.88f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("EMA 50", true, ImVec4(0.25f, 0.41f, 0.88f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 50.0f;
   }
   if (indicator_config_.show_ema_200) {
-    active_indicators_.emplace_back("EMA 200", true, ImVec4(0.29f, 0.0f, 0.51f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("EMA 200", true, ImVec4(0.29f, 0.0f, 0.51f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 200.0f;
   }
 
   // Add RSI indicator
   if (indicator_config_.show_rsi) {
-    active_indicators_.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
-                                    next_indicator_id_++);
-    active_indicators_.back().parameters["period"] =
-        static_cast<float>(indicator_config_.rsi_period);
+    active_indicators_.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f), next_indicator_id_++);
+    active_indicators_.back().parameters["period"] = static_cast<float>(indicator_config_.rsi_period);
   }
 
   // Add MACD indicator
   if (indicator_config_.show_macd) {
-    active_indicators_.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
-    active_indicators_.back().parameters["fast_period"] =
-        static_cast<float>(indicator_config_.macd_fast_period);
-    active_indicators_.back().parameters["slow_period"] =
-        static_cast<float>(indicator_config_.macd_slow_period);
-    active_indicators_.back().parameters["signal_period"] =
-        static_cast<float>(indicator_config_.macd_signal_period);
+    active_indicators_.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
+    active_indicators_.back().parameters["fast_period"] = static_cast<float>(indicator_config_.macd_fast_period);
+    active_indicators_.back().parameters["slow_period"] = static_cast<float>(indicator_config_.macd_slow_period);
+    active_indicators_.back().parameters["signal_period"] = static_cast<float>(indicator_config_.macd_signal_period);
   }
 
   // Add Bollinger Bands indicator
   if (indicator_config_.show_bollinger) {
-    active_indicators_.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
-    active_indicators_.back().parameters["period"] =
-        static_cast<float>(indicator_config_.bollinger_period);
-    active_indicators_.back().parameters["std_dev"] =
-        static_cast<float>(indicator_config_.bollinger_std_dev);
+    active_indicators_.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
+    active_indicators_.back().parameters["period"] = static_cast<float>(indicator_config_.bollinger_period);
+    active_indicators_.back().parameters["std_dev"] = static_cast<float>(indicator_config_.bollinger_std_dev);
   }
 
   // Add Stochastic indicator
   if (indicator_config_.show_stochastic) {
-    active_indicators_.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
-                                    next_indicator_id_++);
-    active_indicators_.back().parameters["k_period"] =
-        static_cast<float>(indicator_config_.stochastic_k_period);
-    active_indicators_.back().parameters["d_period"] =
-        static_cast<float>(indicator_config_.stochastic_d_period);
+    active_indicators_.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
+    active_indicators_.back().parameters["k_period"] = static_cast<float>(indicator_config_.stochastic_k_period);
+    active_indicators_.back().parameters["d_period"] = static_cast<float>(indicator_config_.stochastic_d_period);
   }
 
   // Add ATR indicator
   if (indicator_config_.show_atr) {
-    active_indicators_.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f),
-                                    next_indicator_id_++);
-    active_indicators_.back().parameters["period"] =
-        static_cast<float>(indicator_config_.atr_period);
+    active_indicators_.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f), next_indicator_id_++);
+    active_indicators_.back().parameters["period"] = static_cast<float>(indicator_config_.atr_period);
   }
 
   // Add Fibonacci indicator
   if (indicator_config_.show_fibonacci) {
-    active_indicators_.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
   }
 
   // Add Volume Profile indicator
   if (indicator_config_.show_volume_profile) {
-    active_indicators_.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f), next_indicator_id_++);
   }
 
   // Add Crosshair Info indicator
   if (indicator_config_.show_crosshair_info) {
-    active_indicators_.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f),
-                                    next_indicator_id_++);
+    active_indicators_.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f), next_indicator_id_++);
   }
 }
 
@@ -333,13 +279,13 @@ void ChartPanel::update(float dt) {
     std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
     for (size_t i = 0; i < chart.dates.size(); ++i) {
       BTQuant::RenderEngine::OHLCVCandle bar;
-      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert to microseconds
+      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
       bar.open = chart.opens[i];
       bar.high = chart.highs[i];
       bar.low = chart.lows[i];
       bar.close = chart.closes[i];
       bar.volume = chart.volumes[i];
-      bar.trade_count = 1;  // Placeholder value
+      bar.trade_count = 1; // Placeholder value
       bars.push_back(bar);
     }
 
@@ -365,9 +311,6 @@ void ChartPanel::update(float dt) {
   if (show_aggressor_bubbles_) {
     update_aggressor_trades_data();
   }
-
-  // Note: Global crosshair synchronization is handled in render() after BeginPlot()
-  // because IsPlotHovered() requires an active plot context
 }
 
 void ChartPanel::render() {
@@ -398,23 +341,20 @@ void ChartPanel::render() {
     render_floating_top_toolbar();
   } else {
     // 1. Top Toolbar (Spans full width)
-    ImGui::BeginChild("Toolbar", ImVec2(0, 32), false, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("ChartTopBar", ImVec2(0, TOP_BAR_HEIGHT), false, ImGuiWindowFlags_NoScrollbar);
     render_top_toolbar();
     ImGui::EndChild();
   }
 
   // Middle Section (Contains Left Bar, Chart, Right Bar)
-  float middle_height =
-      ImGui::GetContentRegionAvail().y - (floating_bottom_toolbar_ ? 0 : BOTTOM_BAR_HEIGHT);
-  ImGui::BeginChild("ChartMiddleRegion", ImVec2(0, middle_height), false,
-                    ImGuiWindowFlags_NoScrollbar);
+  float middle_height = ImGui::GetContentRegionAvail().y - (floating_bottom_toolbar_ ? 0 : BOTTOM_BAR_HEIGHT);
+  ImGui::BeginChild("ChartMiddleRegion", ImVec2(0, middle_height), false, ImGuiWindowFlags_NoScrollbar);
 
   if (floating_left_sidebar_) {
     render_floating_left_sidebar();
   } else {
     // 2. Left Sidebar
-    ImGui::BeginChild("ChartLeftSidebar", ImVec2(LEFT_SIDEBAR_WIDTH, 0), true,
-                      ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("ChartLeftSidebar", ImVec2(LEFT_SIDEBAR_WIDTH, 0), true, ImGuiWindowFlags_NoScrollbar);
     render_left_sidebar();
     ImGui::EndChild();
   }
@@ -427,30 +367,30 @@ void ChartPanel::render() {
   }
   ImGui::BeginChild("ChartMainArea", ImVec2(chart_width, 0), false);
 
-  // Render chart controls in a collapsible header (legacy - can be hidden in Quantower mode)
-  if (ImGui::CollapsingHeader("Chart Controls")) {
-    render_chart_controls();
-  }
-
-  // Render liquidity bars controls in a collapsible header
-  if (ImGui::CollapsingHeader("Liquidity Bars")) {
-    render_liquidity_bars_controls();
-  }
-
-  // Render indicator selector
-  if (ImGui::CollapsingHeader("Indicators")) {
-    render_indicator_selector();
-  }
-
-  // Render drawing tools controls
-  if (ImGui::CollapsingHeader("Drawing Tools")) {
-    if (drawing_tools_manager_) {
-      drawing_tools_manager_->render_ui_controls();
+    // Render chart controls in a collapsible header (legacy - can be hidden in Quantower mode)
+    if (ImGui::CollapsingHeader("Chart Controls")) {
+      render_chart_controls();
     }
-  }
 
-  // Render chart with indicators
-  render_instrument_chart(chart);
+    // Render liquidity bars controls in a collapsible header
+    if (ImGui::CollapsingHeader("Liquidity Bars")) {
+      render_liquidity_bars_controls();
+    }
+
+    // Render indicator selector
+    if (ImGui::CollapsingHeader("Indicators")) {
+      render_indicator_selector();
+    }
+
+    // Render drawing tools controls
+    if (ImGui::CollapsingHeader("Drawing Tools")) {
+      if (drawing_tools_manager_) {
+        drawing_tools_manager_->render_ui_controls();
+      }
+    }
+
+    // Render chart with indicators
+    render_instrument_chart(chart);
 
   ImGui::EndChild();
 
@@ -469,8 +409,7 @@ void ChartPanel::render() {
     render_floating_bottom_toolbar();
   } else {
     // 5. Bottom Toolbar (Volume Analysis)
-    ImGui::BeginChild("ChartBottomBar", ImVec2(0, BOTTOM_BAR_HEIGHT), true,
-                      ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("ChartBottomBar", ImVec2(0, BOTTOM_BAR_HEIGHT), true, ImGuiWindowFlags_NoScrollbar);
     render_bottom_toolbar();
     ImGui::EndChild();
   }
@@ -490,8 +429,7 @@ void ChartPanel::render() {
 
   // Render the historical time & sales popup if needed
   if (historical_time_sales_panel_ && show_trades_popup_) {
-    historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_,
-                                                    symbol_);
+    historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_, symbol_);
   }
 
   // Render settings modal if available
@@ -501,47 +439,9 @@ void ChartPanel::render() {
 }
 
 void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchange) {
-  if (symbol_ == symbol && exchange_ == exchange) return;
-
   symbol_ = symbol;
   exchange_ = exchange;
-  last_known_data_size_ = 0;
-  cached_indicators_.clear();
-
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
-
-  // Subscribe to the new symbol in the MarketDataProcessor
-  if (processor_) {
-    auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
-
-    // If symbol doesn't exist in registry, register it first
-    if (!symbol_id_opt) {
-      // Register the symbol with SymbolRegistry to get a valid ID
-      uint32_t new_symbol_id =
-          BTQuant::SymbolRegistry::instance().register_symbol(exchange, symbol);
-      std::cout << "[ChartPanel] Registered new symbol: " << exchange << "/" << symbol
-                << " with ID: " << new_symbol_id << std::endl;
-
-      // Update the chart manager's cache with the new symbol ID
-      symbol_id_opt = new_symbol_id;
-    }
-
-    if (symbol_id_opt) {
-      // Unsubscribe from previous symbol if we had a subscription
-      if (subscription_id_ != 0) {
-        processor_->unsubscribe(subscription_id_);
-        subscription_id_ = 0;
-      }
-
-      // Subscribe to the new symbol for CANDLE updates
-      subscription_id_ = processor_->subscribe(
-          *symbol_id_opt, RenderEngine::NotificationType::CANDLE,
-          [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
-            // Mark dirty to trigger chart update
-            this->markDirty();
-          });
-    }
-  }
 
   // Recreate chart with new symbol
   // Don't destroy old one, so we can switch back to it with state preserved
@@ -557,14 +457,9 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
 }
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
-  if (timeframe_ == timeframe) return;
-
   RenderEngine::TimeFrame old_timeframe = timeframe_;
   (void)old_timeframe;  // Suppress unused variable warning
   timeframe_ = timeframe;
-  last_known_data_size_ = 0;
-  cached_indicators_.clear();
-
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
 
   // Recreate chart with new timeframe
@@ -572,8 +467,7 @@ void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
   initialize();
 
   // Update multi-timeframe indicators when timeframe changes
-  // This ensures that the multi-timeframe indicators are recalculated to align with the new chart
-  // timeframe
+  // This ensures that the multi-timeframe indicators are recalculated to align with the new chart timeframe
   auto charts = chart_manager_->get_charts();
   auto it = charts.find(chart_id_);
   if (it != charts.end()) {
@@ -644,7 +538,7 @@ void ChartPanel::reset_view() {
       last_view_max_ = chart.dates.back();
 
       // Add a small margin to the view
-      double margin = (last_view_max_ - last_view_min_) * 0.05;  // 5% margin
+      double margin = (last_view_max_ - last_view_min_) * 0.05; // 5% margin
       last_view_min_ -= margin;
       last_view_max_ += margin;
     }
@@ -693,9 +587,7 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
 
   // Timeframe selector (Extended to include higher timeframes for multi-timeframe analysis)
-  const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s",  "3s",  "5s",
-                              "15s", "30s",  "1m",    "2m",    "5m",  "15m", "30m",
-                              "1h",  "2h",   "4h",    "6h",    "12h", "1d",  "1w"};
+  const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s", "30s", "1m", "2m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"};
   int selected = static_cast<int>(timeframe_);
   if (ImGui::Combo("Timeframe", &selected, timeframes, IM_ARRAYSIZE(timeframes))) {
     set_timeframe(static_cast<RenderEngine::TimeFrame>(selected));
@@ -712,15 +604,6 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-follow", &follow_latest_);
 
-  // HD/SD Resolution toggle
-  ImGui::SameLine();
-  if (ImGui::RadioButton("HD", hd_resolution_enabled_)) {
-    hd_resolution_enabled_ = true;
-  }
-  ImGui::SameLine();
-  if (ImGui::RadioButton("SD", !hd_resolution_enabled_)) {
-    hd_resolution_enabled_ = false;
-  }
 
   ImGui::PopStyleVar();
 }
@@ -944,7 +827,7 @@ std::vector<double> ChartPanel::calculate_cached_rsi(const std::vector<float>& p
 }
 
 std::vector<double> ChartPanel::calculate_cached_bollinger_upper(const std::vector<float>& prices,
-                                                                 int period, double std_dev) {
+                                                          int period, double std_dev) {
   auto sma = calculate_cached_sma(prices, period);
   std::vector<double> upper_band(prices.size(), 0.0);
 
@@ -969,7 +852,7 @@ std::vector<double> ChartPanel::calculate_cached_bollinger_upper(const std::vect
 }
 
 std::vector<double> ChartPanel::calculate_cached_bollinger_middle(const std::vector<float>& prices,
-                                                                  int period) {
+                                                          int period) {
   auto sma = calculate_cached_sma(prices, period);
 
   // Cache the result in the unified cache
@@ -980,7 +863,7 @@ std::vector<double> ChartPanel::calculate_cached_bollinger_middle(const std::vec
 }
 
 std::vector<double> ChartPanel::calculate_cached_bollinger_lower(const std::vector<float>& prices,
-                                                                 int period, double std_dev) {
+                                                          int period, double std_dev) {
   auto sma = calculate_cached_sma(prices, period);
   std::vector<double> lower_band(prices.size(), 0.0);
 
@@ -1004,8 +887,8 @@ std::vector<double> ChartPanel::calculate_cached_bollinger_lower(const std::vect
   return lower_band;
 }
 
-std::vector<double> ChartPanel::calculate_cached_macd_line(const std::vector<float>& prices,
-                                                           int fast, int slow) {
+std::vector<double> ChartPanel::calculate_cached_macd_line(const std::vector<float>& prices, int fast,
+                                                    int slow) {
   auto ema_fast = calculate_cached_ema(prices, fast);
   auto ema_slow = calculate_cached_ema(prices, slow);
 
@@ -1022,7 +905,7 @@ std::vector<double> ChartPanel::calculate_cached_macd_line(const std::vector<flo
 }
 
 std::vector<double> ChartPanel::calculate_cached_macd_signal(const std::vector<double>& macd_line,
-                                                             int signal) {
+                                                      int signal) {
   // Create cache key based on the macd_line size and signal period
   IndicatorCacheKey key{IndicatorType::MACD_SIGNAL, macd_line.size(), signal, 0, 0.0};
 
@@ -1039,8 +922,8 @@ std::vector<double> ChartPanel::calculate_cached_macd_signal(const std::vector<d
   return signal_line;
 }
 
-std::vector<double> ChartPanel::calculate_cached_macd_histogram(
-    const std::vector<double>& macd_line, const std::vector<double>& signal) {
+std::vector<double> ChartPanel::calculate_cached_macd_histogram(const std::vector<double>& macd_line,
+                                                         const std::vector<double>& signal) {
   std::vector<double> histogram(macd_line.size(), 0.0);
 
   for (size_t i = 0; i < macd_line.size(); ++i) {
@@ -1055,9 +938,9 @@ std::vector<double> ChartPanel::calculate_cached_macd_histogram(
 }
 
 std::vector<double> ChartPanel::calculate_cached_stochastic_k(const std::vector<float>& highs,
-                                                              const std::vector<float>& lows,
-                                                              const std::vector<float>& closes,
-                                                              int k_period) {
+                                                       const std::vector<float>& lows,
+                                                       const std::vector<float>& closes,
+                                                       int k_period) {
   if (highs.empty() || lows.empty() || closes.empty()) {
     return std::vector<double>();
   }
@@ -1071,7 +954,7 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_k(const std::vector<
     return it->second;
   }
 
-  std::vector<double> stoch_k(highs.size(), 50.0);  // Default to neutral
+  std::vector<double> stoch_k(highs.size(), 50.0); // Default to neutral
 
   for (size_t i = k_period - 1; i < highs.size(); ++i) {
     float highest_high = highs[i];
@@ -1087,10 +970,9 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_k(const std::vector<
 
     // Calculate %K
     if (highest_high != lowest_low) {
-      stoch_k[i] =
-          ((static_cast<double>(closes[i]) - lowest_low) / (highest_high - lowest_low)) * 100.0;
+      stoch_k[i] = ((static_cast<double>(closes[i]) - lowest_low) / (highest_high - lowest_low)) * 100.0;
     } else {
-      stoch_k[i] = 50.0;  // Neutral if high equals low
+      stoch_k[i] = 50.0; // Neutral if high equals low
     }
   }
 
@@ -1100,7 +982,7 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_k(const std::vector<
 }
 
 std::vector<double> ChartPanel::calculate_cached_stochastic_d(const std::vector<double>& stoch_k,
-                                                              int slow_period) {
+                                                       int slow_period) {
   if (stoch_k.empty()) {
     return std::vector<double>();
   }
@@ -1114,7 +996,7 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_d(const std::vector<
     return it->second;
   }
 
-  std::vector<double> stoch_d(stoch_k.size(), 50.0);  // Default to neutral
+  std::vector<double> stoch_d(stoch_k.size(), 50.0); // Default to neutral
 
   for (size_t i = slow_period - 1; i < stoch_k.size(); ++i) {
     double sum = 0.0;
@@ -1132,8 +1014,8 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_d(const std::vector<
 }
 
 std::vector<double> ChartPanel::calculate_cached_true_range(const std::vector<float>& highs,
-                                                            const std::vector<float>& lows,
-                                                            const std::vector<float>& closes) {
+                                                     const std::vector<float>& lows,
+                                                     const std::vector<float>& closes) {
   if (highs.empty() || lows.empty() || closes.empty()) {
     return std::vector<double>();
   }
@@ -1172,8 +1054,9 @@ std::vector<double> ChartPanel::calculate_cached_true_range(const std::vector<fl
 }
 
 std::vector<double> ChartPanel::calculate_cached_atr(const std::vector<float>& highs,
-                                                     const std::vector<float>& lows,
-                                                     const std::vector<float>& closes, int period) {
+                                              const std::vector<float>& lows,
+                                              const std::vector<float>& closes,
+                                              int period) {
   if (highs.empty() || lows.empty() || closes.empty()) {
     return std::vector<double>();
   }
@@ -1216,16 +1099,14 @@ std::vector<double> ChartPanel::calculate_cached_atr(const std::vector<float>& h
 }
 
 // Helper methods to calculate and cache combined indicators
-void ChartPanel::calculate_cached_bollinger_bands(const std::vector<float>& prices, int period,
-                                                  double std_dev) {
+void ChartPanel::calculate_cached_bollinger_bands(const std::vector<float>& prices, int period, double std_dev) {
   // This method calculates and caches all three Bollinger Band components
   calculate_cached_bollinger_upper(prices, period, std_dev);
   calculate_cached_bollinger_middle(prices, period);
   calculate_cached_bollinger_lower(prices, period, std_dev);
 }
 
-void ChartPanel::calculate_cached_macd(const std::vector<float>& prices, int fast, int slow,
-                                       int signal) {
+void ChartPanel::calculate_cached_macd(const std::vector<float>& prices, int fast, int slow, int signal) {
   // This method calculates and caches all three MACD components
   auto macd_line = calculate_cached_macd_line(prices, fast, slow);
   auto macd_signal = calculate_cached_macd_signal(macd_line, signal);
@@ -1233,9 +1114,9 @@ void ChartPanel::calculate_cached_macd(const std::vector<float>& prices, int fas
 }
 
 void ChartPanel::calculate_cached_stochastic(const std::vector<float>& highs,
-                                             const std::vector<float>& lows,
-                                             const std::vector<float>& closes, int k_period,
-                                             int d_period) {
+                                          const std::vector<float>& lows,
+                                          const std::vector<float>& closes,
+                                          int k_period, int d_period) {
   (void)d_period;  // Suppress unused parameter warning
   // This method calculates and caches both stochastic components
   auto stoch_k = calculate_cached_stochastic_k(highs, lows, closes, k_period);
@@ -1292,16 +1173,13 @@ void ChartPanel::update_indicator_config_from_active() {
     } else if (indicator.name == "MACD") {
       indicator_config_.show_macd = true;
       if (indicator.parameters.count("fast_period") > 0) {
-        indicator_config_.macd_fast_period =
-            static_cast<int>(indicator.parameters.at("fast_period"));
+        indicator_config_.macd_fast_period = static_cast<int>(indicator.parameters.at("fast_period"));
       }
       if (indicator.parameters.count("slow_period") > 0) {
-        indicator_config_.macd_slow_period =
-            static_cast<int>(indicator.parameters.at("slow_period"));
+        indicator_config_.macd_slow_period = static_cast<int>(indicator.parameters.at("slow_period"));
       }
       if (indicator.parameters.count("signal_period") > 0) {
-        indicator_config_.macd_signal_period =
-            static_cast<int>(indicator.parameters.at("signal_period"));
+        indicator_config_.macd_signal_period = static_cast<int>(indicator.parameters.at("signal_period"));
       }
     } else if (indicator.name == "Bollinger Bands") {
       indicator_config_.show_bollinger = true;
@@ -1314,16 +1192,13 @@ void ChartPanel::update_indicator_config_from_active() {
     } else if (indicator.name == "Stochastic") {
       indicator_config_.show_stochastic = true;
       if (indicator.parameters.count("k_period") > 0) {
-        indicator_config_.stochastic_k_period =
-            static_cast<int>(indicator.parameters.at("k_period"));
+        indicator_config_.stochastic_k_period = static_cast<int>(indicator.parameters.at("k_period"));
       }
       if (indicator.parameters.count("d_period") > 0) {
-        indicator_config_.stochastic_d_period =
-            static_cast<int>(indicator.parameters.at("d_period"));
+        indicator_config_.stochastic_d_period = static_cast<int>(indicator.parameters.at("d_period"));
       }
       if (indicator.parameters.count("slow_period") > 0) {
-        indicator_config_.stochastic_slow_period =
-            static_cast<int>(indicator.parameters.at("slow_period"));
+        indicator_config_.stochastic_slow_period = static_cast<int>(indicator.parameters.at("slow_period"));
       }
     } else if (indicator.name == "ATR") {
       indicator_config_.show_atr = true;
@@ -1348,45 +1223,41 @@ void ChartPanel::sync_active_indicators_with_config() {
   if (indicator_config_.show_sma_9) {
     // Check if already exists in active_indicators_
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "SMA 9"; });
+                          [](const IndicatorItem& item) { return item.name == "SMA 9"; });
     if (it != active_indicators_.end()) {
-      new_active_indicators.push_back(*it);  // Keep existing one
+      new_active_indicators.push_back(*it); // Keep existing one
     } else {
-      new_active_indicators.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 9.0f;
     }
   }
   if (indicator_config_.show_sma_20) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "SMA 20"; });
+                          [](const IndicatorItem& item) { return item.name == "SMA 20"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("SMA 20", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("SMA 20", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 20.0f;
     }
   }
   if (indicator_config_.show_sma_50) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "SMA 50"; });
+                          [](const IndicatorItem& item) { return item.name == "SMA 50"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("SMA 50", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("SMA 50", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 50.0f;
     }
   }
   if (indicator_config_.show_sma_200) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "SMA 200"; });
+                          [](const IndicatorItem& item) { return item.name == "SMA 200"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("SMA 200", true, ImVec4(0.5f, 0.0f, 0.5f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("SMA 200", true, ImVec4(0.5f, 0.0f, 0.5f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 200.0f;
     }
   }
@@ -1394,45 +1265,41 @@ void ChartPanel::sync_active_indicators_with_config() {
   // Add EMA indicators - Required: (9,21,50,200)
   if (indicator_config_.show_ema_9) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "EMA 9"; });
+                          [](const IndicatorItem& item) { return item.name == "EMA 9"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 9.0f;
     }
   }
   if (indicator_config_.show_ema_21) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "EMA 21"; });
+                          [](const IndicatorItem& item) { return item.name == "EMA 21"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("EMA 21", true, ImVec4(0.0f, 0.75f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("EMA 21", true, ImVec4(0.0f, 0.75f, 1.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 21.0f;
     }
   }
   if (indicator_config_.show_ema_50) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "EMA 50"; });
+                          [](const IndicatorItem& item) { return item.name == "EMA 50"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("EMA 50", true, ImVec4(0.25f, 0.41f, 0.88f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("EMA 50", true, ImVec4(0.25f, 0.41f, 0.88f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 50.0f;
     }
   }
   if (indicator_config_.show_ema_200) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "EMA 200"; });
+                          [](const IndicatorItem& item) { return item.name == "EMA 200"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("EMA 200", true, ImVec4(0.29f, 0.0f, 0.51f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("EMA 200", true, ImVec4(0.29f, 0.0f, 0.51f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 200.0f;
     }
   }
@@ -1440,117 +1307,98 @@ void ChartPanel::sync_active_indicators_with_config() {
   // Add RSI indicator
   if (indicator_config_.show_rsi) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "RSI"; });
+                          [](const IndicatorItem& item) { return item.name == "RSI"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
-                                         next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] =
-          static_cast<float>(indicator_config_.rsi_period);
+      new_active_indicators.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f), next_indicator_id_++);
+      new_active_indicators.back().parameters["period"] = static_cast<float>(indicator_config_.rsi_period);
     }
   }
 
   // Add MACD indicator
   if (indicator_config_.show_macd) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "MACD"; });
+                          [](const IndicatorItem& item) { return item.name == "MACD"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
-      new_active_indicators.back().parameters["fast_period"] =
-          static_cast<float>(indicator_config_.macd_fast_period);
-      new_active_indicators.back().parameters["slow_period"] =
-          static_cast<float>(indicator_config_.macd_slow_period);
-      new_active_indicators.back().parameters["signal_period"] =
-          static_cast<float>(indicator_config_.macd_signal_period);
+      new_active_indicators.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
+      new_active_indicators.back().parameters["fast_period"] = static_cast<float>(indicator_config_.macd_fast_period);
+      new_active_indicators.back().parameters["slow_period"] = static_cast<float>(indicator_config_.macd_slow_period);
+      new_active_indicators.back().parameters["signal_period"] = static_cast<float>(indicator_config_.macd_signal_period);
     }
   }
 
   // Add Bollinger Bands indicator
   if (indicator_config_.show_bollinger) {
-    auto it =
-        std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                     [](const IndicatorItem& item) { return item.name == "Bollinger Bands"; });
+    auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
+                          [](const IndicatorItem& item) { return item.name == "Bollinger Bands"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] =
-          static_cast<float>(indicator_config_.bollinger_period);
-      new_active_indicators.back().parameters["std_dev"] =
-          static_cast<float>(indicator_config_.bollinger_std_dev);
+      new_active_indicators.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
+      new_active_indicators.back().parameters["period"] = static_cast<float>(indicator_config_.bollinger_period);
+      new_active_indicators.back().parameters["std_dev"] = static_cast<float>(indicator_config_.bollinger_std_dev);
     }
   }
 
   // Add Stochastic indicator
   if (indicator_config_.show_stochastic) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "Stochastic"; });
+                          [](const IndicatorItem& item) { return item.name == "Stochastic"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
-                                         next_indicator_id_++);
-      new_active_indicators.back().parameters["k_period"] =
-          static_cast<float>(indicator_config_.stochastic_k_period);
-      new_active_indicators.back().parameters["d_period"] =
-          static_cast<float>(indicator_config_.stochastic_d_period);
-      new_active_indicators.back().parameters["slow_period"] =
-          static_cast<float>(indicator_config_.stochastic_slow_period);
+      new_active_indicators.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
+      new_active_indicators.back().parameters["k_period"] = static_cast<float>(indicator_config_.stochastic_k_period);
+      new_active_indicators.back().parameters["d_period"] = static_cast<float>(indicator_config_.stochastic_d_period);
+      new_active_indicators.back().parameters["slow_period"] = static_cast<float>(indicator_config_.stochastic_slow_period);
     }
   }
 
   // Add ATR indicator
   if (indicator_config_.show_atr) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "ATR"; });
+                          [](const IndicatorItem& item) { return item.name == "ATR"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f),
-                                         next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] =
-          static_cast<float>(indicator_config_.atr_period);
+      new_active_indicators.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f), next_indicator_id_++);
+      new_active_indicators.back().parameters["period"] = static_cast<float>(indicator_config_.atr_period);
     }
   }
 
   // Add Fibonacci indicator
   if (indicator_config_.show_fibonacci) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "Fibonacci"; });
+                          [](const IndicatorItem& item) { return item.name == "Fibonacci"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
     }
   }
 
   // Add Volume Profile indicator
   if (indicator_config_.show_volume_profile) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "Volume Profile"; });
+                          [](const IndicatorItem& item) { return item.name == "Volume Profile"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f), next_indicator_id_++);
     }
   }
 
   // Add Crosshair Info indicator
   if (indicator_config_.show_crosshair_info) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                           [](const IndicatorItem& item) { return item.name == "Crosshair Info"; });
+                          [](const IndicatorItem& item) { return item.name == "Crosshair Info"; });
     if (it != active_indicators_.end()) {
       new_active_indicators.push_back(*it);
     } else {
-      new_active_indicators.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f),
-                                         next_indicator_id_++);
+      new_active_indicators.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f), next_indicator_id_++);
     }
   }
 
@@ -1603,8 +1451,7 @@ void ChartPanel::render_indicator_overlay_panel() {
   // Create a window for the indicator overlay panel
   const char* overlay_title = "Active Indicators";
   ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
-  ImGui::Begin(overlay_title, nullptr,
-               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+  ImGui::Begin(overlay_title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
   // Add a button to add new indicators
   if (ImGui::Button("Add Indicator")) {
@@ -1614,56 +1461,46 @@ void ChartPanel::render_indicator_overlay_panel() {
   // Add indicator popup
   if (ImGui::BeginPopup("AddIndicatorPopup")) {
     if (ImGui::Selectable("SMA")) {
-      active_indicators_.emplace_back("SMA", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("SMA", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["period"] = 9.0f;
     }
     if (ImGui::Selectable("EMA")) {
-      active_indicators_.emplace_back("EMA", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("EMA", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["period"] = 9.0f;
     }
     if (ImGui::Selectable("RSI")) {
-      active_indicators_.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("RSI", true, ImVec4(0.5f, 0.5f, 0.5f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["period"] = 14.0f;
     }
     if (ImGui::Selectable("MACD")) {
-      active_indicators_.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("MACD", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["fast_period"] = 12.0f;
       active_indicators_.back().parameters["slow_period"] = 26.0f;
       active_indicators_.back().parameters["signal_period"] = 9.0f;
     }
     if (ImGui::Selectable("Bollinger Bands")) {
-      active_indicators_.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("Bollinger Bands", true, ImVec4(0.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["period"] = 20.0f;
       active_indicators_.back().parameters["std_dev"] = 2.0f;
     }
     if (ImGui::Selectable("Stochastic")) {
-      active_indicators_.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["k_period"] = 14.0f;
       active_indicators_.back().parameters["d_period"] = 3.0f;
       active_indicators_.back().parameters["slow_period"] = 3.0f;
     }
     if (ImGui::Selectable("ATR")) {
-      active_indicators_.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["period"] = 14.0f;
     }
     if (ImGui::Selectable("Fibonacci")) {
-      active_indicators_.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("Fibonacci", true, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), next_indicator_id_++);
     }
     if (ImGui::Selectable("Volume Profile")) {
-      active_indicators_.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("Volume Profile", true, ImVec4(0.7f, 0.7f, 0.7f, 1.0f), next_indicator_id_++);
     }
     if (ImGui::Selectable("Crosshair Info")) {
-      active_indicators_.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f),
-                                      next_indicator_id_++);
+      active_indicators_.emplace_back("Crosshair Info", true, ImVec4(0.8f, 0.8f, 0.8f, 1.0f), next_indicator_id_++);
     }
 
     ImGui::EndPopup();
@@ -1682,22 +1519,19 @@ void ChartPanel::render_indicator_overlay_panel() {
       auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
       if (symbol_id_opt) {
         // Add a daily SMA indicator that will be displayed on the current chart
-        add_multi_timeframe_indicator("Daily SMA 20", true, ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 20,
-                                      RenderEngine::TimeFrame::TF_1DAY);
+        add_multi_timeframe_indicator("Daily SMA 20", true, ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 20, RenderEngine::TimeFrame::TF_1DAY);
       }
     }
     if (ImGui::Selectable("Weekly SMA")) {
       auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
       if (symbol_id_opt) {
-        add_multi_timeframe_indicator("Weekly SMA 20", true, ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 20,
-                                      RenderEngine::TimeFrame::TF_1WEEK);
+        add_multi_timeframe_indicator("Weekly SMA 20", true, ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 20, RenderEngine::TimeFrame::TF_1WEEK);
       }
     }
     if (ImGui::Selectable("Hourly SMA")) {
       auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
       if (symbol_id_opt) {
-        add_multi_timeframe_indicator("Hourly SMA 20", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), 20,
-                                      RenderEngine::TimeFrame::TF_1HOUR);
+        add_multi_timeframe_indicator("Hourly SMA 20", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), 20, RenderEngine::TimeFrame::TF_1HOUR);
       }
     }
 
@@ -1716,14 +1550,14 @@ void ChartPanel::render_indicator_overlay_panel() {
       ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 50.0f);
       ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn("Parameters", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f);  // For delete button
+      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f); // For delete button
 
       ImGui::TableHeadersRow();
 
       for (auto it = active_indicators_.begin(); it != active_indicators_.end();) {
         auto& indicator = *it;
 
-        ImGui::PushID(indicator.id);  // Use unique ID for each indicator
+        ImGui::PushID(indicator.id); // Use unique ID for each indicator
 
         ImGui::TableNextRow();
 
@@ -1738,8 +1572,7 @@ void ChartPanel::render_indicator_overlay_panel() {
         // Column 2: Color picker
         ImGui::TableSetColumnIndex(1);
         if (ImGui::ColorEdit4("##color", &indicator.color.x,
-                              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel |
-                                  ImGuiColorEditFlags_NoTooltip)) {
+              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip)) {
           // Color changed, no additional action needed
         }
 
@@ -1753,22 +1586,20 @@ void ChartPanel::render_indicator_overlay_panel() {
             indicator.name.find("EMA") != std::string::npos ||
             indicator.name.find("RSI") != std::string::npos ||
             indicator.name.find("ATR") != std::string::npos) {
-          float period =
-              indicator.parameters.count("period") > 0 ? indicator.parameters["period"] : 9.0f;
+
+          float period = indicator.parameters.count("period") > 0 ?
+                        indicator.parameters["period"] : 9.0f;
           if (ImGui::DragFloat("##period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
             indicator.parameters["period"] = period;
             update_indicator_config_from_active();
           }
         } else if (indicator.name.find("MACD") != std::string::npos) {
-          float fast_period = indicator.parameters.count("fast_period") > 0
-                                  ? indicator.parameters["fast_period"]
-                                  : 12.0f;
-          float slow_period = indicator.parameters.count("slow_period") > 0
-                                  ? indicator.parameters["slow_period"]
-                                  : 26.0f;
-          float signal_period = indicator.parameters.count("signal_period") > 0
-                                    ? indicator.parameters["signal_period"]
-                                    : 9.0f;
+          float fast_period = indicator.parameters.count("fast_period") > 0 ?
+                             indicator.parameters["fast_period"] : 12.0f;
+          float slow_period = indicator.parameters.count("slow_period") > 0 ?
+                             indicator.parameters["slow_period"] : 26.0f;
+          float signal_period = indicator.parameters.count("signal_period") > 0 ?
+                               indicator.parameters["signal_period"] : 9.0f;
 
           if (ImGui::DragFloat("##fast", &fast_period, 0.5f, 1.0f, 50.0f, "Fast: %.0f")) {
             indicator.parameters["fast_period"] = fast_period;
@@ -1785,10 +1616,10 @@ void ChartPanel::render_indicator_overlay_panel() {
             update_indicator_config_from_active();
           }
         } else if (indicator.name.find("Bollinger") != std::string::npos) {
-          float period =
-              indicator.parameters.count("period") > 0 ? indicator.parameters["period"] : 20.0f;
-          float std_dev =
-              indicator.parameters.count("std_dev") > 0 ? indicator.parameters["std_dev"] : 2.0f;
+          float period = indicator.parameters.count("period") > 0 ?
+                        indicator.parameters["period"] : 20.0f;
+          float std_dev = indicator.parameters.count("std_dev") > 0 ?
+                         indicator.parameters["std_dev"] : 2.0f;
 
           if (ImGui::DragFloat("##bb_period", &period, 0.5f, 1.0f, 100.0f, "Period: %.0f")) {
             indicator.parameters["period"] = period;
@@ -1800,13 +1631,12 @@ void ChartPanel::render_indicator_overlay_panel() {
             update_indicator_config_from_active();
           }
         } else if (indicator.name.find("Stochastic") != std::string::npos) {
-          float k_period =
-              indicator.parameters.count("k_period") > 0 ? indicator.parameters["k_period"] : 14.0f;
-          float d_period =
-              indicator.parameters.count("d_period") > 0 ? indicator.parameters["d_period"] : 3.0f;
-          float slow_period = indicator.parameters.count("slow_period") > 0
-                                  ? indicator.parameters["slow_period"]
-                                  : 3.0f;
+          float k_period = indicator.parameters.count("k_period") > 0 ?
+                          indicator.parameters["k_period"] : 14.0f;
+          float d_period = indicator.parameters.count("d_period") > 0 ?
+                          indicator.parameters["d_period"] : 3.0f;
+          float slow_period = indicator.parameters.count("slow_period") > 0 ?
+                             indicator.parameters["slow_period"] : 3.0f;
 
           if (ImGui::DragFloat("##stoch_k", &k_period, 0.5f, 1.0f, 50.0f, "K: %.0f")) {
             indicator.parameters["k_period"] = k_period;
@@ -1865,10 +1695,10 @@ void ChartPanel::render_indicator_overlay_panel() {
           it = active_indicators_.erase(it);
           update_indicator_config_from_active();
           ImGui::PopID();
-          continue;  // Skip incrementing iterator since we removed an element
+          continue; // Skip incrementing iterator since we removed an element
         }
 
-        ImGui::PopID();  // Pop the ID for this indicator
+        ImGui::PopID(); // Pop the ID for this indicator
         ++it;
       }
 
@@ -1883,22 +1713,19 @@ void ChartPanel::render_indicator_overlay_panel() {
     ImGui::Separator();
     ImGui::Text("Multi-Timeframe Indicators (%zu):", multi_tf_indicators_.size());
 
-    if (ImGui::BeginTable("MultiTFIndicatorTable", 5,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    if (ImGui::BeginTable("MultiTFIndicatorTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
       ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, 50.0f);
       ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 50.0f);
       ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn("Parameters", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f);  // For delete button
+      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f); // For delete button
 
       ImGui::TableHeadersRow();
 
       for (auto it = multi_tf_indicators_.begin(); it != multi_tf_indicators_.end();) {
         auto& indicator = *it;
 
-        ImGui::PushID(
-            next_multitf_indicator_id_ +
-            std::distance(multi_tf_indicators_.begin(), it));  // Use unique ID for each indicator
+        ImGui::PushID(next_multitf_indicator_id_ + std::distance(multi_tf_indicators_.begin(), it)); // Use unique ID for each indicator
 
         ImGui::TableNextRow();
 
@@ -1912,15 +1739,15 @@ void ChartPanel::render_indicator_overlay_panel() {
         // Column 2: Color picker
         ImGui::TableSetColumnIndex(1);
         if (ImGui::ColorEdit4("##multitf_color", &indicator.color.x,
-                              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel |
-                                  ImGuiColorEditFlags_NoTooltip)) {
+              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip)) {
           // Color changed, no additional action needed
         }
 
         // Column 3: Indicator name and source timeframe
         ImGui::TableSetColumnIndex(2);
         char timeframe_str[64];
-        snprintf(timeframe_str, sizeof(timeframe_str), "%s (%s)", indicator.name.c_str(),
+        snprintf(timeframe_str, sizeof(timeframe_str), "%s (%s)",
+                 indicator.name.c_str(),
                  timeframe_to_string(indicator.source_timeframe).c_str());
         ImGui::Text("%s", timeframe_str);
 
@@ -1938,10 +1765,10 @@ void ChartPanel::render_indicator_overlay_panel() {
         if (ImGui::Button("X##mtf_delete")) {
           it = multi_tf_indicators_.erase(it);
           ImGui::PopID();
-          continue;  // Skip incrementing iterator since we removed an element
+          continue; // Skip incrementing iterator since we removed an element
         }
 
-        ImGui::PopID();  // Pop the ID for this indicator
+        ImGui::PopID(); // Pop the ID for this indicator
         ++it;
       }
 
@@ -1961,7 +1788,7 @@ std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<floa
 }
 
 std::vector<double> ChartPanel::calculate_bollinger_middle(const std::vector<float>& prices,
-                                                           int period) {
+                                                          int period) {
   // Redirect to the cached version
   return calculate_cached_bollinger_middle(prices, period);
 }
@@ -2051,7 +1878,8 @@ std::vector<double> ChartPanel::calculate_true_range(const std::vector<float>& h
 
 std::vector<double> ChartPanel::calculate_atr(const std::vector<float>& highs,
                                               const std::vector<float>& lows,
-                                              const std::vector<float>& closes, int period) {
+                                              const std::vector<float>& closes,
+                                              int period) {
   // Redirect to the cached version
   return calculate_cached_atr(highs, lows, closes, period);
 }
@@ -2075,7 +1903,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 8) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 8], sma_9[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_9[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(255, 105, 180, 200), 2.0f);  // Hot pink
+          draw_list->AddLine(p1, p2, IM_COL32(255, 105, 180, 200), 2.0f); // Hot pink
         }
       }
     }
@@ -2091,7 +1919,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 9) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 9], sma_10[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_10[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(255, 165, 0, 200), 2.0f);  // Orange
+          draw_list->AddLine(p1, p2, IM_COL32(255, 165, 0, 200), 2.0f); // Orange
         }
       }
     }
@@ -2107,7 +1935,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 19) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 19], sma_20[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_20[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 200), 2.0f);  // Yellow
+          draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 200), 2.0f); // Yellow
         }
       }
     }
@@ -2123,7 +1951,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 49) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 49], sma_50[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_50[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(0, 255, 255, 200), 2.0f);  // Cyan
+          draw_list->AddLine(p1, p2, IM_COL32(0, 255, 255, 200), 2.0f); // Cyan
         }
       }
     }
@@ -2139,7 +1967,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 199) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 199], sma_200[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_200[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(128, 0, 128, 200), 2.0f);  // Purple
+          draw_list->AddLine(p1, p2, IM_COL32(128, 0, 128, 200), 2.0f); // Purple
         }
       }
     }
@@ -2161,7 +1989,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 8) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 8], ema_9[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_9[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(255, 0, 255, 200), 2.0f);  // Magenta
+          draw_list->AddLine(p1, p2, IM_COL32(255, 0, 255, 200), 2.0f); // Magenta
         }
       }
     }
@@ -2177,7 +2005,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 9) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 9], ema_10[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_10[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(255, 0, 128, 200), 2.0f);  // Medium violet red
+          draw_list->AddLine(p1, p2, IM_COL32(255, 0, 128, 200), 2.0f); // Medium violet red
         }
       }
     }
@@ -2193,7 +2021,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 19) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 19], ema_20[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_20[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(138, 43, 226, 200), 2.0f);  // Blue violet
+          draw_list->AddLine(p1, p2, IM_COL32(138, 43, 226, 200), 2.0f); // Blue violet
         }
       }
     }
@@ -2209,7 +2037,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 20) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 20], ema_21[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_21[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(0, 191, 255, 200), 2.0f);  // Deep sky blue
+          draw_list->AddLine(p1, p2, IM_COL32(0, 191, 255, 200), 2.0f); // Deep sky blue
         }
       }
     }
@@ -2225,7 +2053,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 49) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 49], ema_50[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_50[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(65, 105, 225, 200), 2.0f);  // Royal blue
+          draw_list->AddLine(p1, p2, IM_COL32(65, 105, 225, 200), 2.0f); // Royal blue
         }
       }
     }
@@ -2241,7 +2069,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
         if (i >= 199) {
           ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 199], ema_200[i]);
           ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_200[i]);
-          draw_list->AddLine(p1, p2, IM_COL32(75, 0, 130, 200), 2.0f);  // Indigo
+          draw_list->AddLine(p1, p2, IM_COL32(75, 0, 130, 200), 2.0f); // Indigo
         }
       }
     }
@@ -2268,8 +2096,10 @@ void ChartPanel::render_bollinger_bands(const ChartInstance& chart, size_t start
   auto middle_it = cached_indicators_.find(middle_key);
   auto lower_it = cached_indicators_.find(lower_key);
 
-  if (upper_it != cached_indicators_.end() && middle_it != cached_indicators_.end() &&
+  if (upper_it != cached_indicators_.end() &&
+      middle_it != cached_indicators_.end() &&
       lower_it != cached_indicators_.end()) {
+
     const auto& upper_band = upper_it->second;
     const auto& middle_band = middle_it->second;
     const auto& lower_band = lower_it->second;
@@ -2286,14 +2116,12 @@ void ChartPanel::render_bollinger_bands(const ChartInstance& chart, size_t start
 
         // Add points for filled area
         upper_points.push_back(upper_point);
-        lower_points.insert(lower_points.begin(),
-                            lower_point);  // Insert at beginning to maintain order
+        lower_points.insert(lower_points.begin(), lower_point); // Insert at beginning to maintain order
 
         // Draw middle band (SMA)
         if (i > start_idx && i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
-          ImVec2 prev_middle = ImPlot::PlotToPixels(chart.dates[i - 1], middle_band[i - 1]);
-          draw_list->AddLine(prev_middle, middle_point, IM_COL32(255, 255, 0, 150),
-                             1.0f);  // Yellow
+          ImVec2 prev_middle = ImPlot::PlotToPixels(chart.dates[i-1], middle_band[i-1]);
+          draw_list->AddLine(prev_middle, middle_point, IM_COL32(255, 255, 0, 150), 1.0f); // Yellow
         }
       }
     }
@@ -2306,21 +2134,21 @@ void ChartPanel::render_bollinger_bands(const ChartInstance& chart, size_t start
 
       if (filled_area_points.size() >= 3) {
         draw_list->AddConvexPolyFilled(filled_area_points.data(),
-                                       static_cast<int>(filled_area_points.size()),
-                                       IM_COL32(0, 255, 255, 50));  // Semi-transparent cyan
+                                     static_cast<int>(filled_area_points.size()),
+                                     IM_COL32(0, 255, 255, 50)); // Semi-transparent cyan
       }
     }
 
     // Draw upper and lower band lines
     for (size_t i = start_idx + 1; i < end_idx; ++i) {
       if (i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
-        ImVec2 prev_upper = ImPlot::PlotToPixels(chart.dates[i - 1], upper_band[i - 1]);
+        ImVec2 prev_upper = ImPlot::PlotToPixels(chart.dates[i-1], upper_band[i-1]);
         ImVec2 curr_upper = ImPlot::PlotToPixels(chart.dates[i], upper_band[i]);
-        ImVec2 prev_lower = ImPlot::PlotToPixels(chart.dates[i - 1], lower_band[i - 1]);
+        ImVec2 prev_lower = ImPlot::PlotToPixels(chart.dates[i-1], lower_band[i-1]);
         ImVec2 curr_lower = ImPlot::PlotToPixels(chart.dates[i], lower_band[i]);
 
-        draw_list->AddLine(prev_upper, curr_upper, IM_COL32(0, 255, 255, 150), 1.0f);  // Cyan
-        draw_list->AddLine(prev_lower, curr_lower, IM_COL32(0, 255, 255, 150), 1.0f);  // Cyan
+        draw_list->AddLine(prev_upper, curr_upper, IM_COL32(0, 255, 255, 150), 1.0f); // Cyan
+        draw_list->AddLine(prev_lower, curr_lower, IM_COL32(0, 255, 255, 150), 1.0f); // Cyan
       }
     }
   }
@@ -2333,10 +2161,9 @@ void ChartPanel::render_rsi_indicator(const ChartInstance& chart, size_t start_i
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
   // Get cached RSI values
-  IndicatorCacheKey key{IndicatorType::RSI, chart.closes.size(), indicator_config_.rsi_period, 0,
-                        0.0};
+  IndicatorCacheKey key{IndicatorType::RSI, chart.closes.size(), indicator_config_.rsi_period, 0, 0.0};
   auto it = cached_indicators_.find(key);
-  if (it == cached_indicators_.end()) return;  // No cached data available
+  if (it == cached_indicators_.end()) return; // No cached data available
 
   const auto& rsi = it->second;
 
@@ -2381,7 +2208,7 @@ void ChartPanel::render_rsi_indicator(const ChartInstance& chart, size_t start_i
 }
 
 void ChartPanel::render_stochastic_indicator(const ChartInstance& chart, size_t start_idx,
-                                             size_t end_idx) {
+                                           size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_stochastic) return;
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -2404,7 +2231,8 @@ void ChartPanel::render_stochastic_indicator(const ChartInstance& chart, size_t 
 
     for (size_t i = start_idx; i < end_idx; ++i) {
       if (i >= static_cast<size_t>(indicator_config_.stochastic_k_period +
-                                   indicator_config_.stochastic_d_period - 1)) {
+                                  indicator_config_.stochastic_d_period - 1)) {
+
         double k_value = stoch_k[i];
         double d_value = stoch_d[i];
 
@@ -2416,10 +2244,10 @@ void ChartPanel::render_stochastic_indicator(const ChartInstance& chart, size_t 
         ImVec2 d_point = ImPlot::PlotToPixels(chart.dates[i], d_y);
 
         // Draw %K line (typically faster line)
-        draw_list->AddLine(k_point, k_point, IM_COL32(255, 255, 0, 200), 1.5f);  // Yellow
+        draw_list->AddLine(k_point, k_point, IM_COL32(255, 255, 0, 200), 1.5f); // Yellow
 
         // Draw %D line (typically slower line)
-        draw_list->AddLine(d_point, d_point, IM_COL32(255, 0, 0, 200), 1.5f);  // Red
+        draw_list->AddLine(d_point, d_point, IM_COL32(255, 0, 0, 200), 1.5f); // Red
       }
     }
 
@@ -2429,11 +2257,11 @@ void ChartPanel::render_stochastic_indicator(const ChartInstance& chart, size_t 
 
     ImVec2 ob_p1 = ImPlot::PlotToPixels(limits.X.Min, overbought_y);
     ImVec2 ob_p2 = ImPlot::PlotToPixels(limits.X.Max, overbought_y);
-    draw_list->AddLine(ob_p1, ob_p2, IM_COL32(255, 0, 0, 100), 1.0f);  // Red
+    draw_list->AddLine(ob_p1, ob_p2, IM_COL32(255, 0, 0, 100), 1.0f); // Red
 
     ImVec2 os_p1 = ImPlot::PlotToPixels(limits.X.Min, oversold_y);
     ImVec2 os_p2 = ImPlot::PlotToPixels(limits.X.Max, oversold_y);
-    draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f);  // Green
+    draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f); // Green
   }
 }
 
@@ -2445,8 +2273,7 @@ void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_
 
   // Get cached MACD values
   IndicatorCacheKey line_key{IndicatorType::MACD_LINE, chart.closes.size(),
-                             indicator_config_.macd_fast_period, indicator_config_.macd_slow_period,
-                             0.0};
+                            indicator_config_.macd_fast_period, indicator_config_.macd_slow_period, 0.0};
   IndicatorCacheKey signal_key{IndicatorType::MACD_SIGNAL, chart.closes.size(),
                                indicator_config_.macd_signal_period, 0, 0.0};
   IndicatorCacheKey histogram_key{IndicatorType::MACD_HISTOGRAM, chart.closes.size(), 0, 0, 0.0};
@@ -2456,9 +2283,10 @@ void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_
   auto signal_it = cached_indicators_.find(signal_key);
   auto histogram_it = cached_indicators_.find(histogram_key);
 
-  if (line_it == cached_indicators_.end() || signal_it == cached_indicators_.end() ||
+  if (line_it == cached_indicators_.end() ||
+      signal_it == cached_indicators_.end() ||
       histogram_it == cached_indicators_.end()) {
-    return;  // No cached data available
+    return; // No cached data available
   }
 
   const auto& macd_line = line_it->second;
@@ -2504,16 +2332,15 @@ void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_
 }
 
 void ChartPanel::render_atr_indicator(const ChartInstance& chart, size_t start_idx,
-                                      size_t end_idx) {
+                                     size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_atr) return;
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
   // Get cached ATR values
-  IndicatorCacheKey key{IndicatorType::ATR, chart.highs.size(), indicator_config_.atr_period, 0,
-                        0.0};
+  IndicatorCacheKey key{IndicatorType::ATR, chart.highs.size(), indicator_config_.atr_period, 0, 0.0};
   auto it = cached_indicators_.find(key);
-  if (it == cached_indicators_.end()) return;  // No cached data available
+  if (it == cached_indicators_.end()) return; // No cached data available
 
   const auto& atr = it->second;
 
@@ -2540,13 +2367,12 @@ void ChartPanel::render_atr_indicator(const ChartInstance& chart, size_t start_i
       double atr_value = atr[i];
 
       // Normalize ATR value to fit within the plot area
-      double normalized_atr = limits.Y.Min + ((atr_value - min_atr) / (max_atr - min_atr)) *
-                                                 (limits.Y.Max - limits.Y.Min);
+      double normalized_atr = limits.Y.Min + ((atr_value - min_atr) / (max_atr - min_atr)) * (limits.Y.Max - limits.Y.Min);
 
       ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], normalized_atr);
 
       // Draw ATR line
-      draw_list->AddLine(p, p, IM_COL32(0, 255, 127, 200), 2.0f);  // Spring green
+      draw_list->AddLine(p, p, IM_COL32(0, 255, 127, 200), 2.0f); // Spring green
     }
   }
 }
@@ -2619,13 +2445,6 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
   double close = chart.closes[closest_idx];
   double volume = chart.volumes[closest_idx];
 
-  // Update global crosshair atomics when crosshair info is rendered
-  // This means the crosshair is active on this chart
-  QuantWorkspaceComponent::g_crosshair.price.store(close);  // Use close price as the reference
-  QuantWorkspaceComponent::g_crosshair.time.store(
-      static_cast<uint64_t>(chart.dates[closest_idx] * 1000000));  // Convert to microseconds
-  QuantWorkspaceComponent::g_crosshair.active.store(true);
-
   // Render crosshair info overlay
   ImGui::SetNextWindowPos(ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
   ImGui::SetNextWindowSize(ImVec2(200, 150));
@@ -2635,21 +2454,11 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
 
   ImGui::TextColored(ImVec4(1, 1, 0, 1), "Candle Info:");
   ImGui::Separator();
-  ImGui::Text("Open:  ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(open, "%.2f");
-  ImGui::Text("High:  ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(high, "%.2f");
-  ImGui::Text("Low:   ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(low, "%.2f");
-  ImGui::Text("Close: ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(close, "%.2f");
-  ImGui::Text("Volume: ");
-  ImGui::SameLine();
-  BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(volume, "%.2f");
+  ImGui::Text("Open:  %.2f", open);
+  ImGui::Text("High:  %.2f", high);
+  ImGui::Text("Low:   %.2f", low);
+  ImGui::Text("Close: %.2f", close);
+  ImGui::Text("Volume: %.2f", volume);
 
   // Calculate change
   if (closest_idx > 0) {
@@ -2658,15 +2467,8 @@ void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_
     double change_pct = (change / prev_close) * 100.0;
 
     ImGui::Separator();
-    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), "Change: ");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(change, "%.2f");
-    ImGui::SameLine();
-    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), " (");
-    ImGui::SameLine();
-    BTQuant::UI::FontManager::getInstance().renderFormattedNumericalValue(change_pct, "%.2f");
-    ImGui::SameLine();
-    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1), "%%)");
+    ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+                       "Change: %.2f (%.2f%%)", change, change_pct);
   }
 
   ImGui::End();
@@ -2690,7 +2492,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
   ImPlot::PushStyleColor(ImPlotCol_PlotBg,
                          colors.panel_bg);  // Use panel bg or specific dark
   ImPlot::PushStyleColor(ImPlotCol_PlotBorder, colors.border);
-  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
+  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
 
   // Initialize chart configuration
   // Ensure we start with auto-follow enabled to show recent action
@@ -2793,28 +2595,6 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         chart.highs.empty() ? 1 : *std::max_element(chart.highs.begin(), chart.highs.end());
   }
 
-  // Apply price scale mode if not in manual drag mode
-  if (chart.closes.size() > 0 && !user_dragged_chart_) {
-    double current_price = chart.closes.back();  // Get the most recent closing price
-
-    switch (price_scale_mode_) {
-      case PriceScaleMode::CENTER: {
-        // Center Mode: Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2
-        // Calculate range as a percentage of current price to maintain consistent scaling
-        double range = current_price * center_mode_range_percentage_;
-
-        // Apply the mathematical formula: current_price = (y_max + y_min) / 2
-        // So: y_min = current_price - range, y_max = current_price + range
-        y_axis_min_pre = current_price - range;
-        y_axis_max_pre = current_price + range;
-        break;
-      }
-      default:
-        // Other modes handled elsewhere
-        break;
-    }
-  }
-
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs)) {
     // ===== ALL SETUP CALLS MUST HAPPEN FIRST - BEFORE ANY LOCKING FUNCTIONS =====
@@ -2849,12 +2629,41 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // VOLUME PROFILE OVERLAY - using direct draw to avoid axis switching after setup lock
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
-      // Legacy volume profile code removed/replaced by new method
-    }
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-    // VPVR Overlay (MMT Style)
-    if (show_vpvr_) {
-      render_vpvr_overlay();
+      // Use Theme Colors for a more integrated look
+      ImVec4 vp_color = colors.text;
+      vp_color.w = 0.25f;  // reduced alpha
+
+      // ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
+      // ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
+      // ImPlot::PushStyleColor(ImPlotCol_Line,
+      //                        ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f));  // clearer border
+
+      // Calculate bar width in plot coordinates based on volume values
+      double max_vol_display = vp_max_vol * 4.0;  // Same as used in SetupAxisLimits for X2
+      (void)max_vol_display;  // Suppress unused variable warning
+
+      // Draw volume profile bars using direct drawing to avoid axis switching after setup lock
+      for (size_t i = 0; i < vp_prices.size(); ++i) {
+        // Convert price (Y coordinate) and volume (X coordinate) to screen coordinates
+        ImVec2 pos_screen = ImPlot::PlotToPixels(vp_volumes[i], vp_prices[i]);  // tip of the bar
+        ImVec2 base_screen = ImPlot::PlotToPixels(0, vp_prices[i]);             // base of the bar
+
+        // Calculate bar dimensions
+        float bar_width = base_screen.x - pos_screen.x;  // width from volume value to zero
+        float bar_height = 3.0f;                         // fixed height for visibility
+
+        // Define bar corners
+        ImVec2 bar_tl = ImVec2(base_screen.x - bar_width, pos_screen.y - bar_height / 2);
+        ImVec2 bar_br = ImVec2(base_screen.x, pos_screen.y + bar_height / 2);
+
+        // Draw the volume bar
+        draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
+      }
+
+      // ImPlot::PopStyleColor(2);
+      // ImPlot::PopStyleVar();
     }
 
     // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)
@@ -2880,9 +2689,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // Check if the view has changed (scroll/zoom) and notify the time stats panel if needed
     if ((prev_view_min != last_view_min_ || prev_view_max != last_view_max_) && on_scroll_sync_) {
-      uint64_t start_time = static_cast<uint64_t>(last_view_min_ * 1000000);
-      uint64_t end_time = static_cast<uint64_t>(last_view_max_ * 1000000);
-      on_scroll_sync_(start_time, end_time);
+        uint64_t start_time = static_cast<uint64_t>(last_view_min_ * 1000000);
+        uint64_t end_time = static_cast<uint64_t>(last_view_max_ * 1000000);
+        on_scroll_sync_(start_time, end_time);
     }
 
     // Recalculate start/end for CULLING (Rendering optimization)
@@ -2913,33 +2722,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     const float MIN_BODY_WIDTH_PX = 3.0f;
     const float MIN_BODY_HEIGHT_PX = 1.0f;
 
-    // HD/SD Resolution: Adjust rendering based on toggle
-    // HD = 1 tick per row (normal), SD = 10 ticks per row (aggregated)
-    int aggregation_factor = hd_resolution_enabled_ ? 1 : 10;
-
     // Draw ONLY visible candles
-    for (size_t i = render_start_idx; i < render_end_idx; i += aggregation_factor) {
-      // For SD mode, aggregate multiple ticks into one visual unit
+    for (size_t i = render_start_idx; i < render_end_idx; ++i) {
       double x = chart.dates[i];
       if (x == 0) continue;
 
-      // Initialize with first tick values
       float open = chart.opens[i];
       float high = chart.highs[i];
       float low = chart.lows[i];
       float close = chart.closes[i];
-
-      // Aggregate if in SD mode
-      if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
-        for (int j = 1; j < aggregation_factor; ++j) {
-          size_t idx = i + j;
-          if (idx < chart.dates.size()) {
-            high = std::max(static_cast<float>(high), chart.highs[idx]);
-            low = std::min(static_cast<float>(low), chart.lows[idx]);
-            close = chart.closes[idx];  // Use the last close in the aggregation
-          }
-        }
-      }
 
       // Skip invalid candles
       if (high == 0 || low == 0 || open == 0 || close == 0) continue;
@@ -2953,22 +2744,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       // Transform to screen coordinates
       ImVec2 wick_top = ImPlot::PlotToPixels(x, high);
       ImVec2 wick_bot = ImPlot::PlotToPixels(x, low);
-
-      ImVec2 body_tl, body_br;  // Declare the variables
-
-      // FEATURE IMPLEMENTATION: Green bars (Buys) extend right; Red bars (Sells) extend left
-      // This creates a visual distinction where bullish candles extend to the right of the center
-      // point and bearish candles extend to the left of the center point, making trend
-      // identification easier
-      if (bullish) {
-        // Green bar (buy) extends right from x position
-        body_tl = ImPlot::PlotToPixels(x, std::min(open, close));
-        body_br = ImPlot::PlotToPixels(x + candle_half_width * 2, std::max(open, close));
-      } else {
-        // Red bar (sell) extends left from x position
-        body_tl = ImPlot::PlotToPixels(x - candle_half_width * 2, std::min(open, close));
-        body_br = ImPlot::PlotToPixels(x, std::max(open, close));
-      }
+      ImVec2 body_tl = ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
+      ImVec2 body_br = ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
 
       // Ensure minimum body width in pixels
       float body_width = std::abs(body_br.x - body_tl.x);
@@ -3001,38 +2778,22 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       std::vector<double> y_coords_high;
       std::vector<double> y_coords_low;
 
-      for (size_t i = render_start_idx; i < render_end_idx; i += aggregation_factor) {
+      for (size_t i = render_start_idx; i < render_end_idx; ++i) {
         RenderEngine::OHLCVCandle candle;
         candle.timestamp =
             static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert back to microseconds
-
-        // Initialize with first tick values
         candle.open = chart.opens[i];
         candle.high = chart.highs[i];
         candle.low = chart.lows[i];
         candle.close = chart.closes[i];
         candle.volume = chart.volumes[i];
-
-        // Aggregate if in SD mode
-        if (!hd_resolution_enabled_ && i + aggregation_factor <= render_end_idx) {
-          for (int j = 1; j < aggregation_factor; ++j) {
-            size_t idx = i + j;
-            if (idx < chart.dates.size()) {
-              candle.high = std::max(static_cast<float>(candle.high), chart.highs[idx]);
-              candle.low = std::min(static_cast<float>(candle.low), chart.lows[idx]);
-              candle.close = chart.closes[idx];     // Use the last close in the aggregation
-              candle.volume += chart.volumes[idx];  // Sum the volumes
-            }
-          }
-        }
-
         candle.trade_count = 1;  // Placeholder
 
         visible_candles.push_back(candle);
 
         // Calculate screen coordinates for this candle
-        ImVec2 wick_top = ImPlot::PlotToPixels(chart.dates[i], candle.high);
-        ImVec2 wick_bot = ImPlot::PlotToPixels(chart.dates[i], candle.low);
+        ImVec2 wick_top = ImPlot::PlotToPixels(chart.dates[i], chart.highs[i]);
+        ImVec2 wick_bot = ImPlot::PlotToPixels(chart.dates[i], chart.lows[i]);
 
         x_coords.push_back(wick_top.x);
         y_coords_high.push_back(wick_top.y);
@@ -3049,17 +2810,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         auto analytics = processor_->getSymbolAnalytics(symbol_id);
         const auto& recent_trades = analytics.recent_trades;
 
-        // If we have recent trades, render the step profile histograms showing volume distribution
-        // for each candle
+        // If we have recent trades, render the step profile histograms showing volume distribution for each candle
         if (!recent_trades.empty()) {
-          // Use the enhanced method for Step Profile rendering: draw mini histogram overlay on each
-          // candlestick bar showing volume distribution for that bar's price range with additional
-          // visualization options This is the main implementation for the task requirement We'll
-          // call the method directly on this instance since we have access to the processor and
-          // symbol_id
-          render_enhanced_step_profile_histograms_on_candle_bars(
-              draw_list, visible_candles, x_coords, y_coords_high, y_coords_low, true, 8, 0.8f,
-              false);  // Show POC line with 8 buckets per candle, 80% opacity, no labels
+          // Use the enhanced method for Step Profile rendering: draw mini histogram overlay on each candlestick bar
+          // showing volume distribution for that bar's price range with additional visualization options
+          // This is the main implementation for the task requirement
+          // We'll call the method directly on this instance since we have access to the processor and symbol_id
+          render_enhanced_step_profile_histograms_on_candle_bars(draw_list, visible_candles, x_coords,
+                                                              y_coords_high, y_coords_low,
+                                                              true, 8, 0.8f, false);  // Show POC line with 8 buckets per candle, 80% opacity, no labels
         }
       }
     }
@@ -3084,221 +2843,104 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // Render drawing tools
     if (drawing_tools_manager_) {
-      drawing_tools_manager_->render_all();
+        drawing_tools_manager_->render_all();
     }
 
     // Render crosshair info if mouse is over plot
     // Handle mouse drag interaction for custom profile creation
     handleMouseDragInteraction();
 
-    if (ImPlot::IsPlotHovered()) {
+    if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-
-      // Update global crosshair atomics when crosshair is active in this chart
-      QuantWorkspaceComponent::g_crosshair_price.store(mouse_pos.y, std::memory_order_relaxed);
-      QuantWorkspaceComponent::g_crosshair_time.store(
-          static_cast<uint64_t>(mouse_pos.x * 1000000),
-          std::memory_order_relaxed);  // Convert to microseconds
-      QuantWorkspaceComponent::g_crosshair.active.store(true, std::memory_order_relaxed);
-
-      if (indicator_config_.show_crosshair_info) {
-        render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
-      }
-    } else if (!ImPlot::IsPlotHovered()) {
-      // If mouse is not over this plot, check if this chart was the source of the global crosshair
-      // and potentially deactivate it if needed
-
-      // Check if this chart was the source of the active global crosshair
-      // If so, and if the mouse has moved away for some time, we might want to deactivate
-      // For now, we'll leave the global crosshair active until another chart takes over
-      // or until explicitly deactivated by the workspace component
+      render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
     }
-
-    // Additionally, if the global crosshair is active but not from this chart,
-    // we might want to update the local crosshair state based on global state
-    if (QuantWorkspaceComponent::g_crosshair.active.load() && !ImPlot::IsPlotHovered()) {
-      // This chart isn't currently hovered, but global crosshair is active
-      // We can still draw the global crosshair line
-
-      // Optionally update local state to reflect global crosshair position
-      // This enables cross-chart synchronization even when not hovering
-      global_crosshair_active_ = true;
-      global_crosshair_x_pos_ =
-          static_cast<double>(QuantWorkspaceComponent::g_crosshair.time.load()) / 1000000.0;
-    }
-
+    
     // Render global synchronized crosshair if enabled
     if (global_crosshair_active_) {
       // Convert the stored global crosshair X position to plot coordinates
       // This requires knowing the current plot limits to map screen coordinates
       ImPlotRect limits = ImPlot::GetPlotLimits();
-
+      
       // Calculate the X coordinate in plot space based on the stored screen position
       // We need to map the screen X coordinate back to plot X coordinate
       ImVec2 plot_size = ImPlot::GetPlotSize();
       ImVec2 plot_pos = ImPlot::GetPlotPos();
-
+      
       // Calculate the relative position within the plot area
       float rel_x = (global_crosshair_x_pos_ - plot_pos.x) / plot_size.x;
-
+      
       // Map to plot coordinate
       double plot_x = limits.X.Min + rel_x * (limits.X.Max - limits.X.Min);
-
+      
       // Draw the vertical line at the synchronized position
       ImDrawList* draw_list = ImPlot::GetPlotDrawList();
       ImVec2 top = ImPlot::PlotToPixels(plot_x, limits.Y.Max);
       ImVec2 bottom = ImPlot::PlotToPixels(plot_x, limits.Y.Min);
-
-      // Draw the synchronized crosshair line as a 1px dashed line
-      // Use dashed line pattern to distinguish from regular crosshair
-      const float dash_length = 4.0f;
-      const float gap_length = 2.0f;
-      const float line_thickness = 1.0f;
-
-      // Draw dashed line
-      float current_y = top.y;
-      bool draw_segment = true;
-
-      while (current_y < bottom.y) {
-        float next_y = current_y + (draw_segment ? dash_length : gap_length);
-
-        if (next_y > bottom.y) {
-          next_y = bottom.y;
-        }
-
-        if (draw_segment) {
-          draw_list->AddLine(ImVec2(top.x, current_y), ImVec2(top.x, next_y),
-                             IM_COL32(255, 255, 0, 200),  // Yellow dashed line for global sync
-                             line_thickness);
-        }
-
-        current_y = next_y;
-        draw_segment = !draw_segment;
-      }
-    }
-
-    // Also draw the global crosshair if g_crosshair is active (Universal Crosshair Sync)
-    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
-      // Get the global crosshair time position
-      uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
-
-      // Convert the global time to a plot X coordinate
-      // This requires mapping the time value to the chart's X-axis range
-      ImPlotRect limits = ImPlot::GetPlotLimits();
-
-      // Get chart instance to access the time data
-      auto charts = chart_manager_->get_charts();
-      auto it = charts.find(chart_id_);
-      if (it != charts.end()) {
-        const ChartInstance& chart = it->second;
-
-        if (!chart.dates.empty()) {
-          // Convert global_time (microseconds) to seconds for comparison with chart.dates
-          double global_time_seconds = static_cast<double>(global_time) / 1000000.0;
-
-          // Find the corresponding X position for this time
-          double plot_x =
-              global_time_seconds;  // Direct mapping assuming chart.dates are in seconds
-
-          // Ensure the time is within the visible range
-          if (plot_x >= limits.X.Min && plot_x <= limits.X.Max) {
-            // Draw the vertical line at the global crosshair position
-            ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-            ImVec2 top = ImPlot::PlotToPixels(plot_x, limits.Y.Max);
-            ImVec2 bottom = ImPlot::PlotToPixels(plot_x, limits.Y.Min);
-
-            // Draw the synchronized crosshair line as a 1px dashed line
-            const float dash_length = 4.0f;
-            const float gap_length = 2.0f;
-            const float line_thickness = 1.0f;
-
-            // Draw dashed line
-            float current_y = top.y;
-            bool draw_segment = true;
-
-            while (current_y < bottom.y) {
-              float next_y = current_y + (draw_segment ? dash_length : gap_length);
-
-              if (next_y > bottom.y) {
-                next_y = bottom.y;
-              }
-
-              if (draw_segment) {
-                draw_list->AddLine(
-                    ImVec2(top.x, current_y), ImVec2(top.x, next_y),
-                    IM_COL32(0, 255, 255, 200),  // Cyan dashed line for universal sync
-                    line_thickness);
-              }
-
-              current_y = next_y;
-              draw_segment = !draw_segment;
-            }
-          }
-        }
-      }
+      
+      // Draw the synchronized crosshair line (dashed or different color to distinguish)
+      draw_list->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y), 
+                         IM_COL32(255, 255, 0, 200), 1.0f); // Yellow dashed line for global sync
     }
 
     // Handle drawing tools mouse events
     if (drawing_tools_manager_ && ImPlot::IsPlotHovered()) {
-      drawing_tools_manager_->handle_mouse_events();
+        drawing_tools_manager_->handle_mouse_events();
 
-      // Check for mouse clicks to create drawing tools
-      if (ImPlot::IsPlotSelected()) {
-        ImPlotRect selection = ImPlot::GetPlotSelection();
-        // Store selection bounds for next frame's axis limits
-        // Do NOT call EndPlot() here - it would break the plot context
-        // and cause subsequent IsPlotHovered() calls to crash
-        last_view_min_ = selection.X.Min;
-        last_view_max_ = selection.X.Max;
-        follow_latest_ = false;
-        ImPlot::CancelPlotSelection();
-      }
-
-      // Handle right-click context menu for drawing tools
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImPlot::IsPlotHovered()) {
-        ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-        (void)mouse_pos;  // Suppress unused variable warning
-        // In a real implementation, we would show a context menu to select drawing tool type
-        // For now, we'll just store the position for potential use
-      }
-
-      // Handle left mouse click for creating drawing tools
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-        ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-        (void)mouse_pos;  // Suppress unused variable warning
-                          // In a real implementation, we would check if we're in drawing mode
-                          // and create the appropriate tool based on the selected tool type
-      }
-
-      // Handle mouse dragging for creating drawing tools
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-        // Check if we're in drawing mode
-        static bool is_drawing = false;
-        static ImPlotPoint start_point;
-        static std::string current_tool_id;
-
-        if (!is_drawing) {
-          start_point = ImPlot::GetPlotMousePos();
-          is_drawing = true;
-
-          // Generate a unique ID for the new tool
-          static int tool_counter = 0;
-          current_tool_id = "tool_" + std::to_string(++tool_counter);
+        // Check for mouse clicks to create drawing tools
+        if (ImPlot::IsPlotSelected()) {
+            ImPlotRect selection = ImPlot::GetPlotSelection();
+            // Handle selection-based drawing tools like rectangles
+            // For now, we'll just clear the selection
+            ImPlot::EndPlot();
+            ImPlot::SetNextAxisLimits(ImAxis_X1, selection.X.Min, selection.X.Max, ImGuiCond_Always);
+            ImPlot::SetNextAxisLimits(ImAxis_Y1, selection.Y.Min, selection.Y.Max, ImGuiCond_Always);
         }
 
-        // During drag, we could preview the tool being drawn
-        // For now, we'll just track the drag state
-        ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
-        (void)current_pos;  // Suppress unused variable warning
-
-        // When mouse is released, finalize the tool
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-          // In a real implementation, we would create the tool based on the
-          // selected tool type and the start/end points
-          // For now, we'll just reset the drawing state
-          is_drawing = false;
+        // Handle right-click context menu for drawing tools
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImPlot::IsPlotHovered()) {
+            ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            (void)mouse_pos;  // Suppress unused variable warning
+            // In a real implementation, we would show a context menu to select drawing tool type
+            // For now, we'll just store the position for potential use
         }
-      }
+
+        // Handle left mouse click for creating drawing tools
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
+            ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            (void)mouse_pos;  // Suppress unused variable warning
+            // In a real implementation, we would check if we're in drawing mode
+            // and create the appropriate tool based on the selected tool type
+        }
+
+        // Handle mouse dragging for creating drawing tools
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
+            // Check if we're in drawing mode
+            static bool is_drawing = false;
+            static ImPlotPoint start_point;
+            static std::string current_tool_id;
+
+            if (!is_drawing) {
+                start_point = ImPlot::GetPlotMousePos();
+                is_drawing = true;
+
+                // Generate a unique ID for the new tool
+                static int tool_counter = 0;
+                current_tool_id = "tool_" + std::to_string(++tool_counter);
+            }
+
+            // During drag, we could preview the tool being drawn
+            // For now, we'll just track the drag state
+            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+            (void)current_pos;  // Suppress unused variable warning
+
+            // When mouse is released, finalize the tool
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                // In a real implementation, we would create the tool based on the
+                // selected tool type and the start/end points
+                // For now, we'll just reset the drawing state
+                is_drawing = false;
+            }
+        }
     }
 
     // Render context menu if right-clicked on plot
@@ -3322,92 +2964,27 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // Render aggressor trade bubbles
     if (show_aggressor_bubbles_) {
-      render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx, aggregation_factor);
-    }
-
-    // "Snap to Last" functionality: If X-axis max < latest data time, show a button to jump to live
-    // edge
-    if (!chart.dates.empty()) {
-      ImPlotRect current_limits = ImPlot::GetPlotLimits();
-      double latest_atomic_time = chart.dates.back();  // Latest data point in the chart
-
-      if (current_limits.X.Max < latest_atomic_time) {
-        // Calculate position for the button - top-right corner of the plot
-        ImVec2 plot_pos = ImPlot::GetPlotPos();
-        ImVec2 plot_size = ImPlot::GetPlotSize();
-
-        // Position the button in the top-right corner of the plot area
-        ImVec2 button_pos = ImVec2(plot_pos.x + plot_size.x - 30, plot_pos.y + 5);
-
-        // Draw a hovering arrow button
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-        // Draw a semi-transparent background for the button
-        draw_list->AddRectFilled(ImVec2(button_pos.x - 2, button_pos.y - 2),
-                                 ImVec2(button_pos.x + 28, button_pos.y + 22),
-                                 IM_COL32(0, 0, 0, 180),  // Dark semi-transparent background
-                                 4.0f                     // Rounded corners
-        );
-
-        // Draw an arrow pointing right (>) to indicate "snap to latest"
-        ImVec2 center = ImVec2(button_pos.x + 12, button_pos.y + 10);
-        ImVec2 arrow_points[3] = {
-            ImVec2(center.x - 3, center.y - 4),  // Top left of arrow
-            ImVec2(center.x + 5, center.y),      // Tip of arrow
-            ImVec2(center.x - 3, center.y + 4)   // Bottom left of arrow
-        };
-
-        // Draw the arrow
-        draw_list->AddTriangleFilled(arrow_points[0], arrow_points[1], arrow_points[2],
-                                     IM_COL32(255, 255, 255, 220)  // White arrow
-        );
-
-        // Handle button click
-        ImVec2 mouse_pos = ImGui::GetMousePos();
-        if (mouse_pos.x >= button_pos.x - 2 && mouse_pos.x <= button_pos.x + 28 &&
-            mouse_pos.y >= button_pos.y - 2 && mouse_pos.y <= button_pos.y + 22) {
-          // Draw highlight when hovered
-          draw_list->AddRect(ImVec2(button_pos.x - 2, button_pos.y - 2),
-                             ImVec2(button_pos.x + 28, button_pos.y + 22),
-                             IM_COL32(255, 255, 255, 200),  // Highlight border
-                             4.0f                           // Rounded corners
-          );
-
-          if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            // Jump to the live edge by setting follow_latest_ to true
-            follow_latest_ = true;
-
-            // Reset the view to show the latest data
-            double time_max = latest_atomic_time;
-            double duration_raw =
-                RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
-            double duration_sec = duration_raw / 1000000.0;
-            double window_size = duration_sec * auto_follow_window_;
-            double padding = window_size * 0.05;
-
-            last_view_min_ = time_max - window_size;
-            last_view_max_ = time_max + padding;
-
-            // Force the axis limits to update immediately
-            ImPlot::SetNextAxisLimits(ImAxis_X1, last_view_min_, last_view_max_, ImPlotCond_Always);
-          }
-        }
-      }
+      render_aggressor_trade_bubbles(chart, render_start_idx, render_end_idx);
     }
 
     ImPlot::EndPlot();
   }
 
-  ImPlot::PopStyleVar();
-  ImPlot::PopStyleColor(3);
+  // ImPlot::PopStyleVar();
+  // ImPlot::PopStyleColor(3);
 }
 
 // Helper method to render enhanced step profile histograms on candle bars
-void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
-    ImDrawList* draw_list, const std::vector<RenderEngine::OHLCVCandle>& candles,
-    const std::vector<double>& x_coords, const std::vector<double>& y_coords_high,
-    const std::vector<double>& y_coords_low, bool show_poc_line, int num_buckets_per_candle,
-    float opacity, bool show_labels) {
+void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
+                                                                   const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                                   const std::vector<double>& x_coords,
+                                                                   const std::vector<double>& y_coords_high,
+                                                                   const std::vector<double>& y_coords_low,
+                                                                   bool show_poc_line,
+                                                                   int num_buckets_per_candle,
+                                                                   float opacity,
+                                                                   bool show_labels) {
+
   // This method implements the Step Profile rendering with additional visualization options
   if (candles.empty() || x_coords.size() != candles.size() ||
       y_coords_high.size() != candles.size() || y_coords_low.size() != candles.size()) {
@@ -3503,17 +3080,13 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
         ImU32 color;
         if (j == poc_bucket_idx) {
           // Highlight POC bucket with bright yellow
-          color = IM_COL32(
-              255, 255, 0,
-              static_cast<int>(240 * opacity));  // Bright yellow for POC with adjustable opacity
+          color = IM_COL32(255, 255, 0, static_cast<int>(240 * opacity));  // Bright yellow for POC with adjustable opacity
         } else {
           // Use gradient colors based on volume intensity and position in the candle
-          float volume_ratio =
-              static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
+          float volume_ratio = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
 
           // Determine if this bucket is in the upper or lower half of the candle
-          float position_ratio =
-              static_cast<float>(j) / static_cast<float>(num_buckets_per_candle - 1);
+          float position_ratio = static_cast<float>(j) / static_cast<float>(num_buckets_per_candle - 1);
 
           // Create a color gradient based on volume intensity and position
           if (position_ratio < 0.5f) {
@@ -3521,13 +3094,13 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
             int red_intensity = static_cast<int>(255 * volume_ratio * opacity);
             int alpha = static_cast<int>(180 * opacity);
             color = IM_COL32(red_intensity, static_cast<int>(50 * volume_ratio * opacity),
-                             static_cast<int>(50 * volume_ratio * opacity), alpha);
+                            static_cast<int>(50 * volume_ratio * opacity), alpha);
           } else {
             // Upper half - green for buying pressure, with intensity based on volume
             int green_intensity = static_cast<int>(255 * volume_ratio * opacity);
             int alpha = static_cast<int>(180 * opacity);
             color = IM_COL32(static_cast<int>(50 * volume_ratio * opacity), green_intensity,
-                             static_cast<int>(50 * volume_ratio * opacity), alpha);
+                            static_cast<int>(50 * volume_ratio * opacity), alpha);
           }
         }
 
@@ -3537,13 +3110,12 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
         // Add a subtle border to make individual bars more distinguishable
         if (opacity > 0.3f) {  // Only add border if not too transparent
           draw_list->AddRect(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom),
-                             IM_COL32(0, 0, 0, static_cast<int>(80 * opacity)), 0.0f, 0, 1.0f);
+                           IM_COL32(0, 0, 0, static_cast<int>(80 * opacity)), 0.0f, 0, 1.0f);
         }
       }
     }
 
-    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest
-    // volume
+    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
     if (show_poc_line && poc_bucket_idx >= 0) {
       // Calculate the y-coordinate for the POC line
       float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height;  // Center of the POC bucket
@@ -3554,12 +3126,9 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
       float poc_x_right = x_center + poc_line_half_width;
 
       // Draw the POC line as a horizontal yellow line with adjustable opacity
-      draw_list->AddLine(
-          ImVec2(poc_x_left, poc_y), ImVec2(poc_x_right, poc_y),
-          IM_COL32(255, 255, 0,
-                   static_cast<int>(
-                       255 * opacity)),  // Bright yellow color for POC with adjustable opacity
-          2.5f);                         // Slightly thicker line for better visibility
+      draw_list->AddLine(ImVec2(poc_x_left, poc_y), ImVec2(poc_x_right, poc_y),
+                         IM_COL32(255, 255, 0, static_cast<int>(255 * opacity)),  // Bright yellow color for POC with adjustable opacity
+                         2.5f);                        // Slightly thicker line for better visibility
     }
 
     // Optionally show labels for the mini histogram
@@ -3572,8 +3141,7 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(
       ImVec2 label_pos = ImVec2(x_center, y_high - 15.0f);
 
       // Draw the label with appropriate color
-      draw_list->AddText(label_pos, IM_COL32(255, 255, 255, static_cast<int>(200 * opacity)),
-                         label);
+      draw_list->AddText(label_pos, IM_COL32(255, 255, 255, static_cast<int>(200 * opacity)), label);
     }
   }
 }
@@ -3593,8 +3161,7 @@ void ChartPanel::handleMouseDragInteraction() {
   (void)mouse_screen_pos;  // Suppress unused variable warning
 
   // Convert ImPlotPoint to ImVec2 for interaction manager
-  ImVec2 converted_plot_pos =
-      ImVec2(static_cast<float>(mouse_plot_pos.x), static_cast<float>(mouse_plot_pos.y));
+  ImVec2 converted_plot_pos = ImVec2(static_cast<float>(mouse_plot_pos.x), static_cast<float>(mouse_plot_pos.y));
 
   // Check if left mouse button is pressed (starting drag) and no drag is currently active
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !interaction_mgr.isMouseDragActive()) {
@@ -3604,13 +3171,11 @@ void ChartPanel::handleMouseDragInteraction() {
     }
   }
   // If drag is active, update the position
-  else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
-           interaction_mgr.isTimeRangeSelectionActive()) {
+  else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && interaction_mgr.isTimeRangeSelectionActive()) {
     interaction_mgr.updateTimeRangeSelection(converted_plot_pos);
   }
   // If mouse button is released, end the drag interaction
-  else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
-           interaction_mgr.isTimeRangeSelectionActive()) {
+  else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && interaction_mgr.isTimeRangeSelectionActive()) {
     interaction_mgr.endTimeRangeSelection();
 
     // At this point, we have a completed time range selection
@@ -3620,22 +3185,20 @@ void ChartPanel::handleMouseDragInteraction() {
     // Optionally, we can set the volume profile panel to use this time range
     // This would require having access to the volume profile panel instance
     // For now, we'll just log the selection
-    std::cout << "[ChartPanel] Time range selected: " << time_range.first << " to "
-              << time_range.second << std::endl;
+    std::cout << "[ChartPanel] Time range selected: " << time_range.first << " to " << time_range.second << std::endl;
   }
 }
 
 void ChartPanel::center_on_timestamp(uint64_t timestamp) {
   // Convert the timestamp to the format used by the chart (seconds since epoch)
-  double timestamp_seconds =
-      static_cast<double>(timestamp) / 1000000.0;  // Convert microseconds to seconds
+  double timestamp_seconds = static_cast<double>(timestamp) / 1000000.0; // Convert microseconds to seconds
 
   // Store the target timestamp to be used in the next render cycle
   // We can't directly set the plot limits from outside BeginPlot/EndPlot
   // So we'll store it and apply it during the next render
-  last_view_min_ = timestamp_seconds - 10.0;  // 10 seconds before
-  last_view_max_ = timestamp_seconds + 10.0;  // 10 seconds after
-  follow_latest_ = false;                     // Disable auto-follow to keep the view centered
+  last_view_min_ = timestamp_seconds - 10.0; // 10 seconds before
+  last_view_max_ = timestamp_seconds + 10.0; // 10 seconds after
+  follow_latest_ = false; // Disable auto-follow to keep the view centered
 }
 
 std::pair<uint64_t, uint64_t> ChartPanel::get_visible_time_range() const {
@@ -3655,9 +3218,8 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
     ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
 
     // Convert the x-coordinate (time) back to timestamp
-    uint64_t clicked_timestamp =
-        static_cast<uint64_t>(mouse_pos.x * 1000000);  // Convert from seconds to microseconds
-    (void)clicked_timestamp;                           // Suppress unused variable warning
+    uint64_t clicked_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
+    (void)clicked_timestamp;  // Suppress unused variable warning
 
     // Find the closest candle to the clicked timestamp to determine the time range for the bar
     // Use binary search (std::lower_bound) to optimize from O(n) to O(log n)
@@ -3667,26 +3229,25 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
     auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(), mouse_pos.x);
 
     if (lower == chart.dates.end()) {
-      // Mouse x is beyond the last date, use the last element
-      closest_idx = chart.dates.size() - 1;
+        // Mouse x is beyond the last date, use the last element
+        closest_idx = chart.dates.size() - 1;
     } else if (lower == chart.dates.begin()) {
-      // Mouse x is before the first date, use the first element
-      closest_idx = 0;
+        // Mouse x is before the first date, use the first element
+        closest_idx = 0;
     } else {
-      // Compare the distance to the element at lower and the one before it
-      size_t idx_after = std::distance(chart.dates.begin(), lower);
-      size_t idx_before = idx_after - 1;
+        // Compare the distance to the element at lower and the one before it
+        size_t idx_after = std::distance(chart.dates.begin(), lower);
+        size_t idx_before = idx_after - 1;
 
-      double dist_to_after = std::abs(chart.dates[idx_after] - mouse_pos.x);
-      double dist_to_before = std::abs(chart.dates[idx_before] - mouse_pos.x);
+        double dist_to_after = std::abs(chart.dates[idx_after] - mouse_pos.x);
+        double dist_to_before = std::abs(chart.dates[idx_before] - mouse_pos.x);
 
-      closest_idx = (dist_to_before < dist_to_after) ? idx_before : idx_after;
+        closest_idx = (dist_to_before < dist_to_after) ? idx_before : idx_after;
     }
 
     // Calculate the time range for the clicked bar based on the timeframe
     uint64_t bar_duration = RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
-    uint64_t bar_start_time =
-        static_cast<uint64_t>(chart.dates[closest_idx] * 1000000);  // Convert to microseconds
+    uint64_t bar_start_time = static_cast<uint64_t>(chart.dates[closest_idx] * 1000000); // Convert to microseconds
     uint64_t bar_end_time = bar_start_time + bar_duration;
 
     // Store the time range for the clicked bar
@@ -3714,8 +3275,7 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
 
       // Convert the x-coordinate (time) back to timestamp
-      uint64_t anchor_timestamp =
-          static_cast<uint64_t>(mouse_pos.x * 1000000);  // Convert from seconds to microseconds
+      uint64_t anchor_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
 
       // Create a new anchored VWAP at this timestamp
       create_anchored_vwap_at_time(anchor_timestamp);
@@ -3740,13 +3300,13 @@ void ChartPanel::create_anchored_vwap_at_time(uint64_t timestamp) {
     std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
     for (size_t i = 0; i < chart.dates.size(); ++i) {
       BTQuant::RenderEngine::OHLCVCandle bar;
-      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert to microseconds
+      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
       bar.open = chart.opens[i];
       bar.high = chart.highs[i];
       bar.low = chart.lows[i];
       bar.close = chart.closes[i];
       bar.volume = chart.volumes[i];
-      bar.trade_count = 1;  // Placeholder value
+      bar.trade_count = 1; // Placeholder value
       bars.push_back(bar);
     }
 
@@ -3792,7 +3352,7 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
     }
 
     if (!found_anchor) {
-      continue;  // Anchor timestamp not found in current chart data
+      continue; // Anchor timestamp not found in current chart data
     }
 
     // Render the VWAP line as a smooth polyline with anti-aliasing
@@ -3809,7 +3369,7 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       if (points.size() > 1) {
         // Draw the VWAP line as a smooth polyline in yellow with anti-aliasing
         draw_list->AddPolyline(points.data(), static_cast<int>(points.size()),
-                               IM_COL32(255, 255, 0, 255), ImDrawListFlags_AntiAliasedLines, 2.0f);
+                              IM_COL32(255, 255, 0, 255), ImDrawListFlags_AntiAliasedLines, 2.0f);
       }
     }
 
@@ -3836,8 +3396,8 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       // Draw filled region for SD1 band
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()),
-                                       IM_COL32(255, 255, 0, 80));  // Semi-transparent yellow
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(255, 255, 0, 80));  // Semi-transparent yellow
       }
     }
 
@@ -3864,8 +3424,8 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       // Draw filled region for SD2 band
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()),
-                                       IM_COL32(0, 255, 255, 60));  // Semi-transparent cyan
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(0, 255, 255, 60));  // Semi-transparent cyan
       }
     }
 
@@ -3892,8 +3452,8 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       // Draw filled region for SD3 band
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()),
-                                       IM_COL32(255, 0, 255, 40));  // More transparent magenta
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(255, 0, 255, 40));  // More transparent magenta
       }
     }
   }
@@ -3933,7 +3493,7 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
     }
 
     if (!found_start) {
-      continue;  // Session start time not found in current chart data
+      continue; // Session start time not found in current chart data
     }
 
     // Render the VWAP line as a smooth polyline with anti-aliasing
@@ -3949,13 +3509,11 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
 
       if (points.size() > 1) {
         // Use different colors for active vs historical sessions
-        ImU32 color = session.isActive
-                          ? IM_COL32(0, 255, 255, 255)
-                          : IM_COL32(128, 128, 128, 200);  // Cyan for active, gray for historical
+        ImU32 color = session.isActive ? IM_COL32(0, 255, 255, 255) : IM_COL32(128, 128, 128, 200); // Cyan for active, gray for historical
 
         // Draw the VWAP line as a smooth polyline in different colors based on session status
-        draw_list->AddPolyline(points.data(), static_cast<int>(points.size()), color,
-                               ImDrawListFlags_AntiAliasedLines, 2.0f);
+        draw_list->AddPolyline(points.data(), static_cast<int>(points.size()),
+                              color, ImDrawListFlags_AntiAliasedLines, 2.0f);
       }
     }
 
@@ -3981,10 +3539,10 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
 
       // Draw filled region for SD1 band with different transparency for active vs historical
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
-        ImU32 sd1_color = session.isActive ? IM_COL32(0, 255, 255, 80)
-                                           : IM_COL32(128, 128, 128, 60);  // More opaque for active
+        ImU32 sd1_color = session.isActive ? IM_COL32(0, 255, 255, 80) : IM_COL32(128, 128, 128, 60); // More opaque for active
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()), sd1_color);
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd1_color);
       }
     }
 
@@ -4010,10 +3568,10 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
 
       // Draw filled region for SD2 band with different transparency for active vs historical
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
-        ImU32 sd2_color = session.isActive ? IM_COL32(0, 200, 200, 60)
-                                           : IM_COL32(100, 100, 100, 40);  // More opaque for active
+        ImU32 sd2_color = session.isActive ? IM_COL32(0, 200, 200, 60) : IM_COL32(100, 100, 100, 40); // More opaque for active
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()), sd2_color);
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd2_color);
       }
     }
 
@@ -4039,25 +3597,24 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
 
       // Draw filled region for SD3 band with different transparency for active vs historical
       if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
-        ImU32 sd3_color = session.isActive ? IM_COL32(0, 150, 150, 40)
-                                           : IM_COL32(80, 80, 80, 20);  // More opaque for active
+        ImU32 sd3_color = session.isActive ? IM_COL32(0, 150, 150, 40) : IM_COL32(80, 80, 80, 20); // More opaque for active
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
-                                       static_cast<int>(filled_region_points.size()), sd3_color);
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd3_color);
       }
     }
   }
+
 }
 
 void ChartPanel::render_trades_popup() {
-  // This method is kept for backward compatibility but will be replaced by the
-  // HistoricalTimeSalesPanel popup The actual popup is now handled by the
-  // HistoricalTimeSalesPanel.show_trades_popup method which is called from the render method
+  // This method is kept for backward compatibility but will be replaced by the HistoricalTimeSalesPanel popup
+  // The actual popup is now handled by the HistoricalTimeSalesPanel.show_trades_popup method
+  // which is called from the render method
 }
 
 // Multi-timeframe indicator methods implementation
-void ChartPanel::add_multi_timeframe_indicator(const std::string& name, bool visible, ImVec4 color,
-                                               int period,
-                                               RenderEngine::TimeFrame source_timeframe) {
+void ChartPanel::add_multi_timeframe_indicator(const std::string& name, bool visible, ImVec4 color, int period, RenderEngine::TimeFrame source_timeframe) {
   multi_tf_indicators_.emplace_back(name, visible, color, period, source_timeframe);
 }
 
@@ -4071,7 +3628,7 @@ void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
   (void)chart;  // Suppress unused parameter warning
   // Update multi-timeframe indicators by fetching data from the source timeframe
   for (auto& indicator : multi_tf_indicators_) {
-    if (!indicator.isVisible) continue;  // Skip invisible indicators
+    if (!indicator.isVisible) continue; // Skip invisible indicators
 
     // Get symbol ID to fetch data from the source timeframe
     auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
@@ -4099,8 +3656,7 @@ void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
         // Store the timestamps for alignment with the current chart
         indicator.timestamps.clear();
         for (const auto& candle : source_candles) {
-          indicator.timestamps.push_back(static_cast<double>(candle.timestamp) /
-                                         1000000.0);  // Convert microseconds to seconds
+          indicator.timestamps.push_back(static_cast<double>(candle.timestamp) / 1000000.0); // Convert microseconds to seconds
         }
       } else if (indicator.name.find("EMA") != std::string::npos) {
         // Calculate EMA for the source timeframe
@@ -4109,8 +3665,7 @@ void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
         // Store the timestamps for alignment with the current chart
         indicator.timestamps.clear();
         for (const auto& candle : source_candles) {
-          indicator.timestamps.push_back(static_cast<double>(candle.timestamp) /
-                                         1000000.0);  // Convert microseconds to seconds
+          indicator.timestamps.push_back(static_cast<double>(candle.timestamp) / 1000000.0); // Convert microseconds to seconds
         }
       }
       // Add other indicator types as needed (RSI, etc.)
@@ -4118,8 +3673,7 @@ void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
   }
 }
 
-void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, size_t start_idx,
-                                                   size_t end_idx) {
+void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, size_t start_idx, size_t end_idx) {
   if (chart.dates.empty() || multi_tf_indicators_.empty()) return;
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -4127,8 +3681,7 @@ void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, s
   for (const auto& indicator : multi_tf_indicators_) {
     if (!indicator.isVisible || indicator.values.empty() || indicator.timestamps.empty()) continue;
 
-    // Find the range of the multi-timeframe indicator values that overlap with the current chart's
-    // visible range
+    // Find the range of the multi-timeframe indicator values that overlap with the current chart's visible range
     double visible_start_time = chart.dates[start_idx];
     double visible_end_time = chart.dates[end_idx - 1];
 
@@ -4155,10 +3708,8 @@ void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, s
     // Draw the multi-timeframe indicator lines
     for (size_t i = mt_start_idx; i < mt_end_idx - 1 && i < indicator.values.size() - 1; ++i) {
       // Find the closest date in the current chart for the multi-timeframe timestamp
-      auto current_timestamp_it =
-          std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
-      auto next_timestamp_it =
-          std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i + 1]);
+      auto current_timestamp_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
+      auto next_timestamp_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i + 1]);
 
       // If we can't find exact matches, we'll interpolate or find the closest points
       size_t current_chart_idx = 0;
@@ -4185,26 +3736,24 @@ void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, s
       // Ensure we have valid indices and values
       if (i < indicator.values.size() && (i + 1) < indicator.values.size() &&
           current_chart_idx < chart.dates.size() && next_chart_idx < chart.dates.size()) {
-        // Draw line segments connecting the multi-timeframe indicator values to the appropriate
-        // chart positions
+
+        // Draw line segments connecting the multi-timeframe indicator values to the appropriate chart positions
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[current_chart_idx], indicator.values[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[next_chart_idx], indicator.values[i + 1]);
 
         // Convert color to ImU32
         ImU32 color = ImGui::ColorConvertFloat4ToU32(indicator.color);
 
-        // Draw the line segment with a slightly different style to distinguish from regular
-        // indicators
-        draw_list->AddLine(p1, p2, color, 2.5f);  // Slightly thicker line for visibility
+        // Draw the line segment with a slightly different style to distinguish from regular indicators
+        draw_list->AddLine(p1, p2, color, 2.5f); // Slightly thicker line for visibility
       }
     }
 
-    // Additionally, for better visualization of multi-timeframe indicators, draw points at the
-    // exact multi-timeframe data points that align with the chart
+    // Additionally, for better visualization of multi-timeframe indicators, draw points at the exact
+    // multi-timeframe data points that align with the chart
     for (size_t i = mt_start_idx; i < mt_end_idx && i < indicator.values.size(); ++i) {
       // Find the closest date in the current chart for the multi-timeframe timestamp
-      auto chart_it =
-          std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
+      auto chart_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
 
       if (chart_it != chart.dates.end()) {
         size_t chart_idx = std::distance(chart.dates.begin(), chart_it);
@@ -4221,9 +3770,7 @@ void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, s
   }
 }
 
-std::vector<double> ChartPanel::get_indicator_values_from_timeframe(
-    const std::string& indicator_name, int period, RenderEngine::TimeFrame timeframe,
-    uint32_t symbol_id) {
+std::vector<double> ChartPanel::get_indicator_values_from_timeframe(const std::string& indicator_name, int period, RenderEngine::TimeFrame timeframe, uint32_t symbol_id) {
   // Get candles from the specified timeframe
   auto candles = processor_->getCandles(symbol_id, timeframe);
 
@@ -4253,8 +3800,7 @@ std::vector<double> ChartPanel::get_indicator_values_from_timeframe(
 }
 
 // Set callback for showing historical trades
-void ChartPanel::set_show_historical_trades_callback(
-    std::function<void(uint64_t, uint64_t)> callback) {
+void ChartPanel::set_show_historical_trades_callback(std::function<void(uint64_t, uint64_t)> callback) {
   on_show_historical_trades_ = [this, callback](uint64_t start_time, uint64_t end_time) {
     if (callback) {
       callback(start_time, end_time);
@@ -4275,23 +3821,23 @@ std::pair<double, bool> ChartPanel::get_global_crosshair_state() const {
   return std::make_pair(global_crosshair_x_pos_, global_crosshair_active_);
 }
 
-// Panel settings methods
-void ChartPanel::open_settings() {
-  if (settings_) {
-    settings_->open();
-  }
-}
-
-void ChartPanel::render_context_menu() {
-  // Create a context menu that appears when right-clicking on the panel
-  if (ImGui::BeginPopup("PanelContextMenu")) {
-    if (ImGui::MenuItem("Panel Settings")) {
-      open_settings();
+  // Panel settings methods
+  void ChartPanel::open_settings() {
+    if (settings_) {
+      settings_->open();
     }
-
-    ImGui::EndPopup();
   }
-}
+
+  void ChartPanel::render_context_menu() {
+    // Create a context menu that appears when right-clicking on the panel
+    if (ImGui::BeginPopup("PanelContextMenu")) {
+      if (ImGui::MenuItem("Panel Settings")) {
+        open_settings();
+      }
+
+      ImGui::EndPopup();
+    }
+  }
 
 // Method to update liquidity data from the market data processor
 void ChartPanel::update_liquidity_data() {
@@ -4355,37 +3901,32 @@ void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
   // Draw liquidity bars for each level
   for (const auto& level : liquidity_levels_) {
     // Convert the price to Y coordinate
-    ImVec2 level_pos =
-        ImPlot::PlotToPixels(limits.X.Max, level.price);  // Use rightmost X for liquidity bars
+    ImVec2 level_pos = ImPlot::PlotToPixels(limits.X.Max, level.price); // Use rightmost X for liquidity bars
 
     // Calculate bar width based on volume (relative to max volume)
-    float bar_width =
-        (static_cast<float>(level.volume) / static_cast<float>(max_liquidity_volume_)) *
-        liquidity_bar_width_;
+    float bar_width = (static_cast<float>(level.volume) / static_cast<float>(max_liquidity_volume_)) * liquidity_bar_width_;
 
     // Determine color based on bid/ask
     ImVec4 color = level.is_bid ? liquidity_bids_color_ : liquidity_asks_color_;
-    color.w *= liquidity_bar_opacity_;  // Apply opacity
+    color.w *= liquidity_bar_opacity_; // Apply opacity
     ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
 
-    // Calculate the top and bottom Y positions for the bar (small height to make it look like a
-    // line)
-    float bar_height = 2.0f;  // Small height to make it appear as a horizontal line
+    // Calculate the top and bottom Y positions for the bar (small height to make it look like a line)
+    float bar_height = 2.0f; // Small height to make it appear as a horizontal line
 
     // Calculate the left edge of the bar (extending from the right axis inward)
     float bar_left_x = right_edge_x - bar_width;
 
     // Draw the liquidity bar as a horizontal line extending from the right axis
-    ImVec2 bar_start = ImVec2(bar_left_x, level_pos.y - bar_height / 2);
-    ImVec2 bar_end = ImVec2(right_edge_x, level_pos.y + bar_height / 2);
+    ImVec2 bar_start = ImVec2(bar_left_x, level_pos.y - bar_height/2);
+    ImVec2 bar_end = ImVec2(right_edge_x, level_pos.y + bar_height/2);
 
     draw_list->AddRectFilled(bar_start, bar_end, im_color);
   }
 }
 
 // Method to render aggressor trade bubbles on the chart
-void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx,
-                                                size_t end_idx, int aggregation_factor) {
+void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size_t start_idx, size_t end_idx) {
   if (!show_aggressor_bubbles_ || aggressor_trades_.empty() || chart.dates.empty()) {
     return;
   }
@@ -4405,11 +3946,11 @@ void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size
   for (const auto& trade : aggressor_trades_) {
     // Find the closest candle in the visible range
     auto it = std::lower_bound(chart.dates.begin(), chart.dates.end(), trade.timestamp);
-
+    
     if (it == chart.dates.end()) continue;
-
+    
     size_t chart_idx = std::distance(chart.dates.begin(), it);
-
+    
     // Only render if the trade is within or near the visible range
     if (chart_idx < start_idx || chart_idx >= end_idx) {
       // Check if it's close enough to the visible range to still be shown
@@ -4417,64 +3958,27 @@ void ChartPanel::render_aggressor_trade_bubbles(const ChartInstance& chart, size
       if (chart_idx >= end_idx && (chart_idx - end_idx) > 5) continue;
     }
 
-    // For SD mode, we might want to aggregate or reduce the number of bubbles shown
-    // Only render every nth bubble based on aggregation factor to reduce clutter
-    bool hd_resolution_enabled = (aggregation_factor == 1);  // Determine from aggregation factor
-    if (!hd_resolution_enabled && aggregation_factor > 1) {
-      // Only render every 10th bubble or so to reduce visual clutter in SD mode
-      if ((chart_idx / aggregation_factor) % 2 != 0) {  // Show every other aggregated section
-        continue;
-      }
-    }
-
     // Convert the trade timestamp and price to screen coordinates
     ImVec2 bubble_pos = ImPlot::PlotToPixels(trade.timestamp, trade.price);
 
     // Calculate bubble size based on volume (scaled between min and max size)
-    float bubble_size =
-        bubble_min_size_ + (bubble_max_size_ - bubble_min_size_) *
-                               (static_cast<float>(trade.volume) / static_cast<float>(max_volume));
+    float bubble_size = bubble_min_size_ + 
+                       (bubble_max_size_ - bubble_min_size_) * 
+                       (static_cast<float>(trade.volume) / static_cast<float>(max_volume));
 
     // Determine color based on trade type (buy/sell)
     ImVec4 color = trade.is_buy ? bubble_buy_color_ : bubble_sell_color_;
-    color.w *= bubble_opacity_;  // Apply opacity
+    color.w *= bubble_opacity_; // Apply opacity
     ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
 
-    // For market sells: Draw solid red rectangles extending left
-    if (!trade.is_buy) {  // This is a sell trade
-      // Calculate rectangle dimensions
-      float rect_width = bubble_size * 2.0f;  // Make it wider than the circle
-      float rect_height = bubble_size;        // Make it shorter than the circle diameter
-      float rect_half_height = rect_height / 2.0f;
+    // Draw the bubble as a filled circle
+    draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
 
-      // Define rectangle corners - extending left from the trade position
-      ImVec2 rect_start = ImVec2(bubble_pos.x - rect_width, bubble_pos.y - rect_half_height);
-      ImVec2 rect_end = ImVec2(bubble_pos.x, bubble_pos.y + rect_half_height);
-
-      // Use solid red color for sell rectangles
-      ImVec4 red_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Pure red
-      red_color.w *= bubble_opacity_;                     // Apply opacity
-      ImU32 red_im_color = ImGui::ColorConvertFloat4ToU32(red_color);
-
-      // Draw the solid red rectangle extending left
-      draw_list->AddRectFilled(rect_start, rect_end, red_im_color);
-
-      // Draw a subtle border to make the rectangle more visible
-      ImVec4 border_color = red_color;
-      border_color.w = 0.3f;  // Less opaque border
-      ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
-      draw_list->AddRect(rect_start, rect_end, border_im_color, 0.0f, ImDrawFlags_RoundCornersNone,
-                         1.0f);
-    } else {  // This is a buy trade - keep the original bubble
-      // Draw the bubble as a filled circle
-      draw_list->AddCircleFilled(bubble_pos, bubble_size, im_color);
-
-      // Draw a subtle border to make the bubble more visible
-      ImVec4 border_color = color;
-      border_color.w = 0.3f;  // Less opaque border
-      ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
-      draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
-    }
+    // Draw a subtle border to make the bubble more visible
+    ImVec4 border_color = color;
+    border_color.w = 0.3f; // Less opaque border
+    ImU32 border_im_color = ImGui::ColorConvertFloat4ToU32(border_color);
+    draw_list->AddCircle(bubble_pos, bubble_size, border_im_color, 0, 1.0f);
   }
 }
 
@@ -4499,10 +4003,10 @@ void ChartPanel::update_aggressor_trades_data() {
   for (const auto& trade : recent_trades) {
     // Convert timestamp from microseconds to seconds for consistency with chart data
     double timestamp_seconds = static_cast<double>(trade.timestamp) / 1000000.0;
-
+    
     // Use the is_buy field directly from TradeData
     bool is_buy = trade.is_buy;
-
+    
     aggressor_trades_.emplace_back(timestamp_seconds, trade.price, trade.size, is_buy, 0);
   }
 }
@@ -4515,7 +4019,7 @@ void ChartPanel::update_aggressor_trades_data() {
 void ChartPanel::render_top_toolbar() {
   // Symbol Lookup (InputText)
   ImGui::PushItemWidth(100);
-  if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_),
+  if (ImGui::InputText("##Symbol", symbol_input_buffer_, sizeof(symbol_input_buffer_), 
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     set_symbol(symbol_input_buffer_, exchange_);
   }
@@ -4523,72 +4027,45 @@ void ChartPanel::render_top_toolbar() {
     set_symbol(symbol_input_buffer_, exchange_);
   }
   ImGui::PopItemWidth();
-
+  
   // Tooltip for symbol input
   if (ImGui::IsItemHovered()) {
     ImGui::SetTooltip("Enter symbol (e.g., BTC-USDT)");
   }
-
+  
   ImGui::SameLine();
-
+  
   // Timeframe Selector (Dropdown: 1m, 5m, 1H, 1D - simplified for toolbar)
-  // TODO :: Add all timeframes, from 1ms up to 1d
   const char* toolbar_timeframes[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
   int tf_index = 0;
   // Map current timeframe to index
   switch (timeframe_) {
-    case RenderEngine::TimeFrame::TF_1MIN:
-      tf_index = 0;
-      break;
-    case RenderEngine::TimeFrame::TF_5MIN:
-      tf_index = 1;
-      break;
-    case RenderEngine::TimeFrame::TF_15MIN:
-      tf_index = 2;
-      break;
-    case RenderEngine::TimeFrame::TF_1HOUR:
-      tf_index = 3;
-      break;
-    case RenderEngine::TimeFrame::TF_4HOUR:
-      tf_index = 4;
-      break;
-    case RenderEngine::TimeFrame::TF_1DAY:
-      tf_index = 5;
-      break;
-    default:
-      tf_index = 0;
-      break;
+    case RenderEngine::TimeFrame::TF_1MIN: tf_index = 0; break;
+    case RenderEngine::TimeFrame::TF_5MIN: tf_index = 1; break;
+    case RenderEngine::TimeFrame::TF_15MIN: tf_index = 2; break;
+    case RenderEngine::TimeFrame::TF_1HOUR: tf_index = 3; break;
+    case RenderEngine::TimeFrame::TF_4HOUR: tf_index = 4; break;
+    case RenderEngine::TimeFrame::TF_1DAY: tf_index = 5; break;
+    default: tf_index = 0; break;
   }
-
+  
   ImGui::PushItemWidth(60);
   if (ImGui::Combo("##TF", &tf_index, toolbar_timeframes, IM_ARRAYSIZE(toolbar_timeframes))) {
     RenderEngine::TimeFrame new_tf = RenderEngine::TimeFrame::TF_1MIN;
     switch (tf_index) {
-      case 0:
-        new_tf = RenderEngine::TimeFrame::TF_1MIN;
-        break;
-      case 1:
-        new_tf = RenderEngine::TimeFrame::TF_5MIN;
-        break;
-      case 2:
-        new_tf = RenderEngine::TimeFrame::TF_15MIN;
-        break;
-      case 3:
-        new_tf = RenderEngine::TimeFrame::TF_1HOUR;
-        break;
-      case 4:
-        new_tf = RenderEngine::TimeFrame::TF_4HOUR;
-        break;
-      case 5:
-        new_tf = RenderEngine::TimeFrame::TF_1DAY;
-        break;
+      case 0: new_tf = RenderEngine::TimeFrame::TF_1MIN; break;
+      case 1: new_tf = RenderEngine::TimeFrame::TF_5MIN; break;
+      case 2: new_tf = RenderEngine::TimeFrame::TF_15MIN; break;
+      case 3: new_tf = RenderEngine::TimeFrame::TF_1HOUR; break;
+      case 4: new_tf = RenderEngine::TimeFrame::TF_4HOUR; break;
+      case 5: new_tf = RenderEngine::TimeFrame::TF_1DAY; break;
     }
     set_timeframe(new_tf);
   }
   ImGui::PopItemWidth();
-
+  
   ImGui::SameLine();
-
+  
   // Chart Style (Dropdown: Candle, Bar, Line, Area, Quantower)
   const char* chart_styles[] = {"Candle", "Bar", "Line", "Area", "Quantower"};
   int style_index = static_cast<int>(chart_style_);
@@ -4597,129 +4074,101 @@ void ChartPanel::render_top_toolbar() {
     chart_style_ = static_cast<ChartStyle>(style_index);
   }
   ImGui::PopItemWidth();
-
+  
   ImGui::SameLine();
   ImGui::Spacing();
   ImGui::SameLine();
-
+  
   // Mouse Trading vs. Keyboard Trading toggle button
-  const char* trading_mode_label =
-      (trading_mode_ == TradingMode::MOUSE_TRADING) ? "Mouse" : "Keyboard";
-  ImVec4 button_color = (trading_mode_ == TradingMode::MOUSE_TRADING)
-                            ? ImVec4(0.2f, 0.6f, 0.2f, 1.0f)   // Green for mouse
-                            : ImVec4(0.6f, 0.4f, 0.2f, 1.0f);  // Orange for keyboard
-
+  const char* trading_mode_label = (trading_mode_ == TradingMode::MOUSE_TRADING) ? "Mouse" : "Keyboard";
+  ImVec4 button_color = (trading_mode_ == TradingMode::MOUSE_TRADING) 
+                        ? ImVec4(0.2f, 0.6f, 0.2f, 1.0f)  // Green for mouse
+                        : ImVec4(0.6f, 0.4f, 0.2f, 1.0f); // Orange for keyboard
+  
   ImGui::PushStyleColor(ImGuiCol_Button, button_color);
   if (ImGui::Button(trading_mode_label, ImVec2(70, 0))) {
-    trading_mode_ = (trading_mode_ == TradingMode::MOUSE_TRADING) ? TradingMode::KEYBOARD_TRADING
-                                                                  : TradingMode::MOUSE_TRADING;
+    trading_mode_ = (trading_mode_ == TradingMode::MOUSE_TRADING) 
+                    ? TradingMode::KEYBOARD_TRADING 
+                    : TradingMode::MOUSE_TRADING;
   }
   ImGui::PopStyleColor();
-
+  
   if (ImGui::IsItemHovered()) {
     ImGui::SetTooltip("Toggle between Mouse Trading and Keyboard Trading modes");
   }
-
+  
   ImGui::SameLine();
   ImGui::Spacing();
   ImGui::SameLine();
-
+  
   // Auto-follow checkbox
   ImGui::Checkbox("Auto-follow", &follow_latest_);
-
+  
   ImGui::SameLine();
-
-  // Price Scale Mode indicator
-  const char* scale_modes[] = {"Auto", "Centered", "In View", "Manual", "Center"};
-  ImGui::Text("Y: %s", scale_modes[static_cast<int>(price_scale_mode_)]);
-
+  
+  // Price Centering Mode indicator
+  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
+  ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
+  
   // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
 // 3.2 Left Sidebar (Tools & Objects) - called within ChartLeftSidebar child
 void ChartPanel::render_left_sidebar() {
-  // Get the font manager instance to access the icons font
-  auto& font_manager = BTQuant::UI::FontManager::getInstance();
-
   // Crosshair button
-  ImVec4 crosshair_color =
-      show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 crosshair_color = show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf05b", ImVec2(32, 32))) {  // Crosshairs icon
-      show_crosshair_ = !show_crosshair_;
-    }
-    if (pushed) ImGui::PopFont();  // Pop icons font
+  if (ImGui::Button("+", ImVec2(32, 32))) {
+    show_crosshair_ = !show_crosshair_;
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
-
+  
   // Drawing Tools button
   ImGui::Spacing();
-  ImVec4 drawing_color =
-      show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 drawing_color = show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf14b", ImVec2(32, 32))) {  // Pencil icon
-      show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
-      if (show_drawing_tools_sidebar_) {
-        ImGui::OpenPopup("DrawingToolsPopup");
-      }
+  if (ImGui::Button("D", ImVec2(32, 32))) {
+    show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
+    if (show_drawing_tools_sidebar_) {
+      ImGui::OpenPopup("DrawingToolsPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
-
+  
   // Overlays button
   ImGui::Spacing();
-  ImVec4 overlays_color =
-      show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 overlays_color = show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf0ab", ImVec2(32, 32))) {  // Filter icon
-      show_overlays_menu_ = !show_overlays_menu_;
-      if (show_overlays_menu_) {
-        ImGui::OpenPopup("OverlaysPopup");
-      }
+  if (ImGui::Button("O", ImVec2(32, 32))) {
+    show_overlays_menu_ = !show_overlays_menu_;
+    if (show_overlays_menu_) {
+      ImGui::OpenPopup("OverlaysPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
-
+  
   // Indicators button
   ImGui::Spacing();
-  ImVec4 indicators_color =
-      show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 indicators_color = show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf080", ImVec2(32, 32))) {  // Bar chart icon
-      show_indicators_menu_ = !show_indicators_menu_;
-      if (show_indicators_menu_) {
-        ImGui::OpenPopup("IndicatorsPopup");
-      }
+  if (ImGui::Button("I", ImVec2(32, 32))) {
+    show_indicators_menu_ = !show_indicators_menu_;
+    if (show_indicators_menu_) {
+      ImGui::OpenPopup("IndicatorsPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
   // Trade Bubbles button
   ImGui::Spacing();
-  ImVec4 bubbles_color =
-      show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 bubbles_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf247", ImVec2(32, 32))) {  // USD icon (for trades)
-      show_aggressor_bubbles_ = !show_aggressor_bubbles_;
-    }
-    if (pushed) ImGui::PopFont();  // Pop icons font
+  if (ImGui::Button("B", ImVec2(32, 32))) {
+    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
@@ -4728,48 +4177,39 @@ void ChartPanel::render_left_sidebar() {
   ImGui::Spacing();
   ImGui::Separator();
   ImGui::Spacing();
-
+  
   // Favorite tools section
-  {
-    bool pushed = font_manager.pushIconsFont();
-    ImGui::Text("\uf005");         // Star icon
-    if (pushed) ImGui::PopFont();  // Pop icons font
-  }
+  ImGui::Text("Fav");
   ImGui::Spacing();
-
+  
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false);  // Horizontal line icon
-    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false);       // Trend line icon
-    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true);         // Chevron down icon
-    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false);        // Check square icon
+    favorite_tools_.emplace_back("Horizontal Line", "H", false);
+    favorite_tools_.emplace_back("Trend Line", "T", false);
+    favorite_tools_.emplace_back("Fibonacci", "F", true);
+    favorite_tools_.emplace_back("Rectangle", "R", false);
   }
-
+  
   // Render favorite tools
   for (size_t i = 0; i < favorite_tools_.size(); ++i) {
     const auto& tool = favorite_tools_[i];
-    ImVec4 fav_color =
-        tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+    ImVec4 fav_color = tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
-    {
-      bool pushed = font_manager.pushIconsFont();
-      if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
-        selected_drawing_tool_ = static_cast<int>(i);
-      }
-      if (pushed) ImGui::PopFont();  // Pop icons font
+    if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
+      selected_drawing_tool_ = static_cast<int>(i);
     }
     ImGui::PopID();
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tool.name.c_str());
     ImGui::Spacing();
   }
-
+  
   // Render popups
   render_drawing_tools_popup();
   render_overlays_popup();
   render_indicators_popup();
-
+  
   // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
@@ -4777,16 +4217,16 @@ void ChartPanel::render_drawing_tools_popup() {
   if (ImGui::BeginPopup("DrawingToolsPopup")) {
     ImGui::Text("Drawing Tools");
     ImGui::Separator();
-
-    const char* tools[] = {"Horizontal Line", "Vertical Line", "Trend Line", "Fibonacci",
-                           "Rectangle",       "Text",          "Arrow"};
-
+    
+    const char* tools[] = {"Horizontal Line", "Vertical Line", "Trend Line", 
+                           "Fibonacci", "Rectangle", "Text", "Arrow"};
+    
     for (int i = 0; i < IM_ARRAYSIZE(tools); ++i) {
       bool is_selected = (selected_drawing_tool_ == i);
       if (ImGui::Selectable(tools[i], is_selected)) {
         selected_drawing_tool_ = i;
       }
-
+      
       // Context menu for favorites
       if (ImGui::BeginPopupContextItem()) {
         bool is_fav = false;
@@ -4802,7 +4242,7 @@ void ChartPanel::render_drawing_tools_popup() {
         ImGui::EndPopup();
       }
     }
-
+    
     ImGui::EndPopup();
   }
 }
@@ -4811,7 +4251,7 @@ void ChartPanel::render_overlays_popup() {
   if (ImGui::BeginPopup("OverlaysPopup")) {
     ImGui::Text("Overlays");
     ImGui::Separator();
-
+    
     ImGui::Checkbox("Volume Profile", &indicator_config_.show_volume_profile);
     ImGui::Checkbox("Bollinger Bands", &indicator_config_.show_bollinger);
     ImGui::Checkbox("Fibonacci Levels", &indicator_config_.show_fibonacci);
@@ -4820,16 +4260,16 @@ void ChartPanel::render_overlays_popup() {
 
     // Bubble size configuration
     if (show_aggressor_bubbles_) {
-      ImGui::Separator();
-      ImGui::Text("Bubble Settings:");
-
-      ImGui::SliderFloat("Min Size", &bubble_min_size_, 1.0f, 10.0f, "%.1f");
-      ImGui::SliderFloat("Max Size", &bubble_max_size_, 5.0f, 30.0f, "%.1f");
-      ImGui::SliderFloat("Opacity", &bubble_opacity_, 0.1f, 1.0f, "%.2f");
-
-      ImGui::Text("Colors:");
-      ImGui::ColorEdit4("Buy Color", &bubble_buy_color_.x, ImGuiColorEditFlags_NoInputs);
-      ImGui::ColorEdit4("Sell Color", &bubble_sell_color_.x, ImGuiColorEditFlags_NoInputs);
+        ImGui::Separator();
+        ImGui::Text("Bubble Settings:");
+        
+        ImGui::SliderFloat("Min Size", &bubble_min_size_, 1.0f, 10.0f, "%.1f");
+        ImGui::SliderFloat("Max Size", &bubble_max_size_, 5.0f, 30.0f, "%.1f");
+        ImGui::SliderFloat("Opacity", &bubble_opacity_, 0.1f, 1.0f, "%.2f");
+        
+        ImGui::Text("Colors:");
+        ImGui::ColorEdit4("Buy Color", &bubble_buy_color_.x, ImGuiColorEditFlags_NoInputs);
+        ImGui::ColorEdit4("Sell Color", &bubble_sell_color_.x, ImGuiColorEditFlags_NoInputs);
     }
 
     // Anchored VWAP section
@@ -4844,7 +4284,7 @@ void ChartPanel::render_indicators_popup() {
   if (ImGui::BeginPopup("IndicatorsPopup")) {
     ImGui::Text("Indicators");
     ImGui::Separator();
-
+    
     // Moving Averages
     ImGui::Text("Moving Averages");
     if (ImGui::Checkbox("SMA 9", &indicator_config_.show_sma_9)) {
@@ -4859,9 +4299,9 @@ void ChartPanel::render_indicators_popup() {
     if (ImGui::Checkbox("SMA 200", &indicator_config_.show_sma_200)) {
       sync_active_indicators_with_config();
     }
-
+    
     ImGui::Separator();
-
+    
     if (ImGui::Checkbox("EMA 9", &indicator_config_.show_ema_9)) {
       sync_active_indicators_with_config();
     }
@@ -4874,9 +4314,9 @@ void ChartPanel::render_indicators_popup() {
     if (ImGui::Checkbox("EMA 200", &indicator_config_.show_ema_200)) {
       sync_active_indicators_with_config();
     }
-
+    
     ImGui::Separator();
-
+    
     // Oscillators
     ImGui::Text("Oscillators");
     if (ImGui::Checkbox("RSI", &indicator_config_.show_rsi)) {
@@ -4891,7 +4331,7 @@ void ChartPanel::render_indicators_popup() {
     if (ImGui::Checkbox("ATR", &indicator_config_.show_atr)) {
       sync_active_indicators_with_config();
     }
-
+    
     ImGui::EndPopup();
   }
 }
@@ -4900,11 +4340,11 @@ void ChartPanel::toggle_favorite_tool(const std::string& tool_name) {
   // Find if tool exists in favorites
   auto it = std::find_if(favorite_tools_.begin(), favorite_tools_.end(),
                          [&tool_name](const FavoriteTool& t) { return t.name == tool_name; });
-
+  
   if (it != favorite_tools_.end()) {
     // Toggle favorite status
     it->is_favorite = !it->is_favorite;
-
+    
     // Remove if no longer favorite
     if (!it->is_favorite) {
       favorite_tools_.erase(it);
@@ -4916,63 +4356,38 @@ void ChartPanel::toggle_favorite_tool(const std::string& tool_name) {
   }
 }
 
-// 3.3 Price Scale Implementation
-void ChartPanel::apply_price_scale_mode(const ChartInstance& chart, double last_price) {
+// 3.3 Price Centering Implementation
+void ChartPanel::apply_price_centering_mode(const ChartInstance& chart, double last_price) {
   if (chart.closes.empty() || last_price <= 0) return;
-
+  
   ImPlotRect limits = ImPlot::GetPlotLimits();
-
-  switch (price_scale_mode_) {
-    case PriceScaleMode::AUTO: {
-      // Auto Mode: Soft-lerp the Y-axis center only if price deviates > 25% from the middle
-      double current_center = (limits.Y.Min + limits.Y.Max) / 2.0;
-
-      // Calculate percentage deviation - avoid division by zero
-      double denominator = std::abs(current_center) > 1e-10 ? std::abs(current_center) : 1.0;
-      double price_deviation = std::abs(last_price - current_center) / denominator;
-
-      // Only adjust if deviation is greater than the threshold (25% by default)
-      if (price_deviation > auto_mode_deviation_threshold_) {
-        // Calculate soft interpolation factor (lerp) - adjust gradually
-        double lerp_factor =
-            auto_mode_lerp_factor_;  // Configurable adjustment factor for smooth transition
-        double target_center = last_price;
-
-        // Interpolate the center towards the target
-        double new_center = current_center + lerp_factor * (target_center - current_center);
-
-        // Maintain the same range but shift the center
-        double y_range = limits.Y.Max - limits.Y.Min;
-        double half_range = y_range / 2.0;
-
-        double new_y_min = new_center - half_range;
-        double new_y_max = new_center + half_range;
-
-        ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
-      }
+  
+  switch (price_centering_mode_) {
+    case PriceCenteringMode::AUTO:
+      // Standard ImPlot AutoFit - let ImPlot handle it
+      // This is the default behavior, no manual intervention needed
       break;
-    }
-
-    case PriceScaleMode::AUTO_CENTERED: {
+      
+    case PriceCenteringMode::AUTO_CENTERED: {
       // Center on last price: (Y_max + Y_min)/2 == last_price
       double y_range = limits.Y.Max - limits.Y.Min;
       double half_range = y_range / 2.0;
-
+      
       double new_y_min = last_price - half_range;
       double new_y_max = last_price + half_range;
-
+      
       ImPlot::SetNextAxisLimits(ImAxis_Y1, new_y_min, new_y_max, ImGuiCond_Always);
       break;
     }
-
-    case PriceScaleMode::KEEP_IN_VIEW: {
+    
+    case PriceCenteringMode::KEEP_IN_VIEW: {
       // Only adjust Y limits if last_price exceeds current bounds
       double y_min = limits.Y.Min;
       double y_max = limits.Y.Max;
       double margin = (y_max - y_min) * 0.1;  // 10% margin
-
+      
       bool needs_adjustment = false;
-
+      
       if (last_price < y_min + margin) {
         // Price is too low, shift down
         y_min = last_price - margin * 2;
@@ -4984,115 +4399,51 @@ void ChartPanel::apply_price_scale_mode(const ChartInstance& chart, double last_
         y_min = y_max - (limits.Y.Max - limits.Y.Min);
         needs_adjustment = true;
       }
-
+      
       if (needs_adjustment) {
         ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
       }
       break;
     }
-
-    case PriceScaleMode::MANUAL:
+    
+    case PriceCenteringMode::MANUAL:
       // Disable all auto-fitting - use stored manual limits
       ImPlot::SetNextAxisLimits(ImAxis_Y1, manual_y_min_, manual_y_max_, ImGuiCond_Always);
       break;
-
-    case PriceScaleMode::CENTER: {
-      // Center Mode: Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2
-      // Calculate range as a percentage of current price to maintain consistent scaling
-      double range = last_price * center_mode_range_percentage_;
-
-      // Apply the mathematical formula: current_price = (y_max + y_min) / 2
-      // So: y_min = current_price - range, y_max = current_price + range
-      double y_min = last_price - range;
-      double y_max = last_price + range;
-
-      ImPlot::SetNextAxisLimits(ImAxis_Y1, y_min, y_max, ImGuiCond_Always);
-      break;
-    }
   }
 }
 
 void ChartPanel::handle_y_axis_context_menu() {
   // Right-click on Y-Axis for mode selection
   if (ImGui::BeginPopup("YAxisContextMenu")) {
-    ImGui::Text("Price Scale Mode");
+    ImGui::Text("Price Centering Mode");
     ImGui::Separator();
-
-    int mode = static_cast<int>(price_scale_mode_);
-    if (ImGui::RadioButton("Auto", mode == static_cast<int>(PriceScaleMode::AUTO))) {
-      price_scale_mode_ = PriceScaleMode::AUTO;
+    
+    int mode = static_cast<int>(price_centering_mode_);
+    if (ImGui::RadioButton("Auto", mode == 0)) {
+      price_centering_mode_ = PriceCenteringMode::AUTO;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Standard ImPlot AutoFit");
-
-    if (ImGui::RadioButton("Auto Centered",
-                           mode == static_cast<int>(PriceScaleMode::AUTO_CENTERED))) {
-      price_scale_mode_ = PriceScaleMode::AUTO_CENTERED;
+    
+    if (ImGui::RadioButton("Auto Centered", mode == 1)) {
+      price_centering_mode_ = PriceCenteringMode::AUTO_CENTERED;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Center on last price");
-
-    if (ImGui::RadioButton("Keep in View",
-                           mode == static_cast<int>(PriceScaleMode::KEEP_IN_VIEW))) {
-      price_scale_mode_ = PriceScaleMode::KEEP_IN_VIEW;
+    
+    if (ImGui::RadioButton("Keep in View", mode == 2)) {
+      price_centering_mode_ = PriceCenteringMode::KEEP_IN_VIEW;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Only adjust if price exceeds bounds");
-
-    if (ImGui::RadioButton("Manual", mode == static_cast<int>(PriceScaleMode::MANUAL))) {
-      price_scale_mode_ = PriceScaleMode::MANUAL;
+    
+    if (ImGui::RadioButton("Manual", mode == 3)) {
+      price_centering_mode_ = PriceCenteringMode::MANUAL;
       // Store current limits as manual limits
       ImPlotRect limits = ImPlot::GetPlotLimits();
       manual_y_min_ = limits.Y.Min;
       manual_y_max_ = limits.Y.Max;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Disable auto-fitting");
-
-    if (ImGui::RadioButton("Center", mode == static_cast<int>(PriceScaleMode::CENTER))) {
-      price_scale_mode_ = PriceScaleMode::CENTER;
-    }
-    if (ImGui::IsItemHovered())
-      ImGui::SetTooltip(
-          "Mathematically lock Y-axis so current_price is always (y_max + y_min) / 2");
-
-    // If Center Mode is selected, show range percentage control
-    if (price_scale_mode_ == PriceScaleMode::CENTER) {
-      ImGui::Separator();
-      ImGui::Text("Center Mode Range:");
-
-      // Convert to percentage for display (multiply by 100)
-      float range_pct = static_cast<float>(center_mode_range_percentage_ * 100.0);
-      if (ImGui::SliderFloat("##RangePercentage", &range_pct, 0.1f, 10.0f, "%.2f%%")) {
-        // Convert back to decimal
-        center_mode_range_percentage_ = static_cast<double>(range_pct / 100.0);
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Range percentage of current price for Y-axis limits");
-      }
-    }
-
-    // If Auto Mode is selected, show lerp factor and deviation threshold controls
-    if (price_scale_mode_ == PriceScaleMode::AUTO) {
-      ImGui::Separator();
-      ImGui::Text("Auto Mode Adjustments:");
-
-      // Control for lerp factor
-      float lerp_factor_pct = static_cast<float>(auto_mode_lerp_factor_ * 100.0);
-      if (ImGui::SliderFloat("Lerp Factor##AutoMode", &lerp_factor_pct, 1.0f, 50.0f, "%.1f%%")) {
-        auto_mode_lerp_factor_ = static_cast<double>(lerp_factor_pct / 100.0);
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Adjustment speed factor when centering (higher = faster)");
-      }
-
-      // Control for deviation threshold
-      float threshold_pct = static_cast<float>(auto_mode_deviation_threshold_ * 100.0);
-      if (ImGui::SliderFloat("Deviation Threshold##AutoMode", &threshold_pct, 1.0f, 100.0f,
-                             "%.1f%%")) {
-        auto_mode_deviation_threshold_ = static_cast<double>(threshold_pct / 100.0);
-      }
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Threshold for triggering center adjustment (25%% = default)");
-      }
-    }
-
+    
     ImGui::EndPopup();
   }
 }
@@ -5100,7 +4451,7 @@ void ChartPanel::handle_y_axis_context_menu() {
 void ChartPanel::render_snap_to_last_button() {
   // Only visible if X-axis max < current time
   if (!show_snap_to_last_) return;
-
+  
   ImGui::SameLine();
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
   if (ImGui::Button("Snap to Last", ImVec2(80, 0))) {
@@ -5109,7 +4460,7 @@ void ChartPanel::render_snap_to_last_button() {
     show_snap_to_last_ = false;
   }
   ImGui::PopStyleColor();
-
+  
   if (ImGui::IsItemHovered()) {
     ImGui::SetTooltip("Reset X-axis to follow live data");
   }
@@ -5119,45 +4470,38 @@ void ChartPanel::render_snap_to_last_button() {
 void ChartPanel::render_right_sidebar_order_entry() {
   ImGui::Text("Quick Order");
   ImGui::Separator();
-
+  
   // Update cached quotes from atomic snapshot
   update_cached_quotes();
-
-  // If Mouse Trading enabled: Render massive BUY MKT / SELL MKT buttons with live quotes
-  if (trading_mode_ == TradingMode::MOUSE_TRADING) {
-    // Market Buy button with Best Ask - MASSIVE BUTTONS
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.8f, 0.0f, 1.0f));  // Brighter green
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15, 15));         // Increase padding
-    std::string buy_label = "BUY MKT\n" + std::to_string(cached_best_ask_);
-    if (ImGui::Button(buy_label.c_str(), ImVec2(150, 80))) {  // MASSIVE button size
-      execute_market_order(true);                             // Buy
-    }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
-
-    ImGui::Spacing();
-
-    // Market Sell button with Best Bid - MASSIVE BUTTONS
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.0f, 0.0f, 1.0f));  // Brighter red
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15, 15));         // Increase padding
-    std::string sell_label = "SELL MKT\n" + std::to_string(cached_best_bid_);
-    if (ImGui::Button(sell_label.c_str(), ImVec2(150, 80))) {  // MASSIVE button size
-      execute_market_order(false);                             // Sell
-    }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
-
-    ImGui::Separator();
+  
+  // Market Buy button with Best Ask
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+  std::string buy_label = "BUY\n" + std::to_string(cached_best_ask_);
+  if (ImGui::Button(buy_label.c_str(), ImVec2(100, 40))) {
+    execute_market_order(true);  // Buy
   }
-
+  ImGui::PopStyleColor();
+  
+  ImGui::Spacing();
+  
+  // Market Sell button with Best Bid
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+  std::string sell_label = "SELL\n" + std::to_string(cached_best_bid_);
+  if (ImGui::Button(sell_label.c_str(), ImVec2(100, 40))) {
+    execute_market_order(false);  // Sell
+  }
+  ImGui::PopStyleColor();
+  
+  ImGui::Separator();
+  
   // Order Quantity input
   ImGui::Text("Quantity:");
   ImGui::PushItemWidth(90);
   ImGui::InputDouble("##Qty", &order_quantity_, 0.1, 1.0, "%.4f");
   ImGui::PopItemWidth();
-
+  
   ImGui::Spacing();
-
+  
   // Time In Force selector
   ImGui::Text("TIF:");
   const char* tif_options[] = {"GTC", "IOC", "FOK", "DAY"};
@@ -5167,26 +4511,26 @@ void ChartPanel::render_right_sidebar_order_entry() {
     selected_tif_ = static_cast<TimeInForce>(tif_index);
   }
   ImGui::PopItemWidth();
-
+  
   ImGui::Separator();
-
+  
   // Display current quotes
   ImGui::Text("Best Bid: %.2f", cached_best_bid_);
   ImGui::Text("Best Ask: %.2f", cached_best_ask_);
   ImGui::Text("Spread: %.4f", cached_best_ask_ - cached_best_bid_);
-
+  
   // Note: EndChild() and PopStyleVar() are handled by the caller (render())
 }
 
 void ChartPanel::update_cached_quotes() {
   if (!processor_ || symbol_.empty()) return;
-
+  
   // Get symbol ID
   auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
   if (!symbol_id_opt) return;
-
+  
   uint32_t symbol_id = *symbol_id_opt;
-
+  
   // Read from atomic snapshot (Phase 4.1 requirement)
   // This is a non-blocking call that reads from atomic data
   auto snapshot_opt = processor_->get_atomic_snapshot(symbol_id);
@@ -5201,20 +4545,34 @@ void ChartPanel::update_cached_quotes() {
 void ChartPanel::execute_market_order(bool is_buy) {
   // Phase 4.2: Push to SPSC queue for async execution
   // The UI thread never waits for the HTTP/WebSocket response
-
+  
   // Get symbol ID
   auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
   uint32_t sym_id = symbol_id_opt.value_or(0);
-
-  // Use the new routing method to create and push the trade command
-  bool pushed = RenderEngine::GlobalTradeQueue::push_market_order(
-      sym_id, symbol_, exchange_,
-      is_buy ? RenderEngine::OrderSide::BUY : RenderEngine::OrderSide::SELL, order_quantity_,
-      static_cast<RenderEngine::TimeInForce>(selected_tif_));
-
+  
+  // Create the trade command
+  RenderEngine::TradeCommand cmd(
+    sym_id,
+    symbol_,
+    exchange_,
+    is_buy ? RenderEngine::OrderSide::BUY : RenderEngine::OrderSide::SELL,
+    RenderEngine::OrderType::MARKET,
+    order_quantity_,
+    static_cast<RenderEngine::TimeInForce>(selected_tif_)
+  );
+  
+  // Set additional fields
+  cmd.price = is_buy ? cached_best_ask_ : cached_best_bid_;
+  
+  // Push to the global SPSC queue (non-blocking)
+  bool pushed = RenderEngine::GlobalTradeQueue::push_command(std::move(cmd));
+  
   if (pushed) {
-    std::cout << "[ChartPanel] Market Order QUEUED: " << (is_buy ? "BUY" : "SELL") << " "
-              << order_quantity_ << " " << symbol_ << " TIF: " << static_cast<int>(selected_tif_)
+    std::cout << "[ChartPanel] Market Order QUEUED: "
+              << (is_buy ? "BUY" : "SELL") << " "
+              << order_quantity_ << " " << symbol_
+              << " @ " << (is_buy ? cached_best_ask_ : cached_best_bid_)
+              << " TIF: " << static_cast<int>(selected_tif_)
               << std::endl;
   } else {
     std::cerr << "[ChartPanel] ERROR: Failed to queue order - SPSC queue full!" << std::endl;
@@ -5224,8 +4582,7 @@ void ChartPanel::execute_market_order(bool is_buy) {
 // 3.5 Bottom Toolbar (Volume Analysis) - called within BottomBar child
 void ChartPanel::render_bottom_toolbar() {
   // Volume Profile toggle
-  ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f)
-                                                 : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, vp_color);
   if (ImGui::Button("Vol Profile", ImVec2(80, 0))) {
     show_volume_profile_overlay_ = !show_volume_profile_overlay_;
@@ -5237,8 +4594,7 @@ void ChartPanel::render_bottom_toolbar() {
   ImGui::SameLine();
 
   // Delta toggle
-  ImVec4 delta_color =
-      show_delta_overlay_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 delta_color = show_delta_overlay_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, delta_color);
   if (ImGui::Button("Delta", ImVec2(60, 0))) {
     show_delta_overlay_ = !show_delta_overlay_;
@@ -5249,8 +4605,7 @@ void ChartPanel::render_bottom_toolbar() {
   ImGui::SameLine();
 
   // Cumulative Delta toggle
-  ImVec4 cum_delta_color = show_cumulative_delta_overlay_ ? ImVec4(0.6f, 0.8f, 0.2f, 1.0f)
-                                                          : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 cum_delta_color = show_cumulative_delta_overlay_ ? ImVec4(0.6f, 0.8f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, cum_delta_color);
   if (ImGui::Button("Cum Delta", ImVec2(80, 0))) {
     show_cumulative_delta_overlay_ = !show_cumulative_delta_overlay_;
@@ -5263,8 +4618,7 @@ void ChartPanel::render_bottom_toolbar() {
   ImGui::SameLine();
 
   // Liquidity bars toggle
-  ImVec4 liq_color =
-      show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 liq_color = show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, liq_color);
   if (ImGui::Button("Liquidity", ImVec2(70, 0))) {
     show_liquidity_bars_ = !show_liquidity_bars_;
@@ -5275,8 +4629,7 @@ void ChartPanel::render_bottom_toolbar() {
   ImGui::SameLine();
 
   // Aggressor bubbles toggle
-  ImVec4 bubble_color =
-      show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 bubble_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubble_color);
   if (ImGui::Button("Bubbles", ImVec2(70, 0))) {
     show_aggressor_bubbles_ = !show_aggressor_bubbles_;
@@ -5304,12 +4657,14 @@ void ChartPanel::render_bottom_toolbar() {
 
 // Floating toolbar implementations
 void ChartPanel::render_floating_top_toolbar() {
-  // Set cursor position for the floating toolbar - positioned at the top of the chart area
-  ImVec2 toolbar_pos = ImVec2(10.0f, 10.0f);  // Position from top-left of the parent window
-  ImGui::SetCursorPos(toolbar_pos);
-
-  // Create a borderless toolbar using ImGui::BeginGroup to group elements together
-  ImGui::BeginGroup();
+  ImGui::SetNextWindowPos(floating_top_toolbar_pos_);
+  ImGui::SetNextWindowSize(floating_top_toolbar_size_);
+  
+  ImGui::Begin("Floating Top Toolbar", nullptr, 
+               ImGuiWindowFlags_NoCollapse | 
+               ImGuiWindowFlags_NoResize | 
+               ImGuiWindowFlags_NoMove |
+               ImGuiWindowFlags_AlwaysAutoResize);
 
   // Symbol Lookup (InputText)
   ImGui::PushItemWidth(100);
@@ -5334,51 +4689,25 @@ void ChartPanel::render_floating_top_toolbar() {
   int tf_index = 0;
   // Map current timeframe to index
   switch (timeframe_) {
-    case RenderEngine::TimeFrame::TF_1MIN:
-      tf_index = 0;
-      break;
-    case RenderEngine::TimeFrame::TF_5MIN:
-      tf_index = 1;
-      break;
-    case RenderEngine::TimeFrame::TF_15MIN:
-      tf_index = 2;
-      break;
-    case RenderEngine::TimeFrame::TF_1HOUR:
-      tf_index = 3;
-      break;
-    case RenderEngine::TimeFrame::TF_4HOUR:
-      tf_index = 4;
-      break;
-    case RenderEngine::TimeFrame::TF_1DAY:
-      tf_index = 5;
-      break;
-    default:
-      tf_index = 0;
-      break;
+    case RenderEngine::TimeFrame::TF_1MIN: tf_index = 0; break;
+    case RenderEngine::TimeFrame::TF_5MIN: tf_index = 1; break;
+    case RenderEngine::TimeFrame::TF_15MIN: tf_index = 2; break;
+    case RenderEngine::TimeFrame::TF_1HOUR: tf_index = 3; break;
+    case RenderEngine::TimeFrame::TF_4HOUR: tf_index = 4; break;
+    case RenderEngine::TimeFrame::TF_1DAY: tf_index = 5; break;
+    default: tf_index = 0; break;
   }
 
   ImGui::PushItemWidth(60);
   if (ImGui::Combo("##TF", &tf_index, toolbar_timeframes, IM_ARRAYSIZE(toolbar_timeframes))) {
     RenderEngine::TimeFrame new_tf = RenderEngine::TimeFrame::TF_1MIN;
     switch (tf_index) {
-      case 0:
-        new_tf = RenderEngine::TimeFrame::TF_1MIN;
-        break;
-      case 1:
-        new_tf = RenderEngine::TimeFrame::TF_5MIN;
-        break;
-      case 2:
-        new_tf = RenderEngine::TimeFrame::TF_15MIN;
-        break;
-      case 3:
-        new_tf = RenderEngine::TimeFrame::TF_1HOUR;
-        break;
-      case 4:
-        new_tf = RenderEngine::TimeFrame::TF_4HOUR;
-        break;
-      case 5:
-        new_tf = RenderEngine::TimeFrame::TF_1DAY;
-        break;
+      case 0: new_tf = RenderEngine::TimeFrame::TF_1MIN; break;
+      case 1: new_tf = RenderEngine::TimeFrame::TF_5MIN; break;
+      case 2: new_tf = RenderEngine::TimeFrame::TF_15MIN; break;
+      case 3: new_tf = RenderEngine::TimeFrame::TF_1HOUR; break;
+      case 4: new_tf = RenderEngine::TimeFrame::TF_4HOUR; break;
+      case 5: new_tf = RenderEngine::TimeFrame::TF_1DAY; break;
     }
     set_timeframe(new_tf);
   }
@@ -5395,100 +4724,121 @@ void ChartPanel::render_floating_top_toolbar() {
   }
   ImGui::PopItemWidth();
 
-  // End the group for the toolbar elements
-  ImGui::EndGroup();
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+
+  // Mouse Trading vs. Keyboard Trading toggle button
+  const char* trading_mode_label = (trading_mode_ == TradingMode::MOUSE_TRADING) ? "Mouse" : "Keyboard";
+  ImVec4 button_color = (trading_mode_ == TradingMode::MOUSE_TRADING)
+                        ? ImVec4(0.2f, 0.6f, 0.2f, 1.0f)  // Green for mouse
+                        : ImVec4(0.6f, 0.4f, 0.2f, 1.0f); // Orange for keyboard
+
+  ImGui::PushStyleColor(ImGuiCol_Button, button_color);
+  if (ImGui::Button(trading_mode_label, ImVec2(70, 0))) {
+    trading_mode_ = (trading_mode_ == TradingMode::MOUSE_TRADING)
+                    ? TradingMode::KEYBOARD_TRADING
+                    : TradingMode::MOUSE_TRADING;
+  }
+  ImGui::PopStyleColor();
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Toggle between Mouse Trading and Keyboard Trading modes");
+  }
+
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+
+  // Auto-follow checkbox
+  ImGui::Checkbox("Auto-follow", &follow_latest_);
+
+  ImGui::SameLine();
+
+  // Price Centering Mode indicator
+  const char* centering_modes[] = {"Auto", "Centered", "In View", "Manual"};
+  ImGui::Text("Y: %s", centering_modes[static_cast<int>(price_centering_mode_)]);
+
+  // Floating toolbar controls
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
+  
+  // Dock button
+  if (ImGui::Button("Dock")) {
+    floating_top_toolbar_ = false;
+  }
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Dock this toolbar");
+  }
+
+  ImGui::End();
 }
 
 void ChartPanel::render_floating_left_sidebar() {
   ImGui::SetNextWindowPos(floating_left_sidebar_pos_);
   ImGui::SetNextWindowSize(floating_left_sidebar_size_);
-
-  ImGui::Begin("Floating Left Sidebar", nullptr,
-               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_AlwaysAutoResize);
-
-  // Get the font manager instance to access the icons font
-  auto& font_manager = BTQuant::UI::FontManager::getInstance();
+  
+  ImGui::Begin("Floating Left Sidebar", nullptr, 
+               ImGuiWindowFlags_NoCollapse | 
+               ImGuiWindowFlags_NoResize | 
+               ImGuiWindowFlags_NoMove |
+               ImGuiWindowFlags_AlwaysAutoResize);
 
   // Crosshair button
-  ImVec4 crosshair_color =
-      show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 crosshair_color = show_crosshair_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, crosshair_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf05b", ImVec2(32, 32))) {  // Crosshairs icon
-      show_crosshair_ = !show_crosshair_;
-    }
-    if (pushed) ImGui::PopFont();  // Pop icons font
+  if (ImGui::Button("+", ImVec2(32, 32))) {
+    show_crosshair_ = !show_crosshair_;
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Crosshair");
 
   // Drawing Tools button
   ImGui::Spacing();
-  ImVec4 drawing_color =
-      show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 drawing_color = show_drawing_tools_sidebar_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, drawing_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf14b", ImVec2(32, 32))) {  // Pencil icon
-      show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
-      if (show_drawing_tools_sidebar_) {
-        ImGui::OpenPopup("DrawingToolsPopup");
-      }
+  if (ImGui::Button("D", ImVec2(32, 32))) {
+    show_drawing_tools_sidebar_ = !show_drawing_tools_sidebar_;
+    if (show_drawing_tools_sidebar_) {
+      ImGui::OpenPopup("DrawingToolsPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Drawing Tools");
 
   // Overlays button
   ImGui::Spacing();
-  ImVec4 overlays_color =
-      show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 overlays_color = show_overlays_menu_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, overlays_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf0ab", ImVec2(32, 32))) {  // Filter icon
-      show_overlays_menu_ = !show_overlays_menu_;
-      if (show_overlays_menu_) {
-        ImGui::OpenPopup("OverlaysPopup");
-      }
+  if (ImGui::Button("O", ImVec2(32, 32))) {
+    show_overlays_menu_ = !show_overlays_menu_;
+    if (show_overlays_menu_) {
+      ImGui::OpenPopup("OverlaysPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Overlays");
 
   // Indicators button
   ImGui::Spacing();
-  ImVec4 indicators_color =
-      show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 indicators_color = show_indicators_menu_ ? ImVec4(0.6f, 0.2f, 0.8f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, indicators_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf080", ImVec2(32, 32))) {  // Bar chart icon
-      show_indicators_menu_ = !show_indicators_menu_;
-      if (show_indicators_menu_) {
-        ImGui::OpenPopup("IndicatorsPopup");
-      }
+  if (ImGui::Button("I", ImVec2(32, 32))) {
+    show_indicators_menu_ = !show_indicators_menu_;
+    if (show_indicators_menu_) {
+      ImGui::OpenPopup("IndicatorsPopup");
     }
-    if (pushed) ImGui::PopFont();  // Pop icons font
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Indicators");
 
   // Trade Bubbles button
   ImGui::Spacing();
-  ImVec4 bubbles_color =
-      show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+  ImVec4 bubbles_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubbles_color);
-  {
-    bool pushed = font_manager.pushIconsFont();
-    if (ImGui::Button("\uf247", ImVec2(32, 32))) {  // USD icon (for trades)
-      show_aggressor_bubbles_ = !show_aggressor_bubbles_;
-    }
-    if (pushed) ImGui::PopFont();  // Pop icons font
+  if (ImGui::Button("B", ImVec2(32, 32))) {
+    show_aggressor_bubbles_ = !show_aggressor_bubbles_;
   }
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Aggressor Trade Bubbles");
@@ -5499,34 +4849,25 @@ void ChartPanel::render_floating_left_sidebar() {
   ImGui::Spacing();
 
   // Favorite tools section
-  {
-    bool pushed = font_manager.pushIconsFont();
-    ImGui::Text("\uf005");         // Star icon
-    if (pushed) ImGui::PopFont();  // Pop icons font
-  }
+  ImGui::Text("Fav");
   ImGui::Spacing();
 
   // Initialize favorite tools if empty
   if (favorite_tools_.empty()) {
-    favorite_tools_.emplace_back("Horizontal Line", "\uf068", false);  // Horizontal line icon
-    favorite_tools_.emplace_back("Trend Line", "\uf0e4", false);       // Trend line icon
-    favorite_tools_.emplace_back("Fibonacci", "\uf0d6", true);         // Chevron down icon
-    favorite_tools_.emplace_back("Rectangle", "\uf0c8", false);        // Check square icon
+    favorite_tools_.emplace_back("Horizontal Line", "H", false);
+    favorite_tools_.emplace_back("Trend Line", "T", false);
+    favorite_tools_.emplace_back("Fibonacci", "F", true);
+    favorite_tools_.emplace_back("Rectangle", "R", false);
   }
 
   // Render favorite tools
   for (size_t i = 0; i < favorite_tools_.size(); ++i) {
     const auto& tool = favorite_tools_[i];
-    ImVec4 fav_color =
-        tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+    ImVec4 fav_color = tool.is_favorite ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, fav_color);
     ImGui::PushID(static_cast<int>(i));
-    {
-      bool pushed = font_manager.pushIconsFont();
-      if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
-        selected_drawing_tool_ = static_cast<int>(i);
-      }
-      if (pushed) ImGui::PopFont();  // Pop icons font
+    if (ImGui::Button(tool.icon.c_str(), ImVec2(32, 28))) {
+      selected_drawing_tool_ = static_cast<int>(i);
     }
     ImGui::PopID();
     ImGui::PopStyleColor();
@@ -5554,10 +4895,12 @@ void ChartPanel::render_floating_left_sidebar() {
 void ChartPanel::render_floating_right_sidebar() {
   ImGui::SetNextWindowPos(floating_right_sidebar_pos_);
   ImGui::SetNextWindowSize(floating_right_sidebar_size_);
-
-  ImGui::Begin("Floating Right Sidebar", nullptr,
-               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_AlwaysAutoResize);
+  
+  ImGui::Begin("Floating Right Sidebar", nullptr, 
+               ImGuiWindowFlags_NoCollapse | 
+               ImGuiWindowFlags_NoResize | 
+               ImGuiWindowFlags_NoMove |
+               ImGuiWindowFlags_AlwaysAutoResize);
 
   ImGui::Text("Quick Order");
   ImGui::Separator();
@@ -5625,14 +4968,15 @@ void ChartPanel::render_floating_right_sidebar() {
 void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SetNextWindowPos(floating_bottom_toolbar_pos_);
   ImGui::SetNextWindowSize(floating_bottom_toolbar_size_);
-
-  ImGui::Begin("Floating Bottom Toolbar", nullptr,
-               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_AlwaysAutoResize);
+  
+  ImGui::Begin("Floating Bottom Toolbar", nullptr, 
+               ImGuiWindowFlags_NoCollapse | 
+               ImGuiWindowFlags_NoResize | 
+               ImGuiWindowFlags_NoMove |
+               ImGuiWindowFlags_AlwaysAutoResize);
 
   // Volume Profile toggle
-  ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f)
-                                                 : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 vp_color = show_volume_profile_overlay_ ? ImVec4(0.2f, 0.6f, 0.8f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, vp_color);
   if (ImGui::Button("Vol Profile", ImVec2(80, 0))) {
     show_volume_profile_overlay_ = !show_volume_profile_overlay_;
@@ -5644,8 +4988,7 @@ void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SameLine();
 
   // Delta toggle
-  ImVec4 delta_color =
-      show_delta_overlay_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 delta_color = show_delta_overlay_ ? ImVec4(0.8f, 0.6f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, delta_color);
   if (ImGui::Button("Delta", ImVec2(60, 0))) {
     show_delta_overlay_ = !show_delta_overlay_;
@@ -5656,8 +4999,7 @@ void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SameLine();
 
   // Cumulative Delta toggle
-  ImVec4 cum_delta_color = show_cumulative_delta_overlay_ ? ImVec4(0.6f, 0.8f, 0.2f, 1.0f)
-                                                          : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 cum_delta_color = show_cumulative_delta_overlay_ ? ImVec4(0.6f, 0.8f, 0.2f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, cum_delta_color);
   if (ImGui::Button("Cum Delta", ImVec2(80, 0))) {
     show_cumulative_delta_overlay_ = !show_cumulative_delta_overlay_;
@@ -5670,8 +5012,7 @@ void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SameLine();
 
   // Liquidity bars toggle
-  ImVec4 liq_color =
-      show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 liq_color = show_liquidity_bars_ ? ImVec4(0.4f, 0.8f, 0.4f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, liq_color);
   if (ImGui::Button("Liquidity", ImVec2(70, 0))) {
     show_liquidity_bars_ = !show_liquidity_bars_;
@@ -5682,8 +5023,7 @@ void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SameLine();
 
   // Aggressor bubbles toggle
-  ImVec4 bubble_color =
-      show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+  ImVec4 bubble_color = show_aggressor_bubbles_ ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) : ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
   ImGui::PushStyleColor(ImGuiCol_Button, bubble_color);
   if (ImGui::Button("Bubbles", ImVec2(70, 0))) {
     show_aggressor_bubbles_ = !show_aggressor_bubbles_;
@@ -5710,7 +5050,7 @@ void ChartPanel::render_floating_bottom_toolbar() {
   ImGui::SameLine();
   ImGui::Spacing();
   ImGui::SameLine();
-
+  
   // Dock button
   if (ImGui::Button("Dock")) {
     floating_bottom_toolbar_ = false;
@@ -5738,31 +5078,26 @@ void ChartPanel::render_cumulative_delta_overlay(const ChartInstance& chart) {
   double cumulative_delta = 0.0;
   for (size_t i = 0; i < chart.dates.size(); ++i) {
     double candle_delta = 0.0;
-
+    
     // Estimate delta based on price movement within the candle
     // If close > open, more buying pressure; if close < open, more selling pressure
-    if (i < chart.opens.size() && i < chart.closes.size() && i < chart.highs.size() &&
-        i < chart.lows.size()) {
+    if (i < chart.opens.size() && i < chart.closes.size() && i < chart.highs.size() && i < chart.lows.size()) {
       double open = chart.opens[i];
       double close = chart.closes[i];
       double volume = chart.volumes[i];
-
+      
       if (close > open) {
         // More aggressive buying - assign positive delta
-        candle_delta = volume * (close - open) /
-                       (chart.highs[i] - chart.lows[i] +
-                        1e-8);  // Normalize by range to get proportional delta
+        candle_delta = volume * (close - open) / (chart.highs[i] - chart.lows[i] + 1e-8); // Normalize by range to get proportional delta
       } else if (close < open) {
         // More aggressive selling - assign negative delta
-        candle_delta = -volume * (open - close) /
-                       (chart.highs[i] - chart.lows[i] +
-                        1e-8);  // Normalize by range to get proportional delta
+        candle_delta = -volume * (open - close) / (chart.highs[i] - chart.lows[i] + 1e-8); // Normalize by range to get proportional delta
       } else {
         // No directional bias - neutral
         candle_delta = 0.0;
       }
     }
-
+    
     cumulative_delta += candle_delta;
     cumulative_delta_values.push_back(cumulative_delta);
   }
@@ -5784,7 +5119,7 @@ void ChartPanel::render_cumulative_delta_overlay(const ChartInstance& chart) {
     for (size_t i = 1; i < points.size(); ++i) {
       // Determine color based on the slope (positive/negative)
       ImVec4 color;
-      if (cumulative_delta_values[i] >= cumulative_delta_values[i - 1]) {
+      if (cumulative_delta_values[i] >= cumulative_delta_values[i-1]) {
         // Positive slope - green
         color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);  // Bright green
       } else {
@@ -5793,125 +5128,10 @@ void ChartPanel::render_cumulative_delta_overlay(const ChartInstance& chart) {
       }
 
       // Draw line segment
-      draw_list->AddLine(points[i - 1], points[i], ImGui::ColorConvertFloat4ToU32(color), 2.0f);
+      draw_list->AddLine(points[i-1], points[i], ImGui::ColorConvertFloat4ToU32(color), 2.0f);
     }
   }
 }
 
-std::vector<BTQuant::RenderEngine::TradeData> ChartPanel::get_visible_trades(uint64_t start_time,
-                                                                             uint64_t end_time) {
-  std::vector<BTQuant::RenderEngine::TradeData> visible_trades;
-
-  if (!processor_) return visible_trades;
-
-  auto id_opt = chart_manager_->getSymbolId(symbol_);
-  if (!id_opt) return visible_trades;
-
-  // Get analytics data (copy)
-  auto analytics = processor_->getSymbolAnalytics(*id_opt);
-
-  // Filter and convert trades
-  visible_trades.reserve(analytics.recent_trades.size());
-  for (const auto& trade : analytics.recent_trades) {
-    if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
-      visible_trades.push_back(trade);
-    }
-  }
-
-  return visible_trades;
-}
-
-void ChartPanel::render_vpvr_overlay() {
-  // 1. Get the current visible time range directly from ImPlot
-  ImPlotRect limits = ImPlot::GetPlotLimits();
-  uint64_t visible_start_time =
-      static_cast<uint64_t>(limits.X.Min * 1000000.0);  // Convert to microseconds
-  uint64_t visible_end_time = static_cast<uint64_t>(limits.X.Max * 1000000.0);
-
-  // 2. Fetch lock-free aggregated volume data for THIS exact time window
-  // 2. Fetch lock-free aggregated volume data for THIS exact time window
-  auto render_trades = get_visible_trades(visible_start_time, visible_end_time);
-
-  // Convert to Data::TradeData for VolumeCalculator compatibility
-  std::vector<BTQuant::Data::TradeData> data_trades;
-  data_trades.reserve(render_trades.size());
-  for (const auto& t : render_trades) {
-    BTQuant::Data::TradeData dt;
-    dt.timestamp = t.timestamp;
-    dt.price = t.price;
-    dt.volume = static_cast<float>(t.size);
-    dt.side = t.is_buy ? BTQuant::Data::TradeSide::BUY : BTQuant::Data::TradeSide::SELL;
-    data_trades.push_back(dt);
-  }
-
-  auto vpvr_data = BTQuant::Analytics::VolumeCalculator::get_visible_volume_profile(
-      data_trades, visible_start_time, visible_end_time, vpvr_tick_size_);
-
-  if (vpvr_data.empty()) return;
-
-  // 3. Calculate Point of Control (POC) and Value Area (68%)
-  double max_vol = 0;
-  double poc_price = 0;
-  double total_vol = 0;
-  for (const auto& node : vpvr_data) {
-    total_vol += node.total;
-    if (node.total > max_vol) {
-      max_vol = node.total;
-      poc_price = node.price;
-    }
-  }
-
-  // 4. Render using raw ImDrawList mapped to ImPlot coordinates
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  ImVec2 plot_pos = ImPlot::GetPlotPos();
-  ImVec2 plot_size = ImPlot::GetPlotSize();
-
-  float max_bar_width = plot_size.x * vpvr_width_percentage_;
-  float right_edge = plot_pos.x + plot_size.x;
-
-  for (const auto& node : vpvr_data) {
-    ImVec2 top_left = ImPlot::PlotToPixels(limits.X.Max, node.price + (vpvr_tick_size_ / 2.0));
-    ImVec2 bottom_right = ImPlot::PlotToPixels(limits.X.Max, node.price - (vpvr_tick_size_ / 2.0));
-
-    float y_top = top_left.y;
-    float y_bot = bottom_right.y;
-
-    // MMT "Standard Mode" (Split Buy/Sell)
-    if (vpvr_mode_ == VpvrMode::STANDARD) {
-      float buy_width = static_cast<float>((node.buys / max_vol) * max_bar_width);
-      float sell_width = static_cast<float>((node.sells / max_vol) * max_bar_width);
-
-      // Draw Sells (Red) pushing left
-      draw_list->AddRectFilled(ImVec2(right_edge - buy_width - sell_width, y_top),
-                               ImVec2(right_edge - buy_width, y_bot),
-                               IM_COL32(255, 84, 89, 150)  // MMT AskRed
-      );
-      // Draw Buys (Green) anchored to the right
-      draw_list->AddRectFilled(ImVec2(right_edge - buy_width, y_top), ImVec2(right_edge, y_bot),
-                               IM_COL32(50, 190, 198, 150)  // MMT BidGreen
-      );
-    } else if (vpvr_mode_ == VpvrMode::TOTAL) {
-      float total_width = static_cast<float>((node.total / max_vol) * max_bar_width);
-      draw_list->AddRectFilled(ImVec2(right_edge - total_width, y_top), ImVec2(right_edge, y_bot),
-                               IM_COL32(200, 200, 200, 150)  // Neutral Gray
-      );
-    }
-  }
-
-  // 5. Draw MMT POC Line
-  if (show_vpvr_poc_) {
-    ImVec2 poc_pos =
-        ImPlot::PlotToPixels(limits.X.Min, poc_price);  // X doesn't matter for horizontal line
-    float poc_y = poc_pos.y;
-
-    // Only draw if within vertical limits
-    if (poc_y >= plot_pos.y && poc_y <= plot_pos.y + plot_size.y) {
-      draw_list->AddLine(ImVec2(plot_pos.x, poc_y), ImVec2(right_edge, poc_y),
-                         IM_COL32(255, 215, 0, 200),  // Gold for POC
-                         2.0f                         // Thickness
-      );
-    }
-  }
-}
 
 }  // namespace BTQuant

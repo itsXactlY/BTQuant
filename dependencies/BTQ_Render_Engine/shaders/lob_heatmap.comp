@@ -1,8 +1,7 @@
-// LOB Heatmap Compute Shader - Multi-Exchange Aggregation
+// LOB Heatmap Compute Shader
 // Vulkan 1.3 - Market Microstructure Renderer
 // Computes limit order book depth evolution as a cyclic heatmap texture
 // Price level -> Y-coordinate, Time -> X-coordinate
-// Supports aggregation of multiple atomic depth buffers from different exchanges
 
 #version 460 core
 #extension GL_EXT_nonuniform_qualifier : enable
@@ -20,25 +19,14 @@ struct OrderBookLevel {
     uint numOrders;        // Number of orders at this price
 };
 
-// Per-Exchange Order Book Snapshot (SSBO)
-struct ExchangeOrderBookSnapshot {
+// Hotspine Order Book Snapshot (SSBO)
+layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshot {
     uint currentTimeIndex;     // Current cyclic time index
     uint priceLevelsCount;     // Number of price levels
     float basePrice;           // Base price for rendering
     float priceRange;          // Price range to display
-    OrderBookLevel levels[1024];   // Fixed-size price levels array (can be adjusted as needed)
-};
-
-// Array of order book snapshots from different exchanges
-layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshots {
-    uint numExchanges;                         // Number of exchanges to aggregate
-    ExchangeOrderBookSnapshot snapshots[];     // Array of exchange snapshots
-} orderBooks;
-
-// Atomic depth buffer for aggregating liquidity from multiple sources
-layout(std430, set = 2, binding = 2) restrict buffer AtomicDepthBuffer {
-    uint atomicDepthData[];
-} atomicDepth;
+    OrderBookLevel levels[];   // Variable-length price levels
+} orderBook;
 
 // Heatmap Texture Output (Image2D)
 layout(binding = 1, rgba32f) uniform image2D heatmapOutput;
@@ -71,51 +59,34 @@ const vec3 NEUTRAL_COLOR = vec3(0.2, 0.2, 0.2); // Dark gray for no liquidity
 // Helper Functions
 // ========================================
 
-// Viridis color map function
-vec3 viridis(float t) {
-    t = clamp(t, 0.0, 1.0);
-    vec3 c1 = vec3(0.28060584, 0.26988463, 0.95260712);
-    vec3 c2 = vec3(0.22346425, 0.54647529, 0.76245248);
-    vec3 c3 = vec3(0.26317638, 0.81350462, 0.56800201);
-    vec3 c4 = vec3(0.63192486, 0.94836608, 0.24299267);
-    vec3 c5 = vec3(0.99999634, 0.99999941, 0.00000000);
+// Normalize price to [0, height] coordinate
+float priceToY(float price) {
+    float normalizedPrice = (price - orderBook.basePrice) / orderBook.priceRange;
+    float y = normalizedPrice * params.height;
     
-    vec3 p1 = c1 + t * (-2.44438001 * c1 + t * (5.79533848 * c1 + t * (-4.22790439 * c1 + t * (1.07643645 * c1))));
-    vec3 p2 = t * (3.76932192 * c2 + t * (-9.52183893 * c2 + t * (7.94427756 * c2 - 2.33625653 * c2 * t)));
-    vec3 p3 = t * t * (2.34985503 * c3 + t * (-3.95423610 * c3 + 1.68213585 * c3 * t));
-    vec3 p4 = t * t * t * (0.77600082 * c4 - 0.31583335 * c4 * t);
-    vec3 p5 = t * t * t * t * c5;
-    
-    return p1 + p2 + p3 + p4 + p5;
+    if (params.invertYAxis) {
+        return params.height - 1.0 - y;
+    }
+    return y;
 }
 
-// Magma color map function
-vec3 magma(float t) {
-    t = clamp(t, 0.0, 1.0);
-    vec3 c1 = vec3(0.00127585, 0.00015310, 0.00001441);
-    vec3 c2 = vec3(0.27954233, 0.07684357, 0.20122631);
-    vec3 c3 = vec3(0.73303821, 0.22644686, 0.29406445);
-    vec3 c4 = vec3(0.98474783, 0.52943025, 0.23284661);
-    vec3 c5 = vec3(0.99998435, 0.99998751, 0.99998005);
-    
-    vec3 p1 = c1 + t * (-0.42365615 * c1 + t * (1.05555221 * c1 + t * (-1.01235666 * c1 + t * (0.32694771 * c1))));
-    vec3 p2 = t * (2.07331622 * c2 + t * (-3.09211013 * c2 + t * (2.34184658 * c2 - 0.69462501 * c2 * t)));
-    vec3 p3 = t * t * (0.71406097 * c3 + t * (-0.67176724 * c3 + 0.24395332 * c3 * t));
-    vec3 p4 = t * t * t * (0.21087338 * c4 - 0.04549240 * c4 * t);
-    vec3 p5 = t * t * t * t * c5;
-    
-    return p1 + p2 + p3 + p4 + p5;
-}
-
-// Get color based on liquidity density using Viridis/Magma gradient
+// Get color based on liquidity density (Professional multi-stop gradient)
 vec3 liquidityToColor(float liquidity) {
     float normalized = clamp(liquidity / params.maxLiquidity, 0.0, 1.0);
     
-    // Option 1: Use Viridis color map
-    return viridis(normalized);
+    // 0.0: Deep Blue (Low) -> 0.2: Cyan -> 0.4: Green -> 0.6: Yellow -> 0.8: Orange -> 1.0: Fire Red (High)
+    vec3 c1 = vec3(0.02, 0.02, 0.15); // Deep Blue/Black
+    vec3 c2 = vec3(0.0, 0.6, 1.0);   // Bright Cyan
+    vec3 c3 = vec3(0.0, 1.0, 0.4);   // Vibrant Green 
+    vec3 c4 = vec3(1.0, 1.0, 0.0);   // Pure Yellow
+    vec3 c5 = vec3(1.0, 0.4, 0.0);   // Deep Orange
+    vec3 c6 = vec3(1.0, 0.05, 0.0);  // Fire Red
     
-    // Option 2: Uncomment the next line to use Magma color map instead
-    // return magma(normalized);
+    if (normalized < 0.2) return mix(c1, c2, normalized / 0.2);
+    if (normalized < 0.4) return mix(c2, c3, (normalized - 0.2) / 0.2);
+    if (normalized < 0.6) return mix(c3, c4, (normalized - 0.4) / 0.2);
+    if (normalized < 0.8) return mix(c4, c5, (normalized - 0.6) / 0.2);
+    return mix(c5, c6, (normalized - 0.8) / 0.2);
 }
 
 // ========================================
@@ -129,74 +100,52 @@ layout(local_size_x = 1, local_size_y = 64) in;
 
 void main() {
     uint yIndex = gl_GlobalInvocationID.y;
-
+    
     // Check if thread is within heatmap bounds
     if (yIndex >= params.height) {
         return;
     }
-
+    
     // Current time column to update (cyclic buffer)
-    // Use the first exchange's time index as reference (they should be synchronized)
-    uint currentCol = orderBooks.snapshots[0].currentTimeIndex % params.width;
+    uint currentCol = orderBook.currentTimeIndex % params.width;
     ivec2 targetCoords = ivec2(currentCol, yIndex);
-
-    // Calculate target price for this Y coordinate
-    float targetPrice = orderBooks.snapshots[0].basePrice +
-                       (float(yIndex) / float(params.height)) * orderBooks.snapshots[0].priceRange;
-
-    float totalLiquidity = 0.0;
-
-    // Iterate through all exchanges and aggregate liquidity
-    for (uint ex = 0; ex < orderBooks.numExchanges; ex++) {
-        // Find matching price level in this exchange's data using Binary Search
-        int low = 0;
-        int high = int(orderBooks.snapshots[ex].priceLevelsCount) - 1;
-        int closestIdx = -1;
-        float minDistance = 1e9;
-
-        while (low <= high) {
-            int mid = (low + high) / 2;
-            float levelPrice = orderBooks.snapshots[ex].levels[mid].price;
-            float dist = abs(levelPrice - targetPrice);
-
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestIdx = mid;
-            }
-
-            if (levelPrice < targetPrice) {
-                low = mid + 1;
-            } else if (levelPrice > targetPrice) {
-                high = mid - 1;
-            } else {
-                break; // Exact match
-            }
-        }
-
-        // Add liquidity from this exchange if the match is within the pixel's price bin
-        if (closestIdx != -1 && minDistance < (orderBooks.snapshots[ex].priceRange / float(params.height))) {
-            totalLiquidity += float(orderBooks.snapshots[ex].levels[closestIdx].askQuantity +
-                                   orderBooks.snapshots[ex].levels[closestIdx].bidQuantity);
-        }
-    }
-
-    // Sum multiple atomic depth buffers before colormapping
-    // Calculate index in the atomic depth buffer based on current position
-    uint depthBufferIndex = yIndex * params.width + currentCol;
-
-    // Ensure we don't exceed the buffer bounds
-    if (depthBufferIndex < params.width * params.height) {
-        // Use atomic operation to safely accumulate liquidity from multiple sources
-        uint previousValue = atomicAdd(atomicDepth.atomicDepthData[depthBufferIndex], uint(totalLiquidity));
+    
+    // Find matching price level using Binary Search (Assumes levels are sorted by price)
+    float targetPrice = orderBook.basePrice + (float(yIndex) / float(params.height)) * orderBook.priceRange;
+    
+    int low = 0;
+    int high = int(orderBook.priceLevelsCount) - 1;
+    int closestIdx = -1;
+    float minDistance = 1e9;
+    
+    while (low <= high) {
+        int mid = (low + high) / 2;
+        float levelPrice = orderBook.levels[mid].price;
+        float dist = abs(levelPrice - targetPrice);
         
-        // The total liquidity at this position is now the previous value + the added amount
-        // which equals the value that's currently in the buffer
-        totalLiquidity = float(previousValue + uint(totalLiquidity));
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestIdx = mid;
+        }
+        
+        if (levelPrice < targetPrice) {
+            low = mid + 1;
+        } else if (levelPrice > targetPrice) {
+            high = mid - 1;
+        } else {
+            break; // Exact match
+        }
     }
-
-    // Compute pixel color based on aggregated liquidity
+    
+    float totalLiquidity = 0.0;
+    // Only show liquidity if the match is within the pixel's price bin
+    if (closestIdx != -1 && minDistance < (orderBook.priceRange / float(params.height))) {
+        totalLiquidity = float(orderBook.levels[closestIdx].askQuantity + orderBook.levels[closestIdx].bidQuantity);
+    }
+    
+    // Compute pixel color
     vec3 color = liquidityToColor(totalLiquidity);
-
+    
     // Write to heatmap texture at the current cyclic column
     imageStore(heatmapOutput, targetCoords, vec4(color, 1.0));
 }

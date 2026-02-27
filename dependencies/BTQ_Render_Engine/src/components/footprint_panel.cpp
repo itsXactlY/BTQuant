@@ -14,12 +14,6 @@
 #include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
-#include "ui/font_manager.hpp"  // Include font manager for monospaced font
-#include "../../include/components/quant_workspace_component.hpp"  // Include for global crosshair
-#include "../../include/market_data_processor.hpp"  // Include for MarketDataProcessor
-#include "../trading/HotspineData.h"
-
-using namespace BTQuant::RenderEngine;
 
 namespace BTQuant {
 
@@ -107,10 +101,8 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
   return oss.str();
 }
 
-FootprintPanel::FootprintPanel(const PanelConfig& config,
-                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+FootprintPanel::FootprintPanel(const PanelConfig& config)
     : PanelBase(config),
-      market_data_processor_(processor),
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
       volume_based_n_contracts_(1000),
@@ -118,15 +110,6 @@ FootprintPanel::FootprintPanel(const PanelConfig& config,
       price_aggregation_type_(Data::PriceAggregationType::P_1TICK),
       custom_price_aggregation_value_(0.1),
       zoom_sensitivity_(1.0f) {
-
-  // Subscribe to TRADE notifications for footprint data updates
-  if (market_data_processor_) {
-    subscription_id_ = market_data_processor_->subscribe(
-        0, RenderEngine::NotificationType::TRADE,
-        [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
-          this->markDirty();
-        });
-  }
 
   // Configure the LOD system with appropriate thresholds for footprint visualization
   lod_system_.setMinDetailZoom(0.1f);
@@ -142,15 +125,9 @@ FootprintPanel::FootprintPanel(const PanelConfig& config,
   lod_system_.setTextRenderThreshold(12.0f);
   lod_system_.setLabelRenderThreshold(20.0f);
   lod_system_.setDetailRenderThreshold(8.0f);
-
+  
   // Initialize the ClusterEngine with a default tick size
   cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size of 0.25
-}
-
-FootprintPanel::~FootprintPanel() {
-  if (market_data_processor_ && subscription_id_ > 0) {
-    market_data_processor_->unsubscribe(subscription_id_);
-  }
 }
 
 void FootprintPanel::update(float /*dt*/) {
@@ -621,30 +598,14 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   // Implement LOD: skip text rendering when cell height < 12px
   if (show_volume_labels_ && cell_height_px >= 12.0f) {
     std::string label = getCellLabel(cell);
-    
-    // Use monospaced font for numeric labels to ensure proper alignment
-    ImFont* monospace_font = BTQuant::UI::FontManager::getInstance().getMonospaceFont();
-    ImVec2 text_size;
-    
-    if (monospace_font) {
-      // Temporarily push the font to calculate text size
-      ImGui::PushFont(monospace_font);
-      text_size = ImGui::CalcTextSize(label.c_str());
-      ImGui::PopFont();
-    } else {
-      text_size = ImGui::CalcTextSize(label.c_str());
-    }
-    
+    ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+
     // Center text in cell
     ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f, (p1.y + p2.y - text_size.y) * 0.5f);
 
     // Determine text color based on background luminance for better contrast in filtered cells
     ImU32 background_color_for_text = IM_COL32(128, 128, 128, 64); // Average of gradient colors
     ImU32 text_color = lod_system_.getTextColorForBackground(background_color_for_text);
-    
-    // For ImDrawList, we'll use the default AddText method but the text was formatted with monospace considerations
-    // The actual font rendering in ImPlot context is complex, so we'll just use the default for now
-    // A full implementation would require more complex integration with ImPlot
     draw_list->AddText(text_pos, text_color, label.c_str());
   }
 }
@@ -977,119 +938,9 @@ void FootprintPanel::render() {
         }
     }
 
-    // Draw solid green rectangles extending right for market buys by pulling VolumeData from ClusterEngine
-    if (cluster_engine_ && show_market_buys_) {
-      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-      
-      // Iterate through visible time bars and price levels to get buy volume data
-      // We'll map the cell's position to the appropriate price level and time bucket in the ClusterEngine
-      for (const auto& cell : cells_) {
-        // Get buy volume from ClusterEngine at this price level and time bucket
-        // Map the cell's Y coordinate (price) to the appropriate price level in the ClusterEngine
-        int64_t price_level = static_cast<int64_t>(std::round(cell.y / cluster_engine_->get_tick_size()));
-        
-        // For the time bucket, we'll use the time aggregation type to determine the appropriate bucket
-        // This is a simplified approach - in practice, you'd need to map the time dimension properly
-        // For now, we'll use a time-based calculation based on the cell's X coordinate (time)
-        // We'll determine the time bucket based on the time aggregation type
-        int time_bucket = 0;
-        if (time_aggregation_type_ == BTQuant::Data::TimeAggregationType::T_1MIN) {
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (60LL * 1000000LL)) % 16);
-        } else if (time_aggregation_type_ == BTQuant::Data::TimeAggregationType::T_5MIN) {
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (5LL * 60LL * 1000000LL)) % 16);
-        } else if (time_aggregation_type_ == BTQuant::Data::TimeAggregationType::T_15MIN) {
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (15LL * 60LL * 1000000LL)) % 16);
-        } else if (time_aggregation_type_ == BTQuant::Data::TimeAggregationType::T_30MIN) {
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (30LL * 60LL * 1000000LL)) % 16);
-        } else if (time_aggregation_type_ == BTQuant::Data::TimeAggregationType::T_1HOUR) {
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (60LL * 60LL * 1000000LL)) % 16);
-        } else {
-          // Default to 1-minute aggregation
-          time_bucket = static_cast<int>((static_cast<int64_t>(cell.x * 1000000) / (60LL * 1000000LL)) % 16);
-        }
-        
-        // Ensure the time bucket is within valid range (0-15 as per ClusterEngine implementation)
-        time_bucket = std::max(0, std::min(15, time_bucket));
-        
-        double buy_volume = cluster_engine_->getVolumeDataAt(price_level, time_bucket, 
-                                                            BTQuant::Data::VolumeAnalysisType::BuyVolume);
-        
-        // Only draw if there's significant buy volume
-        if (buy_volume > 0.0) {
-          // Convert plot coordinates to pixel coordinates
-          ImVec2 cell_center = ImPlot::PlotToPixels(cell.x, cell.y);
-          
-          // Calculate the width of the rectangle based on buy volume
-          // Scale the width appropriately to fit the visualization
-          float volume_scale = 0.1f; // Adjust this scale factor as needed for appropriate sizing
-          float rect_width = static_cast<float>(buy_volume * volume_scale);
-          
-          // Create rectangle extending to the right from the cell center
-          ImVec2 rect_start = ImVec2(cell_center.x, cell_center.y - (cell.height * 0.5f)); // Top of the cell
-          ImVec2 rect_end = ImVec2(cell_center.x + rect_width, cell_center.y + (cell.height * 0.5f)); // Bottom of the cell
-          
-          // Draw solid green rectangle extending right
-          draw_list->AddRectFilled(rect_start, rect_end, IM_COL32(0, 255, 0, 180)); // Solid green with some transparency
-        }
-      }
-    }
-
-    // Draw 1px dashed line when g_crosshair.active == true
-    if (QuantWorkspaceComponent::g_crosshair.active.load()) {
-      ImPlotRect limits = ImPlot::GetPlotLimits();
-
-      // Get the global crosshair time position
-      uint64_t global_time = QuantWorkspaceComponent::g_crosshair.time.load();
-      double global_time_seconds = static_cast<double>(global_time) / 1000000.0; // Convert microseconds to seconds
-
-      // Draw vertical dashed line at the global crosshair time position
-      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-      ImVec2 top = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Max);
-      ImVec2 bottom = ImPlot::PlotToPixels(global_time_seconds, limits.Y.Min);
-
-      // Draw the synchronized crosshair line as a 1px dashed line
-      const float dash_length = 4.0f;
-      const float gap_length = 2.0f;
-      const float line_thickness = 1.0f;
-
-      // Draw dashed line
-      float current_y = top.y;
-      bool draw_segment = true;
-
-      while (current_y < bottom.y) {
-          float next_y = current_y + (draw_segment ? dash_length : gap_length);
-
-          if (next_y > bottom.y) {
-              next_y = bottom.y;
-          }
-
-          if (draw_segment) {
-              draw_list->AddLine(
-                  ImVec2(top.x, current_y),
-                  ImVec2(top.x, next_y),
-                  IM_COL32(0, 255, 255, 200), // Cyan dashed line for universal sync
-                  line_thickness
-              );
-          }
-
-          current_y = next_y;
-          draw_segment = !draw_segment;
-      }
-    }
-
     ImPlot::EndPlot();
   }
 
   end_panel_window();
 }
-
-void FootprintPanel::feedTradeToClusterEngine(const MarketData::Trade& trade) {
-  if (cluster_engine_) {
-    // Use a default time bucket of 0, or could use time-based aggregation
-    // For now, we'll use the time aggregation method which determines the time bucket automatically
-    cluster_engine_->processTradeWithTimeAggregation(trade, time_aggregation_type_, 
-                                                    volume_based_n_contracts_, tick_based_n_ticks_);
-  }
 }
-
-} // namespace BTQuant

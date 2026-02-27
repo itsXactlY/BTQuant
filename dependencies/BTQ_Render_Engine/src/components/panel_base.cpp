@@ -2,7 +2,6 @@
 
 #include "imgui.h"
 #include "ui/context_menus.hpp"
-#include "ui/ui_base.hpp"
 
 namespace BTQuant {
 
@@ -10,15 +9,16 @@ void PanelBase::begin_panel_window() {
   ImGui::SetNextWindowPos(config_.position, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
 
-  ImGuiWindowFlags flags = UI::PANEL_DEFAULT_FLAGS;
+  ImGuiWindowFlags flags = ImGuiWindowFlags_None;
   if (!config_.resizable) flags |= ImGuiWindowFlags_NoResize;
   if (!config_.movable) flags |= ImGuiWindowFlags_NoMove;
 
   // Use ThemeManager for glass style
   push_glass_style();
 
-  // Use stable window ID for DockBuilder compatibility (Title###TypeName_N)
-  std::string window_title = get_imgui_window_id();
+  // Ensure unique ID for the window
+  std::string window_title =
+      config_.title + "###panel_" + std::to_string(reinterpret_cast<uintptr_t>(this));
 
   ImGui::Begin(window_title.c_str(), &config_.visible, flags);
 }
@@ -40,43 +40,11 @@ void PanelBase::render() {
     return;
   }
 
-  // Render background image if enabled using channel splitting to ensure it's behind other content
-  if (use_background_image_ && background_texture_ != 0) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    // Split the draw list into channels: 0 for background, 1 for foreground
-    draw_list->ChannelsSplit(2);
-
-    // Switch to background channel (0)
-    draw_list->ChannelsSetCurrent(0);
-
-    // Get the current window position and size
-    ImVec2 window_pos = ImGui::GetWindowPos();
-    ImVec2 window_size = ImGui::GetWindowSize();
-
-    // Define the rectangle for the background image spanning the entire window
-    ImVec2 bg_min = window_pos;
-    ImVec2 bg_max = ImVec2(window_pos.x + window_size.x, window_pos.y + window_size.y);
-
-    // Add the image to the draw list, spanning the entire panel background
-    draw_list->AddImage(background_texture_, bg_min, bg_max, ImVec2(0, 0),
-                        ImVec2(1, 1));  // UV coordinates default to full texture
-
-    // Switch back to foreground channel (1) for normal rendering
-    draw_list->ChannelsSetCurrent(1);
-  }
-
   render_panel_header();
 
   // Default content for placeholder panels
   ImGui::Text("Panel Type: %s", get_panel_type_name(config_.type));
   ImGui::Text("Implementation coming soon...");
-
-  // Merge channels back together if we were using background image
-  if (use_background_image_ && background_texture_ != 0) {
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->ChannelsMerge();
-  }
 
   end_panel_window();
 
@@ -97,8 +65,7 @@ void PanelBase::render_panel_header() {
   // Settings button (left of close button)
   if (get_settings_interface() != nullptr) {
     float button_size = ImGui::GetTextLineHeight();
-    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 -
-                    15.0f);  // Position before close button
+    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 - 15.0f);  // Position before close button
     if (ImGui::Button("⚙", ImVec2(button_size, button_size))) {
       open_settings();
     }

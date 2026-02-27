@@ -8,7 +8,6 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
-#include "../trading/trade_command_queue.hpp"
 
 namespace BTQuant {
 
@@ -32,7 +31,6 @@ enum class OrderbookAggregationMode {
 // Real-time orderbook ladder display
 class OrderbookPanel : public PanelBase {
  public:
-  // DEPRECATED - Legacy hotspine
   OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
                  
@@ -46,7 +44,6 @@ class OrderbookPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -89,23 +86,11 @@ class OrderbookPanel : public PanelBase {
   // Helper method to detect order flow events by comparing snapshots
   void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
 
-  // Unit toggle functionality
-  enum class VolumeUnit {
-    COIN,
-    USD
-  };
-  
-  VolumeUnit volume_unit_ = VolumeUnit::COIN;  // Default to COIN units
-
   // Helper method to track volume changes for delta calculation
   void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
 
   // Helper method to update the lock-free orderbook cache
   void updateOrderbookCache();
-
-  // Order placement functionality
-  void place_order_at_price(double price, RenderEngine::OrderSide side, double quantity = 0.0);
-  void render_order_placement_buttons(const PriceLevel& level, bool is_bid);
 
   struct PriceLevelVolume {
     double bought = 0.0;
@@ -272,11 +257,7 @@ class OrderbookPanel : public PanelBase {
   
   // Atomic pointer to the latest orderbook data for lock-free reads
   mutable std::atomic<OrderbookCache*> latest_orderbook_cache_{nullptr};
-
-  // Atomic snapshots for asks and bids data - accessed via std::memory_order_acquire
-  mutable std::atomic<const std::vector<PriceLevel>*> snapshot_asks_{nullptr};
-  mutable std::atomic<const std::vector<PriceLevel>*> snapshot_bids_{nullptr};
-
+  
   std::map<double, VolumeLevelHistory> volume_level_history_;
   uint64_t volume_delta_period_us_ = 5000000; // 5 seconds in microseconds
 };

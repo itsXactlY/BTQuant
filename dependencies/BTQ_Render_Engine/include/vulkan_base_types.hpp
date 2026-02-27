@@ -18,7 +18,6 @@
 #include <vulkan/vulkan.h>
 
 struct ImDrawData;
-typedef unsigned long long ImTextureID;  // Forward declaration for ImTextureID
 
 namespace BTQuant {
 
@@ -135,18 +134,6 @@ class MemoryPool {
                             VkMemoryPropertyFlags properties);
 };
 
-struct ImageAllocation {
-  VkImage image = VK_NULL_HANDLE;
-  VkDeviceMemory memory = VK_NULL_HANDLE;
-  VkImageView view = VK_NULL_HANDLE;
-  VkDeviceSize size = 0;
-  VkFormat format = VK_FORMAT_UNDEFINED;
-  uint32_t width = 0;
-  uint32_t height = 0;
-  uint32_t mip_levels = 1;
-  VkImageUsageFlags usage = 0;
-};
-
 class GPUMemoryManager {
  public:
   GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
@@ -161,35 +148,6 @@ class GPUMemoryManager {
   BufferAllocation allocate_staging_buffer(VkDeviceSize size);
 
   void deallocate_buffer(const BufferAllocation& allocation);
-
-  // Image allocation methods
-  ImageAllocation allocate_image(uint32_t width, uint32_t height, VkFormat format, 
-                                VkImageTiling tiling, VkImageUsageFlags usage, 
-                                VkMemoryPropertyFlags properties, uint32_t mip_levels = 1);
-  void deallocate_image(const ImageAllocation& allocation);
-
-  // Texture atlas methods for exchange icons
-  ImageAllocation create_texture_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
-                                       uint32_t icon_width, uint32_t icon_height,
-                                       uint32_t cols, uint32_t rows);
-  void update_texture_atlas(const ImageAllocation& atlas,
-                           const std::vector<std::vector<uint8_t>>& icon_data,
-                           uint32_t x_offset, uint32_t y_offset,
-                           uint32_t width, uint32_t height);
-  
-  // Exchange-specific texture atlas methods
-  ImageAllocation create_exchange_icon_atlas(const std::vector<std::vector<uint8_t>>& icon_data,
-                                           uint32_t icon_width, uint32_t icon_height,
-                                           const std::vector<std::string>& exchange_names);
-  VkDescriptorSet create_exchange_icon_descriptor_set(VkDescriptorPool descriptor_pool, 
-                                                     VkSampler sampler, 
-                                                     const ImageAllocation& atlas);
-
-  // Public access methods for texture atlas operations
-  VkResult copy_buffer_to_image(VkCommandBuffer command_buffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-
-  // Method to retrieve ImTextureID from an ImageAllocation for ImGui rendering
-  ImTextureID getImTextureID(VkSampler sampler, const ImageAllocation& allocation, VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) const;
 
   // Memory usage statistics
   struct MemoryStats {
@@ -208,9 +166,6 @@ class GPUMemoryManager {
   std::unique_ptr<MemoryPool> vertex_pool_;
   std::unique_ptr<MemoryPool> uniform_pool_;
   std::unique_ptr<MemoryPool> storage_pool_;
-
-  // Helper methods
-  uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 };
 
 class VulkanCore {
@@ -265,14 +220,6 @@ class VulkanCore {
   // Frame timing metrics
   float get_frame_time_ms() const { return frame_time_ms_; }
   float get_fps() const { return fps_; }
-
-  // Methods for monitoring snapshot data readiness
-  void register_snapshot_source(std::atomic<uint64_t>* snapshot_head);
-  bool is_new_snapshot_available() const;
-  void acknowledge_snapshot_processed();
-
-  // Public access methods for texture atlas operations
-  VkSampler get_default_sampler() const { return default_sampler_; }
 
  private:
   VulkanDashboardConfig config_;
@@ -344,10 +291,6 @@ class VulkanCore {
   // Performance monitoring
   std::vector<float> frame_time_history_;
   static constexpr size_t FRAME_TIME_HISTORY_SIZE = 100;
-
-  // Snapshot data monitoring
-  std::atomic<uint64_t>* monitored_snapshot_head_ = nullptr;
-  std::atomic<uint64_t> last_processed_snapshot_{0};
 
   // Private initialization methods
   void create_instance();

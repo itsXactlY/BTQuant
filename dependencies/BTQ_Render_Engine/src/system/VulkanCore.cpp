@@ -1163,31 +1163,4 @@ void VulkanCore::create_depth_resources() {
   }
 }
 
-void VulkanCore::register_snapshot_source(std::atomic<uint64_t>* snapshot_head) {
-  monitored_snapshot_head_ = snapshot_head;
-  // Initialize the last processed snapshot to the current value to avoid false positives
-  if (snapshot_head) {
-    last_processed_snapshot_.store(snapshot_head->load(std::memory_order_acquire), std::memory_order_release);
-  }
-}
-
-bool VulkanCore::is_new_snapshot_available() const {
-  if (!monitored_snapshot_head_) {
-    return false;
-  }
-  
-  uint64_t current_snapshot = monitored_snapshot_head_->load(std::memory_order_acquire);
-  uint64_t last_processed = last_processed_snapshot_.load(std::memory_order_acquire);
-  
-  return current_snapshot > last_processed;
-}
-
-void VulkanCore::acknowledge_snapshot_processed() {
-  if (monitored_snapshot_head_) {
-    // Update last processed to the current value of the snapshot head
-    uint64_t current_snapshot = monitored_snapshot_head_->load(std::memory_order_acquire);
-    last_processed_snapshot_.store(current_snapshot, std::memory_order_release);
-  }
-}
-
 }  // namespace BTQuant

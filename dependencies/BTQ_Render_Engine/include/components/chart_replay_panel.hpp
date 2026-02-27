@@ -13,7 +13,6 @@ namespace BTQuant {
 
 class ChartReplayPanel : public PanelBase {
 public:
-    // DEPRECATED - Legacy hotspine
     ChartReplayPanel(const PanelConfig& config,
                      std::shared_ptr<HotSpineDataBridge> bridge,
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
@@ -27,7 +26,6 @@ public:
     void set_timeframe(RenderEngine::TimeFrame timeframe);
 
 private:
-    // DEPRECATED - Legacy hotspine
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     ChartManager* chart_manager_;

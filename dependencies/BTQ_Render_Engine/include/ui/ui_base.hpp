@@ -7,18 +7,6 @@
 #include <string>
 
 #include "vulkan_base_types.hpp"
-#include "data/core_types.hpp"
-
-namespace BTQuant::UI {
-
-constexpr ImGuiWindowFlags PANEL_DEFAULT_FLAGS =
-    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-
-constexpr ImGuiWindowFlags OVERLAY_FLAGS =
-    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground;
-
-}  // namespace BTQuant::UI
 
 namespace BTQuant {
 
@@ -26,6 +14,7 @@ namespace BTQuant {
 class VulkanCore;
 namespace RenderEngine {
 struct TradeData;
+struct OrderbookData;
 }  // namespace RenderEngine
 
 // ============================================================================
@@ -84,7 +73,7 @@ struct UIComponent {
   void mark_dirty() { dirty_frames_ = 3; }
   bool is_dirty() const { return dirty_frames_ > 0; }
   virtual void handle_trade(const RenderEngine::TradeData&) {}
-  virtual void handle_orderbook(const OrderbookData&) {}
+  virtual void handle_orderbook(const RenderEngine::OrderbookData&) {}
   virtual void handle_input(const InputEvent&) {}
   bool is_visible() const { return visible_; }
   glm::vec2 get_position() const { return position_; }

@@ -139,7 +139,6 @@ class AlertManager {
 // Forward declarations
 class VulkanDashboard;
 class QuantWorkspaceComponent;
-class LayoutManager;
 
 class ResizablePanel : public UIComponent {
  public:
@@ -158,6 +157,12 @@ class ResizablePanel : public UIComponent {
   bool resizable_ = true;
   bool snap_to_grid_ = false;
   float grid_size_ = 10.0f;
+};
+
+class LayoutManager {
+ public:
+  void create_default_layouts();
+  void save_layout(const std::string& name, const std::string& desc);
 };
 
 class SearchEngine {
@@ -244,7 +249,6 @@ class VulkanDashboard {
    * @param processor Shared pointer to the market data processor
    * @param config Configuration object for dashboard settings
    */
-  // DEPRECATED - Legacy hotspine
   VulkanDashboard(uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig& config);
@@ -297,6 +301,9 @@ class VulkanDashboard {
   /// @brief Initialize the GLFW window
   void init_window();
 
+  /// @brief Poll market data and feed it to the microstructure renderer
+  void pollDataToRenderer();
+
   /// @brief Render the internal performance overlay
   void render_performance_overlay();
 
@@ -304,7 +311,6 @@ class VulkanDashboard {
   void render_layout_indicator();
 
   uint32_t width_, height_;
-  // DEPRECATED - Legacy hotspine
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   VulkanDashboardConfig config_;
@@ -321,7 +327,6 @@ class VulkanDashboard {
   uint32_t current_image_index_ = 0;
   bool is_running_ = true;
   bool window_resized_ = false;
-  float last_dpi_scale_ = 0.0f;  // Track DPI scale to detect changes
 
   /**
    * @brief Callback for when the window framebuffer is resized

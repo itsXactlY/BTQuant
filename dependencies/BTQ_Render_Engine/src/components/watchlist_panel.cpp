@@ -1,0 +1,1175 @@
+#include "../../include/components/watchlist_panel.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
+#include "imgui.h"
+
+namespace BTQuant {
+
+// Helper function to format numbers for financial display
+std::string formatFinancialNumber(double value, int precision = 2) {
+  if (value >= 1e9) {
+    return std::to_string(value / 1e9)
+               .substr(0, std::to_string(value / 1e9).find('.') + precision + 1) +
+           "B";
+  } else if (value >= 1e6) {
+    return std::to_string(value / 1e6)
+               .substr(0, std::to_string(value / 1e6).find('.') + precision + 1) +
+           "M";
+  } else if (value >= 1e3) {
+    return std::to_string(value / 1e3)
+               .substr(0, std::to_string(value / 1e3).find('.') + precision + 1) +
+           "K";
+  } else {
+    return std::to_string(value).substr(0, std::to_string(value).find('.') + precision + 1);
+  }
+}
+
+// Helper function to format price values with consistent decimal places
+std::string formatPrice(double price) {
+  // For prices less than 1, show more decimals
+  if (price < 1.0) {
+    return std::to_string(price).substr(0, std::to_string(price).find('.') + 6);
+  } else {
+    return std::to_string(price).substr(0, std::to_string(price).find('.') + 5);
+  }
+}
+
+// Helper function to calculate color intensity based on change magnitude
+ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
+  // Determine if change is positive or negative
+  bool is_positive = change_value >= 0;
+
+  // Calculate absolute magnitude for intensity
+  double abs_change = std::abs(change_value);
+
+  // Define thresholds for intensity scaling - make more adaptive based on typical market movements
+  double max_intensity_threshold =
+      is_percentage ? 5.0
+                    : 50.0;  // Lower threshold for more sensitivity (5% or $50 as max intensity)
+
+  // For extremely large changes, cap the intensity to prevent overly saturated colors
+  double capped_change = std::min(abs_change, max_intensity_threshold * 2.0);
+
+  // Use logarithmic scaling to make intensity increase more gradually with larger changes
+  // This provides better visual distinction for smaller changes while preventing oversaturation
+  double normalized_change = std::min(1.0, capped_change / max_intensity_threshold);
+
+  // Apply a more balanced curve for intensity scaling - using a combination of linear and
+  // exponential double intensity_factor = normalized_change; // Base linear scaling - unused
+  // variable
+  double saturation_factor = normalized_change;  // Use same factor for consistency
+
+  // Return appropriate color based on sign and intensity
+  if (is_positive) {
+    // Bright green for positive changes - more intense greens for larger changes
+    // Start with a bright green and make it more intense with larger changes
+    float red_comp = 0.1f * (1.0f - saturation_factor);   // Reduce red as intensity increases
+    float green_comp = 0.4f + 0.6f * saturation_factor;   // Increase green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor);  // Reduce blue as intensity increases
+    return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
+  } else {
+    // Bright red for negative changes - more intense reds for larger changes
+    // Start with a bright red and make it more intense with larger changes
+    float red_comp = 0.4f + 0.6f * saturation_factor;      // Increase red as intensity increases
+    float green_comp = 0.1f * (1.0f - saturation_factor);  // Reduce green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor);   // Reduce blue as intensity increases
+    return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
+  }
+}
+
+WatchlistPanel::WatchlistPanel(const PanelConfig& config,
+                               std::shared_ptr<HotSpineDataBridge> bridge,
+                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    : PanelBase(config), bridge_(bridge), processor_(processor) {
+  // Initialize the subscription to real-time market data updates
+  // We'll subscribe to individual symbols when they're added to the watchlist
+
+  // Set config file path based on panel name or use default
+  std::string panel_name = "watchlist";
+  config_file_path_ = panel_name + "_config.ini";
+
+  // Load the saved watchlist order from config file
+  load_watchlist_order_from_config(config_file_path_);
+
+  // Subscribe to all currently watched symbols using the new efficient method
+  subscribe_to_all_watchlist_symbols();
+
+  // Verify all subscriptions are active
+  verify_subscriptions();
+
+  std::cout << "[WatchlistPanel] Initialized with " << watchlist_.size()
+            << " symbols and subscriptions" << std::endl;
+}
+
+void WatchlistPanel::update(float dt) {
+  // Ensure all symbols in the watchlist are subscribed to real-time price feed
+  // updates This handles cases where subscriptions might have been lost or need to be refreshed
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+      subscribe_to_symbol(symbol_id);
+    }
+  }
+
+  // Additionally, periodically verify all subscriptions are active
+  // This ensures robustness in case of connection issues or other problems
+  verify_subscriptions();
+
+  // Log subscription status periodically for debugging (every 10 seconds)
+  static float subscription_check_timer = 0.0f;
+  subscription_check_timer += dt;
+  if (subscription_check_timer > 10.0f) {
+    subscription_check_timer = 0.0f;
+    std::cout << "[WatchlistPanel] Active symbols: " << watchlist_.size()
+              << ", Active subscriptions: " << symbol_subscriptions_.size() << std::endl;
+
+    // Log any discrepancies between watchlist and subscriptions
+    for (const auto& [symbol_id, entry] : watchlist_) {
+      if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+        std::cout << "[WatchlistPanel] Missing subscription for symbol ID: " << symbol_id << " ("
+                  << entry.symbol << ")" << std::endl;
+      }
+    }
+  }
+
+  // Handle real-time price updates for all symbols in the watchlist
+  // Process any pending market data updates
+  process_pending_updates();
+}
+
+void WatchlistPanel::render() {
+  begin_panel_window();
+
+  if (!is_visible()) {
+    end_panel_window();
+    return;
+  }
+
+  render_panel_header();
+
+  // Enhanced section for adding new symbols with better visual grouping
+  ImGui::Spacing();
+  ImGui::Text("Add Symbol to Watchlist:");
+
+  // Input field for new symbol with improved styling
+  ImGui::PushStyleColor(ImGuiCol_FrameBg,
+                        ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Darker background for input
+  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
+  ImGui::SetNextItemWidth(150);
+
+  // Check if we should focus the symbol input field
+  if (should_focus_symbol_input_) {
+      ImGui::SetKeyboardFocusHere();
+      should_focus_symbol_input_ = false; // Reset the flag after focusing
+  }
+
+  bool input_entered =
+      ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_,
+                               sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+  ImGui::PopStyleColor(3);
+
+  // Add tooltip to explain the input field
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Enter a symbol name (e.g., AAPL, MSFT) to add to watchlist");
+    ImGui::EndTooltip();
+  }
+  ImGui::SameLine();
+
+  // Button to add symbol by name with improved styling
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));  // Green background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.3f, 0.7f, 0.3f, 1.0f));  // Lighter green when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(0.4f, 0.8f, 0.4f, 1.0f));                 // Even lighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
+
+  bool add_clicked = ImGui::Button("Add Symbol");
+
+  // Add tooltip to explain the button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Add the symbol entered above to the watchlist");
+    ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleColor(4);  // Pop all 4 color styles
+
+  // Show current count of symbols in watchlist
+  ImGui::SameLine();
+  ImGui::TextDisabled("(%zu symbols)", watchlist_.size());
+
+  // Add a clear all button
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));  // Red background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.9f, 0.1f, 0.1f, 1.0f));  // Darker red when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Even brighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
+
+  if (ImGui::Button("Clear All")) {
+    if (!watchlist_.empty()) {
+      show_clear_all_confirmation_ = true;
+    }
+  }
+
+  // Add tooltip to explain the clear all button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Remove all symbols from the watchlist");
+    ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleColor(4);  // Pop all 4 color styles
+
+  // Alternative symbol selector dropdown
+  if (bridge_) {
+    auto active_symbols = bridge_->getActiveSymbols();
+    if (!active_symbols.empty()) {
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::BeginCombo("##SymbolSelector", "Or select...")) {
+        for (uint32_t sym_id : active_symbols) {
+          std::string sym_name = bridge_->getSymbolName(sym_id);
+          std::string exchange = bridge_->getExchangeName(sym_id);
+          if (sym_name.empty()) continue;
+
+          // Check if already in watchlist
+          bool already_added =
+              (watchlist_.find(sym_id) != watchlist_.end());
+
+          std::string label = exchange + "/" + sym_name;
+          if (already_added) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_Disabled);
+            ImGui::PopStyleColor();
+          } else {
+            if (ImGui::Selectable(label.c_str())) {
+              add_symbol(sym_id, sym_name, exchange);
+            }
+          }
+        }
+        ImGui::EndCombo();
+      }
+      ImGui::SameLine();
+      ImGui::Text("(%zu in watchlist, %zu available)", watchlist_.size(), active_symbols.size());
+    }
+  }
+
+  // Show error message if symbol not found
+  std::string symbol_to_add = new_symbol_buffer_;
+  if ((add_clicked || input_entered) && !symbol_to_add.empty() && bridge_) {
+    // Trim whitespace from input
+    symbol_to_add.erase(0, symbol_to_add.find_first_not_of(" \t"));
+    symbol_to_add.erase(symbol_to_add.find_last_not_of(" \t") + 1);
+
+    if (symbol_to_add.empty()) {
+      ImGui::SameLine();
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));  // Red text for error
+      ImGui::Text("Please enter a valid symbol name!");
+      ImGui::PopStyleColor();
+    } else {
+      // Convert to uppercase for standardization
+      std::transform(symbol_to_add.begin(), symbol_to_add.end(), symbol_to_add.begin(), ::toupper);
+
+      bool symbol_found = false;
+      auto active_symbols = bridge_->getActiveSymbols();
+      for (uint32_t sym_id : active_symbols) {
+        std::string sym_name = bridge_->getSymbolName(sym_id);
+        std::string exchange = bridge_->getExchangeName(sym_id);
+
+        // Compare the symbol name and check if it's already in the watchlist
+        if (!sym_name.empty() && sym_name == symbol_to_add &&
+            watchlist_.find(sym_id) == watchlist_.end()) {
+          add_symbol(sym_id, sym_name, exchange);
+          new_symbol_buffer_[0] = '\0';  // Clear the input buffer
+          symbol_found = true;
+          break;
+        }
+      }
+
+      // Show success message if symbol was added
+      if (symbol_found) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(0.3f, 0.9f, 0.3f, 1.0f));  // Green text for success
+        ImGui::Text("Added '%s' to watchlist!", symbol_to_add.c_str());
+        ImGui::PopStyleColor();
+      } else {
+        // Show error message if symbol was not found
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));  // Red text for error
+        ImGui::Text("Symbol '%s' not found or already in watchlist!", symbol_to_add.c_str());
+        ImGui::PopStyleColor();
+      }
+    }
+  }
+
+  // Filter input
+  render_filter_input();
+
+  ImGui::Separator();
+
+  // Table with fixed 11 columns (symbol, exchange, price, change%, change$, volume, high, low, open, vwap, action)
+  if (ImGui::BeginTable("WatchlistTable", 11,
+                        ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
+                            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                            ImGuiTableFlags_SortMulti)) {
+    render_table_header();
+
+    auto filtered_symbols = get_filtered_symbols();
+    for (uint32_t symbol_id : filtered_symbols) {
+      auto it = watchlist_.find(symbol_id);
+      if (it != watchlist_.end()) {
+        render_table_row(it->second);
+      }
+    }
+
+    ImGui::EndTable();
+  }
+
+  // Context menu for adding/removing symbols
+  if (ImGui::BeginPopupContextWindow()) {
+    if (ImGui::MenuItem("Add All Symbols")) {
+      if (bridge_) {
+        for (uint32_t sym_id : bridge_->getActiveSymbols()) {
+          std::string sym_name = bridge_->getSymbolName(sym_id);
+          std::string exchange = bridge_->getExchangeName(sym_id);
+          if (!sym_name.empty() &&
+              (watchlist_.find(sym_id) == watchlist_.end())) {
+            add_symbol(sym_id, sym_name, exchange);
+          }
+        }
+      }
+    }
+    if (ImGui::MenuItem("Clear Watchlist")) {
+      clear_watchlist();
+    }
+    ImGui::EndPopup();
+  }
+
+  // Delete confirmation dialog
+  if (show_delete_confirmation_) {
+    ImGui::OpenPopup("Confirm Delete?");
+  }
+
+  if (ImGui::BeginPopupModal("Confirm Delete?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Are you sure you want to remove this symbol from the watchlist?");
+
+    // Find the symbol name to display in the confirmation
+    auto it = watchlist_.find(symbol_to_delete_);
+    if (it != watchlist_.end()) {
+      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Symbol: %s",
+                         it->second.symbol.c_str());  // Highlight the symbol name
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Yes, Remove", ImVec2(80, 0))) {
+      remove_symbol(symbol_to_delete_);
+      show_delete_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+      show_delete_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  // Clear all confirmation dialog
+  if (show_clear_all_confirmation_) {
+    ImGui::OpenPopup("Confirm Clear All?");
+  }
+
+  if (ImGui::BeginPopupModal("Confirm Clear All?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Are you sure you want to remove ALL symbols from the watchlist?");
+
+    // Show how many symbols will be removed
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Number of symbols to remove: %zu",
+                       watchlist_.size());
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Yes, Clear All", ImVec2(100, 0))) {
+      clear_watchlist();
+      show_clear_all_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+      show_clear_all_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  end_panel_window();
+}
+
+void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
+                                const std::string& exchange) {
+  if (watchlist_.find(symbol_id) != watchlist_.end()) {
+    return;  // Already exists
+  }
+
+  WatchlistEntry entry;
+  entry.symbol_id = symbol_id;
+  entry.symbol = symbol;
+  entry.exchange = exchange;
+  entry.is_active = true;
+
+  watchlist_[symbol_id] = entry;
+
+  // Add to display order - if there's an existing order, append to the end
+  // otherwise, just add to the vector
+  display_order_.push_back(symbol_id);
+
+  // Subscribe to real-time updates for this symbol
+  subscribe_to_symbol(symbol_id);
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config(config_file_path_);
+
+  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id << ") to watchlist and subscribed to real-time updates" << std::endl;
+}
+
+void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
+                                           RenderEngine::NotificationType type) {
+  // Only process trade updates for real-time price feed
+  if (type != RenderEngine::NotificationType::TRADE) {
+    return;
+  }
+
+  // Check if this symbol is in our watchlist
+  auto it = watchlist_.find(symbol_id);
+  if (it != watchlist_.end()) {
+    // Get the latest analytics data for this symbol
+    auto analytics = processor_->getSymbolAnalytics(symbol_id);
+    if (analytics.symbol_id != 0) {
+      // Update the entry with new data from real-time price feed
+      it->second.price = analytics.last_trade_price;
+      it->second.vwap = analytics.vwap;
+      it->second.last_update_ts = analytics.last_trade_time;
+
+      // Calculate 24h change using the longest available timeframe candles
+      auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+      if (!candles.empty()) {
+        const auto& oldest_candle = candles.front();
+        const auto& newest_candle = candles.back();
+
+        // Calculate percentage change
+        it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
+
+        // Calculate dollar change
+        it->second.change_dollar = newest_candle.close - oldest_candle.close;
+
+        // Store open, high, low values from the oldest candle (representing 24h period)
+        it->second.open_24h = oldest_candle.open;
+        it->second.high_24h = oldest_candle.high;
+        it->second.low_24h = oldest_candle.low;
+
+        // Estimate 24h volume by summing available candles (best effort)
+        double total_vol = 0.0;
+        for (const auto& c : candles) total_vol += c.volume;
+        it->second.volume_24h = total_vol;
+      } else {
+        it->second.change_pct = 0.0;
+        it->second.change_dollar = 0.0;
+        it->second.open_24h = 0.0;
+        it->second.high_24h = 0.0;
+        it->second.low_24h = 0.0;
+        it->second.volume_24h = analytics.volume_1m;  // Fallback
+      }
+
+      // Log every market data update for monitoring
+      std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
+                << " (ID: " << symbol_id << "). New price: " << it->second.price
+                << ", Timestamp: " << it->second.last_update_ts << std::endl;
+    }
+  }
+}
+
+void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
+  watchlist_.erase(symbol_id);
+  display_order_.erase(std::remove(display_order_.begin(),
+                                  display_order_.end(), symbol_id),
+                      display_order_.end());
+
+  // Unsubscribe from real-time updates for this symbol
+  unsubscribe_from_symbol(symbol_id);
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config(config_file_path_);
+}
+
+WatchlistPanel::~WatchlistPanel() {
+  // Unsubscribe from all market data updates when the panel is destroyed
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    unsubscribe_from_symbol(symbol_id);
+  }
+}
+
+void WatchlistPanel::clear_watchlist() {
+  // Unsubscribe from all current symbols before clearing
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    unsubscribe_from_symbol(symbol_id);
+  }
+
+  watchlist_.clear();
+  display_order_.clear();
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config(config_file_path_);
+}
+
+void WatchlistPanel::update_watchlist_data() {
+  // This method is now deprecated since we use real-time updates
+  // The data is updated in on_market_data_update() when new market data arrives
+  // This method remains for backward compatibility but does nothing
+}
+
+
+void WatchlistPanel::render_filter_input() {
+  ImGui::Text("Filter:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(-1);
+  ImGui::InputText("##Filter", filter_buffer_, sizeof(filter_buffer_));
+}
+
+void WatchlistPanel::render_table_header() {
+  // Setup table columns with appropriate widths for better readability
+  ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch);
+  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableSetupColumn("Last Price", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+  ImGui::TableSetupColumn("Change%", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Change$", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 70.0f);
+
+  // Render headers with sort indicators
+  ImGui::TableHeadersRow();
+
+  // Handle ImGui's built-in sorting system
+  ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
+  if (sorts_specs && sorts_specs->SpecsDirty) {
+    if (sorts_specs->SpecsCount > 0) {
+      const auto& spec = sorts_specs->Specs[0];
+      sort_column_ = spec.ColumnIndex;
+      sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
+      sort_watchlist();
+    }
+    sorts_specs->SpecsDirty = false;
+  }
+}
+
+void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
+  ImGui::TableNextRow();
+
+  // Make entire row selectable for click-to-chart
+  // Column 0: Symbol
+  ImGui::TableSetColumnIndex(0);
+  bool is_selected = (entry.symbol_id == selected_symbol_id_);
+
+  ImGui::PushID(static_cast<int>(entry.symbol_id));  // Fix ID conflict
+
+  // Visually highlight the selected row
+  if (is_selected) {
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                           ImGui::GetColorU32(ImVec4(
+                               0.2f, 0.3f, 0.6f, 0.5f)));  // Blueish highlight for selected row
+  }
+
+  if (ImGui::Selectable(entry.symbol.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
+    selected_symbol_id_ = entry.symbol_id;
+
+    // Trigger symbol selection callback to switch all panels to this symbol
+    if (on_symbol_selected_) {
+      on_symbol_selected_(entry.symbol_id, entry.symbol);
+    }
+  }
+
+  // Show tooltip on hover
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Click to switch all panels to %s", entry.symbol.c_str());
+    ImGui::Text("Exchange: %s", entry.exchange.c_str());
+    ImGui::Text("24h Open/High/Low: %.4f / %.4f / %.4f", entry.open_24h, entry.high_24h,
+                entry.low_24h);
+    ImGui::EndTooltip();
+  }
+  
+  ImGui::PopID(); // Pop the ID we pushed earlier for the symbol column
+
+  // Column 1: Exchange
+  ImGui::TableSetColumnIndex(1);
+  ImGui::Text("%s", entry.exchange.c_str());
+
+  // Column 2: Last Price
+  ImGui::TableSetColumnIndex(2);
+  ImVec4 price_color = calculateChangeColor(entry.change_pct, true);
+  ImGui::TextColored(price_color, "%s", formatPrice(entry.price).c_str());
+
+  // Column 3: Change%
+  ImGui::TableSetColumnIndex(3);
+  ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
+  ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
+
+  // Column 4: Change$
+  ImGui::TableSetColumnIndex(4);
+  ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
+  ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
+
+  // Column 5: Volume
+  ImGui::TableSetColumnIndex(5);
+  ImGui::Text("%s", formatFinancialNumber(entry.volume_24h, 2).c_str());
+
+  // Column 6: High
+  ImGui::TableSetColumnIndex(6);
+  ImVec4 high_color = calculateChangeColor(entry.high_24h - entry.price, true);
+  ImGui::TextColored(high_color, "%s", formatPrice(entry.high_24h).c_str());
+
+  // Column 7: Low
+  ImGui::TableSetColumnIndex(7);
+  ImVec4 low_color = calculateChangeColor(entry.low_24h - entry.price, true);
+  ImGui::TextColored(low_color, "%s", formatPrice(entry.low_24h).c_str());
+
+  // Column 8: Open
+  ImGui::TableSetColumnIndex(8);
+  ImVec4 open_color = calculateChangeColor(entry.open_24h - entry.price, true);
+  ImGui::TextColored(open_color, "%s", formatPrice(entry.open_24h).c_str());
+
+  // Column 9: VWAP
+  ImGui::TableSetColumnIndex(9);
+  ImVec4 vwap_color = calculateChangeColor(entry.vwap - entry.price, true);
+  ImGui::TextColored(vwap_color, "%s", formatPrice(entry.vwap).c_str());
+
+  // Column 10: Action
+  ImGui::TableSetColumnIndex(10);
+  ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
+
+  // Style the delete button to be more visually distinct
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));  // Red background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.95f, 0.1f, 0.1f, 1.0f));  // Darker red when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Even brighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
+
+  // Make the delete button smaller and more compact
+  ImGui::PushStyleVar(
+      ImGuiStyleVar_FramePadding,
+      ImVec2(8.0f, 4.0f));  // Small padding but slightly larger for better click area
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
+
+  if (ImGui::Button("✕##DeleteBtn")) {  // Use ✕ symbol for better visual representation
+    // Show confirmation dialog before deleting
+    symbol_to_delete_ = entry.symbol_id;
+    show_delete_confirmation_ = true;
+  }
+
+  // Add tooltip to explain the delete button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Remove '%s' from watchlist", entry.symbol.c_str());
+    ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleVar(2);    // Pop the style variables
+  ImGui::PopStyleColor(4);  // Pop all 4 color styles
+
+  ImGui::PopID();
+}
+
+std::vector<uint32_t> WatchlistPanel::get_filtered_symbols() const {
+  std::vector<uint32_t> filtered;
+
+  std::string filter(filter_buffer_);
+  std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
+
+  for (uint32_t symbol_id : display_order_) {
+    auto it = watchlist_.find(symbol_id);
+    if (it != watchlist_.end()) {
+      if (filter.empty()) {
+        filtered.push_back(symbol_id);
+      } else {
+        std::string symbol = it->second.symbol;
+        std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::tolower);
+        if (symbol.find(filter) != std::string::npos) {
+          filtered.push_back(symbol_id);
+        }
+      }
+    }
+  }
+
+  return filtered;
+}
+
+const char* WatchlistPanel::get_sort_column_name(int column) {
+  switch (column) {
+    case 0:
+      return "Symbol";
+    case 1:
+      return "Exchange";
+    case 2:
+      return "Last Price";
+    case 3:
+      return "Change%";
+    case 4:
+      return "Change$";
+    case 5:
+      return "Volume";
+    case 6:
+      return "High";
+    case 7:
+      return "Low";
+    case 8:
+      return "Open";
+    case 9:
+      return "VWAP";
+    case 10:
+      return "Action";
+    default:
+      return "Unknown";
+  }
+}
+
+double WatchlistPanel::calculate_24h_change(const RenderEngine::OHLCVCandle& current,
+                                            const RenderEngine::OHLCVCandle& old) const {
+  if (old.close == 0.0) return 0.0;
+  // Using close price of the candles
+  return ((current.close - old.close) / old.close) * 100.0;
+}
+
+void WatchlistPanel::sort_watchlist() {
+  // Don't sort if the Action column is selected (column 10) since it doesn't have comparable values
+  if (sort_column_ == 10) {
+    return;
+  }
+
+  std::sort(display_order_.begin(), display_order_.end(),
+            [this](uint32_t a_id, uint32_t b_id) {
+              const auto& a_it = watchlist_.find(a_id);
+              const auto& b_it = watchlist_.find(b_id);
+
+              // If either symbol is not found, return false to maintain order
+              if (a_it == watchlist_.end() || b_it == watchlist_.end()) {
+                return a_id < b_id;  // Maintain original order based on ID
+              }
+
+              const auto& a = a_it->second;
+              const auto& b = b_it->second;
+
+              bool result = false;
+              switch (sort_column_) {
+                case 0:  // Symbol
+                  result = a.symbol < b.symbol;
+                  break;
+                case 1:  // Exchange
+                  result = a.exchange < b.exchange;
+                  break;
+                case 2:  // Last Price
+                  result = a.price < b.price;
+                  break;
+                case 3:  // Change %
+                  result = a.change_pct < b.change_pct;
+                  break;
+                case 4:  // Change $
+                  result = a.change_dollar < b.change_dollar;
+                  break;
+                case 5:  // Volume
+                  result = a.volume_24h < b.volume_24h;
+                  break;
+                case 6:  // High
+                  result = a.high_24h < b.high_24h;
+                  break;
+                case 7:  // Low
+                  result = a.low_24h < b.low_24h;
+                  break;
+                case 8:  // Open
+                  result = a.open_24h < b.open_24h;
+                  break;
+                case 9:  // VWAP
+                  result = a.vwap < b.vwap;
+                  break;
+                default:
+                  result = a.symbol < b.symbol;
+              }
+
+              // Handle equal values to ensure consistent sorting
+              bool values_equal = false;
+              switch (sort_column_) {
+                case 0:  // Symbol
+                  values_equal = (a.symbol == b.symbol);
+                  break;
+                case 1:  // Exchange
+                  values_equal = (a.exchange == b.exchange);
+                  break;
+                case 2:  // Last Price
+                  values_equal = (std::abs(a.price - b.price) <
+                                  1e-9);  // Use epsilon for floating point comparison
+                  break;
+                case 3:  // Change %
+                  values_equal = (std::abs(a.change_pct - b.change_pct) < 1e-9);
+                  break;
+                case 4:  // Change $
+                  values_equal = (std::abs(a.change_dollar - b.change_dollar) < 1e-9);
+                  break;
+                case 5:  // Volume
+                  values_equal = (std::abs(a.volume_24h - b.volume_24h) < 1e-9);
+                  break;
+                case 6:  // High
+                  values_equal = (std::abs(a.high_24h - b.high_24h) < 1e-9);
+                  break;
+                case 7:  // Low
+                  values_equal = (std::abs(a.low_24h - b.low_24h) < 1e-9);
+                  break;
+                case 8:  // Open
+                  values_equal = (std::abs(a.open_24h - b.open_24h) < 1e-9);
+                  break;
+                case 9:  // VWAP
+                  values_equal = (std::abs(a.vwap - b.vwap) < 1e-9);
+                  break;
+                default:
+                  values_equal = (a.symbol == b.symbol);
+              }
+
+              // If values are equal, sort by symbol as secondary criteria to ensure consistent
+              // ordering
+              if (values_equal) {
+                result = a.symbol < b.symbol;
+              }
+
+              return sort_ascending_ ? result : !result;
+            });
+
+  // Save the updated order to config file after sorting
+  save_watchlist_order_to_config(config_file_path_);
+}
+
+
+void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {
+  // Create directory if it doesn't exist
+  std::filesystem::path config_path(config_file);
+  if (!config_path.parent_path().empty()) {
+    std::filesystem::create_directories(config_path.parent_path());
+  }
+
+  // First, read the existing config file to preserve other sections
+  std::vector<std::string> existing_lines;
+  std::ifstream read_file(config_file);
+  bool replaced_section = false;
+
+  if (read_file.is_open()) {
+    std::string line;
+    bool in_watchlist_section = false;
+
+    while (std::getline(read_file, line)) {
+      // Check if we're entering the watchlist_order section
+      if (line.find("[watchlist_order]") != std::string::npos) {
+        existing_lines.push_back(line);
+        in_watchlist_section = true;
+
+        // Add our updated display order
+        std::string order_line = "display_order=";
+        for (size_t i = 0; i < display_order_.size(); ++i) {
+          order_line += std::to_string(display_order_[i]);
+          if (i < display_order_.size() - 1) {
+            order_line += ",";
+          }
+        }
+        existing_lines.push_back(order_line);
+
+        replaced_section = true;
+      }
+      // Skip lines inside the watchlist_order section (we'll replace them)
+      else if (in_watchlist_section && line.find('[') == 0 && line.find(']') != std::string::npos) {
+        // Found next section, so we're out of the watchlist section
+        in_watchlist_section = false;
+        existing_lines.push_back(line);
+      } else if (!in_watchlist_section) {
+        existing_lines.push_back(line);
+      }
+      // If in watchlist section and not a new section header, skip the line
+    }
+    read_file.close();
+  }
+
+  // If the watchlist_order section wasn't found, add it at the end
+  if (!replaced_section) {
+    if (!existing_lines.empty() && !existing_lines.back().empty()) {
+      existing_lines.push_back("");  // Add blank line before new section
+    }
+    existing_lines.push_back("# Watchlist order configuration");
+    existing_lines.push_back("[watchlist_order]");
+
+    std::string order_line = "display_order=";
+    for (size_t i = 0; i < display_order_.size(); ++i) {
+      order_line += std::to_string(display_order_[i]);
+      if (i < display_order_.size() - 1) {
+        order_line += ",";
+      }
+    }
+    existing_lines.push_back(order_line);
+  }
+
+  // Write the updated content back to the file
+  std::ofstream write_file(config_file);
+  if (!write_file.is_open()) {
+    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file
+              << std::endl;
+    return;
+  }
+
+  try {
+    for (const auto& line : existing_lines) {
+      write_file << line << std::endl;
+    }
+
+    write_file.close();
+    std::cout << "[WatchlistPanel] Saved watchlist order to: " << config_file << ", entries: " << display_order_.size() << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[WatchlistPanel] Error saving watchlist order: " << e.what() << std::endl;
+  }
+}
+
+
+void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_file) {
+  std::ifstream file(config_file);
+  if (!file.is_open()) {
+    std::cout << "[WatchlistPanel] Config file not found, using current order: " << config_file
+              << std::endl;
+    return;
+  }
+
+  try {
+    std::string line;
+    std::string current_section;
+    bool found_watchlist_order = false;
+
+    while (std::getline(file, line)) {
+      // Remove comments and trim whitespace
+      size_t comment_pos = line.find('#');
+      if (comment_pos != std::string::npos) {
+        line = line.substr(0, comment_pos);
+      }
+
+      // Trim whitespace
+      size_t start = line.find_first_not_of(" \t\r\n");
+      if (start == std::string::npos) continue;  // Skip empty lines
+      size_t end = line.find_last_not_of(" \t\r\n");
+      line = line.substr(start, end - start + 1);
+
+      // Check for section headers
+      if (line.front() == '[' && line.back() == ']') {
+        current_section = line.substr(1, line.length() - 2);
+        if (current_section == "watchlist_order") {
+          found_watchlist_order = true;
+        }
+        continue;
+      }
+
+      // Parse key-value pairs only in the watchlist_order section
+      if (current_section == "watchlist_order") {
+        size_t equals_pos = line.find('=');
+        if (equals_pos != std::string::npos) {
+          std::string key = line.substr(0, equals_pos);
+          std::string value = line.substr(equals_pos + 1);
+
+          if (key == "display_order") {
+            // Parse comma-separated list of symbol IDs
+            std::vector<uint32_t> new_display_order;
+            std::stringstream ss(value);
+            std::string item;
+
+            while (std::getline(ss, item, ',')) {
+              // Trim whitespace from item
+              size_t item_start = item.find_first_not_of(" \t\r\n");
+              if (item_start != std::string::npos) {
+                size_t item_end = item.find_last_not_of(" \t\r\n");
+                item = item.substr(item_start, item_end - item_start + 1);
+
+                try {
+                  uint32_t symbol_id = std::stoi(item);
+                  // Only add to new order if the symbol exists in the watchlist
+                  if (watchlist_.find(symbol_id) != watchlist_.end()) {
+                    new_display_order.push_back(symbol_id);
+                  } else {
+                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id
+                              << " from config not found in watchlist, skipping."
+                              << std::endl;
+                  }
+                } catch (const std::invalid_argument&) {
+                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config: " << item
+                            << std::endl;
+                }
+              }
+            }
+
+            // Add any remaining symbols that weren't in the config to the end
+            for (const auto& pair : watchlist_) {
+              uint32_t symbol_id = pair.first;
+              if (std::find(new_display_order.begin(), new_display_order.end(), symbol_id) ==
+                  new_display_order.end()) {
+                new_display_order.push_back(symbol_id);
+              }
+            }
+
+            display_order_ = new_display_order;
+            std::cout << "[WatchlistPanel] Loaded watchlist order from config, entries: " << new_display_order.size()
+                      << std::endl;
+          }
+        }
+      }
+    }
+
+    file.close();
+
+    if (found_watchlist_order) {
+      std::cout << "[WatchlistPanel] Successfully loaded watchlist order from: " << config_file
+                << std::endl;
+    } else {
+      std::cout << "[WatchlistPanel] No watchlist order found in config, keeping current order: "
+                << config_file << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[WatchlistPanel] Error loading watchlist order: " << e.what() << std::endl;
+  }
+}
+
+void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
+  if (processor_) {
+    // Check if already subscribed to avoid duplicate subscriptions
+    if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
+      std::cout << "[WatchlistPanel] Already subscribed to symbol ID: " << symbol_id << std::endl;
+      return;
+    }
+
+    // Create a subscription for this specific symbol to receive real-time price updates
+    uint64_t sub_id =
+        processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
+                              [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
+                                this->on_market_data_update(symbol_id, type);
+                              });
+
+    // Store the subscription ID for this symbol
+    symbol_subscriptions_[symbol_id] = sub_id;
+
+    std::cout << "[WatchlistPanel] Subscribed to symbol ID: " << symbol_id
+              << " with subscription ID: " << sub_id << std::endl;
+  }
+}
+
+void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
+  if (processor_) {
+    auto it = symbol_subscriptions_.find(symbol_id);
+    if (it != symbol_subscriptions_.end()) {
+      processor_->unsubscribe(it->second);
+      std::cout << "[WatchlistPanel] Unsubscribed from symbol ID: " << symbol_id
+                << " with subscription ID: " << it->second << std::endl;
+      symbol_subscriptions_.erase(it);
+    } else {
+      std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id
+                << std::endl;
+    }
+  }
+}
+
+void WatchlistPanel::verify_subscriptions() {
+  // Periodically verify that all symbols in the current watchlist group have active subscriptions
+  // This helps ensure robustness in case of connection issues or other problems
+
+  // TODO: Implement actual verification logic
+  // For now, skip this functionality to allow compilation
+}
+
+
+
+void WatchlistPanel::subscribe_to_all_watchlist_symbols() {
+  // Subscribe to all symbols in the watchlist efficiently
+  std::vector<uint32_t> symbols_to_subscribe;
+
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+      symbols_to_subscribe.push_back(symbol_id);
+    }
+  }
+
+  if (!symbols_to_subscribe.empty()) {
+    std::cout << "[WatchlistPanel] Subscribing to " << symbols_to_subscribe.size()
+              << " symbols for real-time updates..."
+              << std::endl;
+
+    for (uint32_t symbol_id : symbols_to_subscribe) {
+      subscribe_to_symbol(symbol_id);
+    }
+
+    std::cout << "[WatchlistPanel] Successfully subscribed to all " << symbols_to_subscribe.size()
+              << " symbols" << std::endl;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+void WatchlistPanel::process_pending_updates() {
+  // This method handles any pending market data updates
+  // Currently, updates are processed directly in on_market_data_update
+  // This method can be extended to handle batch updates or other processing
+  // For now, it serves as a placeholder for future enhancements
+}
+
+
+
+
+
+
+
+
+// Public API method implementations
+void WatchlistPanel::focus_add_symbol_input() {
+  // Set a flag that will be checked during the next render cycle to focus the input field
+  should_focus_symbol_input_ = true;
+}
+
+void WatchlistPanel::clear_all_symbols() {
+  // Clear the watchlist
+  watchlist_.clear();
+  display_order_.clear();
+}
+
+void WatchlistPanel::set_sorting(int column_id, bool ascending) {
+  // Validate column_id is within bounds
+  if (column_id >= 0 && column_id < 11) { // Fixed to 11 columns
+    sort_column_ = column_id;
+    sort_ascending_ = ascending;
+    sort_watchlist(); // Trigger sorting with the new parameters
+  }
+}
+
+}  // namespace BTQuant

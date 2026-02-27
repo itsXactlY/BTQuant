@@ -1,0 +1,171 @@
+#pragma once
+
+#include <chrono>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <atomic>
+#include <functional>
+
+namespace BTQuant {
+
+struct PanelRenderStats {
+    std::chrono::high_resolution_clock::time_point start_time;
+    uint64_t last_render_time_us = 0;
+    uint64_t total_render_time_us = 0;
+    uint64_t min_render_time_us = 0;
+    uint64_t max_render_time_us = 0;
+    uint64_t render_count = 0;
+    std::string panel_title;
+    std::vector<uint64_t> render_time_history;
+
+    // Additional fields for bottleneck detection
+    uint64_t slow_render_threshold_us = 10000; // 10ms threshold for slow renders
+    uint64_t slow_render_count = 0; // Count of renders exceeding threshold
+
+    // Additional detailed tracking
+    uint64_t cumulative_squared_time_us = 0; // For variance calculation
+    std::chrono::high_resolution_clock::time_point first_render_time; // Track when panel was first profiled
+    bool first_render_recorded = false;
+};
+
+class PanelProfiler {
+public:
+    PanelProfiler();
+
+    // Start timing a panel render
+    void start_panel_render(uint32_t panel_id, const std::string& panel_title);
+
+    // End timing a panel render
+    void end_panel_render(uint32_t panel_id);
+
+    // Get stats for a specific panel
+    PanelRenderStats get_panel_stats(uint32_t panel_id) const;
+
+    // Get stats for all panels
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_all_panel_stats() const;
+
+    // Get average render time for a specific panel (in milliseconds)
+    double get_average_render_time_ms(uint32_t panel_id) const;
+
+    // Get last render time for a specific panel (in milliseconds)
+    double get_last_render_time_ms(uint32_t panel_id) const;
+
+    // Get slow render count for a specific panel
+    uint64_t get_slow_render_count(uint32_t panel_id) const;
+
+    // Get percentage of slow renders for a specific panel
+    double get_slow_render_percentage(uint32_t panel_id) const;
+
+    // Set slow render threshold in microseconds (default is 10000us = 10ms)
+    void set_slow_render_threshold(uint64_t threshold_us);
+
+    // Get slowest panels (top N panels by average render time)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_slowest_panels(size_t top_n = 5) const;
+
+    // Get panels with most slow renders (exceeding threshold)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_bottleneck_panels(size_t top_n = 5) const;
+
+    // Reset all profiling stats
+    void reset_stats();
+
+    // Enable/disable profiling
+    void set_enabled(bool enabled);
+    bool is_enabled() const;
+
+    // Generate a human-readable report of panel render times
+    std::string generate_report() const;
+
+    // Generate a bottleneck-focused report
+    std::string generate_bottleneck_report() const;
+
+    // Register a callback for when a slow render is detected
+    void register_slow_render_callback(std::function<void(uint32_t, const std::string&, uint64_t)> callback);
+
+    // Get panels ranked by render time variance (higher variance = more inconsistent performance)
+    std::vector<std::pair<uint32_t, double>> get_panel_variance_ranking() const;
+
+    // Get panels ranked by outlier ratio (panels with inconsistent render times)
+    std::vector<std::pair<uint32_t, double>> get_panel_outlier_ratio_ranking() const;
+
+    // Get panels ranked by resource intensity (combination of average time and slow render frequency)
+    std::vector<std::pair<uint32_t, double>> get_panel_resource_intensity_ranking() const;
+
+    // Generate a detailed bottleneck analysis report with multiple perspectives
+    std::string generate_detailed_bottleneck_report() const;
+
+    // Get panels that exceed a specific percentile of render time (e.g., 95th percentile)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_high_percentile_panels(double percentile = 95.0) const;
+
+    // Get panels with render times above a specific threshold (in milliseconds)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_panels_above_threshold(double threshold_ms) const;
+
+    // Get render time trend for a specific panel (recent vs historical average)
+    std::pair<double, double> get_render_trend_ms(uint32_t panel_id) const; // {recent_avg, historical_avg}
+
+    // Get panels ordered by render time degradation (worse recent performance vs historical)
+    std::vector<std::pair<uint32_t, double>> get_degrading_panels(size_t top_n = 5) const; // {panel_id, degradation_factor}
+
+    // Get real-time render time for active panels (panels currently rendering)
+    std::vector<std::pair<uint32_t, uint64_t>> get_active_render_times() const; // {panel_id, current_render_time_us}
+
+    // Get panels with highest peak render times
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_peak_render_time_panels(size_t top_n = 5) const;
+
+    // Get panels with increasing render time trends
+    std::vector<std::pair<uint32_t, double>> get_increasing_trend_panels(size_t top_n = 5) const;
+
+    // Get panels with the highest resource utilization
+    std::vector<std::pair<uint32_t, double>> get_resource_utilization_ranking() const;
+
+    // Get comprehensive bottleneck ranking considering multiple factors
+    std::vector<std::pair<uint32_t, double>> get_comprehensive_bottleneck_ranking() const;
+
+    // Get top bottleneck panels with detailed information
+    std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>> get_top_bottleneck_details(size_t top_n = 5) const;
+
+    // Detect panels with sudden performance degradation
+    std::vector<std::pair<uint32_t, double>> get_sudden_degradation_panels(size_t top_n = 5) const;
+
+    // Get panels with highest performance volatility
+    std::vector<std::pair<uint32_t, double>> get_performance_volatility_ranking() const;
+
+    // Get panels that are approaching bottleneck status (early warning)
+    std::vector<std::pair<uint32_t, double>> get_potential_bottleneck_warnings(size_t top_n = 5) const;
+
+    // Get panels with highest standard deviation (most inconsistent performance)
+    std::vector<std::pair<uint32_t, double>> get_highest_variance_panels(size_t top_n = 5) const;
+
+    // Get panels with highest render time percentiles (95th, 99th percentile)
+    std::vector<std::pair<uint32_t, std::pair<double, double>>> get_high_percentile_render_times(size_t top_n = 5) const; // {panel_id, {p95_ms, p99_ms}}
+
+    // Get panels with longest time since first profiling (for identifying long-running performance issues)
+    std::vector<std::pair<uint32_t, double>> get_longest_running_panels(size_t top_n = 5) const; // {panel_id, duration_seconds}
+
+    // Get detailed performance metrics for a specific panel
+    std::tuple<double, double, double, double, double> get_detailed_panel_metrics(uint32_t panel_id) const; // {avg_ms, std_dev_ms, p95_ms, p99_ms, variance}
+
+private:
+    std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
+    mutable std::mutex profiling_data_mutex_;
+    std::unordered_map<uint32_t, std::chrono::high_resolution_clock::time_point> active_renders_; // Track currently rendering panels
+    mutable std::mutex active_renders_mutex_;
+    std::atomic<bool> enabled_;
+    std::atomic<uint64_t> slow_render_threshold_us_{10000}; // Default 10ms threshold
+    std::function<void(uint32_t, const std::string&, uint64_t)> slow_render_callback_{nullptr};
+
+    static constexpr size_t MAX_HISTORY_SIZE = 100;
+    static constexpr size_t RECENT_RENDER_COUNT = 10; // Number of recent renders to compare for trends
+
+    // Helper method to calculate standard deviation
+    double calculate_standard_deviation(const std::vector<uint64_t>& values) const;
+
+    // Helper method to calculate percentile from history
+    double calculate_percentile(const std::vector<uint64_t>& values, double percentile) const;
+};
+
+// Global panel profiler instance
+extern PanelProfiler g_panel_profiler;
+
+} // namespace BTQuant

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=PubBTQuant Trading Terminal
+Comment=Advanced trading terminal with real-time analytics
+Exec=/usr/bin/BTQuantTerminal
+Icon=pubbtquant
+Terminal=false
+Type=Application
+Categories=Office;Finance;
+StartupNotify=true

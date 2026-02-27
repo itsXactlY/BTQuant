@@ -1,0 +1,85 @@
+// TPO (Time Price Opportunity) Profile Compute Shader
+// Vulkan 1.3 - Market Microstructure Renderer
+// Real-time histogram of time spent at price levels using atomic operations
+
+#version 460 core
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+// ========================================
+// SSBO Structures
+// ========================================
+
+// Trade Tick Structure (std430 aligned)
+struct TradeTick {
+    float price;        // Trade price
+    uint size;          // Trade size
+    uint timestampLow;  // Timestamp low 32 bits
+    uint timestampHigh; // Timestamp high 32 bits
+    bool isBuy;         // Buy/sell indicator
+};
+
+// Input: Stream of Trade Ticks (SSBO)
+layout(std430, set = 0, binding = 0) readonly buffer TradeTicks {
+    uint tickCount;          // Number of trade ticks
+    uint startTimeLow;       // Start time low 32 bits
+    uint startTimeHigh;      // Start time high 32 bits
+    uint endTimeLow;         // End time low 32 bits
+    uint endTimeHigh;        // End time high 32 bits
+    float minPrice;          // Minimum price in ticks
+    float maxPrice;          // Maximum price in ticks
+    TradeTick ticks[];       // Variable-length trade ticks
+} tradeData;
+
+// Output: Histogram Buckets (Atomic Counter SSBO)
+layout(std430, set = 0, binding = 1) coherent buffer TPOHistogram {
+    uint bucketCount;        // Number of histogram buckets
+    float bucketSize;        // Price range per bucket
+    float basePrice;         // Base price for histogram
+    uint buckets[];          // Histogram data (count per bucket)
+} tpoHistogram;
+
+// ========================================
+// Uniforms
+// ========================================
+
+layout(std140, set = 1, binding = 0) uniform HistogramParams {
+    uint timeWindowMs;       // Time window in milliseconds
+    bool resetOnUpdate;      // Reset histogram on each update
+    float priceResolution;   // Price resolution for buckets
+} params;
+
+// ========================================
+// Main Compute Shader Entry
+// ========================================
+
+layout(local_size_x = 64) in;
+
+void main() {
+    uint threadIndex = gl_GlobalInvocationID.x;
+    
+    // First thread handles histogram initialization if needed
+    if (threadIndex == 0 && params.resetOnUpdate) {
+        for (uint i = 0; i < tpoHistogram.bucketCount; i++) {
+            atomicExchange(tpoHistogram.buckets[i], 0);
+        }
+    }
+    
+    // Wait for initialization to complete
+    barrier();
+    
+    // Process trade ticks
+    if (threadIndex < tradeData.tickCount) {
+        const TradeTick tick = tradeData.ticks[threadIndex];
+        
+        // Calculate bucket index for current price
+        float priceOffset = tick.price - tpoHistogram.basePrice;
+        int bucketIndex = int(floor(priceOffset / tpoHistogram.bucketSize));
+        
+        // Check if bucket index is valid
+        if (bucketIndex >= 0 && bucketIndex < int(tpoHistogram.bucketCount)) {
+            // Increment histogram bucket using atomic operation
+            atomicAdd(tpoHistogram.buckets[bucketIndex], 1);
+        }
+    }
+}

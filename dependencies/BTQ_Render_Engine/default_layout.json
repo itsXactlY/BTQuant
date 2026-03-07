@@ -1,0 +1,152 @@
+{
+    "grid": {
+        "columns": 3,
+        "rows": 5
+    },
+    "panels": [
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 3,
+            "position": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1920.0,
+                30.0
+            ],
+            "symbol": "",
+            "title": "Status",
+            "type": 16,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 1,
+            "grid_y": 3,
+            "position": [
+                640.0,
+                660.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Risk",
+            "type": 8,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 3,
+            "position": [
+                0.0,
+                660.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Positions",
+            "type": 7,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 2,
+            "position": [
+                1280.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Orders",
+            "type": 6,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 1,
+            "grid_y": 2,
+            "position": [
+                640.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Time & Sales",
+            "type": 23,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": 0,
+            "grid_y": 2,
+            "position": [
+                0.0,
+                450.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 1,
+            "grid_x": 2,
+            "grid_y": 0,
+            "position": [
+                1280.0,
+                30.0
+            ],
+            "size": [
+                640.0,
+                420.0
+            ],
+            "symbol": "",
+            "title": "Order Book",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 0,
+            "position": [
+                0.0,
+                30.0
+            ],
+            "size": [
+                1280.0,
+                420.0
+            ],
+            "symbol": "",
+            "title": "Price Chart",
+            "type": 0,
+            "visible": true
+        }
+    ]
+}

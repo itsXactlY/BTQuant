@@ -1,0 +1,22 @@
+{
+  "exchanges": [
+    "binance",
+    "coinbase",
+    "kraken",
+    "okx",
+    "bybit"
+  ],
+  "symbols": [
+    "BTC-USDT",
+    "ETH-USDT",
+    "SOL-USDT",
+    "BTC-USD",
+    "ETH-USD"
+  ],
+  "market_type": "spot",
+  "min_profit_bps": 30,
+  "max_age_ms": 100,
+  "buffer_size": 1000,
+  "flush_interval_ms": 1000,
+  "stats_report_interval_s": 10
+}

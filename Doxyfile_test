@@ -1,0 +1,12 @@
+# Doxyfile 1.9.8
+
+PROJECT_NAME           = "PubBTQuant Test"
+INPUT                  = Examples
+FILE_PATTERNS          = *.py \
+                         *.md \
+                         *.txt
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+HAVE_DOT               = NO
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html

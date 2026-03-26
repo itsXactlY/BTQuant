@@ -1,0 +1,24 @@
+{
+    "db": {
+        "server": "localhost",
+        "database": "test_db",
+        "user": "test_user",
+        "password": "test_password"
+    },
+    "timeframes": ["1m", "5m", "15m", "1h"],
+    "exchanges": [
+        {
+            "name": "binance",
+            "symbols": ["BTC-USDT", "ETH-USDT"],
+            "channels": ["TRADE", "MARKET_DEPTH"],
+            "market_type": "spot"
+        }
+    ],
+    "trade_buffer_size": 100,
+    "candle_buffer_size": 50,
+    "orderbook_buffer_size": 20,
+    "flush_interval_ms": 1000,
+    "stats_report_interval_s": 10,
+    "enable_mssql": false,
+    "enable_exclusive_hotspine": true
+}

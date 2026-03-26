@@ -23,6 +23,9 @@ if ! command -v doxygen &> /dev/null; then
     exit 1
 fi
 
+# Go to project root directory where Doxyfile is located
+cd "$(dirname "$0")/.."
+
 # Create docs/api_reference directory if it doesn't exist
 mkdir -p docs/api_reference
 

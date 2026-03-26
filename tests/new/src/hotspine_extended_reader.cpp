@@ -47,7 +47,7 @@ TradeData HotSpineExtendedReader::resolve_trade(const HotTrade &trade) {
 }
 
 OrderbookData HotSpineExtendedReader::resolve_orderbook(
-    const HotOrderbookSnapshot &snapshot) {
+    const OrderBookSnapshot &snapshot) {
   OrderbookData data;
   data.ts_exchange = snapshot.ts_exchange;
   data.ts_local = snapshot.ts_local;
@@ -117,7 +117,7 @@ std::optional<OrderbookData> HotSpineExtendedReader::poll_orderbook() {
   if (!reader_)
     return std::nullopt;
 
-  HotOrderbookSnapshot snapshot;
+  OrderBookSnapshot snapshot;
   if (!reader_->pollOrderbook(snapshot)) {
     return std::nullopt;
   }

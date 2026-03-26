@@ -160,7 +160,7 @@ private:
                              const std::string &symbol) const;
 
   TradeData resolve_trade(const HotTrade &trade);
-  OrderbookData resolve_orderbook(const HotOrderbookSnapshot &snapshot);
+  OrderbookData resolve_orderbook(const OrderBookSnapshot &snapshot);
 
   void update_caches(const TradeData &trade);
   void update_caches(const OrderbookData &orderbook);

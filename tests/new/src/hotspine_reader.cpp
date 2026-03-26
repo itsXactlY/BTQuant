@@ -182,7 +182,7 @@ bool HotSpineReader::pollTrade(HotTrade &trade) {
   return true;
 }
 
-bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
+bool HotSpineReader::pollOrderbook(OrderBookSnapshot &snapshot) {
   if (!attached_ || !mapped_region_) {
     return false;
   }
@@ -212,16 +212,16 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
   // Calculate entry position (Orderbooks start after Header + Trade Buffer)
   size_t entry_offset =
       HEADER_SIZE + trade_buffer_bytes +
-      (read_pos % header->orderbook_capacity) * sizeof(HotOrderbookSnapshot);
+      (read_pos % header->orderbook_capacity) * sizeof(OrderBookSnapshot);
 
-  if (entry_offset + sizeof(HotOrderbookSnapshot) > mapped_size_) {
+  if (entry_offset + sizeof(OrderBookSnapshot) > mapped_size_) {
     std::cerr << "[SHM] Orderbook entry exceeds shared memory bounds"
               << std::endl;
     header->orderbook_read_index = write_pos; // Skip this entry
     return false;
   }
 
-  HotOrderbookSnapshot *entry = reinterpret_cast<HotOrderbookSnapshot *>(
+  OrderBookSnapshot *entry = reinterpret_cast<OrderBookSnapshot *>(
       static_cast<char *>(mapped_region_) + entry_offset);
 
   // Copy data to output

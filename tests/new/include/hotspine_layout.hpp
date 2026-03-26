@@ -55,7 +55,7 @@ struct HotOrderbookLevel {
 };
 
 // Orderbook snapshot structure (must match between writer and reader)
-struct HotOrderbookSnapshot {
+struct OrderBookSnapshot {
   uint64_t ts_exchange; // exchange timestamp in microseconds
   uint64_t ts_local;    // local receive timestamp in microseconds
   uint32_t symbol_id;   // symbol ID (hash or mapping)
@@ -71,7 +71,7 @@ static inline size_t calculateSharedMemorySize(
     uint64_t capacity,
     uint64_t orderbook_capacity = DEFAULT_ORDERBOOK_CAPACITY) {
   return HEADER_SIZE + (capacity * sizeof(HotTrade)) +
-         (orderbook_capacity * sizeof(HotOrderbookSnapshot));
+         (orderbook_capacity * sizeof(OrderBookSnapshot));
 }
 
 } // namespace HotSpine

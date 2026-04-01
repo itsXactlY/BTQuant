@@ -23,7 +23,7 @@ telegram_api_hash = ""
 telegram_session_file = ".base.session"
 telegram_channel = -100
 
-import fast_mssql
+import fastmssql
 
 # SQL Server connection details
 server = 'localhost'

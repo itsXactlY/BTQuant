@@ -1,0 +1,113 @@
+{
+    "db": {
+        "server": "localhost",
+        "database": "BTQ_MarketData",
+        "user": "SA",
+        "password": "q?}33YIToo:H%xue$Kr*"
+    },
+    "timeframes": ["1m"],
+    "exchanges": [
+        {
+        "name": "binance",
+        "symbols": [
+            "DOGEUSDT",
+            "ADAUSDT",
+            "BTCUSDT",
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+        ],
+        "channels": ["TRADE", "MARKET_DEPTH"],
+        "market_type": "spot"
+        },
+        {
+        "name": "bybit",
+        "symbols": [
+            "DOGEUSDT",
+            "ADAUSDT",
+            "BTCUSDT",
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+        ],
+            "channels": ["TRADE", "MARKET_DEPTH"],
+            "market_type": "spot"
+        },
+        {
+        "name": "okx",
+        "symbols": [
+            "DOGE-USDT",
+            "ADA-USDT",
+            "BTC-USDT",
+            "BNB-USDT",
+            "ETH-USDT",
+            "SOL-USDT"
+        ],
+            "channels": ["TRADE", "MARKET_DEPTH"],
+            "market_type": "spot"
+        }
+    ],
+    "trade_buffer_size": 1000,
+    "candle_buffer_size": 2000,
+    "orderbook_buffer_size": 1000,
+    "flush_interval_ms": 1000,
+    "stats_report_interval_s": 10,
+    "enable_mssql": true,
+    "enable_exclusive_hotspine": true,
+    "parallel_settings": {
+        "num_worker_threads": 16
+    },
+    "warmup_config": {
+        "batch_size": 20,
+        "startup_delay_ms": 5000,
+        "wait_for_connection": true
+    },
+    "debug_mode": {
+        "enabled": false,
+        "verbose_logging": true,
+        "websocket_debug": true,
+        "database_debug": true,
+        "buffer_debug": true,
+        "flush_debug": true,
+        "performance_monitoring": true,
+        "connection_health_checks": true,
+        "data_flow_validation": true,
+        "error_tracing": true,
+        "timestamp_precision": "microseconds",
+        "log_level": "DEBUG"
+    },
+    "database_debug": {
+        "verify_connection_on_start": true,
+        "test_table_creation": true,
+        "log_all_queries": true,
+        "log_connection_status": true,
+        "enable_detailed_error_logging": true,
+        "connection_timeout_ms": 30000,
+        "command_timeout_ms": 60000
+    },
+    "websocket_debug": {
+        "log_connection_attempts": true,
+        "log_subscription_status": true,
+        "log_data_reception": true,
+        "ping_pong_monitoring": true,
+        "connection_health_monitoring": true,
+        "timeout_debugging": true,
+        "protocol_error_logging": true,
+        "data_rate_monitoring": true
+    },
+    "buffer_debug": {
+        "log_buffer_operations": true,
+        "log_threshold_crossing": true,
+        "log_flush_decisions": true,
+        "monitor_memory_usage": true,
+        "track_buffer_sizes": true,
+        "log_batch_operations": true
+    },
+    "performance_monitoring": {
+        "measure_processing_latency": true,
+        "track_throughput": true,
+        "monitor_resource_usage": true,
+        "log_performance_metrics": true,
+        "alert_on_slow_operations": true
+    }
+}

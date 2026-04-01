@@ -9,6 +9,9 @@ on:
     # Run daily at 2 AM UTC to catch regressions
     - cron: '0 2 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -150,6 +153,8 @@ jobs:
 
   performance-benchmark:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
 

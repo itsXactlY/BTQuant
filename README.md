@@ -48,7 +48,7 @@ cd BTQuant
 bash Installers/install_all.sh
 ```
 
-### Your First Backtest
+### Your First Backtest (CCXT Example)
 
 ```python
 from backtrader import backtest

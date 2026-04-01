@@ -13,22 +13,10 @@ BTQuant is a high-frequency algorithmic trading framework that processes thousan
 - **Ultra-Low Latency**: HotSpine shared memory for sub-microsecond trade processing across exchanges
 - **Zero API Rate Limits**: Direct WebSocket feeds from Binance, OKX, Bybit, Coinbase, Kraken
 - **Multi-Exchange Processing**: Simultaneous data from 5+ exchanges with cross-exchange correlation
-- **Complete Transparency**: Every indicator calculation visible and auditable in Backtrader fork
-- **Enterprise Data Management**: SQL Server canonical storage with full audit trails
+- **Complete Transparency**: Every indicator calculation step visible and auditable into its bare bone
+- **Enterprise Data Management**: M$SQL Server canonical storage with full audit trails
 - **Live Trading Ready**: Production-grade execution with monitoring, alerting, and recovery
 - **QuantStats Integration**: Professional performance analytics and reporting
-
-## 📋 Table of Contents
-
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Documentation](#documentation)
-- [Architecture](#architecture)
-- [Features](#features)
-- [Real-Time Detection](#real-time-detection)
-- [Community & Support](#community--support)
-- [Contributing](#contributing)
-- [License](#license)
 
 ## 🚀 Quick Start
 
@@ -36,7 +24,7 @@ BTQuant is a high-frequency algorithmic trading framework that processes thousan
 - Python 3.12+ and C++17
 - Linux (Ubuntu 20.04+, Arch, or equivalent)
 - 8GB RAM minimum (16GB recommended)
-- GCC 7+ or Clang 5+
+- GCC 7+ or Clang 5+ (GCC14 recommended)
 
 ### Installation
 
@@ -46,7 +34,18 @@ git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant.git
 cd BTQuant
 
 # Run automated installer
-bash Installers/install.sh
+# Comes with:
+# - BTQuant python setup
+# - Cython* readyness (Hidden Work in Progress branch)
+# - M$SQL - C++ Adapter Compiling for Python/Cython
+#         - Drops Random generated password after Database Setup ready for dontcommit.py
+#         - Pretuned to handle big data on lowest possible CPU cycles
+#         - While keeping maximal burst capacities.
+#
+# - If want to contribute to optimize few step further:
+# - https://arxiv.org/pdf/2312.00647
+
+bash Installers/install_all.sh
 ```
 
 ### Your First Backtest

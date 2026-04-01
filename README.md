@@ -36,7 +36,10 @@ cd BTQuant
 # Run automated installer
 # Comes with:
 # - BTQuant python setup
-# - Cython* readyness (Hidden Work in Progress branch)
+# - CCAPI C++ Setup
+# - CCAPI C++ Modules (market data collector, manipulation dectector, ...)
+# - Handling Setup of Shared Memory at /dev/shm/BTQ... 
+# - Cython* readyness (Work in Progress - hidden branch)
 # - M$SQL - C++ Adapter Compiling for Python/Cython
 #         - Drops Random generated password after Database Setup ready for dontcommit.py
 #         - Pretuned to handle big data on lowest possible CPU cycles

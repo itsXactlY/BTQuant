@@ -10,7 +10,7 @@
 build.sh
 dependencies/BTQ_Render_Engine/build_tests/
 dependencies/BTQ_Render_Engine/build_tests/
-dependencies/ccapi/example/build/
+
 dependencies/ccapi/binding/
 dependencies/ccapi/binding/
 dependencies/ccapi/include/boost/
@@ -28,7 +28,7 @@ out/
 dist/
 bt/
 candles/
-dependencies/datacollector/
+
 
 # ===== Data / artifacts =====
 **/neural_data/
@@ -84,13 +84,3 @@ Example_*.py
 **/*html
 
 dependencies/datacollector/market_data_collector
-discord_architect.py
-
-plans/
-dependencies/BTQ_Render_Engine/imgui_.ini
-dependencies/BTQ_Render_Engine/imgui.ini
-
-
-install_ralph.sh
-
-dependencies/ccapi/example/boost-prefix/src/boost_1_87_0.tar.gz

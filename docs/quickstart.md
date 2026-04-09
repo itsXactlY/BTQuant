@@ -1,387 +1,187 @@
 # BTQuant Quick Start Guide
 
-## Overview
-
-This guide will help you get started with BTQuant quickly. You'll learn how to create your first strategy, run a backtest, set up real-time market monitoring, and detect manipulation patterns.
-
 ## Prerequisites
 
-Before starting, ensure you have:
-- [x] BTQuant installed (see [Installation Guide](installation.md))
-- [x] Python 3.12+ and C++17 environments set up
-- [x] Basic understanding of Python programming
-- [x] C++ market data collector running (for real-time features)
+- BTQuant installed (see [Installation Guide](installation.md))
+- Virtual environment activated: `source ~/.btq/bin/activate`
+- A data source: either CCXT exchange access (internet) or SQL Server with market data
 
-## Your First Strategy
+## Your First Backtest
 
-Let's create a simple moving average crossover strategy as your first example.
+### Option A: CCXT Data (no database required)
 
-### Step 1: Create a Strategy File
-
-Create a new file called `simple_ma_strategy.py`:
+Fetch data directly from any CCXT-supported exchange:
 
 ```python
-import backtrader as bt
+from backtrader import backtest, get_crypto_data
+from backtrader.strategies.Vumanchu_A import VuManchCipher_A
 
-class SimpleMAStrategy(bt.Strategy):
-    params = (
-        ('fast_period', 10),
-        ('slow_period', 30),
-        ('printlog', False),
-    )
+# Fetch 1 week of BTC/USDT 15-minute candles from Binance
+data = get_crypto_data('BTC/USDT', '2024-01-01', '2024-01-08', '15m', 'binance')
 
-    def __init__(self):
-        # Keep a reference to the "close" line in the data[0] dataseries
-        self.data_close = self.datas[0].close
-        
-        # To keep track of pending orders and buy price/commission
-        self.order = None
-        self.buyprice = None
-        self.buycomm = None
-
-        # Add a MovingAverageSimple indicator
-        self.sma_fast = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.fast_period)
-        self.sma_slow = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.slow_period)
-
-        # Indicators for the plotting show
-        bt.indicators.ExponentialMovingAverage(self.datas[0], period=25)
-        bt.indicators.WeightedMovingAverage(self.datas[0], period=25,
-                                          subplot=True)
-        bt.indicators.StochasticSlow(self.datas[0])
-        bt.indicators.MACDHisto(self.datas[0])
-        rsi = bt.indicators.RSI(self.datas[0])
-        bt.indicators.SmoothedMovingAverage(rsi, period=10)
-        bt.indicators.ATR(self.datas[0], plot=False)
-
-    def log(self, txt, dt=None, doprint=False):
-        ''' Logging function for this strategy'''
-        if self.params.printlog or doprint:
-            dt = dt or self.datas[0].datetime.date(0)
-            print('%s, %s' % (dt.isoformat(), txt))
-
-    def notify_order(self, order):
-        if order.status in [order.Submitted, order.Accepted]:
-            # Buy/Sell order submitted/accepted to/by broker - Nothing to do
-            return
-
-        # Check if an order has been completed
-        # Attention: broker could reject order if not enough cash
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.log(
-                    'BUY EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
-                    (order.executed.price,
-                     order.executed.value,
-                     order.executed.comm))
-
-                self.buyprice = order.executed.price
-                self.buycomm = order.executed.comm
-            else:  # Sell
-                self.log('SELL EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
-                         (order.executed.price,
-                          order.executed.value,
-                          order.executed.comm))
-
-            self.bar_executed = len(self)
-
-        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            self.log('Order Canceled/Margin/Rejected')
-
-        self.order = None
-
-    def notify_trade(self, trade):
-        if not trade.isclosed:
-            return
-
-        self.log('OPERATION PROFIT, GROSS %.2f, NET %.2f' %
-                 (trade.pnl, trade.pnlcomm))
-
-    def next(self):
-        # Simply log the closing price of the series from the reference
-        self.log('Close, %.2f' % self.data_close[0])
-
-        # Check if an order is pending ... if yes, we cannot send a 2nd one
-        if self.order:
-            return
-
-        # Check if we are in the market
-        if not self.position:
-
-            # Not yet ... we MIGHT BUY if ...
-            if self.sma_fast[0] > self.sma_slow[0]:
-                # BUY, BUY, BUY!!! (with default parameters)
-                self.log('BUY CREATE, %.2f' % self.data_close[0])
-
-                # Keep track of the created order to avoid a 2nd order
-                self.order = self.buy()
-
-        else:
-
-            if self.sma_fast[0] < self.sma_slow[0]:
-                # SELL, SELL, SELL!!! (with all possible default parameters)
-                self.log('SELL CREATE, %.2f' % self.data_close[0])
-
-                # Keep track of the created order to avoid a 2nd order
-                self.order = self.sell()
-
-    def stop(self):
-        self.log('(MA Period fast %2d, slow %2d) Ending Value %.2f' %
-                 (self.params.fast_period, self.params.slow_period, self.broker.getvalue()), doprint=True)
+backtest(VuManchCipher_A,
+         data=data,
+         init_cash=1000,
+         quantstats=True,
+         plot=True,
+         asset_name='BTC/USDT')
 ```
 
-### Step 2: Create a Backtest Script
+### Option B: SQL Server Data
 
-Create a file called `run_backtest.py`:
+If you have MSSQL set up with market data:
 
 ```python
-from backtrader import backtest
-from simple_ma_strategy import SimpleMAStrategy
-from backtrader.utils.ccxt_data import get_crypto_data
+from backtrader.utils.backtest import backtest
+from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex
 
-def main():
-    # Get data for backtesting
-    print("Fetching data...")
-    data = get_crypto_data(
-        asset='BTC/USDT',
-        start_date='2024-01-01',
-        end_date='2024-01-31',
-        timeframe='1h',
-        exchange='binance'
-    )
-    
-    if data is None:
-        print("Failed to fetch data. Please check your internet connection and exchange availability.")
-        return
-    
-    print(f"Data fetched successfully. Shape: {data.shape}")
-    
-    # Run backtest
-    print("Running backtest...")
-    result = backtest(
-        strategy=SimpleMAStrategy,
-        data=data,
-        init_cash=10000,  # Starting capital
-        backtest=True,
-        plot=True,        # Generate plot
-        quantstats=True,  # Generate QuantStats report
-        asset_name='BTC/USDT'
-    )
-    
-    print(f"Backtest completed!")
-    print(f"Final portfolio value: ${result:.2f}")
-
-if __name__ == '__main__':
-    main()
+backtest(STrend_RSX_AccumulativeSwingIndex,
+         coin='BTC',
+         collateral='USDT',
+         start_date='2024-01-01',
+         end_date='2024-02-15',
+         interval='1m',
+         init_cash=1000,
+         plot=True,
+         quantstats=False)
 ```
 
-### Step 3: Run Your First Backtest
+When `data` is not provided, BTQuant fetches from SQL Server via `PolarsDataLoader` and caches the result as Parquet in `.btq_cache/`.
+
+## Using the CLI
+
+The `btq` command runs backtests from the terminal:
 
 ```bash
-# Activate your virtual environment
-source .btq/bin/activate
+# Single coin backtest
+btq backtest --coin BTC --strategy VuManchCipher_A --interval 15m --start 2024-01-01 --end 2024-01-08 --plot
 
-# Run the backtest
-python run_backtest.py
+# Multiple coins
+btq backtest --coins BTC,ETH,BNB --strategy Order_Chain_Kioseff_Trading --interval 1h
+
+# List available strategies
+btq list strategies
+
+# List coins in the database
+btq list coins --collateral USDT
 ```
 
-You should see output similar to:
-```
-Fetching data...
-Data fetched successfully. Shape: (744, 6)
-Running backtest...
-Close, 42345.12
-Close, 42456.78
-...
-Backtest completed!
-Final portfolio value: $10542.34
-```
+## Writing a Strategy
 
-## Understanding the Output
+All BTQuant strategies extend `BaseStrategy` from `backtrader.strategies.base`. You override four methods to define your trading logic:
 
-### Console Output
-- **Data fetching**: Shows progress of downloading market data
-- **Strategy logs**: Each bar's closing price and trade executions
-- **Trade notifications**: Buy/sell orders, prices, and commissions
-- **Final results**: Ending portfolio value
-
-### Generated Files
-- **Plot**: A candlestick chart with your strategy's buy/sell signals
-- **QuantStats report**: `QuantStats/BTC_USDT_2024-01-01_12-00-00.html` with detailed performance metrics
-
-## Real-Time Market Monitoring
-
-Once you have the C++ market data collector running, you can monitor live markets for manipulation patterns.
-
-### Start the Market Data Collector
-
-First, ensure your market data collector is running:
-
-```bash
-# Terminal 1: Start market data collection
-cd dependencies/ccapi/example/build/src/market_data_collector
-./market_data_collector
-```
-
-### Run the Manipulation Detector
-
-In another terminal, start the real-time detector:
-
-```bash
-# Terminal 2: Start manipulation detection
-cd tests/new/build
-./manipulation_monitor
-```
-
-### Expected Output
-
-You should see real-time detection alerts:
-
-```
-🚨 StopHunt(symbol=BTC-USDT, exchange=binance, deviation=-1.2%, signal=LONG)
-💰 Arbitrage(buy=kraken@42150, sell=binance@42250, profit=65bps)
-🐋 WhaleDetected(symbol=ETH-USDT, size=$250000, lagging=3 exchanges)
-```
-
-### Understanding Detection Signals
-
-- **🚨 Stop Hunt**: Fake wicks designed to trigger stop-loss orders
-- **💰 Arbitrage**: Cross-exchange price discrepancies
-- **🐋 Whale Front-Run**: Large trades that may move markets
-- **🏦 Liquidity Imbalance**: Thin orderbooks signaling manipulation targets
-- **🎭 Spoofing**: Fake orders to manipulate market perception
-
-## Using the BaseStrategy
-
-For more advanced features, you can use BTQuant's `BaseStrategy`:
+### The Strategy Interface
 
 ```python
 from backtrader.strategies.base import BaseStrategy
+import backtrader as bt
 
-class AdvancedStrategy(BaseStrategy):
+class MyStrategy(BaseStrategy):
     params = (
         ('fast_period', 10),
         ('slow_period', 30),
-        ('take_profit', 2.0),  # 2% take profit
-        ('percent_sizer', 0.1),  # Use 10% of capital per trade
+        ('take_profit', 2.0),
+        ('percent_sizer', 0.1),      # Use 10% of capital per trade
     )
 
     def __init__(self):
-        super().__init__()
-        self.sma_fast = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.fast_period)
-        self.sma_slow = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.slow_period)
+        super().__init__()           # Always call super().__init__()
+        self.sma_fast = bt.indicators.SMA(self.data, period=self.p.fast_period)
+        self.sma_slow = bt.indicators.SMA(self.data, period=self.p.slow_period)
 
     def buy_or_short_condition(self):
-        """Override to implement entry logic"""
+        """Called each bar. Return True if you placed an order."""
         if not self.buy_executed and self.sma_fast[0] > self.sma_slow[0]:
             self.create_order('BUY')
             return True
         return False
 
+    def dca_or_short_condition(self):
+        """Called each bar when already in a position. For adding to position."""
+        return False
+
     def sell_or_cover_condition(self):
-        """Override to implement exit logic"""
+        """Called each bar when in a position. Return True if you closed."""
         if self.buy_executed and self.sma_fast[0] < self.sma_slow[0]:
-            # Close position
-            for order_tracker in self.active_orders[:]:
-                self.close_order(order_tracker)
+            for ot in self.active_orders[:]:
+                self.close_order(ot)
             return True
         return False
 
     def check_stop_loss(self):
-        """Override to implement custom stop loss"""
+        """Custom stop loss logic. Return True if stop was hit."""
         if self.buy_executed and self.average_entry_price:
-            current_price = self.data.close[0]
-            stop_loss_price = self.average_entry_price * 0.95  # 5% stop loss
-            
-            if current_price <= stop_loss_price:
-                for order_tracker in self.active_orders[:]:
-                    self.close_order(order_tracker)
+            if self.data.close[0] <= self.average_entry_price * 0.95:
+                for ot in self.active_orders[:]:
+                    self.close_order(ot)
                 return True
         return False
 ```
 
-## Quick Examples
+### Key BaseStrategy Attributes
 
-### 1. Simple EMA Crossover
+These are available inside your strategy:
+
+| Attribute | Description |
+|---|---|
+| `self.buy_executed` | True if currently in a long position |
+| `self.entry_prices` | List of entry prices for all open legs |
+| `self.average_entry_price` | Weighted average of all entry prices |
+| `self.first_entry_price` | Price of the first entry |
+| `self.take_profit_price` | Calculated take profit target |
+| `self.active_orders` | List of `OrderTracker` instances |
+| `self.sizes` | List of position sizes per leg |
+| `self.position_count` | Number of open order legs |
+| `self.dataclose` | Reference to close price line |
+| `self.p` / `self.params` | Access to strategy parameters |
+
+### Creating and Closing Orders
 
 ```python
-class EMACrossover(BaseStrategy):
-    params = (
-        ('fast_ema', 12),
-        ('slow_ema', 26),
-    )
+# Create a market buy order (auto-calculates size from percent_sizer)
+order_tracker = self.create_order('BUY')
 
-    def __init__(self):
-        super().__init__()
-        self.ema_fast = bt.indicators.ExponentialMovingAverage(
-            self.data, period=self.params.fast_ema)
-        self.ema_slow = bt.indicators.ExponentialMovingAverage(
-            self.data, period=self.params.slow_ema)
+# Create with specific size and price
+order_tracker = self.create_order('BUY', size=0.5, price=42000.0)
 
-    def buy_or_short_condition(self):
-        if not self.buy_executed and self.ema_fast[0] > self.ema_slow[0]:
-            self.create_order('BUY')
-            return True
-        return False
+# Close a specific order
+self.close_order(order_tracker)
 
-    def sell_or_cover_condition(self):
-        if self.buy_executed and self.ema_fast[0] < self.ema_slow[0]:
-            self.close_all_positions()
-            return True
-        return False
+# Close with specific exit price
+self.close_order(order_tracker, exit_price=43000.0)
 ```
 
-### 2. RSI Strategy
+### Position Sizing
+
+When `percent_sizer` is set (e.g., 0.1), each trade uses 10% of available cash:
 
 ```python
-class RSIStrategy(BaseStrategy):
-    params = (
-        ('rsi_period', 14),
-        ('rsi_overbought', 70),
-        ('rsi_oversold', 30),
-    )
-
-    def __init__(self):
-        super().__init__()
-        self.rsi = bt.indicators.RelativeStrengthIndex(
-            self.data, period=self.params.rsi_period)
-
-    def buy_or_short_condition(self):
-        if not self.buy_executed and self.rsi[0] < self.params.rsi_oversold:
-            self.create_order('BUY')
-            return True
-        return False
-
-    def sell_or_cover_condition(self):
-        if self.buy_executed and self.rsi[0] > self.params.rsi_overbought:
-            self.close_all_positions()
-            return True
-        return False
+size = (available_cash * percent_sizer) / current_close_price
 ```
 
 ## Data Sources
 
-### CCXT Data (Recommended for beginners)
-```python
-from backtrader.utils.ccxt_data import get_crypto_data
+### CCXT Data
 
-data = get_crypto_data(
-    asset='BTC/USDT',
-    start_date='2024-01-01',
-    end_date='2024-01-31',
-    timeframe='1h',
-    exchange='binance'
-)
+Fetch from any CCXT exchange:
+
+```python
+from backtrader import get_crypto_data
+
+data = get_crypto_data('BTC/USDT', '2024-01-01', '2024-01-31', '1h', 'binance')
+# Parameters: (asset, start_date, end_date, time_resolution, exchange)
 ```
 
-### SQL Server Data (For advanced users)
+Supported timeframes depend on the exchange. Common ones: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`.
+
+### SQL Server Data
+
+Requires MSSQL with market data:
+
 ```python
 from backtrader.feeds.mssql_crypto import get_database_data
 
-data = get_database_data(
+df = get_database_data(
     ticker='BTC',
     start_date='2024-01-01',
     end_date='2024-01-31',
@@ -390,89 +190,192 @@ data = get_database_data(
 )
 ```
 
-### CSV Data
+### Custom Data (pandas/polars)
+
+Pass any DataFrame to `backtest()`:
+
 ```python
 import pandas as pd
-from backtrader.feeds.polarfeed import PolarsData
+from backtrader.utils.backtest import backtest
 
-df = pd.read_csv('your_data.csv')
-data = PolarsData(dataname=df)
+df = pd.read_csv('my_data.csv')  # Must have OHLCV columns
+backtest(MyStrategy, data=df, init_cash=1000)
 ```
 
-## Running Different Types of Backtests
+## Backtest Output
 
-### 1. Basic Backtest
-```python
-result = backtest(
-    strategy=YourStrategy,
-    data=data,
-    init_cash=10000,
-    backtest=True
-)
+When you run a backtest, BTQuant prints:
+
+```
+==================================================
+BACKTEST RESULTS - BTC/USDT
+==================================================
+Total Trades: 42
+Winning Trades: 28
+Losing Trades: 14
+Win Rate: 66.7%
+Net P&L: $156.32
+Max Drawdown: 8.45%
+Final Portfolio Value: $1156.32
+Total P/L: $156.32
+Return: 15.63%
+==================================================
 ```
 
-### 2. With Optimization
-```python
-from backtrader.utils.backtest import optimize_backtest
+With `--plot` / `plot=True`: a candlestick chart with buy/sell arrows.
 
-results = optimize_backtest(
-    strategy=YourStrategy,
-    data=data,
-    init_cash=10000,
-    fast_period=[10, 20, 30],
-    slow_period=[50, 100, 150],
-    max_workers=4
-)
-```
+With `--quantstats` / `quantstats=True`: an HTML report saved to `QuantStats/` directory.
 
-### 3. Bulk Backtest (Multiple Assets)
+## Bulk Backtesting
+
+Test a strategy across many coins in parallel:
+
+### Python API
+
 ```python
 from backtrader.utils.backtest import bulk_backtest
 
-coins = ['BTC', 'ETH', 'ADA', 'SOL']
 results = bulk_backtest(
-    strategy=YourStrategy,
-    coins=coins,
+    MyStrategy,
+    coins=['BTC', 'ETH', 'ADA', 'SOL'],
     start_date='2024-01-01',
     end_date='2024-01-31',
     interval='1h',
-    init_cash=10000,
-    max_workers=4
+    init_cash=1000,
+    max_workers=8
 )
 ```
 
-## Next Steps
+If `coins=None`, BTQuant auto-discovers all coins from the SQL Server database.
 
-1. **Explore Examples**: Check the `Examples/` directory for more complete examples
-2. **Set up Live Monitoring**: Configure your exchange connections and start real-time detection
-3. **Learn Strategy Development**: Read [Strategy Development Guide](user-guide/strategies.md)
-4. **Understand Configuration**: Review [Configuration Guide](technical/configuration.md)
-5. **Advanced Features**: Explore [API Reference](technical/api-reference.md)
-6. **Launch Dashboard**: Use the QuantStats dashboard for performance analysis
+### CLI
 
-## Common Issues and Solutions
+```bash
+btq bulk --strategy MyStrategy --interval 1h --workers 8
+btq bulk --strategy MyStrategy --coins BTC,ETH --interval 15m --save
+```
 
-### Issue: "No data available"
-**Solution**: Check your internet connection and ensure the exchange is accessible. Try a different exchange or timeframe.
+## Optimization
 
-### Issue: "Shared memory not found"
-**Solution**: Ensure the C++ market data collector is running first. Check `/dev/shm/btquant_hotspine` exists.
+Optimize strategy parameters using Optuna:
 
-### Issue: "Module not found"
-**Solution**: Ensure you're in the correct virtual environment and BTQuant is properly installed.
+### CLI
 
-### Issue: "Permission denied"
-**Solution**: Check file permissions and ensure you have write access to the output directory.
+```bash
+# Default parameter space
+btq optimize --coin BTC --strategy VuManchCipher_A --trials 200
 
-### Issue: "No detection signals"
-**Solution**: Check that multiple exchanges are configured and market data is flowing. Adjust detector thresholds if needed.
+# Aggressive (more trades, higher risk)
+btq optimize --coin BTC --strategy MyStrategy --trials 200 --aggressive
 
-## Getting Help
+# Conservative (tighter drawdown control)
+btq optimize --coin BTC --strategy MyStrategy --trials 200 --conservative
 
-- **Documentation**: This quick start guide covers the basics
-- **Examples**: See `Examples/` directory for working code
-- **Manipulation Detection**: Check [Detection Quick Start](../tests/new/QUICKSTART.md)
-- **Troubleshooting**: Check [Troubleshooting Guide](troubleshooting.md)
-- **Community**: Join the BTQuant community for support
+# Multiple coins (creates separate study per coin)
+btq optimize --coins BTC,ETH,DOGE --strategy MyStrategy --trials 100
 
-You're now ready to start building your own trading strategies with BTQuant! The framework provides powerful tools for both historical backtesting and real-time market analysis with manipulation detection.
+# Custom study name
+btq optimize --coin BTC --strategy MyStrategy --study-name my_study --trials 150
+```
+
+### Optimization Options
+
+```
+--trials / -n          Number of Optuna trials (default: 200)
+--opt-workers          Parallel optimization workers
+--aggressive           Use aggressive param space (if strategy defines param_space_aggressive)
+--conservative         Use conservative param space (if strategy defines param_space_conservative)
+--min-trades           Minimum trades for valid result (default: 30)
+--pruner               Pruner algorithm: hyperband, median, none (default: hyperband)
+--seed                 Random seed (default: 42)
+--multi-period         Run multi-period validation
+```
+
+## Live Trading (Experimental)
+
+Live trading supports PancakeSwap (Web3/BSC) and JackRabbitRelay exchanges.
+
+### Live Trading Setup
+
+```python
+from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+from backtrader import livetrading
+
+ccxt_config = {
+    'apiKey': '',
+    'secret': '',
+    'enableRateLimit': True,
+    'rateLimit': 20,
+    'options': {'defaultType': 'spot'}
+}
+
+livetrading.livetrade(
+    coin='XRP',
+    collateral='USDT',
+    strategy=NRK,
+    asset='XRP/USDT',
+    exchange='mexc',
+    account='',
+    config=ccxt_config
+)
+```
+
+### BaseStrategy Live Trading Features
+
+When `backtest=False`, BaseStrategy:
+- Initializes PancakeSwap Web3 order queue (if exchange is "pancakeswap")
+- Initializes JackRabbitRelay broker (if exchange is "mimic")
+- Can load existing positions from CSV or exchange API
+- Supports Telegram and Discord alert notifications
+
+The `btq live` CLI mode is not yet implemented.
+
+## Multi-Timeframe Resampling
+
+The `backtest()` function supports adding resampled timeframes:
+
+```python
+backtest(MyStrategy,
+         coin='BTC',
+         start_date='2024-01-01',
+         end_date='2024-06-01',
+         interval='1m',
+         add_mtf_resamples=True)  # Adds 5m, 15m, 60m resamples
+```
+
+## Caching
+
+Data fetched from SQL Server is cached as Parquet files in `.btq_cache/`:
+
+- Cache key is derived from symbol, interval, collateral, and date range
+- Parquet files use zstd compression
+- Disable with `--no-cache` flag
+- Clear with `--clear-cache` flag
+- Custom cache directory via `BTQ_CACHE_DIR` environment variable
+
+## Backtest Function Reference
+
+```python
+backtest(
+    strategy,             # Strategy class (required)
+    data=None,            # Pre-loaded data (DataFrame or Backtrader feed)
+    coin=None,            # Coin symbol (e.g., 'BTC')
+    start_date="1970-01-01",
+    end_date="2030-12-31",
+    interval=None,        # Timeframe (e.g., '1h')
+    collateral="USDT",
+    commission=0.00075,   # Commission rate
+    init_cash=100000.0,   # Starting capital
+    plot=False,           # Show chart
+    quantstats=False,     # Generate QuantStats report
+    asset_name=None,      # Display name
+    bulk=False,           # Bulk mode flag
+    exchange=None,        # Exchange name (e.g., 'mexc' for shorting)
+    slippage_bps=5,       # Slippage in basis points
+    params=None,          # Dict of strategy parameters
+    add_mtf_resamples=False,  # Add multi-timeframe resamples
+    **kwargs              # Additional strategy parameters
+)
+```
+
+Returns the final portfolio value as a float.

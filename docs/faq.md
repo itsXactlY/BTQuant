@@ -1,434 +1,288 @@
 # BTQuant Frequently Asked Questions
 
-## General Questions
+## General
 
 ### What is BTQuant?
 
-BTQuant is an institutional-grade algorithmic trading framework built on Backtrader. It provides advanced features for market data ingestion, strategy development, backtesting, and live trading with support for multiple exchanges and SQL Server data storage.
+BTQuant is a backtesting and optimization framework built on a forked Backtrader engine. It provides a CLI (`btq`), a strategy base class (`BaseStrategy`), data feeds for CCXT exchanges and SQL Server, Optuna-based parameter optimization, and QuantStats reporting.
 
-### Is BTQuant free to use?
+### What languages and platforms does it support?
 
-Yes, BTQuant is open-source and free to use. It's built on the open-source Backtrader framework with additional enterprise-grade features.
+BTQuant is written in Python 3.13 with some C++ components (Fast_MSSQL driver, CCAPI). It targets Linux only (Ubuntu/Debian, Fedora, CentOS/RHEL, Arch-based distributions).
 
-### What programming language is BTQuant written in?
+### Do I need SQL Server?
 
-BTQuant is written in Python 3.12+ and extends the Backtrader framework. It also includes C++ components for high-performance market data ingestion.
+No. SQL Server is optional. You can use CCXT data feeds (fetched from any CCXT-supported exchange over the internet) without any database. SQL Server is needed only if you want to use the `bulk_backtest` auto-discovery feature, the `btq list coins` command, or store large amounts of historical data locally.
 
-### What operating systems does BTQuant support?
+### Do I need to know C++?
 
-BTQuant is designed for Linux systems (Ubuntu 20.04+, CentOS 8+, Arch Linux, or equivalent). Windows and macOS support is limited and not officially recommended for production use.
+No. The C++ components (Fast_MSSQL driver, CCAPI market data collector) are pre-built or compiled during installation. You only need Python to write strategies and run backtests.
 
-### How does BTQuant differ from other trading frameworks?
+### Is Docker supported?
 
-BTQuant stands out with:
-- **Institutional-grade data spine**: C++ market data ingestion with SQL Server storage
-- **Multi-exchange support**: Native WebSocket feeds and CCXT integration
-- **Advanced strategy framework**: Built-in DCA, risk management, and live trading
-- **Enterprise features**: Zero latency CPU cyle friendly Hotspine data collection cache, CCAPI Websocket/FIX/REST order engine, JackRabbitRelay integration, and Web3 support
+No. The project FAQ explicitly states Docker is not supported and will not be.
 
-## Installation and Setup
+## Installation
 
-### Do I need programming experience to use BTQuant?
+### Where does BTQuant get installed?
 
-Yes, BTQuant requires Python programming knowledge. You should be comfortable with:
-- Python syntax and object-oriented programming
-- Working with APIs and data structures
-- Basic understanding of financial markets and trading concepts
+- Repository: wherever you clone it
+- Virtual environment: `~/.btq/` (Python 3.13)
+- CCAPI binaries: `~/bin/`
+- Data cache: `.btq_cache/` in the working directory
 
-### What are the minimum system requirements?
+### What does `install_all.sh` actually install?
 
-- **Operating System**: Linux (Ubuntu 20.04+, CentOS 8+, Arch Linux)
-- **Python**: 3.12 or 3.13
-- **Memory**: 8GB RAM (16GB recommended)
-- **Storage**: 20GB free disk space
-- **Network**: Stable internet connection
+The script installs:
+1. System build dependencies (compiler, cmake, libraries)
+2. Microsoft SQL Server (if not already running)
+3. SQL Server ODBC driver and sqlcmd tools
+4. BTQuant Python package and all dependencies into `~/.btq` venv
+5. Fast_MSSQL C++ driver (pre-compiled or built from source)
+6. BTQ_MarketData database initialization
+7. CCAPI C++ market data collector and hotspine binaries
 
-### Can I install BTQuant on Windows?
+### What Python packages does BTQuant depend on?
 
-While possible, Windows installation is not recommended for production use due to:
-- Limited C++ compilation support
-- Performance limitations with SQL Server
-- Better Linux compatibility for exchange APIs
+From `dependencies/setup.py`:
+- ccxt, pybind11, pyodbc, websockets, websocket-client 1.8.0
+- Web3, matplotlib, numpy, polars, pyarrow
+- telethon, scikit-learn, keras, pytz, optuna
 
-### Do I need SQL Server to use BTQuant?
+### How do I activate the environment?
 
-SQL Server is recommended for full functionality but not strictly required. You can use:
-- **With SQL Server**: Full data storage, Hotspine integration, enterprise features
-- **Without SQL Server**: Limited to CCXT data fetching and basic backtesting, rely on "slower" Custom written python Websocket endpoints
+```bash
+source ~/.btq/bin/activate
+```
 
-### How long does installation take?
+### Can I install on Windows or macOS?
 
-Typical installation time:
-- **Automated installer**: 10-45 minutes
-- **Manual installation**: 30-120 minutes
-- **First-time setup**: Additional 10-20 minutes for configuration
+No. The project targets Linux only. The installer script uses Linux-specific package managers and system paths.
 
-## Data and Market Feeds
+## Data
 
-### Which exchanges does BTQuant support?
+### Which exchanges can I get data from?
 
-**CCXT-compatible exchanges** (100+ exchanges):
-- Binance, Bybit, Kraken, Coinbase Pro, KuCoin, and many more
+Any exchange supported by CCXT (100+ exchanges). Common ones: binance, bybit, kraken, coinbase, mexc, kucoin.
 
-**Native Tickdata WebSocket feeds**:
-- Binance, Bitget, MEXC (optimized performance)
-
-**Web3 support**:
-- PancakeSwap (Binance Smart Chain)
-
-### How do I get historical data?
-
-BTQuant provides multiple data sources:
 ```python
-# CCXT data (recommended for beginners)
-from backtrader.utils.ccxt_data import get_crypto_data
+from backtrader import get_crypto_data
 data = get_crypto_data('BTC/USDT', '2024-01-01', '2024-01-31', '1h', 'binance')
-
-# SQL Server data (for advanced users)
-from backtrader.feeds.mssql_crypto import get_database_data
-data = get_database_data('BTC', '2024-01-01', '2024-01-31', '1h', 'USDT')
 ```
 
 ### What timeframes are supported?
 
-BTQuant supports all standard timeframes:
-- **Seconds**: 1s, 5s, 15s, 30s
-- **Minutes**: 1m, 5m, 15m, 30m
-- **Hours**: 1h, 2h, 4h, 6h, 12h
-- **Days**: 1d, 3d, 7d
-- **Weeks**: 1w
-- **Months**: 1M
+Depends on the exchange. Common timeframes: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`.
 
-### Can I use my own data source?
+### How does data caching work?
 
-Yes, BTQuant supports custom data feeds:
-```python
-import pandas as pd
-from backtrader.feeds.polarfeed import PolarsData
+When fetching from SQL Server, data is cached as Parquet files (zstd compressed) in `.btq_cache/`. The cache key is derived from symbol, interval, collateral, and date range. CCXT data fetched via `get_crypto_data()` is not cached by default.
 
-# Load your data
-df = pd.read_csv('my_data.csv')
-data = PolarsData(dataname=df)
+Clear the cache:
+```bash
+btq --clear-cache backtest --coin BTC --strategy MyStrategy
 ```
 
-### How much historical data can BTQuant handle?
-
-BTQuant can handle large datasets:
-- **Memory**: Efficient data loading with caching
-- **Storage**: SQL Server can store billions of records
-- **Performance**: Optimized for high-frequency data
-
-## Strategy Development
-
-### Do I need to be a professional trader to use BTQuant?
-
-No, BTQuant is designed for both beginners and professionals. Start with:
-- **Simple strategies**: Moving average crossovers
-- **Examples**: Use provided strategy templates
-- **Backtesting**: Test strategies before live trading
-
-### How do I create my first strategy?
-
-Start with the quickstart guide:
-```python
-from backtrader.strategies.base import BaseStrategy
-
-class MyFirstStrategy(BaseStrategy):
-    def __init__(self):
-        super().__init__()
-        self.sma = bt.indicators.SimpleMovingAverage(self.data, period=20)
-    
-    def buy_or_short_condition(self):
-        if not self.buy_executed and self.data.close[0] > self.sma[0]:
-            self.create_order('BUY')
-            return True
-        return False
+Disable caching:
+```bash
+btq --no-cache backtest --coin BTC --strategy MyStrategy
 ```
 
-### Can I use machine learning with BTQuant?
-
-Yes, BTQuant supports machine learning integration:
-```python
-from sklearn.ensemble import RandomForestClassifier
-
-class MLStrategy(BaseStrategy):
-    def __init__(self):
-        super().__init__()
-        self.model = RandomForestClassifier()
-        # Train model with historical data
-    
-    def next(self):
-        # Extract features
-        features = self._extract_features()
-        
-        # Make prediction
-        prediction = self.model.predict(features)
-        
-        # Trade based on prediction
-        if prediction == 1:
-            self.create_order('BUY')
+Custom cache directory:
+```bash
+export BTQ_CACHE_DIR=/path/to/cache
 ```
 
-### How do I optimize my strategy parameters?
+### Can I use my own CSV data?
 
-Use the built-in optimization tools:
-```python
-from backtrader.utils.backtest import optimize_backtest
+Yes. Pass a Polars DataFrame via `PolarsFeed` or use `get_database_data()` for SQL Server data. You can also load CSVs with Polars and pass them to the backtest engine.
 
-results = optimize_backtest(
-    strategy=MyStrategy,
-    data=data,
-    sma_period=[10, 20, 30],
-    rsi_period=[14, 20, 28],
-    max_workers=4
-)
+## Strategies
+
+### How do I write a strategy?
+
+Extend `BaseStrategy` from `backtrader.strategies.base` and override these methods:
+
+- `buy_or_short_condition()` -- entry logic
+- `dca_or_short_condition()` -- dollar-cost-averaging or adding to position
+- `sell_or_cover_condition()` -- exit logic
+- `check_stop_loss()` -- custom stop loss
+
+Call `self.create_order('BUY')` to enter and `self.close_order(order_tracker)` to exit.
+
+See the [Quick Start Guide](quickstart.md) for a complete example.
+
+### What parameters does BaseStrategy accept?
+
+```
+init_cash, exchange, account, asset, amount, coin, collateral,
+debug, capture_data, backtest, bulk, optuna, quantstats,
+use_stoploss, pnl, final_value, channel, symbol,
+stop_loss, stop_trail, take_profit, percent_sizer,
+order_cooldown, enable_alerts, alert_channel
 ```
 
-### Can I backtest multiple strategies at once?
+### How do I list available strategies?
 
-Yes, use bulk backtesting:
-```python
-from backtrader.utils.backtest import bulk_backtest
-
-results = bulk_backtest(
-    strategy=MyStrategy,
-    coins=['BTC', 'ETH', 'ADA', 'SOL'],
-    start_date='2024-01-01',
-    end_date='2024-01-31',
-    interval='1h',
-    max_workers=4
-)
+```bash
+btq list strategies
 ```
+
+Or programmatically:
+```python
+from backtrader.btquant import list_available_strategies
+strategies = list_available_strategies()
+```
+
+### How does position sizing work?
+
+When `percent_sizer` is set (e.g., 0.1), each trade uses that fraction of available cash:
+
+```
+size = (available_cash * percent_sizer) / current_close_price
+```
+
+In live trading, minimum order values are enforced per exchange (Binance: $5.50, MEXC: $1.10, PancakeSwap: $0.00001).
+
+## Backtesting
+
+### How do I run a backtest?
+
+Python:
+```python
+from backtrader.utils.backtest import backtest
+result = backtest(MyStrategy, coin='BTC', start_date='2024-01-01',
+                  end_date='2024-01-31', interval='1h', init_cash=1000)
+```
+
+CLI:
+```bash
+btq backtest --coin BTC --strategy MyStrategy --interval 1h --start 2024-01-01 --end 2024-01-31
+```
+
+### What does the backtest function return?
+
+A float representing the final portfolio value.
+
+### What analyzers are included?
+
+The `backtest()` function automatically adds:
+- TimeReturn
+- SharpeRatio
+- DrawDown
+- TradeAnalyzer
+- Returns
+- CustomSQN
+- PyFolio (unless multi-timeframe resampling is enabled)
+
+### How do I generate a QuantStats report?
+
+CLI: `btq backtest --coin BTC --strategy MyStrategy --quantstats`
+
+Python: `backtest(MyStrategy, ..., quantstats=True)`
+
+Reports are saved as HTML files in the `QuantStats/` directory.
+
+### What is bulk backtesting?
+
+Bulk backtesting runs a strategy across multiple coins in parallel using `concurrent.futures`. If no coins are specified, it auto-discovers all available coins from the SQL Server database.
+
+CLI: `btq bulk --strategy MyStrategy --interval 1h --workers 8`
+
+### What does bulk_backtest return?
+
+A list of dictionaries, each containing:
+- `coin`, `asset`, `final_value`, `pnl`, `return_pct`, `status` (success/failed/skipped)
+
+## Optimization
+
+### How does optimization work?
+
+BTQuant uses Optuna for hyperparameter optimization. Each trial runs a backtest with sampled parameters. Pruning (hyperband or median) stops unpromising trials early.
+
+### What are the parameter space modes?
+
+- **default**: Strategy's default parameter space
+- **aggressive**: Strategy's `param_space_aggressive()` function (if defined)
+- **conservative**: Strategy's `param_space_conservative()` function (if defined)
+
+### How do I run optimization?
+
+```bash
+btq optimize --coin BTC --strategy MyStrategy --trials 200
+btq optimize --coin BTC --strategy MyStrategy --trials 200 --aggressive
+btq optimize --coins BTC,ETH --strategy MyStrategy --trials 100 --conservative
+```
+
+### What pruning algorithms are available?
+
+- `hyperband` (default)
+- `median`
+- `none` (disabled)
+
+### What is the minimum trades threshold?
+
+Default: 30 trades. Optimization trials with fewer than `--min-trades` trades are considered invalid. Set with `--min-trades`.
 
 ## Live Trading
 
-### Can I use BTQuant for live trading?
+### Is live trading implemented?
 
-Yes, BTQuant supports live trading with:
-- **Multiple exchanges**: Binance, Bybit, Kraken, etc.
-- **Risk management**: Built-in stop-loss and position sizing
-- **Alerts**: Discord and Telegram notifications
-- **Monitoring**: Real-time performance tracking
+The `btq live` CLI mode exits with "Live trading not yet implemented." However, live trading is partially implemented in Python for:
 
-### Is live trading safe with BTQuant?
+- **PancakeSwap** (Web3/BSC via `PancakeSwapV2DirectOrderBase`)
+- **JackRabbitRelay** (via `JrrBroker`)
 
-BTQuant includes safety features:
-- **Paper trading**: Test strategies before going live
-- **Risk limits**: Maximum position sizes and stop-losses
-- **Error handling**: Graceful failure recovery
-- **Monitoring**: Real-time alerts and logging
+### Which exchanges support live trading?
 
-### How do I start live trading?
+Through JackRabbitRelay: any exchange JRR supports. Through PancakeSwap: Binance Smart Chain DEX trading.
 
-1. **Paper trade first**: Test with simulated orders
-2. **Start small**: Use minimal capital initially
-3. **Monitor closely**: Watch performance and errors
-4. **Scale gradually**: Increase position sizes over time
+### How do alerts work?
 
-### Can I trade multiple exchanges simultaneously?
+When `enable_alerts=True` on a strategy, BTQuant initializes Telegram and Discord alert services using credentials from `dontcommit.py`. Alerts are sent via `self.send_alert(message)`.
 
-Yes, BTQuant supports multi-exchange trading:
-```python
-# Configure multiple exchanges
-exchanges = {
-    'binance': {'api_key': '...', 'secret': '...'},
-    'bybit': {'api_key': '...', 'secret': '...'},
-    'kraken': {'api_key': '...', 'secret': '...'}
-}
+## Configuration
 
-# Trade across exchanges
-for exchange_name, config in exchanges.items():
-    # Execute trades on each exchange
-    pass
-```
+### Where are credentials stored?
 
-### What about slippage and fees?
+In `dependencies/backtrader/dontcommit.py`. This file contains:
+- JackRabbitRelay settings
+- Web3/Solana wallet keys
+- Discord webhook URL
+- Telegram API credentials
+- SQL Server connection strings
 
-BTQuant accounts for trading costs:
-```python
-# Configure commission and slippage
-cerebro.broker.setcommission(commission=0.00075)  # 0.075%
-cerebro.broker.set_slippage_perc(perc=0.0005)     # 0.05% slippage
-```
+This file should not be committed to version control.
 
-## Performance and Scalability
+### What is the HotSpine shared memory?
 
-### How fast is BTQuant?
-
-Performance depends on your setup:
-- **Backtesting**: 1000+ bars/second on modern hardware
-- **Live trading**: Real-time order execution
-- **Data ingestion**: 100,000+ trades/second with Hotspine
-
-### Can BTQuant handle high-frequency trading?
-
-Yes, BTQuant supports HFT with:
-- **C++ market data ingestion**: Microsecond precision
-- **Optimized data storage**: SQL Server with proper indexing
-- **Low-latency execution**: Direct exchange API integration
-
-### How much memory does BTQuant use?
-
-Memory usage varies:
-- **Simple strategies**: 100-500 MB
-- **Complex strategies**: 1-4 GB
-- **Large datasets**: 4-16 GB (with proper caching)
-
-### Can I run BTQuant on a VPS?
-
-Yes, BTQuant works well on VPS:
-- **Recommended**: 4+ CPU cores, 8+ GB RAM
-- **Operating system**: Ubuntu 20.04 LTS
-- **Network**: Low-latency connection to exchanges
-
-## Data Management
-
-### How do I backup my data?
-
-SQL Server backup strategies:
-```bash
-# Full database backup
-sqlcmd -S localhost -U SA -P "YourStrong!Passw0rd" -Q "BACKUP DATABASE BinanceData TO DISK = '/backup/BinanceData.bak'"
-
-# Automated backups with cron
-0 2 * * * /path/to/backup_script.sh
-```
-
-### Can I export my trading results?
-
-Yes, multiple export formats:
-```python
-# Export to CSV
-results.to_csv('trading_results.csv')
-
-# Export to JSON
-import json
-with open('results.json', 'w') as f:
-    json.dump(results, f, indent=2)
-
-# QuantStats HTML report
-from backtrader.utils.backtest import backtest
-backtest(strategy, data, quantstats=True)  # Generates HTML report
-```
-
-### How do I clean up old data?
-
-Data management utilities:
-```python
-# Delete old data from SQL Server
-import pyodbc
-conn = pyodbc.connect(connection_string)
-cursor = conn.cursor()
-cursor.execute("DELETE FROM trades WHERE timestamp < DATEADD(day, -30, GETDATE())")
-conn.commit()
-conn.close()
-```
+HotSpine is a C++ component that writes market data to shared memory at `/dev/shm/btquant_hotspine` for ultra-low latency access. It is built from the CCAPI example during installation.
 
 ## Troubleshooting
 
-### My strategy isn't working, what should I do?
+### "Could not import strategy: X"
 
-1. **Check data**: Ensure data is loading correctly
-2. **Enable debug mode**: Add `debug=True` to strategy parameters
-3. **Review logs**: Check console output for errors
-4. **Test incrementally**: Add features one at a time
-5. **Use examples**: Start with working examples
+Make sure the strategy class exists in `backtrader.strategies`. Use `btq list strategies` to see available strategies.
 
-### I'm getting "No data available" errors, how do I fix this?
+### "Error: --strategy required"
 
-Common causes and solutions:
-- **Invalid symbol**: Check symbol format (e.g., 'BTC/USDT')
-- **Date range**: Ensure dates are valid and within exchange history
-- **Exchange issues**: Try different exchange or timeframe
-- **Rate limits**: Add delays between requests
+The `--strategy` flag is required for backtest, bulk, and optimize modes.
 
-### How do I debug strategy logic?
+### "No data for BTC 1h 2024-01-01->2024-01-31"
 
-Use debugging techniques:
-```python
-class DebugStrategy(BaseStrategy):
-    params = (('debug', True),)
-    
-    def next(self):
-        if self.p.debug:
-            print(f"Price: {self.data.close[0]}")
-            print(f"Position: {self.position.size}")
-            print(f"Indicators: {self.sma[0]}")
-        
-        super().next()
+The SQL Server database does not have data for that coin/timeframe/date range. Check available coins with `btq list coins`.
+
+### "Failed to get coins from database"
+
+SQL Server is not running or `dontcommit.py` connection settings are wrong. Verify with:
+```bash
+sudo systemctl status mssql-server
 ```
 
-## Legal and Compliance
+### Backtest returns no trades
 
-### Is algorithmic trading legal?
+Check that your strategy's `buy_or_short_condition()` returns `True` and actually calls `self.create_order()`. Enable debug mode with `--debug`.
 
-Yes, algorithmic trading is legal in most jurisdictions, but:
-- **Check local regulations**: Some countries have restrictions
-- **Exchange rules**: Follow exchange terms of service
-- **Tax implications**: Consult tax professional for reporting
+### Plot not showing
 
-### Do I need a license to use BTQuant?
-
-No license required for personal use. For commercial use:
-- **Review licensing**: Check BTQuant and Backtrader licenses
-- **Consult legal**: Verify compliance with local laws
-- **Exchange agreements**: Follow exchange API terms
-
-### Is my data secure with BTQuant?
-
-BTQuant security practices:
-- **Local storage**: Data stored on your infrastructure
-- **API keys**: Never transmitted to third parties
-- **Encryption**: Use encrypted connections where possible
-- **Access control**: Limit access to sensitive files
-
-## Support and Community
-
-### Where can I get help?
-
-Support options:
-- **Documentation**: Comprehensive guides and examples
-- **GitHub issues**: Report bugs and feature requests
-- **Community**: Join discussions and share knowledge
-- **Professional support**: Available for enterprise users
-
-### How do I contribute to BTQuant?
-
-Contribution guidelines:
-1. **Fork the repository**: Create your own copy
-2. **Follow coding standards**: Use consistent style and documentation
-3. **Test thoroughly**: Ensure changes don't break existing functionality
-4. **Submit pull request**: Describe changes and reasoning
-
-### Can I request new features?
-
-Yes, feature requests are welcome:
-- **GitHub issues**: Submit detailed feature requests
-- **Community discussion**: Gather feedback from other users
-- **Implementation**: Consider implementing the feature yourself
-
-## Advanced Topics
-
-### Can I use BTQuant with Docker?
-
-No, Docker support and any questions related to BTQuand and Docker will and must be ignored.
-Squeeze all into containers, make all 10 times more complexer and harder to debug wont happen, ever.
-
-### How do I deploy BTQuant in production?
-
-Production deployment checklist:
-- **Infrastructure**: Reliable servers with backup power
-- **Monitoring**: 24/7 monitoring and alerting
-- **Security**: Firewall, VPN, and access controls
-- **Backup**: Regular data and configuration backups
-- **Testing**: Staging environment for testing changes
-
-### Can I integrate BTQuant with other systems?
-
-Yes, BTQuant provides integration points:
-- **REST APIs**: Custom endpoints for external systems
-- **Message queues**: RabbitMQ, Redis for real-time updates
-- **Databases**: Direct SQL Server integration
-- **Monitoring**: Prometheus, Grafana for metrics
-
-This FAQ covers the most common questions about BTQuant. For more detailed information, refer to the specific documentation sections or seek community support.
+The `--plot` flag calls `cerebro.plot()`. On headless servers, matplotlib may not have a display backend. The plot will still be generated if a display is available.

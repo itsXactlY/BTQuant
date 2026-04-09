@@ -1,423 +1,295 @@
 # BTQuant Installation Guide
 
-## Overview
+## Supported Platforms
 
-BTQuant is a high-frequency algorithmic trading framework combining Python's flexibility with C++'s performance. It features real-time market manipulation detection, ultra-low latency shared memory data pipelines, and institutional-grade backtesting capabilities. This guide will help you set up the complete BTQuant system including Python components, C++ detectors, and market data collectors.
+- Ubuntu / Debian
+- Fedora
+- CentOS / RHEL
+- Arch Linux / Manjaro / EndeavourOS / Garuda
 
-## System Requirements
-
-### Minimum Requirements
-- **Operating System**: Linux (Ubuntu 20.04+, CentOS 8+, Arch Linux, or equivalent)
-- **Python**: 3.12 or 3.13
-- **C++ Compiler**: GCC 7+ or Clang 5+ (C++17 support required)
-- **Build System**: CMake 3.15+
-- **Memory**: 8GB RAM (16GB recommended for optimal performance)
-- **Storage**: 20GB free disk space (more if using SQL Server)
-- **Network**: Stable internet connection for data feeds
-
-### Recommended Requirements
-- **Operating System**: Linux with kernel 5.14+
-- **Python**: 3.13
-- **C++ Compiler**: GCC 9+ or Clang 10+ with full C++17 support
-- **Build System**: CMake 3.20+
-- **Memory**: 16GB RAM or more
-- **Storage**: 50GB+ SSD storage
-- **Network**: High-speed, low-latency connection (for live trading)
+The installer script auto-detects your distribution. Other Linux distributions are not supported.
 
 ## Prerequisites
 
-### System Dependencies
+- Linux operating system
+- sudo/root access
+- Internet connection
+- Git
 
-Install the required system packages based on your Linux distribution:
+## Automated Installation
 
-#### Ubuntu/Debian
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential python3-dev unixodbc-dev git cmake ninja-build
-```
-
-#### CentOS/RHEL/Fedora
-```bash
-# CentOS/RHEL
-sudo yum groupinstall -y 'Development Tools'
-sudo yum install -y python3-devel unixODBC-devel git cmake ninja-build
-
-# Fedora
-sudo dnf groupinstall -y 'Development Tools'
-sudo dnf install -y python3-devel unixODBC-devel git cmake ninja-build
-```
-
-#### Arch Linux
-```bash
-sudo pacman -Syu --noconfirm
-sudo pacman -S --noconfirm base-devel pybind11 unixodbc git tk cmake ninja
-```
-
-### Optional: SQL Server Setup
-
-For full functionality with SQL Server data storage:
-
-#### Microsoft SQL Server (Recommended)
-1. Install SQL Server 2019 or later
-2. Install SQL Server Management Studio (SSMS)
-3. Create database with appropriate permissions
-
-#### Alternative: SQL Server Express
-- Free version suitable for development and small-scale deployments
-
-## Installation Methods
-
-### Method 1: Automated Installation (Recommended)
-
-The easiest way to install BTQuant is using the provided installer script:
+The `install_all.sh` script handles the complete setup:
 
 ```bash
-# Clone the repository
-git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant BTQuant
+git clone --recurse-submodules -b prototyping https://github.com/ItsXactlY/BTQuant BTQuant
 cd BTQuant
-
-# Run the automated installer
-bash Installers/install.sh
+bash Installers/install_all.sh
 ```
 
-The installer will:
-- Detect your Linux distribution
-- Install system dependencies (Python and C++)
-- Create a Python virtual environment (`.btq`)
-- Install all required Python packages
-- Build C++ components (market data collectors and detectors)
-- Set up the Backtrader fork with extensions
-- Configure shared memory segments for HotSpine
+### What the Installer Does
 
-### Method 2: Manual Installation
+The script runs these steps in order:
 
-#### Step 1: Clone Repository
+1. **Detects your Linux distribution** from `/etc/os-release`
+
+2. **Installs system dependencies** based on your distro:
+
+   Ubuntu/Debian:
+   ```
+   build-essential, python3-dev, python3-venv, python3-pybind11,
+   unixodbc-dev, git, cmake, libssl-dev, libboost-all-dev,
+   rapidjson-dev, curl, wget, gnupg2, software-properties-common, lsb-release
+   ```
+
+   Fedora:
+   ```
+   Development Tools group, python3-devel, python3-pybind11,
+   unixODBC-devel, git, cmake, openssl-devel, boost-devel,
+   rapidjson-devel, curl, wget, gnupg2
+   ```
+
+   CentOS/RHEL:
+   ```
+   Development Tools group, python3-devel, python3-pybind11,
+   unixODBC-devel, git, cmake, openssl-devel, boost-devel,
+   rapidjson-devel, curl, wget, gnupg2
+   ```
+
+   Arch-based:
+   ```
+   base-devel, python, pybind11, unixodbc, git, cmake,
+   openssl, boost, rapidjson, curl, wget, gnupg
+   ```
+
+3. **Installs Microsoft SQL Server** (skipped if already running):
+   - Adds the Microsoft package repository for your distro
+   - Installs `mssql-server` and `msodbcsql18` ODBC driver
+   - Runs `mssql-conf setup` with an evaluation license
+   - Enables and starts the `mssql-server` systemd service
+   - Waits 30 seconds for SQL Server to start
+
+4. **Installs sqlcmd tools** (skipped if already available):
+   - Installs `mssql-tools18` (or `mssql-tools` on Arch)
+   - Adds to PATH via `~/.bashrc`
+
+5. **Sets up BTQuant Python environment**:
+   - Clones the repository (prototyping branch) if not present
+   - Creates a virtual environment at `~/.btq`
+   - Upgrades pip, setuptools, wheel
+   - Installs pybind11 in the venv
+   - Runs `pip install .` from the `dependencies/` directory (installs all Python dependencies: ccxt, pybind11, pyodbc, websockets, Web3, matplotlib, pandas, numpy, polars, pyarrow, telethon, scikit-learn, keras, pytz, optuna)
+
+6. **Builds the Fast_MSSQL driver**:
+   - Checks for a pre-compiled `.so` binary matching your Python version
+   - If found, copies it to the venv site-packages
+   - If not found, builds from source via `pip install .` in `dependencies/MsSQL/`
+
+7. **Initializes the database**:
+   - Checks if `BTQ_MarketData` database exists on SQL Server
+   - If not, runs `dependencies/datacollector/init_database.py`
+
+8. **Builds CCAPI**:
+   - Initializes git submodules (`git submodule update --init --recursive`)
+   - Runs bootstrap script if present
+   - Builds with CMake
+   - Copies `market_data_collector` and `hotspine` binaries to `~/bin/`
+
+### Post-Installation
+
+After the script completes:
+
 ```bash
-git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant BTQuant
+# Activate the virtual environment
+source ~/.btq/bin/activate
+
+# Reload PATH for sqlcmd and ~/bin
+source ~/.bashrc
+```
+
+The installer prints the SQL Server SA password. Save it if you need SQL Server access.
+
+## Manual Installation
+
+If the automated installer does not work for your setup:
+
+### Step 1: Clone the Repository
+
+```bash
+git clone --recurse-submodules -b prototyping https://github.com/ItsXactlY/BTQuant BTQuant
 cd BTQuant
 ```
 
-#### Step 2: Create Virtual Environment
+### Step 2: Create Virtual Environment
+
 ```bash
-python3 -m venv .btq
-source .btq/bin/activate
+python3 -m venv ~/.btq
+source ~/.btq/bin/activate
 ```
 
-#### Step 3: Install Python Dependencies
+### Step 3: Install Python Dependencies
+
 ```bash
-# Upgrade pip and install build tools
 pip install --upgrade pip setuptools wheel
-
-# Install main dependencies
+pip install pybind11
 cd dependencies
 pip install .
+```
 
-# Install QuantStats fork
-cd quantstats_lumi_btquant
-pip install .
+This installs all required packages from `dependencies/setup.py`:
+- ccxt, pybind11, pyodbc, websockets, websocket-client, Web3
+- matplotlib, pandas, numpy, polars, pyarrow
+- telethon, scikit-learn, keras, pytz, optuna
 
-# Install MSSQL extension
-cd ../MsSQL
+### Step 4: Build Fast_MSSQL (Optional)
+
+Only needed if you use SQL Server data feeds:
+
+```bash
+cd dependencies/MsSQL
 pip install .
 ```
 
-#### Step 4: Build C++ Components
+Or copy a pre-compiled binary from `dependencies/backtrader/feeds/mssql/` to your site-packages.
+
+### Step 5: Build CCAPI (Optional)
+
+Only needed for real-time market data collection:
+
 ```bash
-# Build market data collector
-cd ../../dependencies/ccapi/example
+cd dependencies/ccapi
+git submodule update --init --recursive
+cd example
 mkdir -p build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-
-# Build manipulation detectors
-cd ../../../tests/new
-chmod +x BUILD_AND_RUN.sh
-./BUILD_AND_RUN.sh release
-```
-
-#### Step 5: Verify Installation
-```bash
-# Test Python components
-python3 -c "import backtrader as bt; print(f'Backtrader version: {bt.__version__}')"
-
-# Test C++ components
-cd tests/new/build
-./manipulation_monitor --help
+cmake ..
+cmake --build .
 ```
 
 ## Configuration
 
-### Basic Configuration
+### Credentials and Secrets
 
-After installation, you need to configure BTQuant for your environment:
-
-#### 1. Set Up Secrets and Credentials
-
-Edit the `dependencies/backtrader/dontcommit.py` file:
+Edit `dependencies/backtrader/dontcommit.py` to configure:
 
 ```python
-# JackRabbit Relay
-identify = "your_jrr_identify_string"
+# JackRabbitRelay
+identify = ""                    # JRR identify string
 jrr_webhook_url = "http://127.0.0.1:80"
-jrr_order_history = "/path/to/jrr/history/"
+jrr_order_history = "/home/JackrabbitRelay2/Data/Mimic/"
 
-# Web3 Configuration
-bsc_privaccount1 = "your_private_key"
-bsc_privaccountaddress = "your_wallet_address"
+# Web3 (BSC)
+bsc_privaccount1 = ""
+bsc_privaccountaddress = ""
 
-# Solana Configuration
-solana_privkey_base58 = "your_solana_private_key"
-solana_wallet_address = "your_solana_address"
+# Solana
+solana_privkey_base58 = ""
+solana_wallet_address = ""
 
-# Discord Webhook
-discord_webhook_url = "https://discord.com/api/webhooks/..."
+# Discord
+discord_webhook_url = ""
 
-# Telegram Configuration
-telegram_api_id = 1234567
-telegram_api_hash = "your_telegram_api_hash"
+# Telegram
+telegram_api_id = 1111111
+telegram_api_hash = ""
 telegram_session_file = ".base.session"
-telegram_channel = -1001234567890
+telegram_channel = -100
 
-# SQL Server Configuration
+# SQL Server (match your MSSQL setup)
 server = 'localhost'
 candle_database = 'BinanceData'
 optuna_database = 'OptunaBT'
 username = 'SA'
 password = 'YourStrong!Passw0rd'
-driver = '{ODBC Driver 18 for SQL Server}'
 ```
 
-#### 2. Database Configuration
+The `dontcommit.py` file is listed in `.gitignore` -- do not commit credentials.
 
-For SQL Server setup:
+### SQL Server Connection Strings
 
-```python
-# Connection strings
-connection_string = (f'DRIVER={driver};'
-                     f'SERVER={server};'
-                     f'DATABASE={candle_database};'
-                     f'UID={username};'
-                     f'PWD={password};'
-                     f'TrustServerCertificate=yes;')
+Two connection strings are auto-generated from the settings above:
+- `connection_string` -- for the candle/market data database (`candle_database`)
+- `optuna_connection_string` -- for the Optuna optimization database (`optuna_database`)
 
-optuna_connection_string = (f'DRIVER={driver};'
-                           f'SERVER={server};'
-                           f'DATABASE={optuna_database};'
-                           f'UID={username};'
-                           f'PWD={password};'
-                           f'TrustServerCertificate=yes;')
-```
+Both use ODBC Driver 18 with `TrustServerCertificate=yes`.
 
-### Exchange Configuration
+### Data Cache
 
-#### CCXT Exchanges
-For CCXT-compatible exchanges (Binance, Bybit, etc.):
-
-```python
-ccxt_config = {
-    'apiKey': 'your_api_key',
-    'secret': 'your_api_secret',
-    'enableRateLimit': True,
-    'rateLimit': 20,
-    'options': {
-        'defaultType': 'spot'  # or 'future', 'margin'
-    }
-}
-```
-
-#### Native Exchange Integration
-For native WebSocket feeds (Binance, Bitget, MEXC):
-
-```python
-# Exchange-specific configuration
-exchange_config = {
-    'binance': {
-        'api_key': 'your_api_key',
-        'secret_key': 'your_secret_key',
-        'testnet': False
-    },
-    'bitget': {
-        'api_key': 'your_api_key',
-        'secret_key': 'your_secret_key',
-        'passphrase': 'your_passphrase'
-    }
-}
-```
-
-## Testing Your Installation
-
-### Python Components Test
-
-```python
-from backtrader import backtest
-from backtrader.strategies.Vumanchu_A import VuManchCipher_A
-from backtrader.utils.ccxt_data import get_crypto_data
-
-# Test with sample data
-data = get_crypto_data('BTC/USDT', '2024-01-01', '2024-01-08', '15m', 'binance')
-
-if __name__ == '__main__':
-    result = backtest(
-        strategy=VuManchCipher_A,
-        data=data,
-        init_cash=1000,
-        backtest=True,
-        plot=False,
-        quantstats=False,
-        asset_name='BTC/USDT'
-    )
-    print(f"Backtest completed. Final value: ${result:.2f}")
-```
-
-### C++ Components Test
+BTQuant caches market data as Parquet files in `.btq_cache/` (or the path set by `BTQ_CACHE_DIR` environment variable). Clear the cache with:
 
 ```bash
-# Test market data collector
-cd dependencies/ccapi/example/build/src/market_data_collector
-./market_data_collector --test
-
-# Test manipulation detectors
-cd ../../../../tests/new/build
-./simple_monitor
-
-# Should see output like:
-# 🚨 StopHunt(symbol=BTC-USDT, exchange=binance, deviation=-1.2%, signal=LONG)
-# 💰 Arbitrage(buy=kraken@42150, sell=binance@42250, profit=65bps)
+btq --clear-cache backtest --coin BTC --strategy MyStrategy
 ```
 
-### Database Connection Test
+## Verifying the Installation
 
-```python
-from backtrader.feeds.mssql_crypto import get_database_data
+```bash
+# Activate the environment
+source ~/.btq/bin/activate
 
-# Test database connection
-try:
-    df = get_database_data(
-        ticker='BTC',
-        start_date='2024-01-01',
-        end_date='2024-01-02',
-        time_resolution='1h',
-        pair='USDT'
-    )
-    print(f"Database test successful. Retrieved {len(df)} rows.")
-except Exception as e:
-    print(f"Database test failed: {e}")
+# Check CLI is available
+btq --help
+
+# List available strategies
+btq list strategies
+
+# Run a simple backtest (requires data source)
+btq backtest --coin BTC --strategy VuManchCipher_A --interval 15m --start 2024-01-01 --end 2024-01-08
 ```
 
 ## Troubleshooting
 
-### Common Installation Issues
+### Python version mismatch
 
-#### 1. Permission Denied Errors
+BTQuant targets Python 3.13. Verify with:
 ```bash
-# Fix file permissions
-chmod +x Installers/install.sh
-chmod +x dependencies/setup.py
-chmod +x tests/new/BUILD_AND_RUN.sh
+source ~/.btq/bin/activate
+python --version
 ```
 
-#### 2. Missing Dependencies
+### SQL Server not starting
+
 ```bash
-# Reinstall system dependencies
-sudo apt-get install -y build-essential python3-dev unixodbc-dev cmake ninja-build
-
-# Reinstall Python dependencies
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-```
-
-#### 3. C++ Compilation Errors
-```bash
-# Check compiler version
-g++ --version
-
-# Update CMake
-sudo apt-get install cmake
-
-# Clean and rebuild
-cd tests/new
-rm -rf build
-./BUILD_AND_RUN.sh release
-```
-
-#### 4. Virtual Environment Issues
-```bash
-# Recreate virtual environment
-rm -rf .btq
-python3 -m venv .btq
-source .btq/bin/activate
-pip install --upgrade pip setuptools wheel
-```
-
-#### 4. SQL Server Connection Issues
-```bash
-# Test ODBC connection
-isql -v your_dsn your_username your_password
-
-# Check SQL Server status
 sudo systemctl status mssql-server
+sudo journalctl -u mssql-server -f
 ```
 
-### Performance Optimization
+### Missing system libraries
 
-#### 1. Memory Management
-```python
-# Increase Python memory allocation
-export PYTHONMALLOC=malloc
-export MALLOC_ARENA_MAX=1
+Re-run the system dependency installation for your distro (see step 2 of the installer).
+
+### Fast_MSSQL binary not found
+
+If the pre-compiled `.so` is not available for your Python version, build from source:
+```bash
+cd dependencies/MsSQL
+pip install .
 ```
 
-#### 2. Database Optimization
-- Enable SQL Server query optimization
-- Create appropriate indexes on OHLCV tables
-- Configure connection pooling
+### CCAPI build failures
 
-#### 3. Network Optimization
-- Use low-latency network connections
-- Configure firewall for WebSocket traffic
-- Use VPN if required for exchange access
+Ensure you have CMake 3.15+ and a C++17 compiler:
+```bash
+g++ --version
+cmake --version
+```
 
-### Getting Help
+### Import errors
 
-If you encounter issues:
-
-1. **Check the logs**: BTQuant provides detailed logging for both Python and C++ components
-2. **Review system requirements**: Ensure your system meets minimum requirements for C++ compilation
-3. **Consult documentation**: Check the troubleshooting and FAQ sections
-4. **Community support**: Join the BTQuant community for assistance
-
-## Next Steps
-
-After successful installation:
-
-1. **Read the Quick Start Guide**: Learn how to create your first strategy and run backtests
-2. **Set up Market Data**: Configure and start the C++ market data collectors
-3. **Run Detection Monitors**: Start real-time manipulation detection
-4. **Explore Examples**: Check the `Examples/` directory for working code
-5. **Configure Data Sources**: Set up your preferred data feeds and exchanges
-6. **Start Strategy Development**: Begin building your trading strategies
-7. **Launch Dashboard**: Use the QuantStats dashboard for performance analysis
+Make sure you are in the virtual environment and installed from the `dependencies/` directory:
+```bash
+source ~/.btq/bin/activate
+cd dependencies
+pip install .
+```
 
 ## Uninstallation
 
-To completely remove BTQuant:
-
 ```bash
-# Remove virtual environment
-rm -rf .btq
+# Remove the virtual environment
+rm -rf ~/.btq
 
-# Remove repository
-cd ..
+# Remove the repository
 rm -rf BTQuant
 
-# Optional: Remove system packages (if no longer needed)
-sudo apt-get remove -y build-essential python3-dev unixodbc-dev
+# Optionally remove SQL Server (Ubuntu/Debian)
+sudo apt-get remove -y mssql-server msodbcsql18 mssql-tools18
 ```
-
-## Support
-
-For additional support and questions:
-- Check the [FAQ section](faq.md)
-- Review [troubleshooting guide](troubleshooting.md)
-- Explore [strategy development](user-guide/strategies.md)
-- Visit the BTQuant community forums

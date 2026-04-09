@@ -1,612 +1,394 @@
-# BigBrainCentral Data Spine
-
-BigBrainCentral is BTQuant's institutional-grade market data infrastructure, providing a complete data pipeline from exchange APIs to strategy execution with microsecond precision and enterprise reliability.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Data Ingestion](#data-ingestion)
-- [Storage Layer](#storage-layer)
-- [Data Access](#data-access)
-- [Performance Characteristics](#performance-characteristics)
-- [Operational Considerations](#operational-considerations)
-- [Troubleshooting](#troubleshooting)
+# BigBrainCentral Technical Documentation
 
 ## Overview
 
-BigBrainCentral revolutionizes quantitative trading data management by implementing a true institutional data spine:
+BigBrainCentral is BTQuant's SQL Server-based market data storage system. It uses a custom C++ ODBC driver (`fast_mssql`) for high-performance database operations.
 
-### Key Differentiators
+**Key Features:**
+- Custom C++ ODBC driver (no Python DB layer overhead)
+- Connection pooling at C++ level
+- Bulk insert operations
+- Thread-safe operations
+- Per-market OHLCV table sharding
 
-- **Single Source of Truth**: All data flows through SQL Server with ACID guarantees
-- **Microstructure Data**: Trades, orderbooks, and candles with microsecond precision
-- **C++ Hot Path**: Ultra-low latency ingestion without Python GIL limitations
-- **Research/Live Parity**: Backtests use identical data to live trading
-- **Enterprise Scale**: Handles billions of records with optimized queries
+## Components
 
-### Architecture Overview
+### 1. MSSQLConfig (`bigbraincentral/storage_mssql.py`)
 
-```
-Exchange APIs → C++ Collectors → SQL Server → Python Adapters → Strategies/Analytics
-```
+Configuration dataclass for SQL Server connections:
 
-## Architecture
-
-### Component Breakdown
-
-#### 1. C++ Ingestion Layer
-
-**ExchangeConnectionManager**
-- Manages WebSocket connections to multiple exchanges
-- Correlation ID encoding: `exchange:symbol:market_type`
-- Thread pool management for concurrent data streams
-
-**MarketDataProcessor**
-- Parses ccapi events (trades, orderbooks)
-- Normalizes heterogeneous exchange payloads
-- Enriches data with timestamps and metadata
-- Decodes correlation IDs for proper classification
-
-**CandleAggregator**
-- Maintains per-symbol timeframe state
-- Supports arbitrary resolutions (1s, 15s, 1m, 5m, 1h, etc.)
-- Aligns timestamps to bucket boundaries
-- Flushes completed candles for bulk insertion
-
-**MSSQLBulkInserter**
-- ODBC connection management with prepared statements
-- Column-wise parameter binding for maximum throughput
-- Three insertion paths:
-  - `dbo.trades`: Raw trade data
-  - `dbo.orderbook_snapshots`: Bid/ask depth
-  - `{exchange}_{symbol}_klines`: Per-symbol OHLCV
-
-#### 2. SQL Server Storage
-
-**Schema Design**
-- **Trades Table**:
-  ```sql
-  CREATE TABLE dbo.trades (
-      id BIGINT IDENTITY PRIMARY KEY,
-      exchange VARCHAR(50) NOT NULL,
-      symbol VARCHAR(20) NOT NULL,
-      market_type VARCHAR(20) NOT NULL,
-      price DECIMAL(20, 8) NOT NULL,
-      size DECIMAL(20, 8) NOT NULL,
-      side TINYINT NOT NULL,  -- 0=BUY, 1=SELL
-      aggressor_flag BIT,
-      ts_exchange DATETIME2(6) NOT NULL,
-      ts_local DATETIME2(6) NOT NULL,
-      created_at DATETIME2(6) DEFAULT GETUTCDATE()
-  );
-  ```
-
-- **Orderbook Snapshots Table**:
-  ```sql
-  CREATE TABLE dbo.orderbook_snapshots (
-      id BIGINT IDENTITY PRIMARY KEY,
-      exchange VARCHAR(50) NOT NULL,
-      symbol VARCHAR(20) NOT NULL,
-      market_type VARCHAR(20) NOT NULL,
-      bids NVARCHAR(MAX),  -- JSON array of [price, size]
-      asks NVARCHAR(MAX),  -- JSON array of [price, size]
-      ts_exchange DATETIME2(6) NOT NULL,
-      ts_local DATETIME2(6) NOT NULL,
-      checksum BINARY(32),
-      created_at DATETIME2(6) DEFAULT GETUTCDATE()
-  );
-  ```
-
-- **OHLCV Tables** (per symbol):
-  ```sql
-  CREATE TABLE binance_btcusdt_klines (
-      id BIGINT IDENTITY PRIMARY KEY,
-      open_time DATETIME2(6) NOT NULL,
-      open DECIMAL(20, 8) NOT NULL,
-      high DECIMAL(20, 8) NOT NULL,
-      low DECIMAL(20, 8) NOT NULL,
-      close DECIMAL(20, 8) NOT NULL,
-      volume DECIMAL(20, 8) NOT NULL,
-      close_time DATETIME2(6) NOT NULL,
-      quote_volume DECIMAL(20, 8),
-      count BIGINT,
-      taker_buy_volume DECIMAL(20, 8),
-      taker_buy_quote_volume DECIMAL(20, 8),
-      created_at DATETIME2(6) DEFAULT GETUTCDATE()
-  );
-  ```
-
-#### 3. Python Access Layer
-
-**ReadOnlyOHLCV**
-- SELECT-only access for research
-- Supports global and per-pair table modes
-- Automatic query optimization
-
-**DatabaseOHLCVData**
-- Backtrader feed implementation
-- Polls for new data in live mode
-- Handles timestamp conversion
-
-**MarketDataStorage**
-- JackRabbitRelay integration
-- Bulk data operations
-- Health monitoring
-
-## Data Ingestion
-
-### Exchange Support
-
-BigBrainCentral supports major cryptocurrency exchanges:
-
-| Exchange | Status | Features |
-|----------|--------|----------|
-| Binance | ✅ Production | Spot, Futures, Options |
-| Bitget | ✅ Production | Spot, Futures |
-| MEXC | ✅ Production | Spot |
-| OKX | ✅ Production | Spot, Futures, Options |
-| Bybit | 🚧 Planned | Spot, Futures |
-| KuCoin | 🚧 Planned | Spot, Futures |
-| Gate.io | 🚧 Planned | Spot, Futures |
-
-### Data Types
-
-#### Trade Data
-- **Price**: DECIMAL(20, 8) for precision
-- **Size**: DECIMAL(20, 8) for full volume representation
-- **Side**: BUY/SELL classification
-- **Aggressor Flag**: Identifies market taker
-- **Timestamps**: Microsecond precision (DATETIME2(6))
-
-#### Orderbook Data
-- **Bids/Asks**: JSON arrays of [price, size] pairs
-- **Depth**: Configurable levels (default: top 20)
-- **Checksums**: Data integrity validation
-- **Update Frequency**: Real-time snapshots
-
-#### Candle Data
-- **Timeframes**: 1s to 1M+ intervals
-- **OHLCV**: Standard price/volume data
-- **Additional Fields**: Quote volume, trade count, taker metrics
-- **Alignment**: Exchange-specific bucket boundaries
-
-### Ingestion Pipeline
-
-#### 1. Connection Establishment
-```cpp
-// Correlation ID encoding
-std::string correlation_id = exchange + ":" + symbol + ":" + market_type;
-
-// WebSocket subscription
-session->subscribe({
-    {"exchange", exchange},
-    {"symbol", symbol},
-    {"market_type", market_type}
-});
+```python
+@dataclass
+class MSSQLConfig:
+    server: str = "localhost"
+    database: str = "BTQ_MarketData"
+    username: str = "SA"
+    password: str = ""
+    driver: str = "{ODBC Driver 18 for SQL Server}"
+    trust_server_certificate: bool = True
+    
+    def get_connection_string(self) -> str:
+        """Build ODBC connection string"""
 ```
 
-#### 2. Data Processing
-```cpp
-void MarketDataProcessor::processTrade(const ccapi::Event& event) {
-    // Parse ccapi event
-    auto trade = parseTradeEvent(event);
-
-    // Normalize data
-    HotTrade normalized_trade = normalizeTrade(trade);
-
-    // Enrich with metadata
-    normalized_trade.ts_local = getCurrentTimestamp();
-
-    // Queue for bulk insertion
-    trade_buffer.push_back(normalized_trade);
-}
+**Example Connection String:**
+```
+DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=BTQ_MarketData;UID=SA;PWD=YourPassword;TrustServerCertificate=yes;
 ```
 
-#### 3. Bulk Insertion
-```cpp
-void MSSQLBulkInserter::flushTrades() {
-    // Prepare statement
-    SQLPrepare(stmt, "INSERT INTO dbo.trades (...) VALUES (?, ?, ...)", SQL_NTS);
+### 2. MarketDataStorage Class
 
-    // Bind parameters column-wise
-    SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR,
-                    0, 0, (SQLPOINTER)exchange_buffer.data(), 0, nullptr);
+High-performance synchronous SQL Server storage.
 
-    // Execute bulk insert
-    SQLExecute(stmt);
-
-    // Commit transaction
-    SQLTransact(env, conn, SQL_COMMIT);
-}
+```python
+class MarketDataStorage:
+    def __init__(self, config: MSSQLConfig, logger: Optional[logging.Logger] = None):
+    
+    # Connection management
+    def connect(self) -> None:
+    def disconnect(self) -> None:
+    
+    # Store operations
+    def store_ohlcv(self, data: Dict[str, Any]) -> bool:
+    def store_trade(self, data: Dict[str, Any]) -> bool:
+    def store_orderbook(self, data: Dict[str, Any]) -> bool:
+    def bulk_store_ohlcv(self, data_list: List[Dict[str, Any]]) -> int:
+    
+    # Read operations
+    def get_ohlcv(self, exchange: str, symbol: str, timeframe: str,
+                  start: datetime, end: Optional[datetime] = None,
+                  limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_trades(self, exchange: str, symbol: str,
+                   start: datetime, end: Optional[datetime] = None,
+                   limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_latest_price(self, exchange: str, symbol: str) -> Optional[float]:
+    def get_stats(self) -> Dict[str, Any]:
 ```
 
-## Storage Layer
+### 3. Database Schema
 
-### Database Configuration
+#### Trades Table
 
-#### Optimal Settings
 ```sql
--- Enable advanced features
-EXEC sp_configure 'show advanced options', 1;
-RECONFIGURE;
-
--- Memory optimization
-EXEC sp_configure 'max server memory (MB)', 8192;  -- 8GB for 16GB system
-RECONFIGURE;
-
--- Query optimization
-EXEC sp_configure 'cost threshold for parallelism', 50;
-EXEC sp_configure 'max degree of parallelism', 4;
-RECONFIGURE;
-```
-
-#### Index Strategy
-```sql
--- Trades table indexes
-CREATE CLUSTERED INDEX IX_trades_ts_exchange
-ON dbo.trades (exchange, symbol, ts_exchange);
-
-CREATE NONCLUSTERED INDEX IX_trades_symbol_ts
-ON dbo.trades (symbol, ts_exchange) INCLUDE (price, size, side);
-
--- OHLCV table indexes
-CREATE CLUSTERED INDEX IX_klines_open_time
-ON binance_btcusdt_klines (open_time);
-
-CREATE NONCLUSTERED INDEX IX_klines_symbol_time
-ON binance_btcusdt_klines (symbol, open_time) INCLUDE (open, high, low, close, volume);
-```
-
-#### Partitioning Strategy
-```sql
--- Create partition function
-CREATE PARTITION FUNCTION pf_trades_monthly (DATETIME2(6))
-AS RANGE RIGHT FOR VALUES (
-    '2024-01-01', '2024-02-01', '2024-03-01', -- Monthly partitions
-    '2024-04-01', '2024-05-01', '2024-06-01'
+CREATE TABLE trades (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    timestamp DATETIME2 NOT NULL,
+    exchange VARCHAR(50) NOT NULL,
+    symbol VARCHAR(50) NOT NULL,
+    market_type VARCHAR(20) NOT NULL DEFAULT 'spot',
+    trade_id VARCHAR(100),
+    price DECIMAL(20, 8) NOT NULL,
+    quantity DECIMAL(30, 8) NOT NULL,
+    side VARCHAR(10) NOT NULL,
+    is_buyer_maker BIT,
+    created_at DATETIME2 DEFAULT GETDATE()
 );
 
--- Create partition scheme
-CREATE PARTITION SCHEME ps_trades_monthly
-AS PARTITION pf_trades_monthly
-TO (fg_2024_01, fg_2024_02, fg_2024_03,
-    fg_2024_04, fg_2024_05, fg_2024_06, fg_future);
-
--- Apply to table
-ALTER TABLE dbo.trades
-ADD CONSTRAINT PK_trades PRIMARY KEY NONCLUSTERED (id)
-ON ps_trades_monthly (ts_exchange);
+CREATE INDEX idx_trades_lookup 
+ON trades(exchange, symbol, market_type, timestamp DESC);
 ```
 
-### Data Retention
+#### Orderbook Snapshots Table
 
-#### Automated Cleanup
 ```sql
--- Create cleanup procedure
-CREATE PROCEDURE sp_cleanup_old_data
-    @retention_days INT = 365
-AS
-BEGIN
-    DECLARE @cutoff_date DATETIME2(6) = DATEADD(DAY, -@retention_days, GETUTCDATE());
+CREATE TABLE orderbook_snapshots (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    timestamp DATETIME2 NOT NULL,
+    exchange VARCHAR(50) NOT NULL,
+    symbol VARCHAR(50) NOT NULL,
+    market_type VARCHAR(20) NOT NULL DEFAULT 'spot',
+    bids NVARCHAR(MAX) NOT NULL,    -- JSON array
+    asks NVARCHAR(MAX) NOT NULL,    -- JSON array
+    checksum VARCHAR(64),
+    created_at DATETIME2 DEFAULT GETDATE()
+);
 
-    -- Delete old trades
-    DELETE FROM dbo.trades
-    WHERE ts_exchange < @cutoff_date;
-
-    -- Delete old orderbooks
-    DELETE FROM dbo.orderbook_snapshots
-    WHERE ts_exchange < @cutoff_date;
-
-    -- Log cleanup
-    INSERT INTO dbo.cleanup_log (table_name, records_deleted, cutoff_date)
-    VALUES ('trades', @@ROWCOUNT, @cutoff_date);
-END;
+CREATE INDEX idx_orderbook_lookup 
+ON orderbook_snapshots(exchange, symbol, market_type, timestamp DESC);
 ```
 
-#### Archival Strategy
+#### OHLCV Tables (Per-Market Sharding)
+
+Each exchange+symbol combination gets its own table:
+
 ```sql
--- Archive to separate database
-INSERT INTO archive_db.dbo.trades_archived
-SELECT * FROM dbo.trades
-WHERE ts_exchange < DATEADD(MONTH, -12, GETUTCDATE());
+-- Table name format: {exchange}_{symbol}_klines
+-- Example: binance_btcusdt_klines
 
--- Compress archived data
-ALTER INDEX ALL ON archive_db.dbo.trades_archived
-REBUILD WITH (DATA_COMPRESSION = PAGE);
+CREATE TABLE [binance_btcusdt_klines] (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    timestamp DATETIME2 NOT NULL,
+    exchange VARCHAR(50) NOT NULL,
+    symbol VARCHAR(50) NOT NULL,
+    market_type VARCHAR(20) NOT NULL DEFAULT 'spot',
+    timeframe VARCHAR(10) NOT NULL,
+    [open] DECIMAL(20, 8) NOT NULL,
+    high DECIMAL(20, 8) NOT NULL,
+    low DECIMAL(20, 8) NOT NULL,
+    [close] DECIMAL(20, 8) NOT NULL,
+    volume DECIMAL(30, 8) NOT NULL,
+    created_at DATETIME2 DEFAULT GETDATE(),
+    CONSTRAINT UQ_btcusdt_klines_ohlcv 
+        UNIQUE(timestamp, exchange, symbol, market_type, timeframe)
+);
+
+CREATE INDEX idx_binance_btcusdt_klines_lookup 
+ON [binance_btcusdt_klines](exchange, symbol, market_type, timeframe, timestamp DESC);
 ```
 
-## Data Access
+### 4. Data Formats
 
-### Python Integration
+#### OHLCV Data Input
 
-#### Backtrader Feeds
 ```python
-from backtrader.feeds import DatabaseOHLCVData
+ohlcv_data = {
+    "exchange": "binance",          # str - Exchange name
+    "symbol": "BTCUSDT",            # str - Symbol
+    "timestamp": 1704067200000,     # int - Milliseconds since epoch
+    "timeframe": "1m",              # str - Timeframe (1m, 5m, 1h, etc.)
+    "open": 42000.50,               # float - Open price
+    "high": 42100.75,               # float - High price
+    "low": 41950.25,                # float - Low price
+    "close": 42050.00,              # float - Close price
+    "volume": 123.456,              # float - Volume
+    "market_type": "spot"           # str (optional) - Market type
+}
 
-# Create feed
-data = DatabaseOHLCVData(
-    exchange='binance',
-    symbol='BTCUSDT',
-    timeframe='1h',
-    fromdate=datetime(2024, 1, 1),
-    todate=datetime(2024, 12, 31)
+storage.store_ohlcv(ohlcv_data)
+```
+
+#### Trade Data Input
+
+```python
+trade_data = {
+    "timestamp": 1704067200000,     # int - Milliseconds since epoch
+    "exchange": "binance",          # str - Exchange name
+    "symbol": "BTCUSDT",            # str - Symbol
+    "trade_id": "123456789",        # str - Trade ID
+    "price": 42000.50,              # float - Trade price
+    "quantity": 0.123,              # float - Trade quantity
+    "side": "buy",                  # str - "buy" or "sell"
+    "is_buyer_maker": True,         # bool - Is buyer the maker
+    "market_type": "spot"           # str (optional) - Market type
+}
+
+storage.store_trade(trade_data)
+```
+
+#### Orderbook Data Input
+
+```python
+orderbook_data = {
+    "timestamp": 1704067200000,     # int - Milliseconds since epoch
+    "exchange": "binance",          # str - Exchange name
+    "symbol": "BTCUSDT",            # str - Symbol
+    "bids": [                       # list - Bid levels [(price, size), ...]
+        [42000.00, 1.5],
+        [41999.00, 2.3],
+    ],
+    "asks": [                       # list - Ask levels [(price, size), ...]
+        [42001.00, 0.8],
+        [42002.00, 1.2],
+    ],
+    "checksum": "abc123",           # str (optional) - Orderbook checksum
+    "market_type": "spot"           # str (optional) - Market type
+}
+
+storage.store_orderbook(orderbook_data)
+```
+
+### 5. ReadOnlyOHLCV Class (`feeds/db_ohlcv_mssql.py`)
+
+Read-only OHLCV data access for backtesting and live feeds:
+
+```python
+@dataclass
+class MSSQLFeedConfig:
+    server: str = "localhost"
+    database: str = "BTQ_MarketData"
+    username: str = "SA"
+    password: str = ""
+    driver: str = "{ODBC Driver 18 for SQL Server}"
+    trust_server_certificate: bool = True
+    
+    def connection_string(self) -> str:
+
+class ReadOnlyOHLCV:
+    def __init__(self,
+                 config: MSSQLFeedConfig,
+                 mode: str = "global",          # "global" or "per_pair"
+                 global_table: str = "ohlcv",
+                 schema: str = "dbo",
+                 table_pattern: str = "{symbol}_klines"):
+    
+    def get_ohlcv(self,
+                  exchange: str,
+                  symbol: str,
+                  timeframe: str,
+                  start: datetime,
+                  end: Optional[datetime] = None,
+                  limit: Optional[int] = None,
+                  strict_gt: bool = False) -> List[dict]:
+```
+
+**Modes:**
+- `"global"`: Single table with exchange/symbol columns
+- `"per_pair"`: Separate table per exchange+symbol
+
+### 6. ReadOnlyTradesAgg Class
+
+Extends ReadOnlyOHLCV with tick-level trade access:
+
+```python
+class ReadOnlyTradesAgg(ReadOnlyOHLCV):
+    def get_ticks_by_id(self, 
+                        exchange: str, 
+                        symbol: str, 
+                        last_id: int, 
+                        limit: int = 1000) -> list[dict]:
+```
+
+**Output Format:**
+```python
+[
+    {
+        "id": 12345,                    # int - Trade ID (monotonic)
+        "timestamp": datetime,          # datetime - Trade timestamp
+        "open": 42000.50,              # float - Trade price (same as close)
+        "high": 42000.50,              # float - Trade price
+        "low": 42000.50,               # float - Trade price
+        "close": 42000.50,             # float - Trade price
+        "volume": 0.123                # float - Trade quantity
+    },
+    ...
+]
+```
+
+**Note:** Tick data uses OHLCV format where O=H=L=C=price and V=quantity for compatibility with Backtrader.
+
+### 7. DatabaseOHLCVData Feed
+
+Backtrader-compatible data feed reading from SQL Server:
+
+```python
+class DatabaseOHLCVData(DataBase):
+    params = (
+        ("db_config", None),            # MSSQLFeedConfig
+        ("exchange", None),             # "binance", "okx", etc.
+        ("symbol", None),               # "BTC-USDT", etc.
+        ("timeframe", TimeFrame.Seconds),
+        ("compression", 1),
+        ("fromdate", None),             # datetime
+        ("todate", None),               # datetime (optional)
+        ("live", True),                 # Enable live polling
+        ("poll_interval", 0.10),        # Base poll interval
+        ("mode", "global"),             # "global" or "per_pair"
+        ("global_table", "ohlcv"),
+        ("schema", "dbo"),
+        ("table_pattern", "{symbol}_klines"),
+        ("source", "auto"),             # "auto", "klines", "trades"
+        ("ticks", True),                # Raw per-trade mode
+        ("tick_batch_limit", 1000),     # Batch size per poll
+        ("min_poll", 0.05),             # Fastest poll interval
+        ("max_poll", 0.50),             # Slowest poll interval
+        ("debug", False),
+    )
+```
+
+**Convenience Subclasses:**
+```python
+class BinanceDBData(DatabaseOHLCVData):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("exchange", "binance")
+
+class OkxDBData(DatabaseOHLCVData):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("exchange", "okx")
+```
+
+## Usage Examples
+
+### Basic Storage Setup
+
+```python
+from backtrader.bigbraincentral.storage_mssql import MarketDataStorage, MSSQLConfig
+
+config = MSSQLConfig(
+    server="localhost",
+    database="BTQ_MarketData",
+    username="SA",
+    password="YourStrong!Passw0rd"
 )
 
-# Add to cerebro
+storage = MarketDataStorage(config)
+storage.connect()
+
+# Store OHLCV
+storage.store_ohlcv({
+    "exchange": "binance",
+    "symbol": "BTCUSDT",
+    "timestamp": 1704067200000,
+    "timeframe": "1m",
+    "open": 42000.0,
+    "high": 42100.0,
+    "low": 41900.0,
+    "close": 42050.0,
+    "volume": 100.0
+})
+
+# Query OHLCV
+data = storage.get_ohlcv(
+    exchange="binance",
+    symbol="BTCUSDT",
+    timeframe="1m",
+    start=datetime(2024, 1, 1),
+    end=datetime(2024, 1, 2)
+)
+
+storage.disconnect()
+```
+
+### Live Feed from Database
+
+```python
+import backtrader as bt
+from backtrader.feeds.db_ohlcv_mssql import BinanceDBData, MSSQLFeedConfig
+from datetime import datetime
+
+config = MSSQLFeedConfig(
+    server="localhost",
+    database="BTQ_MarketData",
+    username="SA",
+    password="YourPassword"
+)
+
+cerebro = bt.Cerebro()
+
+data = BinanceDBData(
+    db_config=config,
+    symbol="BTC-USDT",
+    timeframe=bt.TimeFrame.Minutes,
+    compression=1,
+    fromdate=datetime(2024, 1, 1),
+    live=True,
+    ticks=True
+)
+
 cerebro.adddata(data)
+cerebro.addstrategy(MyStrategy)
+cerebro.run()
 ```
 
-#### Direct SQL Access
+### Bulk OHLCV Storage
+
 ```python
-import pyodbc
+ohlcv_list = [
+    {"exchange": "binance", "symbol": "BTCUSDT", "timestamp": 1704067200000,
+     "timeframe": "1m", "open": 42000.0, "high": 42100.0, 
+     "low": 41900.0, "close": 42050.0, "volume": 100.0},
+    # ... more rows
+]
 
-# Connection
-conn = pyodbc.connect(connection_string)
-
-# Query trades
-cursor = conn.cursor()
-cursor.execute("""
-    SELECT ts_exchange, price, size, side
-    FROM dbo.trades
-    WHERE exchange = ? AND symbol = ?
-    AND ts_exchange BETWEEN ? AND ?
-    ORDER BY ts_exchange
-""", ('binance', 'BTCUSDT', start_date, end_date))
-
-trades = cursor.fetchall()
+count = storage.bulk_store_ohlcv(ohlcv_list)
+print(f"Stored {count} rows")
 ```
-
-#### Analytics Integration
-```python
-import pandas as pd
-
-# Load data for analysis
-query = """
-SELECT
-    DATEPART(HOUR, ts_exchange) as hour,
-    AVG(price) as avg_price,
-    SUM(size) as total_volume,
-    COUNT(*) as trade_count
-FROM dbo.trades
-WHERE exchange = 'binance' AND symbol = 'BTCUSDT'
-AND ts_exchange >= DATEADD(DAY, -30, GETUTCDATE())
-GROUP BY DATEPART(HOUR, ts_exchange)
-ORDER BY hour
-"""
-
-df = pd.read_sql(query, conn)
-```
-
-### Research Applications
-
-#### Microstructure Analysis
-```python
-# Order flow analysis
-query = """
-SELECT
-    ts_exchange,
-    price,
-    size,
-    side,
-    SUM(CASE WHEN side = 0 THEN size ELSE -size END) OVER
-        (ORDER BY ts_exchange ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as order_imbalance
-FROM dbo.trades
-WHERE exchange = 'binance' AND symbol = 'BTCUSDT'
-ORDER BY ts_exchange
-"""
-
-order_flow = pd.read_sql(query, conn)
-```
-
-#### Liquidity Analysis
-```python
-# Orderbook depth analysis
-query = """
-SELECT
-    ts_exchange,
-    JSON_VALUE(bids, '$[0][0]') as best_bid,
-    JSON_VALUE(asks, '$[0][0]') as best_ask,
-    CAST(JSON_VALUE(bids, '$[0][1]') AS FLOAT) as bid_size,
-    CAST(JSON_VALUE(asks, '$[0][1]') AS FLOAT) as ask_size
-FROM dbo.orderbook_snapshots
-WHERE exchange = 'binance' AND symbol = 'BTCUSDT'
-ORDER BY ts_exchange DESC
-"""
-
-liquidity = pd.read_sql(query, conn)
-```
-
-## Performance Characteristics
-
-### Ingestion Performance
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Trades/Second** | 270,000 | Peak observed |
-| **Orderbooks/Second** | 800 | Limited by exchange APIs |
-| **Latency** | <130ms | End-to-end from exchange to SQL |
-| **CPU Usage** | <5% | C++ optimized |
-| **Memory Usage** | 100MB | Buffer management |
-
-### Query Performance
-
-| Query Type | Latency | Throughput |
-|------------|---------|------------|
-| **Single Symbol Trades** | 50ms | 20K queries/sec |
-| **Time Range Scan** | 200ms | 5K queries/sec |
-| **OHLCV Aggregation** | 100ms | 10K queries/sec |
-| **Orderbook Lookup** | 25ms | 40K queries/sec |
-
-### Storage Efficiency
-
-| Data Type | Size/Record | Daily Volume | Monthly Storage |
-|-----------|-------------|--------------|-----------------|
-| **Trades** | 80 bytes | 10M | 2.4GB |
-| **Orderbooks** | 2KB | 100K | 20GB |
-| **1m Candles** | 120 bytes | 1440 | 170KB |
-| **1h Candles** | 120 bytes | 24 | 3KB |
-
-## Operational Considerations
-
-### Monitoring
-
-#### Key Metrics
-```sql
--- Ingestion health check
-SELECT
-    exchange,
-    symbol,
-    COUNT(*) as trades_last_hour,
-    MAX(ts_exchange) as latest_trade,
-    DATEDIFF(MINUTE, MAX(ts_exchange), GETUTCDATE()) as minutes_behind
-FROM dbo.trades
-WHERE ts_exchange >= DATEADD(HOUR, -1, GETUTCDATE())
-GROUP BY exchange, symbol;
-```
-
-#### Alert Conditions
-- Ingestion lag > 5 minutes
-- Error rate > 1%
-- Buffer utilization > 90%
-- Query latency > 1 second
-
-### Backup and Recovery
-
-#### Backup Strategy
-```sql
--- Full backup weekly
-BACKUP DATABASE BigBrainCentral
-TO DISK = 'D:\backups\bb_weekly.bak'
-WITH COMPRESSION, CHECKSUM;
-
--- Differential daily
-BACKUP DATABASE BigBrainCentral
-TO DISK = 'D:\backups\bb_daily.diff'
-WITH DIFFERENTIAL, COMPRESSION;
-
--- Transaction log hourly
-BACKUP LOG BigBrainCentral
-TO DISK = 'D:\backups\bb_log.trn'
-WITH COMPRESSION;
-```
-
-#### Point-in-Time Recovery
-```sql
--- Restore sequence
-RESTORE DATABASE BigBrainCentral
-FROM DISK = 'D:\backups\bb_weekly.bak'
-WITH NORECOVERY;
-
-RESTORE DATABASE BigBrainCentral
-FROM DISK = 'D:\backups\bb_daily.diff'
-WITH NORECOVERY;
-
-RESTORE LOG BigBrainCentral
-FROM DISK = 'D:\backups\bb_log.trn'
-WITH RECOVERY;
-```
-
-### Scaling
-
-#### Vertical Scaling
-- Increase SQL Server memory allocation
-- Add more CPU cores
-- Use faster storage (NVMe SSDs)
-- Optimize tempdb configuration
-
-#### Horizontal Scaling
-- Read replicas for analytics
-- Sharded databases by exchange
-- Distributed ingestion workers
-- Load-balanced query routing
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. Ingestion Lag
-**Symptoms**: Data appears delayed in queries
-**Causes**:
-- Network connectivity issues
-- Exchange API rate limits
-- SQL Server performance problems
-
-**Solutions**:
-```sql
--- Check ingestion status
-SELECT
-    exchange,
-    symbol,
-    MAX(ts_exchange) as latest_data,
-    DATEDIFF(SECOND, MAX(ts_exchange), GETUTCDATE()) as lag_seconds
-FROM dbo.trades
-GROUP BY exchange, symbol;
-```
-
-#### 2. Connection Failures
-**Symptoms**: ODBC connection errors
-**Causes**:
-- SQL Server service down
-- Network firewall issues
-- Authentication problems
-
-**Solutions**:
-```bash
-# Test ODBC connection
-isql -v "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=master;UID=sa;PWD=YourPassword;TrustServerCertificate=yes"
-```
-
-#### 3. Performance Degradation
-**Symptoms**: Queries slow down over time
-**Causes**:
-- Index fragmentation
-- Statistics out of date
-- Tempdb full
-
-**Solutions**:
-```sql
--- Rebuild indexes
-ALTER INDEX ALL ON dbo.trades REBUILD;
-
--- Update statistics
-UPDATE STATISTICS dbo.trades;
-
--- Check tempdb usage
-SELECT
-    name,
-    size_mb = size * 8.0 / 1024,
-    used_mb = (size - available) * 8.0 / 1024
-FROM (
-    SELECT
-        name,
-        size = SUM(size),
-        available = SUM(available)
-    FROM tempdb.sys.database_files
-    GROUP BY name
-) t;
-```
-
-#### 4. Data Quality Issues
-**Symptoms**: Missing or incorrect data
-**Causes**:
-- Exchange API changes
-- Parsing errors
-- Data corruption
-
-**Solutions**:
-```sql
--- Data validation queries
-SELECT
-    exchange,
-    symbol,
-    COUNT(*) as total_trades,
-    COUNT(CASE WHEN price <= 0 THEN 1 END) as invalid_prices,
-    COUNT(CASE WHEN size <= 0 THEN 1 END) as invalid_sizes,
-    MIN(ts_exchange) as earliest_trade,
-    MAX(ts_exchange) as latest_trade
-FROM dbo.trades
-GROUP BY exchange, symbol;
-```
-
-BigBrainCentral represents the state-of-the-art in quantitative trading data infrastructure, providing institutional-grade data management with the transparency and performance required for serious algorithmic trading.

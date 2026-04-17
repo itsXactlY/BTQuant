@@ -16,7 +16,7 @@ namespace UI {
 UnifiedThemeManager::UnifiedThemeManager() {
   initialize_themes_directory();
   load_builtin_themes();
-  current_theme_name_ = "Dark Professional";
+  current_theme_name_ = "Deep Void";
 }
 
 UnifiedThemeManager::~UnifiedThemeManager() {
@@ -370,90 +370,90 @@ void UnifiedThemeManager::load_builtin_themes() {
 
   themes_[high_contrast.name] = high_contrast;
 
-  // Deep Void Theme
+  // Deep Void Theme - MMT Deep Void Palette
   ThemeDefinition deep_void;
   deep_void.name = "Deep Void";
-  deep_void.description = "Deep space inspired dark theme with cosmic accents";
+  deep_void.description = "MMT Deep Void - dark, clean, professional Quantower-style";
   deep_void.is_dark_theme = true;
 
-  // Set colors - deep space inspired
-  deep_void.colors.background_primary[0] = 0.05f;  // R - Very dark space black
-  deep_void.colors.background_primary[1] = 0.05f;  // G
-  deep_void.colors.background_primary[2] = 0.1f;   // B - With a hint of deep blue
-  deep_void.colors.background_primary[3] = 1.0f;   // A
+  // MMT Deep Void colors
+  deep_void.colors.background_primary[0] = 0.043f;   // #0B0E11
+  deep_void.colors.background_primary[1] = 0.055f;
+  deep_void.colors.background_primary[2] = 0.067f;
+  deep_void.colors.background_primary[3] = 1.0f;
 
-  deep_void.colors.background_secondary[0] = 0.08f;
-  deep_void.colors.background_secondary[1] = 0.08f;
-  deep_void.colors.background_secondary[2] = 0.15f;
+  deep_void.colors.background_secondary[0] = 0.06f;
+  deep_void.colors.background_secondary[1] = 0.07f;
+  deep_void.colors.background_secondary[2] = 0.09f;
   deep_void.colors.background_secondary[3] = 1.0f;
 
-  deep_void.colors.background_panel[0] = 0.07f;
-  deep_void.colors.background_panel[1] = 0.07f;
-  deep_void.colors.background_panel[2] = 0.12f;
+  deep_void.colors.background_panel[0] = 0.082f;      // #15191E
+  deep_void.colors.background_panel[1] = 0.098f;
+  deep_void.colors.background_panel[2] = 0.118f;
   deep_void.colors.background_panel[3] = 1.0f;
 
-  deep_void.colors.text_primary[0] = 0.95f;    // R - Bright white for primary text
-  deep_void.colors.text_primary[1] = 0.95f;    // G
-  deep_void.colors.text_primary[2] = 0.98f;    // B - Slightly blue-white
-  deep_void.colors.text_primary[3] = 1.0f;     // A
+  deep_void.colors.text_primary[0] = 0.82f;            // #D1D7DE
+  deep_void.colors.text_primary[1] = 0.84f;
+  deep_void.colors.text_primary[2] = 0.86f;
+  deep_void.colors.text_primary[3] = 1.0f;
 
-  deep_void.colors.text_secondary[0] = 0.75f;
-  deep_void.colors.text_secondary[1] = 0.78f;
-  deep_void.colors.text_secondary[2] = 0.85f;
+  deep_void.colors.text_secondary[0] = 0.60f;
+  deep_void.colors.text_secondary[1] = 0.62f;
+  deep_void.colors.text_secondary[2] = 0.65f;
   deep_void.colors.text_secondary[3] = 1.0f;
 
-  deep_void.colors.text_muted[0] = 0.45f;
-  deep_void.colors.text_muted[1] = 0.5f;
-  deep_void.colors.text_muted[2] = 0.6f;
+  deep_void.colors.text_muted[0] = 0.40f;
+  deep_void.colors.text_muted[1] = 0.42f;
+  deep_void.colors.text_muted[2] = 0.45f;
   deep_void.colors.text_muted[3] = 1.0f;
 
-  // Cosmic green for positive prices
-  deep_void.colors.price_up[0] = 0.2f;
+  // Neon Mint - Buy/Candle up
+  deep_void.colors.price_up[0] = 0.0f;                 // #00E566
   deep_void.colors.price_up[1] = 0.9f;
-  deep_void.colors.price_up[2] = 0.7f;
+  deep_void.colors.price_up[2] = 0.4f;
   deep_void.colors.price_up[3] = 1.0f;
 
-  // Nebula red for negative prices
-  deep_void.colors.price_down[0] = 0.9f;
-  deep_void.colors.price_down[1] = 0.3f;
-  deep_void.colors.price_down[2] = 0.5f;
+  // Crimson - Sell/Candle down
+  deep_void.colors.price_down[0] = 0.9f;               // #E61926
+  deep_void.colors.price_down[1] = 0.1f;
+  deep_void.colors.price_down[2] = 0.15f;
   deep_void.colors.price_down[3] = 1.0f;
 
-  deep_void.colors.price_neutral[0] = 0.6f;
-  deep_void.colors.price_neutral[1] = 0.65f;
-  deep_void.colors.price_neutral[2] = 0.75f;
+  deep_void.colors.price_neutral[0] = 0.50f;
+  deep_void.colors.price_neutral[1] = 0.52f;
+  deep_void.colors.price_neutral[2] = 0.55f;
   deep_void.colors.price_neutral[3] = 1.0f;
 
-  // Cosmic blue accent
-  deep_void.colors.accent_primary[0] = 0.3f;
-  deep_void.colors.accent_primary[1] = 0.6f;
-  deep_void.colors.accent_primary[2] = 1.0f;
+  // Accent = Neon Mint
+  deep_void.colors.accent_primary[0] = 0.0f;           // #00E566
+  deep_void.colors.accent_primary[1] = 0.9f;
+  deep_void.colors.accent_primary[2] = 0.4f;
   deep_void.colors.accent_primary[3] = 1.0f;
 
-  // Nebula orange accent
-  deep_void.colors.accent_secondary[0] = 1.0f;
-  deep_void.colors.accent_secondary[1] = 0.5f;
-  deep_void.colors.accent_secondary[2] = 0.2f;
+  // Accent secondary = Crimson
+  deep_void.colors.accent_secondary[0] = 0.9f;         // #E61926
+  deep_void.colors.accent_secondary[1] = 0.1f;
+  deep_void.colors.accent_secondary[2] = 0.15f;
   deep_void.colors.accent_secondary[3] = 1.0f;
 
-  deep_void.colors.border_color[0] = 0.25f;
-  deep_void.colors.border_color[1] = 0.3f;
-  deep_void.colors.border_color[2] = 0.4f;
+  deep_void.colors.border_color[0] = 0.165f;           // #2A2E33
+  deep_void.colors.border_color[1] = 0.180f;
+  deep_void.colors.border_color[2] = 0.196f;
   deep_void.colors.border_color[3] = 1.0f;
 
-  deep_void.colors.status_connected[0] = 0.3f;
+  deep_void.colors.status_connected[0] = 0.0f;
   deep_void.colors.status_connected[1] = 0.9f;
-  deep_void.colors.status_connected[2] = 0.6f;
+  deep_void.colors.status_connected[2] = 0.4f;
   deep_void.colors.status_connected[3] = 1.0f;
 
   deep_void.colors.status_disconnected[0] = 0.9f;
-  deep_void.colors.status_disconnected[1] = 0.4f;
-  deep_void.colors.status_disconnected[2] = 0.4f;
+  deep_void.colors.status_disconnected[1] = 0.1f;
+  deep_void.colors.status_disconnected[2] = 0.15f;
   deep_void.colors.status_disconnected[3] = 1.0f;
 
-  deep_void.colors.status_warning[0] = 1.0f;
+  deep_void.colors.status_warning[0] = 0.9f;
   deep_void.colors.status_warning[1] = 0.7f;
-  deep_void.colors.status_warning[2] = 0.2f;
+  deep_void.colors.status_warning[2] = 0.1f;
   deep_void.colors.status_warning[3] = 1.0f;
 
   // Typography
@@ -462,25 +462,25 @@ void UnifiedThemeManager::load_builtin_themes() {
   deep_void.font_size_small = 12.0f;
   deep_void.font_size_large = 18.0f;
 
-  // Spacing
-  deep_void.padding_small = 4.0f;
-  deep_void.padding_medium = 8.0f;
-  deep_void.padding_large = 16.0f;
+  // Spacing - compact
+  deep_void.padding_small = 2.0f;
+  deep_void.padding_medium = 4.0f;
+  deep_void.padding_large = 8.0f;
 
-  // Border radius
-  deep_void.border_radius_small = 2.0f;
-  deep_void.border_radius_medium = 4.0f;
-  deep_void.border_radius_large = 8.0f;
+  // Border radius - zero for clean look
+  deep_void.border_radius_small = 0.0f;
+  deep_void.border_radius_medium = 0.0f;
+  deep_void.border_radius_large = 0.0f;
 
   // Shadow properties
   deep_void.shadow_normal.offset_x = 0.0f;
-  deep_void.shadow_normal.offset_y = 2.0f;
-  deep_void.shadow_normal.blur_radius = 4.0f;
+  deep_void.shadow_normal.offset_y = 0.0f;
+  deep_void.shadow_normal.blur_radius = 0.0f;
   deep_void.shadow_normal.spread = 0.0f;
   deep_void.shadow_normal.color[0] = 0.0f;
   deep_void.shadow_normal.color[1] = 0.0f;
   deep_void.shadow_normal.color[2] = 0.0f;
-  deep_void.shadow_normal.color[3] = 0.3f;
+  deep_void.shadow_normal.color[3] = 0.0f;
 
   deep_void.is_builtin = true;
 
@@ -564,8 +564,8 @@ void UnifiedThemeManager::apply_to_imgui() const {
       ImVec4(theme.colors.background_primary[0], theme.colors.background_primary[1],
              theme.colors.background_primary[2], theme.colors.background_primary[3]);
   style.Colors[ImGuiCol_TitleBgActive] =
-      ImVec4(theme.colors.accent_primary[0], theme.colors.accent_primary[1],
-             theme.colors.accent_primary[2], theme.colors.accent_primary[3]);
+      ImVec4(theme.colors.background_panel[0], theme.colors.background_panel[1],
+             theme.colors.background_panel[2], theme.colors.background_panel[3]);
   style.Colors[ImGuiCol_MenuBarBg] =
       ImVec4(theme.colors.background_secondary[0], theme.colors.background_secondary[1],
              theme.colors.background_secondary[2], theme.colors.background_secondary[3]);

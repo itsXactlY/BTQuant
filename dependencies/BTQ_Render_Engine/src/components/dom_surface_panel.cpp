@@ -563,16 +563,33 @@ void DomSurfacePanel::render() {
   }
 
   // DOM Surface controls
+  ImGui::Checkbox("DOM Ladder", &show_dom_ladder_);
+  ImGui::SameLine();
+  ImGui::Checkbox("Show Heatmap BG", &show_heatmap_overlay_);
+  ImGui::SameLine();
+  ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
+  if (show_dom_ladder_) {
+    ImGui::SameLine();
+    ImGui::PushItemWidth(120);
+    ImGui::SliderInt("Rows", &ladder_visible_rows_, 5, 60);
+    ImGui::PopItemWidth();
+  }
+  ImGui::SameLine();
+  ImGui::Text(" | Symbol: %u | Orders: %zu | Trades: %zu", current_symbol_id_,
+              large_order_markers_.size(), trade_bubbles_.size());
+
+  // If ladder mode, render the 5-column DOM ladder and return
+  if (show_dom_ladder_) {
+    renderDOMLadder();
+    end_panel_window();
+    return;
+  }
+
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
-  ImGui::SameLine();
-  ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
-  ImGui::SameLine();
-  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
-              large_order_markers_.size(), trade_bubbles_.size());
 
-  // Enable Pan/Zoom for DOM Surface
+  // Enable Pan/Zoom for DOM Surface (heatmap mode)
   std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxes("Time", "Price");
@@ -632,6 +649,360 @@ void DomSurfacePanel::render() {
   }
 
   end_panel_window();
+}
+
+// ============================================================
+// DOM Ladder — 5-Column Price Ladder
+// ============================================================
+void DomSurfacePanel::renderDOMLadder() {
+  if (!processor_ || current_symbol_id_ == 0) return;
+
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt || (orderbook_opt->bids.empty() && orderbook_opt->asks.empty())) {
+    ImGui::Text("No orderbook data available");
+    return;
+  }
+
+  const auto& book = *orderbook_opt;
+
+  // Determine the tick size (minimum price increment) from the data
+  double tick_size = 0.01;  // default fallback
+  if (book.bids.size() >= 2) {
+    tick_size = std::abs(book.bids[0].price - book.bids[1].price);
+  } else if (book.asks.size() >= 2) {
+    tick_size = std::abs(book.asks[0].price - book.asks[1].price);
+  }
+  if (tick_size <= 0.0) tick_size = 0.01;
+
+  // Best bid / best ask / mid price
+  double best_bid = book.bids.empty() ? 0.0 : book.bids.front().price;
+  double best_ask = book.asks.empty() ? 0.0 : book.asks.front().price;
+  double mid_price = (best_bid > 0.0 && best_ask > 0.0) ? (best_bid + best_ask) / 2.0
+                     : best_bid > 0.0 ? best_bid
+                     : best_ask;
+
+  // Build lookup maps for size at each price
+  std::map<int64_t, double> bid_map;  // tick_index -> size
+  std::map<int64_t, double> ask_map;
+  double max_bid_size = 0.0;
+  double max_ask_size = 0.0;
+  double total_bid_vol = 0.0;
+  double total_ask_vol = 0.0;
+  double all_sizes_sum = 0.0;
+  int all_sizes_count = 0;
+
+  for (const auto& lv : book.bids) {
+    int64_t idx = static_cast<int64_t>(std::round(lv.price / tick_size));
+    bid_map[idx] += lv.size;
+    max_bid_size = std::max(max_bid_size, bid_map[idx]);
+    total_bid_vol += lv.size;
+    all_sizes_sum += lv.size;
+    all_sizes_count++;
+  }
+  for (const auto& lv : book.asks) {
+    int64_t idx = static_cast<int64_t>(std::round(lv.price / tick_size));
+    ask_map[idx] += lv.size;
+    max_ask_size = std::max(max_ask_size, ask_map[idx]);
+    total_ask_vol += lv.size;
+    all_sizes_sum += lv.size;
+    all_sizes_count++;
+  }
+
+  double max_size = std::max(max_bid_size, max_ask_size);
+  if (max_size <= 0.0) max_size = 1.0;
+
+  double avg_size = (all_sizes_count > 0) ? (all_sizes_sum / all_sizes_count) : 1.0;
+  double large_order_threshold = avg_size * 2.0;
+
+  // Compute cumulative volumes for the cumulative columns
+  // Asks: cumulative from top (best ask) downward (ascending price)
+  // Bids: cumulative from top (best bid) downward (descending price)
+  // We pre-compute for all tick indices we'll display.
+
+  int64_t center_tick = static_cast<int64_t>(std::round(mid_price / tick_size));
+  int half_rows = ladder_visible_rows_;
+
+  // Pre-compute sorted tick indices for asks and bids
+  // Asks go from center_tick+1 upward in price (ascending)
+  // Bids go from center_tick downward in price (descending)
+
+  // Cumulative ask volume: accumulate from highest displayed ask down to lowest ask
+  std::map<int64_t, double> cum_ask_vol;
+  double running = 0.0;
+  for (int i = half_rows; i >= 0; --i) {
+    int64_t tick_idx = center_tick + 1 + i;
+    double sz = 0.0;
+    auto it = ask_map.find(tick_idx);
+    if (it != ask_map.end()) sz = it->second;
+    running += sz;
+    cum_ask_vol[tick_idx] = running;
+  }
+
+  // Cumulative bid volume: accumulate from lowest displayed bid up to best bid
+  std::map<int64_t, double> cum_bid_vol;
+  running = 0.0;
+  for (int i = half_rows; i >= 0; --i) {
+    int64_t tick_idx = center_tick - 1 - i;
+    double sz = 0.0;
+    auto it = bid_map.find(tick_idx);
+    if (it != bid_map.end()) sz = it->second;
+    running += sz;
+    cum_bid_vol[tick_idx] = running;
+  }
+
+  // Colors
+  const ImU32 col_bid_bar     = IM_COL32(0, 230, 102, 120);    // Neon Mint
+  const ImU32 col_ask_bar     = IM_COL32(230, 25, 38, 120);    // Crimson
+  const ImU32 col_spread_bg   = IM_COL32(60, 50, 20, 80);      // Amber tint
+  const ImU32 col_large_order = IM_COL32(255, 200, 0, 40);      // Gold highlight
+  const ImU32 col_price_text  = IM_COL32(200, 210, 220, 255);   // Light grey
+  const ImU32 col_grid        = IM_COL32(30, 35, 40, 100);      // Grid lines
+  const ImU32 col_bid_text    = IM_COL32(0, 230, 102, 255);
+  const ImU32 col_ask_text    = IM_COL32(230, 25, 38, 255);
+  const ImU32 col_cum_text    = IM_COL32(150, 160, 170, 200);
+  const ImU32 col_spread_text = IM_COL32(255, 200, 80, 255);
+
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImVec2 cursor_start = ImGui::GetCursorScreenPos();
+  float panel_width = ImGui::GetContentRegionAvail().x;
+  float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+  // Column widths: SellVol | AskSize | Price | BidSize | BuyVol
+  float col_price_w = panel_width * 0.22f;
+  float col_size_w  = panel_width * 0.20f;
+  float col_vol_w   = panel_width * 0.19f;
+
+  float col_x[5];
+  col_x[0] = cursor_start.x;                                    // Sell Vol (cumulative asks)
+  col_x[1] = col_x[0] + col_vol_w;                              // Ask Size
+  col_x[2] = col_x[1] + col_size_w;                             // Price (center)
+  col_x[3] = col_x[2] + col_price_w;                            // Bid Size
+  col_x[4] = col_x[3] + col_size_w;                             // Buy Vol (cumulative bids)
+
+  // Header row
+  float y = cursor_start.y;
+  auto draw_centered_text = [&](float x_left, float width, const char* text, ImU32 color) {
+    float tw = ImGui::CalcTextSize(text).x;
+    dl->AddText(ImVec2(x_left + (width - tw) * 0.5f, y), color, text);
+  };
+
+  draw_centered_text(col_x[0], col_vol_w,   "Sell Vol",  col_ask_text);
+  draw_centered_text(col_x[1], col_size_w,  "Ask",       col_ask_text);
+  draw_centered_text(col_x[2], col_price_w, "Price",     col_price_text);
+  draw_centered_text(col_x[3], col_size_w,  "Bid",       col_bid_text);
+  draw_centered_text(col_x[4], col_vol_w,   "Buy Vol",   col_bid_text);
+  y += row_height;
+
+  // Grid line below header
+  dl->AddLine(ImVec2(cursor_start.x, y), ImVec2(cursor_start.x + panel_width, y), col_grid, 1.0f);
+
+  // Build all rows: from top (highest ask) to bottom (lowest bid)
+  // Row order: asks descending from (center + half_rows) down to (center + 1),
+  //            spread row at center,
+  //            bids descending from center down to (center - half_rows)
+
+  struct LadderRow {
+    int64_t tick_idx;
+    bool is_ask;
+    bool is_spread;
+    double size;
+    double cum_vol;
+  };
+
+  std::vector<LadderRow> rows;
+  // Asks: from highest to lowest (display top to bottom = high to low)
+  for (int i = half_rows; i >= 1; --i) {
+    int64_t ti = center_tick + i;
+    double sz = 0.0;
+    auto it = ask_map.find(ti);
+    if (it != ask_map.end()) sz = it->second;
+    double cv = 0.0;
+    auto cit = cum_ask_vol.find(ti);
+    if (cit != cum_ask_vol.end()) cv = cit->second;
+    rows.push_back({ti, true, false, sz, cv});
+  }
+
+  // Spread row
+  rows.push_back({center_tick, false, true, 0.0, 0.0});
+
+  // Bids: from highest to lowest
+  for (int i = 0; i < half_rows; ++i) {
+    int64_t ti = center_tick - i;
+    double sz = 0.0;
+    auto it = bid_map.find(ti);
+    if (it != bid_map.end()) sz = it->second;
+    double cv = 0.0;
+    auto cit = cum_bid_vol.find(ti);
+    if (cit != cum_bid_vol.end()) cv = cit->second;
+    rows.push_back({ti, false, false, sz, cv});
+  }
+
+  // Reserve space for the ladder
+  float total_height = static_cast<float>(rows.size()) * row_height + row_height;  // +1 for header
+  ImGui::Dummy(ImVec2(panel_width, total_height));
+
+  // Draw each row
+  for (const auto& row : rows) {
+    double price = row.tick_idx * tick_size;
+    bool is_large = row.size > large_order_threshold;
+
+    // Background for spread row
+    if (row.is_spread) {
+      dl->AddRectFilled(
+          ImVec2(cursor_start.x, y),
+          ImVec2(cursor_start.x + panel_width, y + row_height),
+          col_spread_bg);
+    }
+    // Background for large orders
+    else if (is_large) {
+      dl->AddRectFilled(
+          ImVec2(cursor_start.x, y),
+          ImVec2(cursor_start.x + panel_width, y + row_height),
+          col_large_order);
+    }
+
+    // Grid line at bottom of row
+    dl->AddLine(
+        ImVec2(cursor_start.x, y + row_height),
+        ImVec2(cursor_start.x + panel_width, y + row_height),
+        col_grid, 0.5f);
+
+    // Format price
+    char price_buf[32];
+    // Use appropriate decimal places based on tick size
+    int decimals = 2;
+    if (tick_size < 0.0001) decimals = 8;
+    else if (tick_size < 0.001) decimals = 6;
+    else if (tick_size < 0.01) decimals = 4;
+    else if (tick_size < 1.0) decimals = 2;
+    else decimals = 0;
+    snprintf(price_buf, sizeof(price_buf), "%.*f", decimals, price);
+
+    if (row.is_spread) {
+      // Spread row
+      float tw = ImGui::CalcTextSize(price_buf).x;
+      dl->AddText(ImVec2(col_x[2] + (col_price_w - tw) * 0.5f, y), col_spread_text, price_buf);
+
+      // Show spread value
+      char spread_buf[64];
+      snprintf(spread_buf, sizeof(spread_buf), "--- %.2f (%.4f%%) ---",
+               book.spread, book.spread_percent * 100.0);
+      float sw = ImGui::CalcTextSize(spread_buf).x;
+      dl->AddText(ImVec2(col_x[2] + (col_price_w - sw) * 0.5f, y + row_height * 0.0f),
+                  col_spread_text, spread_buf);
+    } else if (row.is_ask) {
+      // Ask side: columns 0 (cum), 1 (size), 2 (price)
+      // Cumulative volume bar (column 0) - right-aligned from price side
+      double max_cum = cum_ask_vol.empty() ? 1.0 : cum_ask_vol.rbegin()->second;
+      if (max_cum <= 0.0) max_cum = 1.0;
+      float bar_ratio = static_cast<float>(row.cum_vol / max_cum);
+      float bar_w = bar_ratio * col_vol_w;
+      if (bar_w > 1.0f) {
+        dl->AddRectFilled(
+            ImVec2(col_x[0] + col_vol_w - bar_w, y + 1.0f),
+            ImVec2(col_x[0] + col_vol_w, y + row_height - 1.0f),
+            col_ask_bar);
+      }
+
+      // Cumulative volume text
+      char cv_buf[32];
+      snprintf(cv_buf, sizeof(cv_buf), "%.1f", row.cum_vol);
+      dl->AddText(ImVec2(col_x[0] + 4.0f, y), col_cum_text, cv_buf);
+
+      // Ask size bar (column 1) - right-aligned from price
+      float size_ratio = static_cast<float>(row.size / max_size);
+      float size_bar_w = size_ratio * col_size_w;
+      if (size_bar_w > 1.0f) {
+        dl->AddRectFilled(
+            ImVec2(col_x[1] + col_size_w - size_bar_w, y + 1.0f),
+            ImVec2(col_x[1] + col_size_w, y + row_height - 1.0f),
+            col_ask_bar);
+      }
+
+      // Ask size text
+      if (row.size > 0.0) {
+        char sz_buf[32];
+        snprintf(sz_buf, sizeof(sz_buf), "%.1f", row.size);
+        dl->AddText(ImVec2(col_x[1] + 4.0f, y),
+                    is_large ? col_spread_text : col_ask_text, sz_buf);
+      }
+
+      // Price text (column 2)
+      float tw = ImGui::CalcTextSize(price_buf).x;
+      dl->AddText(ImVec2(col_x[2] + (col_price_w - tw) * 0.5f, y), col_ask_text, price_buf);
+
+    } else {
+      // Bid side: columns 2 (price), 3 (size), 4 (cum)
+      // Price text
+      float tw = ImGui::CalcTextSize(price_buf).x;
+      dl->AddText(ImVec2(col_x[2] + (col_price_w - tw) * 0.5f, y), col_bid_text, price_buf);
+
+      // Bid size bar (column 3) - left-aligned from price
+      float size_ratio = static_cast<float>(row.size / max_size);
+      float size_bar_w = size_ratio * col_size_w;
+      if (size_bar_w > 1.0f) {
+        dl->AddRectFilled(
+            ImVec2(col_x[3], y + 1.0f),
+            ImVec2(col_x[3] + size_bar_w, y + row_height - 1.0f),
+            col_bid_bar);
+      }
+
+      // Bid size text
+      if (row.size > 0.0) {
+        char sz_buf[32];
+        snprintf(sz_buf, sizeof(sz_buf), "%.1f", row.size);
+        float stw = ImGui::CalcTextSize(sz_buf).x;
+        dl->AddText(ImVec2(col_x[3] + col_size_w - stw - 4.0f, y),
+                    is_large ? col_spread_text : col_bid_text, sz_buf);
+      }
+
+      // Cumulative volume bar (column 4) - left-aligned
+      double max_cum = cum_bid_vol.empty() ? 1.0 : cum_bid_vol.rbegin()->second;
+      if (max_cum <= 0.0) max_cum = 1.0;
+      float bar_ratio = static_cast<float>(row.cum_vol / max_cum);
+      float bar_w = bar_ratio * col_vol_w;
+      if (bar_w > 1.0f) {
+        dl->AddRectFilled(
+            ImVec2(col_x[4], y + 1.0f),
+            ImVec2(col_x[4] + bar_w, y + row_height - 1.0f),
+            col_bid_bar);
+      }
+
+      // Cumulative volume text
+      char cv_buf[32];
+      snprintf(cv_buf, sizeof(cv_buf), "%.1f", row.cum_vol);
+      float cvw = ImGui::CalcTextSize(cv_buf).x;
+      dl->AddText(ImVec2(col_x[4] + col_vol_w - cvw - 4.0f, y), col_cum_text, cv_buf);
+    }
+
+    y += row_height;
+  }
+
+  // Draw vertical separator lines between columns
+  for (int c = 1; c < 5; ++c) {
+    dl->AddLine(
+        ImVec2(col_x[c], cursor_start.y),
+        ImVec2(col_x[c], y),
+        col_grid, 1.0f);
+  }
+
+  // CVD (Cumulative Volume Delta) at bottom
+  y += 4.0f;
+  double analytics_buy_vol = 0.0;
+  double analytics_sell_vol = 0.0;
+  auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+  analytics_buy_vol = analytics.buy_volume;
+  analytics_sell_vol = analytics.sell_volume;
+  double cvd = analytics_buy_vol - analytics_sell_vol;
+
+  char cvd_buf[128];
+  snprintf(cvd_buf, sizeof(cvd_buf), "CVD: %.1f  |  Buy: %.1f  Sell: %.1f  |  Imbalance: %.2f%%",
+           cvd, analytics_buy_vol, analytics_sell_vol,
+           (total_bid_vol + total_ask_vol > 0.0)
+               ? ((total_bid_vol - total_ask_vol) / (total_bid_vol + total_ask_vol)) * 100.0
+               : 0.0);
+  ImU32 cvd_color = cvd >= 0.0 ? col_bid_text : col_ask_text;
+  dl->AddText(ImVec2(cursor_start.x, y), cvd_color, cvd_buf);
 }
 
 void DomSurfacePanel::updatePersistentLevels(const RenderEngine::OrderbookData& orderbook) {

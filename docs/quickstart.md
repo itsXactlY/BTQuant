@@ -190,16 +190,17 @@ df = get_database_data(
 )
 ```
 
-### Custom Data (pandas/polars)
+### Custom Data (Polars)
 
-Pass any DataFrame to `backtest()`:
+Pass a Polars DataFrame or use `PolarsFeed`:
 
 ```python
-import pandas as pd
-from backtrader.utils.backtest import backtest
+import polars as pl
+from backtrader.feeds.polarfeed import PolarsFeed
 
-df = pd.read_csv('my_data.csv')  # Must have OHLCV columns
-backtest(MyStrategy, data=df, init_cash=1000)
+df = pl.read_csv('my_data.csv')  # Must have OHLCV columns
+data = PolarsFeed(df=df)
+backtest(MyStrategy, data=data, init_cash=1000)
 ```
 
 ## Backtest Output

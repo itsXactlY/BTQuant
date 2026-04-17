@@ -77,7 +77,7 @@ The script runs these steps in order:
    - Creates a virtual environment at `~/.btq`
    - Upgrades pip, setuptools, wheel
    - Installs pybind11 in the venv
-   - Runs `pip install .` from the `dependencies/` directory (installs all Python dependencies: ccxt, pybind11, pyodbc, websockets, Web3, matplotlib, pandas, numpy, polars, pyarrow, telethon, scikit-learn, keras, pytz, optuna)
+   - Runs `pip install .` from the `dependencies/` directory (installs all Python dependencies: ccxt, pybind11, pyodbc, websockets, Web3, matplotlib, numpy, polars, pyarrow, telethon, scikit-learn, keras, pytz, optuna)
 
 6. **Builds the Fast_MSSQL driver**:
    - Checks for a pre-compiled `.so` binary matching your Python version
@@ -137,7 +137,7 @@ pip install .
 
 This installs all required packages from `dependencies/setup.py`:
 - ccxt, pybind11, pyodbc, websockets, websocket-client, Web3
-- matplotlib, pandas, numpy, polars, pyarrow
+- matplotlib, numpy, polars, pyarrow
 - telethon, scikit-learn, keras, pytz, optuna
 
 ### Step 4: Build Fast_MSSQL (Optional)

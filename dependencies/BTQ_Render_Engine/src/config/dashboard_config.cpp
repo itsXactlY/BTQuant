@@ -440,7 +440,7 @@ std::string DashboardConfig::getLayoutFilePath(const std::string& layout_name) c
 
 void DashboardConfig::initializeDefaults() {
   // Data source defaults
-  data_source_config_.hotspine_shm_name = "/btquant_hotspine";
+  data_source_config_.hotspine_shm_name = "/btquant";
   data_source_config_.symbols_file = "/dev/shm/btquant_symbols.json";
   data_source_config_.auto_reconnect = true;
   data_source_config_.reconnect_interval_ms = 5000;

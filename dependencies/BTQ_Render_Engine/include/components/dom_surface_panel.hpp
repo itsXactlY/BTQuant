@@ -216,6 +216,13 @@ class DomSurfacePanel : public PanelBase {
   void updateFlushDOMRulerData();
   bool show_flush_dom_ruler_ = true;  // Toggle for flush DOM ruler display
   float flush_dom_ruler_width_ = 0.05f;  // Width as fraction of plot (5%)
+
+  // DOM Ladder (5-column price ladder)
+  void renderDOMLadder();
+  bool show_dom_ladder_ = true;          // Toggle: ladder vs heatmap-only
+  bool show_heatmap_overlay_ = false;    // Keep heatmap as optional background
+  int ladder_visible_rows_ = 30;         // Price levels above/below center
+  double running_cvd_ = 0.0;             // Cumulative Volume Delta
 };
 
 }  // namespace BTQuant

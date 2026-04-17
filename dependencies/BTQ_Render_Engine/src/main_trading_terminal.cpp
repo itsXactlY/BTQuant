@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
   system_optimizer->optimize();
 
   // 3. Data Bridge
-  auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
+  auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant");
   data_bridge->setMarketDataProcessor(market_processor);
 
   if (auto res = data_bridge->start(); !res) {
@@ -164,11 +164,11 @@ int main(int argc, char** argv) {
   while (!dashboard->should_close()) {
     auto frame_begin = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(frame_begin - last_frame_time).count();
-    (void)dt;  // Suppress unused variable warning
+    (void)dt;
     last_frame_time = frame_begin;
 
-    // Data Sync - Single sync point in main loop
-    data_bridge->sync();
+    // Data Sync — bridge runs its own thread, no sync here
+    // data_bridge->sync();  // REMOVED: causes double-sync contention with bridge thread
 
     // Event Handling
     dashboard->handle_events();

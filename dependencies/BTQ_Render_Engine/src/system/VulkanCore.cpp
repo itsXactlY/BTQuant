@@ -86,7 +86,7 @@ VkResult VulkanCore::PrepareFrame(uint32_t& imageIndex) {
 
   VkResult result = vkAcquireNextImageKHR(
       device_, swapchain_,
-      UINT64_MAX,  // Unbegrenzter Timeout für bessere Stabilität
+      1000000000ULL,  // 1s timeout — don't block forever if swapchain is stale
       image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &imageIndex);
 
   if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {

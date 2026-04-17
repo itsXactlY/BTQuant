@@ -548,7 +548,7 @@ void HistoricalTimeSalesPanel::render_trade_size_histogram() {
 
   // Create a small plot area
   if (ImGui::BeginChild("TradeSizeHistogramArea", ImVec2(0, 150), true)) {
-    if (ImPlot::BeginPlot(plot_title, nullptr, nullptr, ImVec2(-1, -1),
+    if (ImPlot::BeginPlot(plot_title, ImVec2(-1, -1),
                           ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
       ImPlot::SetupAxes(nullptr, "Count", ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
 
@@ -1137,7 +1137,7 @@ void HistoricalTimeSalesPanel::renderTradePaceChart() {
 
   // Create a small plot area in the header
   if (ImGui::BeginChild("TradePaceChartArea", ImVec2(0, 80), true)) {
-    if (ImPlot::BeginPlot(plot_title, "Time (s)", "Trades/Min", ImVec2(-1, -1),
+    if (ImPlot::BeginPlot(plot_title, ImVec2(-1, -1),
                           ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
       ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
 

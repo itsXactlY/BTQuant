@@ -1,268 +1,364 @@
 #include "../../include/components/tpo_panel.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
-#include <ctime>
+#include <cstring>
 #include <format>
+#include <numeric>
 #include <vector>
-#include <unordered_map>
 
 #include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
 
-// Define dummy structures for compilation
-namespace Data {
-    struct Cluster {
-        double centerX = 0.0;
-        double centerY = 0.0;
-        double width = 0.0;
-        double height = 0.0;
-        double askVolume = 0.0;
-        double bidVolume = 0.0;
-    };
-    
-    struct Stats {
-        uint64_t lastUpdateTimeNs = 0;
-    };
-}
-
 namespace BTQuant {
 
-TpoPanel::TpoPanel(const PanelConfig& config)
-    : PanelBase(config) {}
+// ==========================================================================
+// Constants
+// ==========================================================================
+
+// TPO bracket letters (A through P = 16 brackets max)
+static constexpr char TPO_LETTERS[] = "ABCDEFGHIJKLMNOP";
+
+// Colors
+static constexpr ImU32 COLOR_TPO_FIRST_HALF  = IM_COL32(180, 200, 255, 255);  // Light blue  A-H
+static constexpr ImU32 COLOR_TPO_SECOND_HALF = IM_COL32(120, 160, 240, 255);  // Deeper blue I-P
+static constexpr ImU32 COLOR_VALUE_AREA      = IM_COL32(30, 40, 60, 80);      // Dark blue tint
+static constexpr ImU32 COLOR_POC             = IM_COL32(255, 200, 0, 220);     // Gold
+static constexpr ImU32 COLOR_SINGLE_PRINT   = IM_COL32(74, 144, 255, 60);     // Blue highlight
+static constexpr ImU32 COLOR_SESSION_EXTREME= IM_COL32(200, 200, 200, 160);   // Light gray
+static constexpr ImU32 COLOR_IB             = IM_COL32(255, 140, 0, 140);     // Orange
+static constexpr ImU32 COLOR_VAH            = IM_COL32(0, 200, 100, 200);     // Green
+static constexpr ImU32 COLOR_VAL            = IM_COL32(200, 50, 50, 200);     // Red
+
+// Value area percentage (68%)
+static constexpr double VA_PERCENT = 0.68;
+
+// ==========================================================================
+// Helper: popcount for uint16_t
+// ==========================================================================
+static inline int popcount16(uint16_t v) {
+  return std::popcount(v);
+}
+
+// ==========================================================================
+// Constructor / update
+// ==========================================================================
+
+TpoPanel::TpoPanel(const PanelConfig& config) : PanelBase(config) {}
 
 void TpoPanel::update(float /*dt*/) {
-  // Update logic if needed
+  // No periodic update needed; data read from ClusterEngine on render
 }
+
+// ==========================================================================
+// Compute TPO levels and value area from ClusterEngine canvas
+// ==========================================================================
+
+static bool computeTpoProfile(
+    const Analytics::ClusterEngine& engine,
+    std::vector<TpoPanel::TpoLevel>& levels,
+    TpoPanel::ValueArea& va)
+{
+  const auto& canvas = engine.getCanvas();
+  if (canvas.empty()) return false;
+
+  // 1. Collect all price levels with non-zero tpo_bits
+  levels.clear();
+  levels.reserve(canvas.size());
+
+  int total_tpo = 0;
+  int max_tpo = 0;
+  size_t poc_index = 0;
+
+  double session_high = -1e30;
+  double session_low = 1e30;
+
+  for (size_t i = 0; i < canvas.size(); ++i) {
+    uint16_t bits = canvas[i].tpo_bits;
+    if (bits == 0) continue;
+
+    int pc = popcount16(bits);
+    double price = engine.priceAtIndex(i);
+
+    levels.push_back({price, bits, pc});
+    total_tpo += pc;
+
+    if (pc > max_tpo) {
+      max_tpo = pc;
+      poc_index = levels.size() - 1;
+    }
+
+    if (price > session_high) session_high = price;
+    if (price < session_low) session_low = price;
+  }
+
+  if (levels.empty()) return false;
+
+  va.session_high = session_high;
+  va.session_low = session_low;
+
+  // 2. POC price
+  va.poc_price = levels[poc_index].price;
+
+  // 3. Initial Balance (first hour = first two 30-min brackets, bits 0 and 1)
+  double ib_high = -1e30;
+  double ib_low = 1e30;
+  bool ib_found = false;
+  for (const auto& lvl : levels) {
+    if (lvl.tpo_bits & 0x0003) {  // bit 0 or bit 1 set
+      ib_found = true;
+      if (lvl.price > ib_high) ib_high = lvl.price;
+      if (lvl.price < ib_low) ib_low = lvl.price;
+    }
+  }
+  va.ib_high = ib_found ? ib_high : 0.0;
+  va.ib_low  = ib_found ? ib_low  : 0.0;
+
+  // 4. Value Area: start at POC, expand outward until 68% of TPO enclosed.
+  //    At each step, pick the direction (up or down) that adds more TPO count.
+  int target_tpo = static_cast<int>(total_tpo * VA_PERCENT);
+  int accumulated = levels[poc_index].popcount;
+
+  int lo = static_cast<int>(poc_index);
+  int hi = static_cast<int>(poc_index);
+
+  while (accumulated < target_tpo) {
+    int up_count = 0;
+    int dn_count = 0;
+
+    if (hi + 1 < static_cast<int>(levels.size()))
+      up_count = levels[hi + 1].popcount;
+    if (lo - 1 >= 0)
+      dn_count = levels[lo - 1].popcount;
+
+    bool can_up = (hi + 1 < static_cast<int>(levels.size()));
+    bool can_dn = (lo - 1 >= 0);
+
+    if (!can_up && !can_dn) break;
+
+    if (can_up && (!can_dn || up_count >= dn_count)) {
+      hi++;
+      accumulated += levels[hi].popcount;
+    } else {
+      lo--;
+      accumulated += levels[lo].popcount;
+    }
+  }
+
+  va.vah = levels[hi].price;
+  va.val = levels[lo].price;
+
+  return true;
+}
+
+// ==========================================================================
+// Detect single prints: price levels where popcount == 1 AND bracketed
+// by levels with popcount > 1 above AND below.
+// ==========================================================================
+
+static std::vector<double> detectSinglePrints(
+    const std::vector<TpoPanel::TpoLevel>& levels)
+{
+  std::vector<double> singles;
+  if (levels.size() < 3) return singles;
+
+  for (size_t i = 1; i + 1 < levels.size(); ++i) {
+    if (levels[i].popcount == 1 &&
+        levels[i - 1].popcount > 1 &&
+        levels[i + 1].popcount > 1) {
+      singles.push_back(levels[i].price);
+    }
+  }
+  return singles;
+}
+
+// ==========================================================================
+// render()
+// ==========================================================================
 
 void TpoPanel::render() {
   begin_panel_window();
 
-  // Enhanced toolbar with more options
+  // ---- Toolbar ----
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
-  static bool show_text = true;
-  ImGui::Checkbox("Delta Labels", &show_text);
+  static bool show_letters = true;
+  ImGui::Checkbox("Letters", &show_letters);
   ImGui::SameLine();
-  static bool show_grid = true;
-  ImGui::Checkbox("Grid", &show_grid);
+  static bool show_va = true;
+  ImGui::Checkbox("Value Area", &show_va);
   ImGui::SameLine();
-  static bool show_heatmap = true;
-  ImGui::Checkbox("Heatmap", &show_heatmap);
-
-  // Time window configuration
-  static float time_window = 30.0f;
+  static bool show_single_prints = true;
+  ImGui::Checkbox("Single Prints", &show_single_prints);
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::SliderFloat("Time Window", &time_window, 10.0f, 300.0f, "%.0f s");
+  static bool show_ib = true;
+  ImGui::Checkbox("IB", &show_ib);
 
-  // TODO: Implement actual TPO data retrieval
-  // For now, using dummy data to allow compilation
-  std::vector<Data::Cluster> clusters; // Dummy vector
-  Data::Stats stats{}; // Dummy stats
-
-  // Calculate TPO statistics
-  double local_poc_price = 0.0;
-  double max_volume = 0.0;
-  std::unordered_map<double, double> price_volumes;
-  std::unordered_map<double, int> tpo_counts; // Track TPO counts per price level
-
-  // Pre-calculate POC data and TPO counts
-  for (const auto& cluster : clusters) {
-    // Accumulate volume by price level for POC calculation
-    price_volumes[cluster.centerY] += cluster.askVolume + cluster.bidVolume;
-    
-    // Count TPO occurrences per price level (simulating TPO counts)
-    // In a real implementation, this would come from the TPO engine
-    tpo_counts[cluster.centerY]++;
+  // ---- If no engine, show placeholder and exit early ----
+  if (!cluster_engine_ || cluster_engine_->getCanvas().empty()) {
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                       "No TPO data available. Set ClusterEngine on this panel.");
+    end_panel_window();
+    return;
   }
 
-  // Find Point of Control (POC) - price level with highest volume
-  for (const auto& [price, volume] : price_volumes) {
-    if (volume > max_volume) {
-      max_volume = volume;
-      local_poc_price = price;
-    }
-  }
-  
-  // Calculate Value Area (70% of TPOs) - simplified implementation
-  // In a real implementation, this would use the TPO engine's get_value_area method
-  double value_area_low = local_poc_price - 5.0;  // Placeholder calculation
-  double value_area_high = local_poc_price + 5.0; // Placeholder calculation
-  
-  // More accurate calculation based on TPO counts
-  if (!tpo_counts.empty()) {
-    // Calculate total TPO count
-    int total_tpo_count = 0;
-    for (const auto& [price, count] : tpo_counts) {
-        total_tpo_count += count;
-    }
-    
-    if (total_tpo_count > 0) {
-        // Target 70% of total TPOs for value area
-        int target_count = static_cast<int>(total_tpo_count * 0.70);
-        
-        // Sort price levels by distance from POC
-        std::vector<std::pair<double, int>> sorted_by_distance;
-        for (const auto& [price, count] : tpo_counts) {
-            sorted_by_distance.emplace_back(price, count);
-        }
-        
-        std::sort(sorted_by_distance.begin(), sorted_by_distance.end(),
-                  [local_poc_price](const auto& a, const auto& b) {
-                      return std::abs(a.first - local_poc_price) < std::abs(b.first - local_poc_price);
-                  });
-        
-        // Expand from POC until we reach 70% of TPOs
-        int accumulated_count = 0;
-        value_area_low = local_poc_price;
-        value_area_high = local_poc_price;
-        
-        for (const auto& [price, count] : sorted_by_distance) {
-            if (accumulated_count >= target_count) break;
-            
-            accumulated_count += count;
-            value_area_low = std::min(value_area_low, price);
-            value_area_high = std::max(value_area_high, price);
-        }
-    }
+  // ---- Compute TPO profile ----
+  std::vector<TpoLevel> levels;
+  ValueArea va;
+  if (!computeTpoProfile(*cluster_engine_, levels, va)) {
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No TPO data in engine canvas.");
+    end_panel_window();
+    return;
   }
 
-  // Base time for labeling (relative to time window)
-  double base_time_sec =
-      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - time_window;
+  std::vector<double> single_prints = detectSinglePrints(levels);
 
-  if (ImPlot::BeginPlot("##TPOProfile", ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend | ImPlotFlags_Crosshairs)) {
-    // Axis Setup - ALL Setup calls must happen BEFORE any locking functions
-    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+  // ---- Determine axis range ----
+  double price_min = va.session_low;
+  double price_max = va.session_high;
+  double price_pad = (price_max - price_min) * 0.05;
+  if (price_pad < cluster_engine_->getTickSize()) price_pad = cluster_engine_->getTickSize();
+  price_min -= price_pad;
+  price_max += price_pad;
 
-    // Enable grid if requested (must call SetupAxis before SetupAxisLimits)
-    if (show_grid) {
-      ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
-      ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_None);
-    }
-
-    // Calculate Y-axis limits before calling SetupAxisLimits
-    float p_min = 0, p_max = 1000;
-    if (!clusters.empty()) {
-      p_min = clusters[0].centerY;
-      p_max = clusters[0].centerY;
-      for (const auto& c : clusters) {
-        p_min = std::min(p_min, (float)c.centerY);
-        p_max = std::max(p_max, (float)c.centerY);
+  // X axis: we use a nominal range [0, num_brackets] for letter placement
+  int max_bracket = 0;
+  for (const auto& lvl : levels) {
+    for (int b = 0; b < 16; ++b) {
+      if (lvl.tpo_bits & (1 << b) && b + 1 > max_bracket) {
+        max_bracket = b + 1;
       }
     }
+  }
+  if (max_bracket < 1) max_bracket = 16;
+  double x_max = static_cast<double>(max_bracket) + 1.0;
 
-    // Apply all axis limits at once
-    ImPlot::SetupAxisLimits(ImAxis_X1, 0, time_window, ImPlotCond_Always);
-    if (!clusters.empty()) {
-      ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min - 10, (double)p_max + 10, ImPlotCond_Once);
-    }
-
-    // Custom Formatting (C++26 lambda)
-    ImPlot::SetupAxisFormat(
-        ImAxis_X1,
-        [](double val, char* buff, int size, void* user_data) -> int {
-          double base = *static_cast<double*>(user_data);
-          std::time_t t = static_cast<std::time_t>(base + val);
-          std::tm* tm = std::localtime(&t);
-          if (tm) [[likely]] {
-            return (int)std::strftime(buff, size, "%H:%M:%S", tm);
-          } else {
-            return std::snprintf(buff, size, "%.2f", val);
-          }
-        },
-        &base_time_sec);
-
-    // Render Heatmap Background if available
-    if (show_heatmap) {
-      // TODO: Implement heatmap texture rendering
-      // For now, skip heatmap rendering to allow compilation
-    }
+  // ---- ImPlot ----
+  if (ImPlot::BeginPlot("##TPOProfile", ImVec2(-1, -1),
+                        ImPlotFlags_NoLegend | ImPlotFlags_Crosshairs)) {
+    ImPlot::SetupAxes("Bracket", "Price", ImPlotAxisFlags_NoGridLines,
+                      ImPlotAxisFlags_None);
+    ImPlot::SetupAxisLimits(ImAxis_X1, 0, x_max, ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, price_min, price_max, ImPlotCond_Once);
 
     auto* draw_list = ImPlot::GetPlotDrawList();
 
-    for (const auto& cluster : clusters) {
-      int delta = static_cast<int>(cluster.askVolume) - static_cast<int>(cluster.bidVolume);
+    // ---- Value Area shading ----
+    if (show_va && va.vah > va.val) {
+      // Shade from x=0..x_max between VAL and VAH
+      ImVec2 p_lo_left  = ImPlot::PlotToPixels(0.0, va.val);
+      ImVec2 p_hi_right = ImPlot::PlotToPixels(x_max, va.vah);
+      draw_list->AddRectFilled(p_lo_left, p_hi_right, COLOR_VALUE_AREA);
+    }
 
-      ImU32 color;
-      float intensity = std::clamp(std::abs((float)delta) / 2000.0f, 0.2f, 0.7f);
-      if (delta > 0) {
-        color = ImColor(0.1f, 0.8f, 0.1f, intensity);  // Green for positive delta
-      } else {
-        color = ImColor(0.8f, 0.1f, 0.1f, intensity);  // Red for negative delta
-      }
+    // ---- Session High / Low lines ----
+    {
+      ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.session_high);
+      ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.session_high);
+      draw_list->AddLine(p1, p2, COLOR_SESSION_EXTREME, 1.0f);
 
-      double x1 = (double)cluster.centerX - (double)cluster.width * 0.48;
-      double x2 = (double)cluster.centerX + (double)cluster.width * 0.48;
-      double y1 = (double)cluster.centerY - (double)cluster.height * 0.48;
-      double y2 = (double)cluster.centerY + (double)cluster.height * 0.48;
+      p1 = ImPlot::PlotToPixels(0.0, va.session_low);
+      p2 = ImPlot::PlotToPixels(x_max, va.session_low);
+      draw_list->AddLine(p1, p2, COLOR_SESSION_EXTREME, 1.0f);
+    }
 
-      ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
-      ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
+    // ---- Value Area lines (VAH / VAL) ----
+    if (show_va && va.vah > va.val) {
+      ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.vah);
+      ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.vah);
+      draw_list->AddLine(p1, p2, COLOR_VAH, 2.0f);
 
-      draw_list->AddRectFilled(p1, p2, color);
-      draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+      p1 = ImPlot::PlotToPixels(0.0, va.val);
+      p2 = ImPlot::PlotToPixels(x_max, va.val);
+      draw_list->AddLine(p1, p2, COLOR_VAL, 2.0f);
+    }
 
-      if (show_text && (std::abs(p2.y - p1.y) > 18)) {
-        std::string label = std::format("{}", delta);
-        ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
-        draw_list->AddText(
-            ImVec2((p1.x + p2.x - text_size.x) * 0.5f, (p1.y + p2.y - text_size.y) * 0.5f),
-            IM_COL32_WHITE, label.c_str());
+    // ---- POC line (thick gold) ----
+    if (va.poc_price > 0.0) {
+      ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.poc_price);
+      ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.poc_price);
+      draw_list->AddLine(p1, p2, COLOR_POC, 3.0f);
+    }
+
+    // ---- Initial Balance lines ----
+    if (show_ib && va.ib_high > va.ib_low) {
+      ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.ib_high);
+      ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.ib_high);
+      draw_list->AddLine(p1, p2, COLOR_IB, 1.5f);
+
+      p1 = ImPlot::PlotToPixels(0.0, va.ib_low);
+      p2 = ImPlot::PlotToPixels(x_max, va.ib_low);
+      draw_list->AddLine(p1, p2, COLOR_IB, 1.5f);
+    }
+
+    // ---- Single print highlights ----
+    if (show_single_prints) {
+      double half_tick = cluster_engine_->getTickSize() * 0.5;
+      for (double sp_price : single_prints) {
+        ImVec2 p1 = ImPlot::PlotToPixels(0.0, sp_price - half_tick);
+        ImVec2 p2 = ImPlot::PlotToPixels(x_max, sp_price + half_tick);
+        draw_list->AddRectFilled(p1, p2, COLOR_SINGLE_PRINT);
       }
     }
 
-    // Draw Value Area (shaded region between VAH and VAL)
-    if (value_area_low < value_area_high && value_area_low > 0) {
-      // Draw shaded area for Value Area
-      double va_x[] = {0.0, time_window, time_window, 0.0};
-      double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
-      
-      // ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
-      ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
-      ImPlot::PopStyleColor();
-      
-      // Draw Value Area High (VAH) line
-      double vah_line_x[2] = {0, time_window};
-      double vah_line_y[2] = {value_area_high, value_area_high};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
-      ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
-      ImPlot::PopStyleColor();
-      
-      // Draw Value Area Low (VAL) line
-      double val_line_x[2] = {0, time_window};
-      double val_line_y[2] = {value_area_low, value_area_low};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
-      ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
-      ImPlot::PopStyleColor();
-    }
+    // ---- TPO Letter Grid ----
+    if (show_letters) {
+      // Estimate pixel height per price level to decide if we can render text
+      ImVec2 p_test_top = ImPlot::PlotToPixels(0.0, price_max);
+      ImVec2 p_test_bot = ImPlot::PlotToPixels(0.0, price_min);
+      double plot_height_px = std::abs(p_test_bot.y - p_test_top.y);
+      double price_range = price_max - price_min;
+      double px_per_price = (price_range > 0) ? plot_height_px / price_range : 1.0;
 
-    // Draw POC line if found (using pre-calculated value)
-    if (local_poc_price > 0) {
-      double poc_line_x[2] = {0, time_window};
-      double poc_line_y[2] = {local_poc_price, local_poc_price};
-      // ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
-      // ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
-      ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
+      // Each letter occupies about 14px wide. Check if we have enough vertical space.
+      bool can_draw_text = (px_per_price >= 8.0);
+
+      // We need to get the plot draw position to compute letter size
+      ImPlotRect plot_limits = ImPlot::GetPlotLimits();
+
+      for (const auto& lvl : levels) {
+        for (int b = 0; b < 16; ++b) {
+          if (!(lvl.tpo_bits & (1 << b))) continue;
+
+          double cx = static_cast<double>(b) + 0.5;
+          double cy = lvl.price;
+
+          ImVec2 center_px = ImPlot::PlotToPixels(cx, cy);
+
+          ImU32 color = (b < 8) ? COLOR_TPO_FIRST_HALF : COLOR_TPO_SECOND_HALF;
+
+          if (can_draw_text) {
+            // Draw the letter
+            char letter_str[2] = { TPO_LETTERS[b], '\0' };
+            ImVec2 text_size = ImGui::CalcTextSize(letter_str);
+            draw_list->AddText(
+                ImVec2(center_px.x - text_size.x * 0.5f,
+                       center_px.y - text_size.y * 0.5f),
+                color, letter_str);
+          } else {
+            // Zoomed out: draw a small filled rectangle instead of text
+            float half_h = static_cast<float>(px_per_price * 0.45);
+            float half_w = 5.0f;
+            ImVec2 p1(center_px.x - half_w, center_px.y - half_h);
+            ImVec2 p2(center_px.x + half_w, center_px.y + half_h);
+            draw_list->AddRectFilled(p1, p2, color);
+          }
+        }
+      }
     }
 
     ImPlot::EndPlot();
   }
 
-  // Enhanced Overlay Info
+  // ---- Overlay info ----
   ImGui::SetCursorPos(ImVec2(10, 45));
-  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f",
-                     clusters.size(), 
-                     local_poc_price > 0 ? local_poc_price : 0.0,
-                     value_area_low > 0 ? value_area_low : 0.0,
-                     value_area_high > 0 ? value_area_high : 0.0);
+  ImGui::TextColored(ImVec4(1, 1, 0, 0.6f),
+                     "TPO | POC: %.2f | VAH: %.2f | VAL: %.2f | Hi: %.2f | Lo: %.2f",
+                     va.poc_price, va.vah, va.val, va.session_high, va.session_low);
 
   end_panel_window();
 }

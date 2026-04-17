@@ -43,8 +43,9 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Optional:
   // Multi-viewport
 
-  // Style Definitions (Managed by ThemeManager)
+  // Style Definitions (Managed by ThemeManager) - Apply MMT Deep Void
   ThemeManager::getInstance().initialize();
+  ThemeManager::getInstance().apply_unified_theme("Deep Void");
 
   // 2. HW Layer Init
   init_window();
@@ -416,14 +417,14 @@ void VulkanDashboard::render_layout_indicator() {
                ImGuiWindowFlags_NoFocusOnAppearing |
                ImGuiWindowFlags_NoNav);
 
-  // Draw the layout indicator with a semi-transparent background
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f)); // Dark semi-transparent background
+  // Draw the layout indicator with MMT Deep Void background
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.043f, 0.055f, 0.067f, 0.7f));
 
   // Change text color based on whether a quick save slot is active
   if (active_slot > 0) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.9f, 0.5f, 1.0f)); // Greenish color for active quick save
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.9f, 0.4f, 1.0f)); // Neon Mint for active quick save
   } else {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f)); // Light text
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.84f, 0.86f, 1.0f)); // MMT text color
   }
 
   ImGui::Text("Layout: %s%s", active_layout.c_str(), slot_info.c_str());

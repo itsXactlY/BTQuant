@@ -315,4 +315,4 @@ Trading-specific settings can be found in `dependencies/backtrader/config/tradin
 2. **Use environment variables** for sensitive data in production
 3. **Use JSON config files** for development (easier to manage)
 4. **Set `require_keys=False`** when testing without real API keys
-5. **Use separate accounts** for paper trading vs live trading
+5. **Test with small amounts** before running full-size live positions

@@ -164,6 +164,17 @@ class ClusterEngine {
   // Getter method to access the cluster canvas for visualization
   const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
 
+  // Public accessors for TPO panel and other consumers
+  const std::vector<HotSpine::V3::VolumeNode>& getCanvas() const { return canvas_; }
+  double getTickSize() const { return tick_size_; }
+  int64_t getMinTickIndex() const { return min_tick_index_; }
+  int64_t getSessionStartUs() const { return session_start_us_; }
+
+  // Compute absolute price for a relative canvas index
+  double priceAtIndex(size_t relative_index) const {
+    return static_cast<double>(min_tick_index_ + static_cast<int64_t>(relative_index)) * tick_size_;
+  }
+
   // Calculate standard deviation for a specific price level and time bucket
   double calculateStandardDeviation(int64_t price_level, int time_bucket) const;
 

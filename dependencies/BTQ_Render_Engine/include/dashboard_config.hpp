@@ -18,7 +18,7 @@ namespace RenderEngine {
 
 // Data source configuration
 struct DataSourceConfig {
-  std::string hotspine_shm_name = "/btquant_hotspine";
+  std::string hotspine_shm_name = "/btquant";
   std::string symbols_file = "/dev/shm/btquant_symbols.json";
   bool auto_reconnect = true;
   uint32_t reconnect_interval_ms = 5000;

@@ -10,25 +10,26 @@
 namespace BTQuant {
 
 struct ThemeColors {
-  ImVec4 background = ImVec4(0.06f, 0.07f, 0.12f, 1.0f);  // #10121f - Dark background with enhanced contrast
-  ImVec4 text = ImVec4(0.92f, 0.92f, 0.92f, 1.0f);        // #ebebeb - Light text for excellent contrast (WCAG AAA)
-  ImVec4 text_dim = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);    // #8c8c8c - Muted text with sufficient contrast (WCAG AA)
+  // MMT Deep Void Palette - dark, clean, professional
+  ImVec4 background = ImVec4(0.043f, 0.055f, 0.067f, 1.0f);  // #0B0E11 - Deep void background
+  ImVec4 text = ImVec4(0.82f, 0.84f, 0.86f, 1.0f);           // #D1D7DE - Clean text
+  ImVec4 text_dim = ImVec4(0.45f, 0.48f, 0.52f, 1.0f);       // Muted text
 
-  // Accents
-  ImVec4 accent_green = ImVec4(0.35f, 0.95f, 0.35f, 1.0f); // #59f259 - Enhanced green for optimal contrast
-  ImVec4 accent_red = ImVec4(0.95f, 0.35f, 0.35f, 1.0f);   // #f25959 - Enhanced red for optimal contrast
-  ImVec4 accent_cyan = ImVec4(0.25f, 0.85f, 0.95f, 1.0f);  // #40d9f5 - Enhanced cyan accent
-  ImVec4 accent_magenta = ImVec4(0.95f, 0.25f, 0.85f, 1.0f); // #f540d9 - Enhanced magenta accent
+  // Accents - MMT Neon Mint / Crimson
+  ImVec4 accent_green = ImVec4(0.0f, 0.9f, 0.4f, 1.0f);      // #00E566 - Neon Mint
+  ImVec4 accent_red = ImVec4(0.9f, 0.1f, 0.15f, 1.0f);       // #E61926 - Crimson
+  ImVec4 accent_cyan = ImVec4(0.0f, 0.9f, 0.4f, 1.0f);       // #00E566 - Accent = Neon Mint
+  ImVec4 accent_magenta = ImVec4(0.9f, 0.1f, 0.15f, 1.0f);   // #E61926 - Accent = Crimson
 
   // UI Elements
-  ImVec4 panel_bg = ImVec4(0.09f, 0.11f, 0.15f, 0.92f);   // #171c26 - Panel background with enhanced contrast
-  ImVec4 border = ImVec4(0.20f, 0.22f, 0.28f, 0.65f);     // #333847 - Borders with enhanced contrast
-  ImVec4 header_bg = ImVec4(0.12f, 0.14f, 0.20f, 0.97f);  // #1f2433 - Header background with enhanced contrast
+  ImVec4 panel_bg = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);    // #15191E - Panel background
+  ImVec4 border = ImVec4(0.165f, 0.180f, 0.196f, 1.0f);      // #2A2E33 - Border
+  ImVec4 header_bg = ImVec4(0.082f, 0.098f, 0.118f, 1.0f);   // #15191E - Header matches panel
 
   // Chart specific
-  ImVec4 chart_grid = ImVec4(0.20f, 0.22f, 0.28f, 0.35f);  // #333847 - Grid with enhanced contrast
-  ImVec4 candle_up = ImVec4(0.35f, 0.95f, 0.35f, 1.0f);    // Consistent with accent green
-  ImVec4 candle_down = ImVec4(0.95f, 0.35f, 0.35f, 1.0f);  // Consistent with accent red
+  ImVec4 chart_grid = ImVec4(0.10f, 0.12f, 0.14f, 0.4f);     // #1A1E24 - Grid lines
+  ImVec4 candle_up = ImVec4(0.0f, 0.9f, 0.4f, 1.0f);         // #00E566 - Neon Mint
+  ImVec4 candle_down = ImVec4(0.9f, 0.1f, 0.15f, 1.0f);      // #E61926 - Crimson
 };
 
 enum class ThemeType {

@@ -190,11 +190,7 @@ private:
             addKeyValuePairs(oss, args...);
         }
 
-        oss << " (File: " << metadata.file
-            << ", Line: " << metadata.line
-            << ", Func: " << metadata.function
-            << ", Thread: " << metadata.thread_id << ")"
-            << std::endl;
+        oss << std::endl;  // Compact format
 
         return oss.str();
     }

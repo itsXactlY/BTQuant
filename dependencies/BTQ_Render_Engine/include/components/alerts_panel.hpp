@@ -44,11 +44,18 @@ class AlertsPanel : public PanelBase {
   std::vector<AlertRule> rules_;
   std::vector<AlertLog> logs_;
 
-  // UI State
-  bool show_create_modal_ = false;
-  char new_rule_name_[64] = "";
+  // Deferred-mutation slots. The render loop iterates over rules_; doing
+  // erase_if directly would invalidate the iteration index. The render
+  // captures the user's intent in these strings, then applies them after
+  // the loop completes.
+  std::string rule_to_delete_id_;
+  std::string edit_target_id_;
+
+  char new_rule_name_[128] = "";
   char new_rule_expr_[128] = "";
-  char new_rule_symbol_[32] = "";
+  char new_rule_symbol_[64] = "";
+  bool show_create_modal_ = false;
+  bool show_alert_window_ = true;
 };
 
 }  // namespace BTQuant

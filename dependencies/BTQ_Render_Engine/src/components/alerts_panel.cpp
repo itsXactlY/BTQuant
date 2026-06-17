@@ -123,15 +123,28 @@ void AlertsPanel::render_rules_table() {
 
       ImGui::TableSetColumnIndex(4);
       if (ImGui::Button("Edit")) {
-        // TODO: Edit logic
+        // Mark this rule as the one being edited (full editor is a future
+        // enhancement; right now we just copy the name into the create
+        // dialog so the user can edit by re-creating).
+        edit_target_id_ = rule.id;
+        show_create_modal_ = true;
       }
       ImGui::SameLine();
       if (ImGui::Button("Del")) {
-        // TODO: Delete logic (would need iterator handling)
+        rule_to_delete_id_ = rule.id;
       }
       ImGui::PopID();
     }
     ImGui::EndTable();
+
+    // Apply deferred delete (erasing inside the loop body would invalidate
+    // the iteration index).
+    if (!rule_to_delete_id_.empty()) {
+      auto new_end = std::remove_if(rules_.begin(), rules_.end(),
+          [this](const AlertRule& r) { return r.id == rule_to_delete_id_; });
+      rules_.erase(new_end, rules_.end());
+      rule_to_delete_id_.clear();
+    }
   }
 }
 

@@ -263,10 +263,9 @@ void WatchlistPanel::update(float dt) {
   verify_subscriptions();
 
   // Log subscription status periodically for debugging (every 10 seconds)
-  static float subscription_check_timer = 0.0f;
-  subscription_check_timer += dt;
-  if (subscription_check_timer > 10.0f) {
-    subscription_check_timer = 0.0f;
+  subscription_check_timer_ += dt;
+  if (subscription_check_timer_ > 10.0f) {
+    subscription_check_timer_ = 0.0f;
     std::cout << "[WatchlistPanel] Active symbols in '" << current_group_name_
               << "': " << get_current_watchlist().size()
               << ", Active subscriptions: " << symbol_subscriptions_.size() << std::endl;
@@ -1082,8 +1081,8 @@ void WatchlistPanel::render_group_tabs() {
 
     if (ImGui::Button("+##AddGroup")) {
       // Create a new group with a default name
-      static int new_group_counter = 1;
-      std::string new_group_name = "Group " + std::to_string(new_group_counter++);
+  // (static removed — now a class member)
+      std::string new_group_name = "Group " + std::to_string(new_group_counter_++);
       create_group(new_group_name);
       switch_to_group(new_group_name);
     }

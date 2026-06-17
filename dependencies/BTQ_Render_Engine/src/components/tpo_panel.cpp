@@ -194,17 +194,13 @@ void TpoPanel::render() {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
-  static bool show_letters = true;
-  ImGui::Checkbox("Letters", &show_letters);
+  ImGui::Checkbox("Letters", &show_letters_);
   ImGui::SameLine();
-  static bool show_va = true;
-  ImGui::Checkbox("Value Area", &show_va);
+  ImGui::Checkbox("Value Area", &show_va_);
   ImGui::SameLine();
-  static bool show_single_prints = true;
-  ImGui::Checkbox("Single Prints", &show_single_prints);
+  ImGui::Checkbox("Single Prints", &show_single_prints_);
   ImGui::SameLine();
-  static bool show_ib = true;
-  ImGui::Checkbox("IB", &show_ib);
+  ImGui::Checkbox("IB", &show_ib_);
 
   // ---- If no engine, show placeholder and exit early ----
   if (!cluster_engine_ || cluster_engine_->getCanvas().empty()) {
@@ -256,7 +252,7 @@ void TpoPanel::render() {
     auto* draw_list = ImPlot::GetPlotDrawList();
 
     // ---- Value Area shading ----
-    if (show_va && va.vah > va.val) {
+    if (show_va_ && va.vah > va.val) {
       // Shade from x=0..x_max between VAL and VAH
       ImVec2 p_lo_left  = ImPlot::PlotToPixels(0.0, va.val);
       ImVec2 p_hi_right = ImPlot::PlotToPixels(x_max, va.vah);
@@ -275,7 +271,7 @@ void TpoPanel::render() {
     }
 
     // ---- Value Area lines (VAH / VAL) ----
-    if (show_va && va.vah > va.val) {
+    if (show_va_ && va.vah > va.val) {
       ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.vah);
       ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.vah);
       draw_list->AddLine(p1, p2, COLOR_VAH, 2.0f);
@@ -293,7 +289,7 @@ void TpoPanel::render() {
     }
 
     // ---- Initial Balance lines ----
-    if (show_ib && va.ib_high > va.ib_low) {
+    if (show_ib_ && va.ib_high > va.ib_low) {
       ImVec2 p1 = ImPlot::PlotToPixels(0.0, va.ib_high);
       ImVec2 p2 = ImPlot::PlotToPixels(x_max, va.ib_high);
       draw_list->AddLine(p1, p2, COLOR_IB, 1.5f);
@@ -304,7 +300,7 @@ void TpoPanel::render() {
     }
 
     // ---- Single print highlights ----
-    if (show_single_prints) {
+    if (show_single_prints_) {
       double half_tick = cluster_engine_->getTickSize() * 0.5;
       for (double sp_price : single_prints) {
         ImVec2 p1 = ImPlot::PlotToPixels(0.0, sp_price - half_tick);
@@ -314,7 +310,7 @@ void TpoPanel::render() {
     }
 
     // ---- TPO Letter Grid ----
-    if (show_letters) {
+    if (show_letters_) {
       // Estimate pixel height per price level to decide if we can render text
       ImVec2 p_test_top = ImPlot::PlotToPixels(0.0, price_max);
       ImVec2 p_test_bot = ImPlot::PlotToPixels(0.0, price_min);
@@ -383,7 +379,7 @@ void TpoPanel::render() {
 
   // ---- Phase 7.4: TSC latency record (per-frame) ----
   {
-    static const double tsc_freq_mhz_ = []() {
+    if (tsc_freq_mhz_ <= 0.0) {
 #if defined(__x86_64__) || defined(__i386__)
       auto t0 = std::chrono::high_resolution_clock::now();
       uint64_t r0 = __rdtsc();
@@ -391,20 +387,20 @@ void TpoPanel::render() {
       uint64_t r1 = __rdtsc();
       auto t1 = std::chrono::high_resolution_clock::now();
       double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-      return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+      tsc_freq_mhz_ = (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+      tsc_last_ingress_ = __rdtsc();
 #else
-      return 0.0;
+      tsc_freq_mhz_ = 0.0;
 #endif
-    }();
+    }
 #if defined(__x86_64__) || defined(__i386__)
-    static uint64_t tsc_last_ingress = __rdtsc();
     uint64_t tsc_now = __rdtsc();
     double us = (tsc_freq_mhz_ > 0.0)
-                    ? static_cast<double>(tsc_now - tsc_last_ingress) / tsc_freq_mhz_
+                    ? static_cast<double>(tsc_now - tsc_last_ingress_) / tsc_freq_mhz_
                     : 0.0;
     btq::TelemetryCollector::getInstance().recordPerformanceMetric(
         "tpo_panel_render_us", us, "us");
-    tsc_last_ingress = tsc_now;
+    tsc_last_ingress_ = tsc_now;
 #endif
   }
 

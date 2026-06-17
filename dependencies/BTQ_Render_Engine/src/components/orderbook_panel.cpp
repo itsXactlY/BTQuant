@@ -338,8 +338,7 @@ void OrderbookPanel::render() {
   auto active_symbols = processor_->getActiveSymbols();
 
   // Debug Info
-  static int frame_count = 0;
-  if (frame_count++ % 300 == 0) {
+  if (++frame_count_ % 300 == 0) {
     std::cout << "[OrderbookPanel] Rendering. SymID=" << symbol_id_
               << " ActiveSyms=" << active_symbols.size() << std::endl;
   }
@@ -468,7 +467,7 @@ void OrderbookPanel::render() {
   if (!cache || cache->bids.empty() || cache->asks.empty()) {
     ImGui::Text("Waiting for Orderbook: %s", symbol_name_.c_str());
     ImGui::Text("ID: %u", symbol_id_);
-    ImGui::ProgressBar(((frame_count % 100) / 100.0f), ImVec2(-1, 0), "Polling Data Processor...");
+    ImGui::ProgressBar(((frame_count_ % 100) / 100.0f), ImVec2(-1, 0), "Polling Data Processor...");
     end_panel_window();
     return;
   }

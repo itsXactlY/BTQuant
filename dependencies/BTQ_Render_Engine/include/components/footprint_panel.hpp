@@ -205,6 +205,19 @@ class FootprintPanel : public PanelBase {
                         std::vector<FootprintCell>& diagonal_imbalances,
                         std::vector<FootprintCell>& stacked_imbalances) const;
 
+  // UI toggle / threshold state (was 4x static locals in render()).
+  // Members so multiple FootprintPanels don't share one global UI state.
+  bool  show_imbalances_       = true;
+  bool  show_exhaustion_       = true;
+  float imbalance_threshold_  = 3.0f;
+  float exhaustion_threshold_  = 3.0f;
+
+  // Per-frame TSC telemetry state (Phase 7.4). One pair, shared between the
+  // update() and render() functions that each had a `static` tsc_freq_mhz_.
+  double   tsc_freq_mhz_       = 0.0;
+  uint64_t tsc_update_start_   = 0;
+  uint64_t tsc_update_end_     = 0;
+
  private:
   // Number formatting helper
   static std::string formatNumber(double value, NumberFormat format, int decimal_places);

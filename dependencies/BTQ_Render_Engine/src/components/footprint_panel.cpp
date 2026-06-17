@@ -138,8 +138,8 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
 }
 
 void FootprintPanel::update(float /*dt*/) {
-  // Phase 7.4: TSC frequency calibration (computed once per process).
-  static const double tsc_freq_mhz_ = []() {
+  // Phase 7.4: TSC frequency calibration (computed once per instance via member).
+  if (tsc_freq_mhz_ <= 0.0) {
 #if defined(__x86_64__) || defined(__i386__)
     auto t0 = std::chrono::high_resolution_clock::now();
     uint64_t r0 = __rdtsc();
@@ -147,20 +147,20 @@ void FootprintPanel::update(float /*dt*/) {
     uint64_t r1 = __rdtsc();
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+    tsc_freq_mhz_ = (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
 #else
-    return 0.0;
+    tsc_freq_mhz_ = 0.0;
 #endif
-  }();
+  }
 #if defined(__x86_64__) || defined(__i386__)
-  uint64_t tsc_update_start = __rdtsc();
+  tsc_update_start_ = __rdtsc();
 #endif
 
   if (!cluster_engine_) {
 #if defined(__x86_64__) || defined(__i386__)
     if (tsc_freq_mhz_ > 0.0) {
-      uint64_t tsc_update_end = __rdtsc();
-      double latency_us = static_cast<double>(tsc_update_end - tsc_update_start) / tsc_freq_mhz_;
+      tsc_update_end_ = __rdtsc();
+      double latency_us = static_cast<double>(tsc_update_end_ - tsc_update_start_) / tsc_freq_mhz_;
       btq::TelemetryCollector::getInstance().recordPerformanceMetric(
           "footprint_panel_update_latency_us", latency_us, "us");
     }
@@ -211,8 +211,8 @@ void FootprintPanel::update(float /*dt*/) {
   // Phase 7.4: record update latency to TelemetryCollector.
 #if defined(__x86_64__) || defined(__i386__)
   if (tsc_freq_mhz_ > 0.0) {
-    uint64_t tsc_update_end = __rdtsc();
-    double latency_us = static_cast<double>(tsc_update_end - tsc_update_start) / tsc_freq_mhz_;
+    tsc_update_end_ = __rdtsc();
+    double latency_us = static_cast<double>(tsc_update_end_ - tsc_update_start_) / tsc_freq_mhz_;
     btq::TelemetryCollector::getInstance().recordPerformanceMetric(
         "footprint_panel_update_latency_us", latency_us, "us");
   }
@@ -793,22 +793,10 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
 }
 
 void FootprintPanel::render() {
-  // Phase 7.4: TSC frequency calibration (computed once per process).
-  static const double tsc_freq_mhz_ = []() {
+  // Phase 7.4: TSC frequency calibration is now done in update() (per-instance
+  // member). Just take the render-start stamp here.
 #if defined(__x86_64__) || defined(__i386__)
-    auto t0 = std::chrono::high_resolution_clock::now();
-    uint64_t r0 = __rdtsc();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    uint64_t r1 = __rdtsc();
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
-#else
-    return 0.0;
-#endif
-  }();
-#if defined(__x86_64__) || defined(__i386__)
-  uint64_t tsc_render_start = __rdtsc();
+  tsc_update_start_ = __rdtsc();
 #endif
 
   begin_panel_window();
@@ -819,17 +807,13 @@ void FootprintPanel::render() {
   ImGui::SliderFloat("Delta Threshold", &delta_threshold_, -100.0f, 100.0f);
   
   // Imbalance and Exhaustion Detection Controls
-  static bool show_imbalances = true;
-  static bool show_exhaustion = true;
-  static float imbalance_threshold = 3.0f;
-  static float exhaustion_threshold = 3.0f;
   
   ImGui::Separator();
   ImGui::Text("Imbalance & Exhaustion Detection:");
-  ImGui::Checkbox("Show Imbalances", &show_imbalances);
-  ImGui::Checkbox("Show Exhaustion", &show_exhaustion);
-  ImGui::SliderFloat("Imbalance Threshold", &imbalance_threshold, 1.0f, 10.0f);
-  ImGui::SliderFloat("Exhaustion Threshold", &exhaustion_threshold, 1.0f, 10.0f);
+  ImGui::Checkbox("Show Imbalances", &show_imbalances_);
+  ImGui::Checkbox("Show Exhaustion", &show_exhaustion_);
+  ImGui::SliderFloat("Imbalance Threshold", &imbalance_threshold_, 1.0f, 10.0f);
+  ImGui::SliderFloat("Exhaustion Threshold", &exhaustion_threshold_, 1.0f, 10.0f);
 
   // Number formatting options
   const char* number_formats[] = {"Raw", "Thousands (K)", "Millions (M)", "Scientific", "Custom Decimal"};
@@ -931,16 +915,16 @@ void FootprintPanel::render() {
     std::vector<std::tuple<int64_t, int, double, double, double, std::string>> exhaustion_moves_raw;
     
     if (cluster_engine_) {
-        diagonal_imbalances_raw = cluster_engine_->detect_diagonal_imbalances(imbalance_threshold);
-        stacked_imbalances_raw = cluster_engine_->detect_stacked_imbalances(imbalance_threshold);
-        if (show_exhaustion) {
-            exhaustion_moves_raw = cluster_engine_->detect_exhaustion_moves(exhaustion_threshold);
+        diagonal_imbalances_raw = cluster_engine_->detect_diagonal_imbalances(imbalance_threshold_);
+        stacked_imbalances_raw = cluster_engine_->detect_stacked_imbalances(imbalance_threshold_);
+        if (show_exhaustion_) {
+            exhaustion_moves_raw = cluster_engine_->detect_exhaustion_moves(exhaustion_threshold_);
         }
     }
     
     // Convert raw detection results to visual indicators
     std::vector<FootprintCell> exhaustion_signals;
-    if (show_exhaustion) {
+    if (show_exhaustion_) {
         // Convert exhaustion moves to visual indicators
         for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
             // Find corresponding cells in our visualization grid
@@ -966,7 +950,7 @@ void FootprintPanel::render() {
     }
     
     // Highlight imbalance and exhaustion areas if enabled
-    if (show_imbalances || show_exhaustion) {
+    if (show_imbalances_ || show_exhaustion_) {
         // Highlight diagonal imbalances from raw detection
         for (const auto& [price_level, time_bucket, buy_vol, sell_vol, ratio] : diagonal_imbalances_raw) {
             // Map the detected price level and time bucket to visual cells
@@ -993,7 +977,7 @@ void FootprintPanel::render() {
             }
         }
         
-        if (show_exhaustion) {
+        if (show_exhaustion_) {
             // Highlight exhaustion moves from raw detection
             for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
                 // Map the detected price level and time bucket to visual cells

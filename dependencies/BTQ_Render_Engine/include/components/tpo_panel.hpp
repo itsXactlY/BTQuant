@@ -45,6 +45,17 @@ class TpoPanel : public PanelBase {
  private:
   uint32_t symbol_id_ = 0;
   Analytics::ClusterEngine* cluster_engine_ = nullptr;
+
+  // UI toggle state (was 4x static locals in render() — every TpoPanel
+  // instance now keeps its own toggles instead of sharing a single global).
+  bool show_letters_       = true;
+  bool show_va_            = true;
+  bool show_single_prints_ = true;
+  bool show_ib_            = true;
+
+  // Per-frame TSC telemetry state (Phase 7.4).
+  double tsc_freq_mhz_     = 0.0;
+  uint64_t tsc_last_ingress_ = 0;
 };
 
 }  // namespace BTQuant

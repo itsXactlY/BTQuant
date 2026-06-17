@@ -130,7 +130,6 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
                        ChartManager* chart_manager,
                        PanelManager* panel_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
-  indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 
   // Initialize the historical time & sales panel for showing trades
@@ -322,8 +321,8 @@ void ChartPanel::update(float dt) {
 }
 
 void ChartPanel::render() {
-  // Phase 7.4: TSC frequency calibration (computed once per process).
-  static const double tsc_freq_mhz_ = []() {
+  // Phase 7.4: TSC frequency calibration (per-instance member, computed once).
+  if (tsc_freq_mhz_ <= 0.0) {
 #if defined(__x86_64__) || defined(__i386__)
     auto t0 = std::chrono::high_resolution_clock::now();
     uint64_t r0 = __rdtsc();
@@ -331,13 +330,13 @@ void ChartPanel::render() {
     uint64_t r1 = __rdtsc();
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+    tsc_freq_mhz_ = (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
 #else
-    return 0.0;
+    tsc_freq_mhz_ = 0.0;
 #endif
-  }();
+  }
 #if defined(__x86_64__) || defined(__i386__)
-  uint64_t tsc_render_start = __rdtsc();
+  tsc_render_start_ = __rdtsc();
 #endif
   begin_panel_window();
 
@@ -466,7 +465,7 @@ void ChartPanel::render() {
 #if defined(__x86_64__) || defined(__i386__)
   if (tsc_freq_mhz_ > 0.0) {
     uint64_t tsc_render_end = __rdtsc();
-    double latency_us = static_cast<double>(tsc_render_end - tsc_render_start) / tsc_freq_mhz_;
+    double latency_us = static_cast<double>(tsc_render_end - tsc_render_start_) / tsc_freq_mhz_;
     btq::TelemetryCollector::getInstance().recordPerformanceMetric(
         "chart_panel_render_latency_us", latency_us, "us");
   }
@@ -2959,18 +2958,13 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
         // Handle mouse dragging for creating drawing tools
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-            // Check if we're in drawing mode
-            static bool is_drawing = false;
-            static ImPlotPoint start_point;
-            static std::string current_tool_id;
-
-            if (!is_drawing) {
-                start_point = ImPlot::GetPlotMousePos();
-                is_drawing = true;
-
-                // Generate a unique ID for the new tool
-                static int tool_counter = 0;
-                current_tool_id = "tool_" + std::to_string(++tool_counter);
+            // Check if we're in drawing mode (per-instance state via members)
+            if (!is_drawing_tool_) {
+                ImPlotPoint mp = ImPlot::GetPlotMousePos();
+                tool_start_point_.x = mp.x;
+                tool_start_point_.y = mp.y;
+                is_drawing_tool_ = true;
+                current_tool_id_ = "tool_" + std::to_string(++tool_counter_);
             }
 
             // During drag, we could preview the tool being drawn
@@ -2983,7 +2977,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
                 // In a real implementation, we would create the tool based on the
                 // selected tool type and the start/end points
                 // For now, we'll just reset the drawing state
-                is_drawing = false;
+                is_drawing_tool_ = false;
             }
         }
     }

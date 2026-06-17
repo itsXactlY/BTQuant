@@ -203,6 +203,11 @@ class WatchlistPanel : public PanelBase {
   // Alerts management UI
   void render_alerts_management();
 
+  // Per-instance debounce + counter (were static locals in render/update —
+  // sharing those between multiple WatchlistPanels was a bug).
+  float subscription_check_timer_ = 0.0f;
+  int   new_group_counter_       = 1;
+
  private:
   // Column customization members
   std::vector<ColumnInfo> column_info_;

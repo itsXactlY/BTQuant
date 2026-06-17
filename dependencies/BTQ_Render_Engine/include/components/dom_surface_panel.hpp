@@ -223,10 +223,10 @@ class DomSurfacePanel : public PanelBase {
   void updateAutoCenter();
 
   // Flush DOM Ruler functionality
+  // Flush DOM Ruler — live bid/ask imbalance strip
   void renderFlushDOMRuler();
-  void updateFlushDOMRulerData();
-  bool show_flush_dom_ruler_ = true;  // Toggle for flush DOM ruler display
-  float flush_dom_ruler_width_ = 0.05f;  // Width as fraction of plot (5%)
+  bool   show_flush_dom_ruler_   = true;  // Toggle for flush DOM ruler display
+  float  flush_dom_ruler_width_  = 0.05f;  // Width as fraction of plot (5%)
 
   // DOM Ladder (5-column price ladder)
   void renderDOMLadder();

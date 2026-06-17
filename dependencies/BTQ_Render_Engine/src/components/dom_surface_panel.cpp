@@ -1249,10 +1249,51 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::Separator();
 }
 
+// ============================================================================
+// Flush DOM Ruler — live bid/ask imbalance bar drawn on the right edge of
+// the heatmap plot. Width is configurable (fraction of plot width).
+// ============================================================================
 void DomSurfacePanel::renderFlushDOMRuler() {
-  // TODO: Implement Flush DOM Ruler rendering
-  // This function should render the live orderbook at the right edge of the heatmap panel
-  // For now, this is a stub implementation
+  if (!show_flush_dom_ruler_) return;
+
+  ImDrawList* dl = ImPlot::GetPlotDrawList();
+  if (!dl) return;
+
+  // Compute plot's right edge and a vertical strip width.
+  ImVec2 plot_min = ImPlot::GetPlotPos();
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+  float x_right = plot_min.x + plot_size.x;
+  float strip_w = plot_size.x * flush_dom_ruler_width_;
+
+  // Pull the latest snapshot for bid/ask imbalance.
+  auto snap_opt =
+      processor_ ? processor_->get_atomic_snapshot(current_symbol_id_) : std::nullopt;
+  float bid_share = 0.5f, ask_share = 0.5f;
+  if (snap_opt) {
+    // AtomicL2Snapshot only carries top-of-book (best_bid_size / best_ask_size),
+    // not full depth. Use those as the imbalance proxy.
+    double total_bid = snap_opt->best_bid_size;
+    double total_ask = snap_opt->best_ask_size;
+    if ((total_bid + total_ask) > 0.0) {
+      bid_share = static_cast<float>(total_bid / (total_bid + total_ask));
+      ask_share = 1.0f - bid_share;
+    }
+  }
+
+  // Draw bid (Neon Mint) on the left half of the strip, ask (Crimson) on the right.
+  // y extent = full plot height (price range is the plot's vertical axis).
+  ImVec2 bot_left(plot_min.x + plot_size.x - strip_w, plot_min.y);
+  ImVec2 bot_right(x_right, plot_min.y + plot_size.y);
+  float mid_x = bot_left.x + strip_w * bid_share;
+  dl->AddRectFilled(bot_left, ImVec2(mid_x, bot_right.y),
+                    IM_COL32(0, 230, 102, 110));     // Neon Mint
+  dl->AddRectFilled(ImVec2(mid_x, bot_left.y), bot_right,
+                    IM_COL32(230, 25, 38, 110));     // Crimson
+  dl->AddRect(bot_left, bot_right, IM_COL32(255, 255, 255, 200), 0.0f, 0, 1.0f);
+
+  // 50% reference line in the centre.
+  dl->AddLine(ImVec2(mid_x, bot_left.y), ImVec2(mid_x, bot_right.y),
+              IM_COL32(255, 255, 255, 180), 1.0f);
 }
 
 }  // namespace BTQuant

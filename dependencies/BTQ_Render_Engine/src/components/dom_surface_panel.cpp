@@ -631,6 +631,18 @@ void DomSurfacePanel::render() {
       ImPlot::PopColormap();
     }
 
+    // Phase 4.2: GPU compute heatmap texture backdrop (Phase 1). When the
+    // Vulkan LOB pipeline publishes an ImGui texture id, overlay it on the
+    // plot as a 70%-opacity background. Falls back to CPU heatmap above.
+    if (heatmap_tex_id_ != nullptr && cols > 0 && rows > 0) {
+      ImVec2 p_min = ImPlot::GetPlotPos();
+      ImVec2 p_size = ImPlot::GetPlotSize();
+      ImVec2 p_max = ImVec2(p_min.x + p_size.x, p_min.y + p_size.y);
+      ImPlot::GetPlotDrawList()->AddImage(
+          heatmap_tex_id_, p_min, p_max, ImVec2(0, 0), ImVec2(1, 1),
+          IM_COL32(255, 255, 255, 178));  // 70% opacity overlay
+    }
+
     // Render Persistent Level Lines OVER the heatmap
     if (show_persistent_lines_) {
       renderPersistentLevels();

@@ -1,5 +1,4 @@
-#ifndef BTQ_TASK_SCHEDULER_HPP
-#define BTQ_TASK_SCHEDULER_HPP
+#pragma once
 
 #include <thread>
 #include <mutex>
@@ -257,5 +256,3 @@ public:
 };
 
 } // namespace btq
-
-#endif // BTQ_TASK_SCHEDULER_HPP

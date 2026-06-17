@@ -7,7 +7,7 @@ import mmap, os, struct, time, json, random, signal, sys
 SHM_PATH = "/dev/shm/btquant"
 SYMBOLS_FILE = "/dev/shm/btquant_symbols.json"
 
-HEADER_SIZE = 80
+HEADER_SIZE = 4096  # must match C++ HOTSPINE_HEADER_SIZE in hotspine_data_bridge.cpp
 TRADE_SIZE = 40
 OB_SIZE = 6464       # alignas(64): 6424 -> 6464
 OB_HEADER = 24       # uint64+uint64+uint32+uint8+uint8+uint8[2]

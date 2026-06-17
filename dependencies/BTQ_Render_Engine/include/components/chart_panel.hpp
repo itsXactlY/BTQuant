@@ -372,8 +372,6 @@ class ChartPanel : public PanelBase {
   void render_session_vwap_overlay(const ChartInstance& chart);
   void render_cumulative_delta_overlay(const ChartInstance& chart);
   void create_anchored_vwap_at_time(uint64_t timestamp);
-  void render_trades_popup();
-
   // Indicator rendering methods
   void render_sma_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_ema_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx);

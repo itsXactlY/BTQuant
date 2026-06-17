@@ -448,9 +448,6 @@ void ChartPanel::render() {
   // Render the indicator overlay panel
   render_indicator_overlay_panel();
 
-  // Render the trades popup if needed
-  render_trades_popup();
-
   // Render the historical time & sales popup if needed
   if (historical_time_sales_panel_ && show_trades_popup_) {
     historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_, symbol_);
@@ -3644,12 +3641,6 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
     }
   }
 
-}
-
-void ChartPanel::render_trades_popup() {
-  // This method is kept for backward compatibility but will be replaced by the HistoricalTimeSalesPanel popup
-  // The actual popup is now handled by the HistoricalTimeSalesPanel.show_trades_popup method
-  // which is called from the render method
 }
 
 // Multi-timeframe indicator methods implementation

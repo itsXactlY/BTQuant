@@ -1,12 +1,19 @@
 #include "components/dom_surface_panel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <iostream>
+#include <limits>
 #include <numeric>
 
 #include <imgui.h>
+
+#include "ChartMath.hpp"
+#include "sync/crosshair_helper.hpp"
 
 namespace BTQuant {
 
@@ -554,6 +561,11 @@ void DomSurfacePanel::render() {
     }
   }
 
+  // Phase 4.3: Auto-center the viewport on the live mid price. Done every
+  // frame (not only when dirty) so the viewport follows the market in
+  // real-time. The function is a no-op if no snapshot is available.
+  updateAutoCenter();
+
   begin_panel_window();
 
   if (current_symbol_id_ == 0) {
@@ -649,6 +661,51 @@ void DomSurfacePanel::render() {
   }
 
   end_panel_window();
+}
+
+// ============================================================
+// Phase 4.3: Auto-center the price viewport on the live mid price.
+// Reads mid_price from the atomic L2 snapshot. If |mid - center| exceeds
+// 5 ticks, shifts the price bounds by 10% of the delta. The same shift
+// is applied to the heatmap bounds (used by the ImPlot view).
+// ============================================================
+void DomSurfacePanel::updateAutoCenter() {
+  if (!auto_center_enabled_ || !processor_ || current_symbol_id_ == 0) return;
+
+  auto snap_opt = processor_->get_atomic_snapshot(current_symbol_id_);
+  if (!snap_opt) return;
+  double mid = snap_opt->mid_price;
+  if (mid <= 0.0) return;
+
+  // Determine a tick size for the threshold. Use the same heuristic as
+  // renderDOMLadder() — diff between the first two bid/ask prices.
+  double tick_size = 0.01;
+  auto book_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (book_opt) {
+    const auto& book = *book_opt;
+    if (book.bids.size() >= 2) {
+      tick_size = std::abs(book.bids[0].price - book.bids[1].price);
+    } else if (book.asks.size() >= 2) {
+      tick_size = std::abs(book.asks[0].price - book.asks[1].price);
+    }
+  }
+  if (tick_size <= 0.0) tick_size = 0.01;
+
+  // Heatmap viewport (Y-axis is price)
+  if (bounds_max_[1] > bounds_min_[1]) {
+    double center = 0.5 * (bounds_min_[1] + bounds_max_[1]);
+    double delta = mid - center;
+    if (std::abs(delta) > tick_size * 5.0) {
+      double shift = 0.1 * delta;
+      bounds_min_[1] += shift;
+      bounds_max_[1] += shift;
+    }
+  }
+
+  // DOM ladder uses center_tick derived from mid_price every frame, so the
+  // ladder is intrinsically self-centering. We just remember the mid for
+  // any non-ladder use (e.g. overlay markers).
+  last_known_mid_ = mid;
 }
 
 // ============================================================

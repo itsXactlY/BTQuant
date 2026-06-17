@@ -8,12 +8,21 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <thread>
 
 #include "../../include/analytics/cluster_engine.hpp"
+#include "../../include/data/VolumeDataTypes.h"
 #include "analytics/cluster_engine.hpp"
 #include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
+
+// Phase 7.1 + 7.4: crosshair global sync + TSC telemetry
+#include "../../include/sync/crosshair_helper.hpp"
+#include "../../include/telemetry_collector.h"
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
 
 namespace BTQuant {
 
@@ -129,7 +138,35 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
 }
 
 void FootprintPanel::update(float /*dt*/) {
-  if (!cluster_engine_) return;
+  // Phase 7.4: TSC frequency calibration (computed once per process).
+  static const double tsc_freq_mhz_ = []() {
+#if defined(__x86_64__) || defined(__i386__)
+    auto t0 = std::chrono::high_resolution_clock::now();
+    uint64_t r0 = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    uint64_t r1 = __rdtsc();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+    return 0.0;
+#endif
+  }();
+#if defined(__x86_64__) || defined(__i386__)
+  uint64_t tsc_update_start = __rdtsc();
+#endif
+
+  if (!cluster_engine_) {
+#if defined(__x86_64__) || defined(__i386__)
+    if (tsc_freq_mhz_ > 0.0) {
+      uint64_t tsc_update_end = __rdtsc();
+      double latency_us = static_cast<double>(tsc_update_end - tsc_update_start) / tsc_freq_mhz_;
+      btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+          "footprint_panel_update_latency_us", latency_us, "us");
+    }
+#endif
+    return;
+  }
 
   const auto& canvas = cluster_engine_->getClusterCanvas();
   if (canvas.empty()) return;
@@ -170,6 +207,16 @@ void FootprintPanel::update(float /*dt*/) {
       cells_.push_back(std::move(cell));
     }
   }
+
+  // Phase 7.4: record update latency to TelemetryCollector.
+#if defined(__x86_64__) || defined(__i386__)
+  if (tsc_freq_mhz_ > 0.0) {
+    uint64_t tsc_update_end = __rdtsc();
+    double latency_us = static_cast<double>(tsc_update_end - tsc_update_start) / tsc_freq_mhz_;
+    btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+        "footprint_panel_update_latency_us", latency_us, "us");
+  }
+#endif
 }
 
 ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume) const {
@@ -746,6 +793,24 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
 }
 
 void FootprintPanel::render() {
+  // Phase 7.4: TSC frequency calibration (computed once per process).
+  static const double tsc_freq_mhz_ = []() {
+#if defined(__x86_64__) || defined(__i386__)
+    auto t0 = std::chrono::high_resolution_clock::now();
+    uint64_t r0 = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    uint64_t r1 = __rdtsc();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+    return 0.0;
+#endif
+  }();
+#if defined(__x86_64__) || defined(__i386__)
+  uint64_t tsc_render_start = __rdtsc();
+#endif
+
   begin_panel_window();
 
   // Show some basic controls
@@ -945,6 +1010,19 @@ void FootprintPanel::render() {
     }
 
     ImPlot::EndPlot();
+  }
+
+  // ---- Phase 7.1 crosshair reader: dashed hline at the shared price ----
+  if (BTQuant::crosshair_active_for(symbol_id_)) {
+    double ch_price = BTQuant::load_crosshair_price(symbol_id_);
+    if (ch_price > 0.0) {
+      ImVec2 panel_min = ImGui::GetWindowPos();
+      ImVec2 panel_max = { panel_min.x + ImGui::GetWindowWidth(),
+                           panel_min.y + ImGui::GetWindowHeight() };
+      float y = ImPlot::PlotToPixels(0.0, ch_price).y;
+      BTQuant::render_dashed_hline(ImGui::GetWindowDrawList(),
+                                   panel_min.x + 30.0f, panel_max.x - 10.0f, y);
+    }
   }
 
   end_panel_window();

@@ -13,6 +13,7 @@
 #endif
 
 #include "../../include/components/theme_manager.hpp"
+#include "../../include/sync/crosshair_helper.hpp"
 #include "imgui.h"
 #include "implot.h"
 
@@ -1424,5 +1425,48 @@ void TapePanel::writeInt32(std::ofstream& file, int32_t value) {
   file.put((value >> 24) & 0xFF);
 }
 #endif
+
+// ============================================================================
+// Phase 3 helper implementations (Spec 3.3 / 3.5 / 3.6)
+// ============================================================================
+// computeAlphaRanks: for each trade, count how many of the last `last_n`
+// trades have size <= this trade's size. The rank ∈ [0, 1] is mapped by
+// render_trade_table to alpha ∈ [0.05, 0.50].
+std::vector<double> TapePanel::computeAlphaRanks(
+    const std::vector<RenderEngine::TradeData>& trades,
+    size_t last_n) const {
+  std::vector<double> ranks(trades.size(), 0.0);
+  if (trades.empty()) return ranks;
+
+  const size_t window = std::min(last_n, trades.size());
+  const size_t newest_offset = trades.size() - 1;
+
+  for (size_t i = 0; i < window; ++i) {
+    size_t idx = newest_offset - i;
+    size_t count = 0;
+    for (size_t j = 0; j < window; ++j) {
+      size_t jdx = newest_offset - j;
+      if (trades[jdx].size <= trades[idx].size) ++count;
+    }
+    ranks[idx] = static_cast<double>(count) / static_cast<double>(window);
+  }
+  return ranks;
+}
+
+// detectSweep: the row at `original_index` (newer) compares with the
+// next-newer trade. A sweep is "two consecutive trades within 50ms and
+// at different prices" — typical iceberg / stop-run signature.
+bool TapePanel::detectSweep(const std::vector<RenderEngine::TradeData>& trades,
+                            size_t original_index) const {
+  // trades[0] is oldest; trades[size-1] is newest.
+  // The newer trade sits at `original_index`; the next-newer is at index+1.
+  if (original_index + 1 >= trades.size()) return false;
+  const auto& t0 = trades[original_index];
+  const auto& t1 = trades[original_index + 1];
+  uint64_t delta_us =
+      (t0.timestamp > t1.timestamp) ? (t0.timestamp - t1.timestamp)
+                                    : (t1.timestamp - t0.timestamp);
+  return (delta_us < 50000ULL) && (t0.price != t1.price);
+}
 
 }  // namespace BTQuant

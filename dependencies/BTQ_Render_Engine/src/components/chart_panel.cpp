@@ -20,6 +20,14 @@
 #include "../../include/components/drawing_tools.hpp"
 #include "../../include/components/chart_panel_settings.hpp"
 
+// Phase 7.1 + 7.4: crosshair global sync + TSC telemetry
+#include "../../include/sync/crosshair_helper.hpp"
+#include "../../include/telemetry_collector.h"
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
+#include <thread>
+
 namespace BTQuant {
 
 // Helper method to calculate all indicators when new data arrives
@@ -314,6 +322,23 @@ void ChartPanel::update(float dt) {
 }
 
 void ChartPanel::render() {
+  // Phase 7.4: TSC frequency calibration (computed once per process).
+  static const double tsc_freq_mhz_ = []() {
+#if defined(__x86_64__) || defined(__i386__)
+    auto t0 = std::chrono::high_resolution_clock::now();
+    uint64_t r0 = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    uint64_t r1 = __rdtsc();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+    return 0.0;
+#endif
+  }();
+#if defined(__x86_64__) || defined(__i386__)
+  uint64_t tsc_render_start = __rdtsc();
+#endif
   begin_panel_window();
 
   if (!is_visible()) {
@@ -436,6 +461,16 @@ void ChartPanel::render() {
   if (settings_) {
     settings_->render();
   }
+
+  // Phase 7.4: record render latency (TSC -> TelemetryCollector).
+#if defined(__x86_64__) || defined(__i386__)
+  if (tsc_freq_mhz_ > 0.0) {
+    uint64_t tsc_render_end = __rdtsc();
+    double latency_us = static_cast<double>(tsc_render_end - tsc_render_start) / tsc_freq_mhz_;
+    btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+        "chart_panel_render_latency_us", latency_us, "us");
+  }
+#endif
 }
 
 void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchange) {
@@ -2853,6 +2888,16 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
+
+      // Phase 7.1: publish crosshair price to global atomic for sibling panels
+      // (footprint/tpo/dom). ChartPanel is the writer; readers honour symbol_id.
+      auto ch_id_opt = chart_manager_->getSymbolId(symbol_);
+      int32_t ch_symbol_id = ch_id_opt ? static_cast<int32_t>(*ch_id_opt) : -1;
+      BTQuant::write_crosshair(mouse_pos.y, ch_symbol_id);
+    } else {
+      // Mouse not over the plot: clear the global crosshair so sibling panels
+      // don't keep drawing a stale line.
+      BTQuant::clear_crosshair();
     }
     
     // Render global synchronized crosshair if enabled

@@ -79,6 +79,12 @@ class DomSurfacePanel : public PanelBase {
   void setHistoryDepth(int depth) { history_depth_ = depth; }
   void setPriceRange(double range) { price_range_ = range; }
 
+  // Phase 4: Heatmap texture backdrop setter.
+  // Pass 0 to disable the backdrop. The CachedTexture is owned by the caller
+  // (e.g. LobHeatmapComputePipeline); this panel only retains the ImGui id.
+  void setHeatmapTextureId(void* im_texture_id) { heatmap_tex_id_ = im_texture_id; }
+  void* getHeatmapTextureId() const { return heatmap_tex_id_; }
+
   // Getters for serialization
   uint32_t get_symbol_id() const { return current_symbol_id_; }
   double get_price_range() const { return price_range_; }
@@ -211,6 +217,11 @@ class DomSurfacePanel : public PanelBase {
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type);
 
+  // Phase 4.3: Auto-center the viewport on the live mid price.
+  // Shifts the price bounds by 10% of the (mid - center) delta whenever
+  // |delta| > 5 ticks. No-op if the processor is null or no snapshot exists.
+  void updateAutoCenter();
+
   // Flush DOM Ruler functionality
   void renderFlushDOMRuler();
   void updateFlushDOMRulerData();
@@ -223,6 +234,11 @@ class DomSurfacePanel : public PanelBase {
   bool show_heatmap_overlay_ = false;    // Keep heatmap as optional background
   int ladder_visible_rows_ = 30;         // Price levels above/below center
   double running_cvd_ = 0.0;             // Cumulative Volume Delta
+
+  // Phase 4: Auto-center + heatmap backdrop state.
+  bool auto_center_enabled_ = true;      // Phase 4.3: shift viewport to track mid
+  void* heatmap_tex_id_ = nullptr;       // Phase 4.2: ImGui texture for backdrop
+  double last_known_mid_ = 0.0;          // Cached for the auto-center step
 };
 
 }  // namespace BTQuant

@@ -12,6 +12,14 @@
 #include "imgui.h"
 #include "implot.h"
 
+// Phase 7.1 + 7.4: crosshair global sync + TSC telemetry
+#include "../../include/sync/crosshair_helper.hpp"
+#include "../../include/telemetry_collector.h"
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
+#include <thread>
+
 namespace BTQuant {
 
 // ==========================================================================
@@ -359,6 +367,46 @@ void TpoPanel::render() {
   ImGui::TextColored(ImVec4(1, 1, 0, 0.6f),
                      "TPO | POC: %.2f | VAH: %.2f | VAL: %.2f | Hi: %.2f | Lo: %.2f",
                      va.poc_price, va.vah, va.val, va.session_high, va.session_low);
+
+  // ---- Phase 7.1 crosshair reader: draw a dashed hline at the shared price ----
+  if (BTQuant::crosshair_active_for(symbol_id_)) {
+    double ch_price = BTQuant::load_crosshair_price(symbol_id_);
+    if (ch_price > 0.0 && ch_price >= price_min && ch_price <= price_max) {
+      ImVec2 panel_min = ImGui::GetWindowPos();
+      ImVec2 panel_max = { panel_min.x + ImGui::GetWindowWidth(),
+                           panel_min.y + ImGui::GetWindowHeight() };
+      float y = ImPlot::PlotToPixels(0.0, ch_price).y;
+      BTQuant::render_dashed_hline(ImGui::GetWindowDrawList(),
+                                   panel_min.x + 30.0f, panel_max.x - 10.0f, y);
+    }
+  }
+
+  // ---- Phase 7.4: TSC latency record (per-frame) ----
+  {
+    static const double tsc_freq_mhz_ = []() {
+#if defined(__x86_64__) || defined(__i386__)
+      auto t0 = std::chrono::high_resolution_clock::now();
+      uint64_t r0 = __rdtsc();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      uint64_t r1 = __rdtsc();
+      auto t1 = std::chrono::high_resolution_clock::now();
+      double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+      return (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+      return 0.0;
+#endif
+    }();
+#if defined(__x86_64__) || defined(__i386__)
+    static uint64_t tsc_last_ingress = __rdtsc();
+    uint64_t tsc_now = __rdtsc();
+    double us = (tsc_freq_mhz_ > 0.0)
+                    ? static_cast<double>(tsc_now - tsc_last_ingress) / tsc_freq_mhz_
+                    : 0.0;
+    btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+        "tpo_panel_render_us", us, "us");
+    tsc_last_ingress = tsc_now;
+#endif
+  }
 
   end_panel_window();
 }

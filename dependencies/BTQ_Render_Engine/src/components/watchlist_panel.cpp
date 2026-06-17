@@ -77,6 +77,8 @@ std::string formatPrice(double price) {
   }
 }
 
+namespace {
+
 // Enhanced interpolation function for smoother transitions
 double interpolateValue(double start, double end, float progress) {
   // Use quintic easing for even smoother animation with better acceleration/deceleration
@@ -179,6 +181,8 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }
+
+}  // namespace
 
 WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,

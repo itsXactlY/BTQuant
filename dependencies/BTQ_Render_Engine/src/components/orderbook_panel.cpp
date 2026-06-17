@@ -19,11 +19,15 @@ OrderbookPanel::~OrderbookPanel() {
     }
 }
 
+namespace {
+
 // Helper function to round to nearest multiple
 double roundToNearest(double value, double multiple) {
     if (multiple == 0.0) return value;
     return std::round(value / multiple) * multiple;
 }
+
+}  // namespace
 
 OrderbookPanel::OrderbookPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,

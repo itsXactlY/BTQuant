@@ -71,13 +71,13 @@ class TimeAndSalesPanel : public PanelBase {
   // UI state for filters
   bool show_histogram_ = false;
   bool show_search_ = false;  // New search panel
-  char min_size_input_[32] = "0.0";
-  char max_size_input_[32] = "";  // Empty means no upper limit
-  char min_price_input_[32] = ""; // Empty means no lower limit
-  char max_price_input_[32] = ""; // Empty means no upper limit
-  char exchange_input_[64] = "";
-  char start_time_input_[32] = "";
-  char end_time_input_[32] = "";
+  std::string min_size_input_ = "0.0";
+  std::string max_size_input_ = "";  // Empty means no upper limit
+  std::string min_price_input_ = ""; // Empty means no lower limit
+  std::string max_price_input_ = ""; // Empty means no upper limit
+  std::string exchange_input_ = "";
+  std::string start_time_input_ = "";
+  std::string end_time_input_ = "";
 
   // Cached trades for rendering
   std::vector<RenderEngine::TradeData> cached_trades_;

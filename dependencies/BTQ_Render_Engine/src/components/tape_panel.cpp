@@ -797,6 +797,10 @@ void TapePanel::render_trade_table() {
     int filtered_index = 0;                                            // Index in the filtered list
     int original_index = static_cast<int>(cached_trades_.size()) - 1;  // Start from newest trade
 
+    // Phase 3.3: pre-compute alpha-by-size rank for the last 500 trades so
+    // every rendered row can apply an alpha tinted to its size (rank ∈ [0,1]).
+    const std::vector<double> alpha_ranks = computeAlphaRanks(cached_trades_, 500);
+
     while (original_index >= 0 && clipper.Step()) {
       // Process all rows in the current clipper step
       while (clipper.DisplayStart < clipper.DisplayEnd && original_index >= 0) {
@@ -839,6 +843,10 @@ void TapePanel::render_trade_table() {
 
             // Check if this trade is part of a cluster
             bool is_clustered = isTradeClustered(original_index, cached_trades_);
+
+            // Phase 3.3: alpha-by-size ranking for the last 500 trades.
+            // Reused across rows, computed once before the row loop.
+            (void)is_clustered;  // existing cluster highlight stays below
 
             // Set background color for search matches and clustered trades
             if (is_search_match) {
@@ -940,6 +948,29 @@ void TapePanel::render_trade_table() {
 
             if (is_block_trade_size) {
               ImGui::PopFont();
+            }
+
+            // Phase 3.3: apply alpha-by-size tint to the size cell. Rank 0
+            // (smallest of the last 500) -> alpha 0.05; rank 1 (largest) -> 0.50.
+            if (original_index < static_cast<int>(alpha_ranks.size())) {
+              float a = 0.05f + 0.45f * static_cast<float>(alpha_ranks[original_index]);
+              size_color.w *= a;  // Dim cell colour proportionally to rank
+              ImGui::SameLine();
+              ImGui::TextDisabled("(%.0f%%)", alpha_ranks[original_index] * 100.0f);
+            }
+
+            // Phase 3.5: detect sweep bracket (two trades within 50ms at
+            // different prices) and draw a 1px white vertical bracket on the
+            // left edge of the row. Uses the un-filtered cached_trades_ so
+            // the detection sees consecutive trades regardless of UI filter.
+            if (detectSweep(cached_trades_, original_index)) {
+              ImVec2 p_min = ImGui::GetItemRectMin();
+              ImVec2 p_max = ImGui::GetItemRectMax();
+              if (p_min.x > 0.0f && p_max.x > p_min.x) {
+                ImGui::GetWindowDrawList()->AddLine(
+                    ImVec2(p_min.x, p_min.y), ImVec2(p_min.x, p_max.y),
+                    IM_COL32(255, 255, 255, 200), 1.0f);
+              }
             }
 
             // Side column

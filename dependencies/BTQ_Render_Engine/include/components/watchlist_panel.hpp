@@ -156,7 +156,6 @@ class WatchlistPanel : public PanelBase {
   std::vector<uint32_t>& get_current_display_order();
   const std::vector<uint32_t>& get_current_display_order() const;
 
-  void update_watchlist_data();
   void render_table_header();
   void render_table_row(const WatchlistEntry& entry);
   void render_filter_input();
@@ -175,7 +174,6 @@ class WatchlistPanel : public PanelBase {
   void render_draggable_header(int column_index, const char* label);
 
   // Drag and drop helpers
-  void handle_drag_drop_reordering();
   void cleanup_drag_resources();
 
   // Column customization helpers

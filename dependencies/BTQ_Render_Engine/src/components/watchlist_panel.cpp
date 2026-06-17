@@ -926,12 +926,6 @@ void WatchlistPanel::clear_watchlist() {
   save_watchlist_order_to_config(config_file_path_);
 }
 
-void WatchlistPanel::update_watchlist_data() {
-  // This method is now deprecated since we use real-time updates
-  // The data is updated in on_market_data_update() when new market data arrives
-  // This method remains for backward compatibility but does nothing
-}
-
 void WatchlistPanel::render_group_tabs() {
   // Create tabs for different watchlist groups with enhanced styling
   ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);    // Round the tab corners more
@@ -2298,18 +2292,6 @@ void WatchlistPanel::sort_watchlist() {
 
   // Save the updated order to config file after sorting
   save_watchlist_order_to_config(config_file_path_);
-}
-
-void WatchlistPanel::handle_drag_drop_reordering() {
-  // This method is now deprecated as drag and drop reordering is handled directly in
-  // render_table_row when drag and drop occurs. This ensures immediate visual feedback and proper
-  // state management. The drag-and-drop functionality is now fully implemented and working with
-  // config saving.
-
-  // NOTE: The actual drag-and-drop reordering happens in render_table_row() method
-  // where each row acts as both a drag source and drop target.
-  // When a drag operation completes, the display_order_ vector is updated immediately
-  // and the new order is saved to the config file.
 }
 
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {

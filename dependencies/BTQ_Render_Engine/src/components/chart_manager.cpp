@@ -166,12 +166,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     chart.volumes.reserve(candles.size());
 
     for (const auto& candle : candles) {
-      chart.dates.push_back(static_cast<double>(candle.timestamp) / 1000000.0);
-      chart.opens.push_back(static_cast<float>(candle.open));
-      chart.highs.push_back(static_cast<float>(candle.high));
-      chart.lows.push_back(static_cast<float>(candle.low));
-      chart.closes.push_back(static_cast<float>(candle.close));
-      chart.volumes.push_back(static_cast<float>(candle.volume));
+      append_candle_to(chart, candle);
     }
   } else {
     double last_stored_ts = chart.dates.back();
@@ -185,11 +180,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
       // 1e-3)
       if (std::abs(candle_ts - last_stored_ts) < 0.001) {
         // Update the last candle as it might still be aggregating
-        chart.opens.back() = static_cast<float>(candles[i].open);
-        chart.highs.back() = static_cast<float>(candles[i].high);
-        chart.lows.back() = static_cast<float>(candles[i].low);
-        chart.closes.back() = static_cast<float>(candles[i].close);
-        chart.volumes.back() = static_cast<float>(candles[i].volume);
+        append_candle_to(chart, candles[i]);
         start_idx = i + 1;
         found_overlap = true;
         break;
@@ -217,13 +208,18 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
 
   // Append ONLY new candles (or all if reset/gap)
   for (size_t i = start_idx; i < candles.size(); ++i) {
-    chart.dates.push_back(static_cast<double>(candles[i].timestamp) / 1000000.0);
-    chart.opens.push_back(static_cast<float>(candles[i].open));
-    chart.highs.push_back(static_cast<float>(candles[i].high));
-    chart.lows.push_back(static_cast<float>(candles[i].low));
-    chart.closes.push_back(static_cast<float>(candles[i].close));
-    chart.volumes.push_back(static_cast<float>(candles[i].volume));
+    append_candle_to(chart, candles[i]);
   }
+}
+
+void ChartManager::append_candle_to(ChartInstance& chart,
+                                    const RenderEngine::OHLCVCandle& candle) {
+  chart.dates.push_back(static_cast<double>(candle.timestamp) / 1000000.0);
+  chart.opens.push_back(static_cast<float>(candle.open));
+  chart.highs.push_back(static_cast<float>(candle.high));
+  chart.lows.push_back(static_cast<float>(candle.low));
+  chart.closes.push_back(static_cast<float>(candle.close));
+  chart.volumes.push_back(static_cast<float>(candle.volume));
 }
 
 void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe) {

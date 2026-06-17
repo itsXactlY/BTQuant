@@ -23,7 +23,13 @@ telegram_api_hash = ""
 telegram_session_file = ".base.session"
 telegram_channel = -100
 
-import fastmssql
+# fast_mssql shim — drop-in for the C++ fast_mssql module
+# The shim is in the mssql/ dir which is on sys.path
+import sys
+_fast_mssql_path = __file__.rsplit('/', 1)[0] + '/feeds/mssql'
+if _fast_mssql_path not in sys.path:
+    sys.path.insert(0, _fast_mssql_path)
+import fast_mssql
 
 # SQL Server connection details
 server = 'localhost'

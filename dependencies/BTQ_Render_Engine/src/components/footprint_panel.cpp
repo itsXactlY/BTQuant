@@ -126,12 +126,50 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
   lod_system_.setLabelRenderThreshold(20.0f);
   lod_system_.setDetailRenderThreshold(8.0f);
   
-  // Initialize the ClusterEngine with a default tick size
-  cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size of 0.25
 }
 
 void FootprintPanel::update(float /*dt*/) {
-  // Update logic if needed
+  if (!cluster_engine_) return;
+
+  const auto& canvas = cluster_engine_->getClusterCanvas();
+  if (canvas.empty()) return;
+  if (!data_dirty_.exchange(false, std::memory_order_acq_rel)) return;
+
+  const double tick_size = cluster_engine_->getTickSize();
+  const int64_t min_tick = cluster_engine_->getMinTickIndex();
+
+  cells_.clear();
+  cells_.reserve(canvas.size() * 16);
+
+  for (size_t price_idx = 0; price_idx < canvas.size(); ++price_idx) {
+    const auto& time_buckets = canvas[price_idx];
+    const double price = static_cast<double>(min_tick + static_cast<int64_t>(price_idx)) * tick_size;
+
+    for (int tb = 0; tb < static_cast<int>(time_buckets.size()); ++tb) {
+      const auto& cc = time_buckets[tb];
+      const int trade_cnt = cc.trade_count.load(std::memory_order_relaxed);
+      if (cc.total_volume == 0.0 && trade_cnt == 0) continue;
+
+      const double vwap_approx = trade_cnt > 0
+          ? cc.sum_of_prices / static_cast<double>(trade_cnt)
+          : price;
+
+      FootprintCell cell(
+          static_cast<double>(tb),
+          price,
+          0.8,
+          tick_size,
+          cc.sell_volume,   // bid_volume: sell-aggressor trades (hit the bid)
+          cc.buy_volume,    // ask_volume: buy-aggressor trades (lifted the ask)
+          static_cast<uint32_t>(trade_cnt),
+          vwap_approx
+      );
+      cell.buy_trade_count  = static_cast<uint32_t>(cc.buy_trade_count.load(std::memory_order_relaxed));
+      cell.sell_trade_count = static_cast<uint32_t>(cc.sell_trade_count.load(std::memory_order_relaxed));
+      cell.max_single_trade_volume = cc.max_single_trade_volume.load(std::memory_order_relaxed);
+      cells_.push_back(std::move(cell));
+    }
+  }
 }
 
 ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume) const {
@@ -788,38 +826,6 @@ void FootprintPanel::render() {
 
   // Zoom sensitivity control
   ImGui::SliderFloat("Zoom Sensitivity", &zoom_sensitivity_, 0.1f, 3.0f);
-
-  // Initialize some dummy data for testing if cells are empty
-  if (cells_.empty()) {
-    // Generate sample footprint cells for demonstration
-    for (int i = 0; i < 20; ++i) {
-      for (int j = 0; j < 15; ++j) {
-        double x_pos = i * 1.0;  // Time dimension
-        double y_pos = j * 5.0;  // Price dimension
-        double width = 0.8;       // Time width
-        double height = 4.0;      // Price height
-        
-        // Generate varying volumes to demonstrate gradient effects
-        double bid_vol = 100.0 + (i * 50.0) + (j * 30.0);
-        double ask_vol = 80.0 + (i * 40.0) + (j * 20.0);
-        
-        // Randomly make some cells have higher buy or sell volume to show gradient effects
-        if ((i + j) % 3 == 0) {
-          bid_vol *= 2.0;  // Higher buy volume
-        } else if ((i + j) % 3 == 1) {
-          ask_vol *= 2.0;  // Higher sell volume
-        }
-        
-        FootprintCell cell(x_pos, y_pos, width, height, bid_vol, ask_vol, 
-                          static_cast<uint32_t>(50 + i + j), y_pos);
-        cell.buy_trade_count = static_cast<uint32_t>(bid_vol / 10.0);
-        cell.sell_trade_count = static_cast<uint32_t>(ask_vol / 10.0);
-        cell.max_single_trade_volume = std::max(bid_vol, ask_vol) / 5.0;
-        
-        cells_.push_back(cell);
-      }
-    }
-  }
 
   // Main footprint chart area using ImPlot
   if (ImPlot::BeginPlot("##FootprintChart", ImVec2(-1, -1))) {

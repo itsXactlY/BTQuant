@@ -1,6 +1,8 @@
 #include "../../include/components/correlation_heatmap_panel.hpp"
 #include "imgui.h"
 #include <cmath>
+#include <algorithm>
+#include <string>
 
 namespace BTQuant {
 

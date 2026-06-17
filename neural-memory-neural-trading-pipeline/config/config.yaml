@@ -1,0 +1,38 @@
+feature_selection:
+  importance_threshold: 0.01
+  correlation_threshold: 0.85
+  target_features: 15
+
+labeling:
+  horizon: 50
+  tp_threshold: 0.02
+  sl_threshold: -0.01
+  vol_window: 20
+
+model:
+  type: transformer
+  seq_len: 100
+  d_model: 256
+  num_heads: 8
+  num_layers: 6
+  d_ff: 1024
+  dropout: 0.3
+
+training:
+  batch_size: 128
+  lr: 0.0003
+  weight_decay: 0.0001
+  epochs: 100
+  early_stopping_patience: 15
+  gradient_clip: 1.0
+
+backtesting:
+  commission: 0.001
+  slippage: 0.0005
+  initial_capital: 10000
+
+walk_forward:
+  train_months: 12
+  val_months: 2
+  test_months: 2
+  step_months: 1

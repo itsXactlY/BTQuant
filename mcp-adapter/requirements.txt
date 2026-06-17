@@ -1,0 +1,16 @@
+# MCP Adapter for BTQuant
+# pip install -r requirements.txt
+
+# MCP protocol server
+mcp>=1.0.0
+
+# HTTP transport (uvicorn + starlette for SSE/HTTP)
+uvicorn>=0.27.0
+starlette>=0.36.0
+sse-starlette>=1.8.0
+
+# BTQuant dependencies (already in system)
+# backtrader  (local fork at dependencies/backtrader)
+# requests
+# numpy
+# pandas

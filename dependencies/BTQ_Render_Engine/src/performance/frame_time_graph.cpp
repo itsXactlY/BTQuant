@@ -380,13 +380,13 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         std::vector<double> critical_values(frame_times_.size(), frame_time_threshold_critical_);
 
         // Critical threshold line (red)
-        ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+        ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), static_cast<int>(frame_times_.size()));
 
         // Warning threshold line (yellow/orange)
-        ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+        ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), static_cast<int>(frame_times_.size()));
 
         // Plot frame times with enhanced visualization
-        ImPlot::PlotLine("Frame Time", x_values.data(), frame_times_.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+        ImPlot::PlotLine("Frame Time", x_values.data(), frame_times_.data(), static_cast<int>(frame_times_.size()));
 
         // Highlight performance issues with filled areas
         std::vector<double> warning_x, warning_y, critical_x, critical_y;
@@ -406,11 +406,11 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
         // Fill areas for warning and critical issues separately
         if (!warning_x.empty()) {
-            ImPlot::PlotShaded("Warning Spikes", warning_x.data(), warning_y.data(), static_cast<int>(warning_x.size()), frame_time_threshold_warning_, ImPlotSpec());
+            ImPlot::PlotShaded("Warning Spikes", warning_x.data(), warning_y.data(), static_cast<int>(warning_x.size()), frame_time_threshold_warning_);
         }
 
         if (!critical_x.empty()) {
-            ImPlot::PlotShaded("Critical Spikes", critical_x.data(), critical_y.data(), static_cast<int>(critical_x.size()), frame_time_threshold_critical_, ImPlotSpec());
+            ImPlot::PlotShaded("Critical Spikes", critical_x.data(), critical_y.data(), static_cast<int>(critical_x.size()), frame_time_threshold_critical_);
         }
 
         // Draw markers for performance issues
@@ -420,10 +420,10 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
                 if (frame_times_[i] > frame_time_threshold_critical_) {
                     // Large red circle for critical - use ImPlotSpec for marker style
-                    ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1, ImPlotSpec());
+                    ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1);
                 } else {
                     // Orange diamond for warning
-                    ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1, ImPlotSpec());
+                    ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1);
                 }
             }
         }
@@ -436,15 +436,15 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
             // Average line (blue)
             std::vector<double> avg_values(frame_times_.size(), avg);
-            ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+            ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), static_cast<int>(frame_times_.size()));
 
             // Min line (light blue) - using stipple pattern to simulate dashed
             std::vector<double> min_values(frame_times_.size(), min_val);
-            ImPlot::PlotLine("Min", x_values.data(), min_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+            ImPlot::PlotLine("Min", x_values.data(), min_values.data(), static_cast<int>(frame_times_.size()));
 
             // Max line (purple) - using stipple pattern to simulate dashed
             std::vector<double> max_values(frame_times_.size(), max_val);
-            ImPlot::PlotLine("Max", x_values.data(), max_values.data(), static_cast<int>(frame_times_.size()), ImPlotSpec());
+            ImPlot::PlotLine("Max", x_values.data(), max_values.data(), static_cast<int>(frame_times_.size()));
 
             // Add a trend line to show performance direction
             if (frame_times_.size() >= 2) {
@@ -474,7 +474,7 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                                                  ImVec4(0.0f, 0.5f, 1.0f, 1.0f);    // Blue if stable
 
                 // ImPlot::SetNextLineStyle(trend_color, 1.5f);
-                ImPlot::PlotLine("Trend", trend_x.data(), trend_y.data(), 2, ImPlotSpec());
+                ImPlot::PlotLine("Trend", trend_x.data(), trend_y.data(), 2);
             }
 
             // Add a rolling average line for smoother trend visualization
@@ -494,7 +494,7 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                 }
 
                 // ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 1.0f, 0.8f), 1.2f); // Purple for rolling average
-                ImPlot::PlotLine("Rolling Avg", rolling_avg_x.data(), rolling_avg_y.data(), static_cast<int>(rolling_avg_x.size()), ImPlotSpec());
+                ImPlot::PlotLine("Rolling Avg", rolling_avg_x.data(), rolling_avg_y.data(), static_cast<int>(rolling_avg_x.size()));
             }
         }
 

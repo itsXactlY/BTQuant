@@ -7,6 +7,21 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <vulkan/vulkan.h>
+
+// ============================================================================
+// CachedTexture — minimal stub for Phase 1 ImGui texture wrapping.
+// In production this is populated by GPUMemoryManager::add_texture(), which
+// wraps ImGui_ImplVulkan_AddTexture. Until that method is added, we keep a
+// trivially-default-constructible struct so the Phase 1 headers compile.
+// ============================================================================
+struct CachedTexture {
+    VkImageView     image_view     = VK_NULL_HANDLE;
+    VkSampler       sampler        = VK_NULL_HANDLE;
+    VkImageLayout   layout         = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    void*           im_texture_id  = nullptr;
+};
 
 // 3rd party
 #define GLM_ENABLE_EXPERIMENTAL

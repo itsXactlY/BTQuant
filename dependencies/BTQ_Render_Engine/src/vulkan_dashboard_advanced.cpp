@@ -2,11 +2,14 @@
 
 #include <cstdint>
 #include <iostream>
+#include <ranges>
+#include <span>
 
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "components/footprint_panel.hpp"
 #include "components/interaction_manager.hpp"
+#include "components/MarketMicrostructureRenderer.h"
 #include "components/quant_workspace_component.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
@@ -14,6 +17,7 @@
 #include "implot.h"
 #include "performance_monitor.hpp"
 #include "performance/debug_overlay.hpp"
+#include "symbol_registry.hpp"
 #include "ui/layout_manager.hpp"
 
 namespace BTQuant {
@@ -68,6 +72,15 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
+
+  micro_renderer_ = std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
+      vulkan_core_.get(), market_data_processor_);
+  if (auto result = micro_renderer_->initialize(); !result) [[unlikely]] {
+    std::println("[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: {}",
+                 RenderEngine::to_string(result.error()));
+    micro_renderer_.reset();  // Don't keep a broken renderer
+  }
+
   workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
 
   // LAYOUT BOOTSTRAP - Load saved layout or apply default preset
@@ -274,7 +287,24 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // Process updates and UI - ONLY workspace_->render_gui() (panel_manager is handled internally)
+  // Dispatch compute before render pass while command buffer is open
+  if (micro_renderer_) {
+    pollDataToRenderer();
+    if (auto result = micro_renderer_->prepare(); !result) {
+      std::cout << "[VulkanDashboard] Micro renderer prepare failed: "
+                << RenderEngine::to_string(result.error()) << "\n";
+    }
+    micro_renderer_->executeCompute(vulkan_core_->get_current_command_buffer());
+    VkMemoryBarrier barrier{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT};
+    vkCmdPipelineBarrier(vulkan_core_->get_current_command_buffer(),
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                         0, 1, &barrier, 0, nullptr, 0, nullptr);
+  }
+
+  // Process updates and UI
   float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
   if (workspace_) {
     workspace_->update(dt);
@@ -284,8 +314,10 @@ void VulkanDashboard::render_frame() {
   // Finalize ImGui and Record Graphics commands
   ImGui::Render();
 
-  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [](VkCommandBuffer cmd) {
-    // No microstructure renderer - panels handle their own rendering
+  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
+    if (micro_renderer_) {
+      micro_renderer_->executeGraphics(cmd);
+    }
   });
   vulkan_core_->PresentFrame(imageIndex);
 }
@@ -340,6 +372,88 @@ void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, i
 }
 
 
+void VulkanDashboard::pollDataToRenderer() {
+  using namespace BTQuant::RenderEngine;
+  if (!micro_renderer_ || !market_data_processor_) return;
+
+  uint32_t symbol_id = 0;
+  auto id_opt = SymbolRegistry::instance().get_symbol_id("Binance", active_symbol_);
+  if (!id_opt) {
+    auto all_symbols = SymbolRegistry::instance().get_all_symbols();
+    for (const auto& info : all_symbols) {
+      if (info.symbol == active_symbol_) { symbol_id = info.id; break; }
+    }
+  } else {
+    symbol_id = *id_opt;
+  }
+  if (symbol_id == 0) return;
+
+  auto analytics = market_data_processor_->getSymbolAnalytics(symbol_id);
+  if (analytics.last_update_time == 0) return;
+
+  if (!analytics.consolidated_bids.empty() || !analytics.consolidated_asks.empty()) {
+    OrderbookData ob;
+    ob.timestamp = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+    for (auto const& [price, size] : analytics.consolidated_bids)
+      ob.bids.push_back(PriceLevel{price, size});
+    for (auto const& [price, size] : analytics.consolidated_asks)
+      ob.asks.push_back(PriceLevel{price, size});
+    micro_renderer_->updateLOBData(ob);
+  }
+
+  if (!analytics.recent_trades.empty()) {
+    size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades.size());
+    std::vector<TradeData> trades;
+    trades.reserve(count);
+    for (size_t i = analytics.recent_trades.size() - count; i < analytics.recent_trades.size(); ++i) {
+      const auto& t = analytics.recent_trades[i];
+      TradeData td; td.symbol = t.symbol; td.symbol_id = t.symbol_id;
+      td.timestamp = t.timestamp; td.price = t.price; td.size = t.size; td.is_buy = t.is_buy;
+      trades.push_back(td);
+    }
+    micro_renderer_->updateTradeData(std::span<const TradeData>(trades));
+  }
+
+  auto candle_opt = market_data_processor_->getCurrentCandle(symbol_id, RenderEngine::TimeFrame::TF_1SEC);
+  if (candle_opt) {
+    const uint64_t now_us = analytics.last_update_time;
+    const uint64_t timeframe_us = 1'000'000;
+    const uint64_t window_us = 30'000'000;
+    constexpr float tickSize = 0.5f;
+
+    struct ClusterKey { uint64_t time; int32_t price_bin; auto operator<=>(const ClusterKey&) const = default; };
+    struct ClusterValue { uint32_t bidVol=0, askVol=0, count=0, buyCount=0, sellCount=0; float maxTradeVol=0, totalTradeSize=0; };
+    std::map<ClusterKey, ClusterValue> aggregator;
+
+    for (const auto& t : std::views::reverse(analytics.recent_trades)) {
+      if (t.timestamp <= now_us - window_us) break;
+      const uint64_t timeBin = (t.timestamp / timeframe_us) * timeframe_us;
+      const int32_t priceBin = static_cast<int32_t>(std::round(t.price / tickSize));
+      auto& val = aggregator[ClusterKey{timeBin, priceBin}];
+      if (t.is_buy) { val.bidVol += static_cast<uint32_t>(t.size); val.buyCount++; }
+      else          { val.askVol += static_cast<uint32_t>(t.size); val.sellCount++; }
+      val.count++;
+      if (t.size > val.maxTradeVol) val.maxTradeVol = static_cast<float>(t.size);
+      val.totalTradeSize += static_cast<float>(t.size);
+    }
+
+    std::vector<CandleCluster> clusters;
+    clusters.reserve(aggregator.size());
+    for (auto const& [key, val] : aggregator) {
+      const float rel_time = static_cast<float>(key.time - (now_us - window_us)) / 1'000'000.0f;
+      clusters.emplace_back(rel_time, static_cast<float>(key.price_bin) * tickSize,
+                            static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f, tickSize * 0.9f,
+                            val.bidVol, val.askVol, val.count, 0.0f, true,
+                            val.buyCount, val.sellCount, val.maxTradeVol,
+                            (key.time - timeframe_us) * 1000, key.time * 1000);
+    }
+    if (!clusters.empty())
+      micro_renderer_->updateFootprintClusters(std::span<const CandleCluster>(clusters));
+  }
+}
+
 void VulkanDashboard::render_performance_overlay() {
   if (!show_performance_overlay_) {
     return;
@@ -376,15 +490,16 @@ void VulkanDashboard::render_performance_overlay() {
 
   ImGui::End();
 
-  // Update debug overlay with active component counts
   if (workspace_ && workspace_->getPanelManager()) {
-    size_t active_panels = workspace_->getPanelManager()->get_panel_count();
-    g_debug_overlay.set_active_panels_count(active_panels);
+    g_debug_overlay.set_active_panels_count(workspace_->getPanelManager()->get_panel_count());
   }
-
-  // TODO: Update active indicators and alerts counts when available
-  g_debug_overlay.set_active_indicators_count(0); // Placeholder - update when indicator system is integrated
-  g_debug_overlay.set_active_alerts_count(0);     // Placeholder - update when alert system is integrated
+  if (micro_renderer_) {
+    auto stats = micro_renderer_->getStats();
+    g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates,
+                                       stats.tradeUpdates, stats.footprintCellsRendered);
+  }
+  g_debug_overlay.set_active_indicators_count(0);
+  g_debug_overlay.set_active_alerts_count(0);
 }
 
 void VulkanDashboard::render_layout_indicator() {

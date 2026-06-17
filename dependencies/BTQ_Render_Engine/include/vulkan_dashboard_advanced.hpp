@@ -54,6 +54,7 @@ struct OrderBookLevel {
   double price;
   double size;
 };
+class MarketMicrostructureRenderer;
 }  // namespace RenderEngine
 
 // Helper: Convert ImVec4 to glm::vec4
@@ -317,6 +318,7 @@ class VulkanDashboard {
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> vulkan_core_;
   std::unique_ptr<QuantWorkspaceComponent> workspace_;
+  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> micro_renderer_;
   std::unique_ptr<VulkanSyncContext> sync_context_;
   std::unique_ptr<TimelineSemaphore> timeline_semaphore_;
 

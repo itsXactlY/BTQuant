@@ -64,10 +64,11 @@ class FootprintPanel : public PanelBase {
   void render() override;
 
   uint32_t get_symbol_id() const { return symbol_id_; }
-  void set_symbol_id(uint32_t id) {
-    symbol_id_ = id;
-    // Note: Exchange connection management has been moved out of the renderer
-    // The renderer now only handles rendering, not data subscription
+  void set_symbol_id(uint32_t id) { symbol_id_ = id; }
+
+  void set_cluster_engine(Analytics::ClusterEngine* engine) {
+    cluster_engine_ = engine;
+    data_dirty_.store(true, std::memory_order_relaxed);
   }
 
   // Configuration
@@ -178,8 +179,8 @@ class FootprintPanel : public PanelBase {
   // Level of Detail (LOD) system for footprint rendering
   BTQuant::Rendering::FootprintLOD lod_system_;
 
-  // Cluster Engine for advanced imbalance and exhaustion detection
-  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+  // Cluster Engine for advanced imbalance and exhaustion detection (non-owning)
+  Analytics::ClusterEngine* cluster_engine_ = nullptr;
 
   // Rendering Helpers
   ImU32 getCellColor(const FootprintCell& cell, double max_volume = 10000.0) const;

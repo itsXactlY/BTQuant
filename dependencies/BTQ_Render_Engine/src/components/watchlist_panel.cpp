@@ -2128,6 +2128,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       ImGui::EndPopup();
     }
 
+    // Pop the second PushID (column 10, Action — delete button + popup)
+    // that was pushed at line ~2051. Without this, the ID stack grows
+    // by 1 per row per frame, eventually corrupting every subsequent
+    // widget ID and breaking rendering across the whole application.
+    ImGui::PopID();
     ImGui::PopID();
   }
 }

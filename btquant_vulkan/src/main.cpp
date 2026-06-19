@@ -174,6 +174,7 @@ private:
       windowManager.showOrderBookDepthWindow();
       windowManager.showFootprintWindow();
       windowManager.showVPVRWindow();
+      windowManager.showMultiVWAPWindow();
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();

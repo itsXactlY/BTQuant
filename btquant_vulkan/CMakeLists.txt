@@ -55,6 +55,7 @@ set(SOURCES
     src/widgets/order_book_depth_widget.cpp
     src/widgets/footprint_widget.cpp
     src/widgets/vpvr_widget.cpp
+    src/widgets/multi_vwap_widget.cpp
     src/widgets/dom_widget.cpp
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
@@ -78,6 +79,7 @@ set(HEADERS
     src/widgets/order_book_depth_widget.hpp
     src/widgets/footprint_widget.hpp
     src/widgets/vpvr_widget.hpp
+    src/widgets/multi_vwap_widget.hpp
     src/widgets/dom_widget.hpp
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp

@@ -93,6 +93,8 @@ void MarketDataProcessor::runLoop() {
             m_latestSnapshot.order_book = m_aggregator.orderBook();
             m_latestSnapshot.metrics = m_aggregator.metrics();
             m_latestSnapshot.recent_trades = m_aggregator.trades();
+            m_latestSnapshot.recent_candles = m_aggregator.candles();
+            m_latestSnapshot.current_candle = m_aggregator.currentCandle();
         }
 
         // Sleep until next poll.
@@ -102,11 +104,19 @@ void MarketDataProcessor::runLoop() {
     }
 }
 
-MarketDataProcessor::Snapshot MarketDataProcessor::snapshot(size_t last_n_trades) const {
+MarketDataProcessor::Snapshot MarketDataProcessor::snapshot(
+    size_t last_n_trades, size_t last_n_candles) const {
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     Snapshot s = m_latestSnapshot;
     if (s.recent_trades.size() > last_n_trades) {
         s.recent_trades.resize(last_n_trades);
+    }
+    if (s.recent_candles.size() > last_n_candles) {
+        // Keep the most recent N candles — drop from the front.
+        s.recent_candles.erase(
+            s.recent_candles.begin(),
+            s.recent_candles.begin()
+                + static_cast<std::ptrdiff_t>(s.recent_candles.size() - last_n_candles));
     }
     return s;
 }

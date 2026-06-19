@@ -41,14 +41,19 @@ public:
     void stop();
 
     // Snapshot of the current state — thread-safe, returns by-value copy.
-    // Trade list is bounded to last_n_trades.
+    // Trade list is bounded to last_n_trades; candles by last_n_candles.
+    // recent_candles holds bucket-finalized candles; current_candle is a
+    // pointer (null if no tick has arrived since startup) to the in-progress
+    // bucket so widgets can render "live" minute activity.
     struct Snapshot {
         data::OrderBook order_book;
         data::MarketMetrics metrics;
-        std::vector<data::Trade> recent_trades;  // last N trades, newest first
-        uint64_t snapshot_seq = 0;              // monotonically increasing
+        std::vector<data::Trade> recent_trades;       // last N trades, newest first
+        std::vector<data::Candle> recent_candles;     // last M finalized candles
+        const data::Candle* current_candle = nullptr;  // pointer into in-progress bucket
+        uint64_t snapshot_seq = 0;                    // monotonically increasing
     };
-    Snapshot snapshot(size_t last_n_trades = 100) const;
+    Snapshot snapshot(size_t last_n_trades = 100, size_t last_n_candles = 60) const;
 
     bool isRunning() const noexcept { return m_running.load(std::memory_order_acquire); }
 

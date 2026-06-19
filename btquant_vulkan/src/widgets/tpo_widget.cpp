@@ -86,29 +86,20 @@ void TPOWidget::render() {
 
     ImGui::Separator();
 
-    // Show recent candles (from live or fallback synth).
+    // Show OHLC candles — pull directly from the snapshot's recent_candles
+    // (computed by the MarketDataProcessor background thread). No more
+    // widget-side reconstruction from trades.
     std::vector<data::Candle> candles;
-    if (isLive && m_data) {
-        // Derive candles from recent trades (group by minute).
-        auto snap = m_data->snapshot(256);
-        if (snap.snapshot_seq > 0 && !snap.recent_trades.empty()) {
-            // Find candles via the snapshot's aggregated metrics. We don't
-            // have a proper candle aggregator in MarketDataProcessor yet,
-            // so we synthesize from trades grouped by minute for the demo.
-            std::map<int64_t, data::Candle> byMinute;
-            for (const auto& t : snap.recent_trades) {
-                int64_t minute = t.timestamp / 60000000;
-                auto& c = byMinute[minute];
-                if (c.open == 0) c.open = t.price;
-                c.high = std::max(c.high, t.price);
-                c.low = (c.low == 0) ? t.price : std::min(c.low, t.price);
-                c.close = t.price;
-                c.volume += t.size;
-                c.startTime = minute * 60000000;
-                c.endTime = c.startTime + 60000000;
-            }
-            for (auto& [_, c] : byMinute) candles.push_back(c);
+    if (m_data) {
+        auto snap = m_data->snapshot(1, 60);
+        candles = std::move(snap.recent_candles);
+        // The current in-progress candle (if any) shows live activity for
+        // the current minute; append it after the finalized ones for the
+        // table view so the user sees ongoing volume build-up.
+        if (snap.current_candle) {
+            candles.push_back(*snap.current_candle);
         }
+        isLive = snap.snapshot_seq > 0 && !candles.empty();
     } else {
         // Synthetic fallback candles.
         static std::vector<data::Candle> synthCandles;
@@ -135,37 +126,58 @@ void TPOWidget::render() {
     }
 
     if (!candles.empty()) {
-        ImGui::Text("Recent Candles (OHLC) — %s", isLive ? "LIVE" : "synthetic");
-        ImGui::Columns(6, "CandleData", true);
-        ImGui::SetColumnWidth(0, 60);
-        ImGui::SetColumnWidth(1, 70);
-        ImGui::SetColumnWidth(2, 70);
-        ImGui::SetColumnWidth(3, 70);
-        ImGui::SetColumnWidth(4, 70);
-        ImGui::SetColumnWidth(5, 70);
+        ImGui::Text("Recent Candles (OHLC) — %zu finalized + current (%s)",
+                    candles.size() - (m_data && candles.size() > 0 ? 1 : 0),
+                    isLive ? "LIVE" : "synthetic");
+        ImGui::Columns(8, "CandleData", true);
+        ImGui::SetColumnWidth(0, 60);  // Time
+        ImGui::SetColumnWidth(1, 60);  // Open
+        ImGui::SetColumnWidth(2, 60);  // High
+        ImGui::SetColumnWidth(3, 60);  // Low
+        ImGui::SetColumnWidth(4, 60);  // Close
+        ImGui::SetColumnWidth(5, 60);  // Volume
+        ImGui::SetColumnWidth(6, 55);  // Delta
+        ImGui::SetColumnWidth(7, 45);  // #Trades
 
         ImGui::Text("Time"); ImGui::NextColumn();
         ImGui::Text("Open"); ImGui::NextColumn();
         ImGui::Text("High"); ImGui::NextColumn();
         ImGui::Text("Low"); ImGui::NextColumn();
         ImGui::Text("Close"); ImGui::NextColumn();
-        ImGui::Text("Volume"); ImGui::NextColumn();
+        ImGui::Text("Vol"); ImGui::NextColumn();
+        ImGui::Text("Delta"); ImGui::NextColumn();
+        ImGui::Text("#"); ImGui::NextColumn();
         ImGui::Separator();
 
         int shown = 0;
-        for (const auto& candle : candles) {
-            if (shown++ >= 10) break;
-            auto timePoint = std::chrono::system_clock::time_point(std::chrono::microseconds(candle.startTime));
+        for (auto it = candles.rbegin(); it != candles.rend() && shown < 10; ++it, ++shown) {
+            const auto& candle = *it;
+            auto timePoint = std::chrono::system_clock::time_point(
+                std::chrono::microseconds(candle.startTime));
             auto timeT = std::chrono::system_clock::to_time_t(timePoint);
             std::stringstream ss;
             ss << std::put_time(std::localtime(&timeT), "%H:%M");
-            ImGui::Text("%s", ss.str().c_str());
+            // Mark the in-progress candle with a "*" so the user can see it
+            // building in real time.
+            if (candle.startTime == candles.back().startTime) {
+                ss << "*";
+            }
+            ImGui::Text("%s", ss.str().c_str()); ImGui::NextColumn();
+            ImGui::Text("%.2f", candle.open); ImGui::NextColumn();
+            ImGui::Text("%.2f", candle.high); ImGui::NextColumn();
+            ImGui::Text("%.2f", candle.low); ImGui::NextColumn();
+            ImGui::Text("%.2f", candle.close); ImGui::NextColumn();
+            ImGui::Text("%.1f", candle.volume); ImGui::NextColumn();
+            // Color delta: green positive, red negative, gray zero.
+            if (candle.delta > 0.01)
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+            else if (candle.delta < -0.01)
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
+            ImGui::Text("%+.1f", candle.delta);
+            if (candle.delta > 0.01 || candle.delta < -0.01)
+                ImGui::PopStyleColor();
             ImGui::NextColumn();
-            ImGui::Text("%.4f", candle.open); ImGui::NextColumn();
-            ImGui::Text("%.4f", candle.high); ImGui::NextColumn();
-            ImGui::Text("%.4f", candle.low); ImGui::NextColumn();
-            ImGui::Text("%.4f", candle.close); ImGui::NextColumn();
-            ImGui::Text("%.2f", candle.volume); ImGui::NextColumn();
+            ImGui::Text("%u", candle.tradeCount); ImGui::NextColumn();
         }
         ImGui::Columns(1);
     }

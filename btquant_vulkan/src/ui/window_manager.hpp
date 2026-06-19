@@ -24,6 +24,7 @@ public:
     void showOrderBookWindow();
     void showOrderBookDepthWindow();
     void showFootprintWindow();
+    void showVPVRWindow();
     void showDOMWindow();
     void showTradesWindow();
     void showTPOWindow();
@@ -36,6 +37,7 @@ public:
     bool showOrderBook = true;
     bool showOrderBookDepth = true;
     bool showFootprint = true;
+    bool showVPVR = true;
     bool showDOM = true;
     bool showTrades = true;
     bool showTPO = true;
@@ -44,6 +46,7 @@ private:
     class OrderBookWidget* m_orderBookWidget = nullptr;
     class OrderBookDepthWidget* m_orderBookDepthWidget = nullptr;
     class FootprintWidget* m_footprintWidget = nullptr;
+    class VPVRWidget* m_vpvrWidget = nullptr;
     class DOMWidget* m_domWidget = nullptr;
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;

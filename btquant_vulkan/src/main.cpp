@@ -173,6 +173,7 @@ private:
       windowManager.showOrderBookWindow();
       windowManager.showOrderBookDepthWindow();
       windowManager.showFootprintWindow();
+      windowManager.showVPVRWindow();
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();

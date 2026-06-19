@@ -1,5 +1,5 @@
 #include "dom_widget.hpp"
-#include "../ui/ui_context.hpp"
+#include "../data/market_data_processor.hpp"
 #include "../data/market_data.hpp"
 #include <imgui.h>
 #include <algorithm>
@@ -11,6 +11,10 @@ namespace btquant::ui {
 DOMWidget::DOMWidget() = default;
 DOMWidget::~DOMWidget() = default;
 
+void DOMWidget::setMarketData(::btquant::MarketDataProcessor* data) {
+    m_data = data;
+}
+
 void DOMWidget::render() {
     if (!m_initialized) {
         m_initialized = true;
@@ -18,7 +22,6 @@ void DOMWidget::render() {
 
     ImGui::Begin("Depth of Market (DOM)", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    // Controls
     ImGui::Text("Controls:");
     static const double price_min = 0.001, price_max = 1.0;
     ImGui::SliderScalar("Price Grouping", ImGuiDataType_Double, &m_priceGrouping, &price_min, &price_max, "%.4f");
@@ -29,121 +32,98 @@ void DOMWidget::render() {
         if (ImGui::Selectable("Right")) m_alignment = "Right";
         ImGui::EndCombo();
     }
-    
+
     ImGui::Separator();
 
-    // Mock data for demonstration
-    static std::vector<data::OrderBookLevel> mockBids, mockAsks;
-    
-    // Generate mock data if empty
-    if (mockBids.empty() || mockAsks.empty()) {
-        // Generate mock bid levels
-        double bidPrice = 100.0;
-        for (int i = 0; i < m_maxLevels; i++) {
-            data::OrderBookLevel level;
-            level.price = bidPrice;
-            level.size = 100.0 + (rand() % 100);  // Random size between 100-200
-            level.cumSize = level.size + (i > 0 ? mockBids[i-1].cumSize : 0);
-            mockBids.push_back(level);
-            bidPrice -= m_priceGrouping;
-        }
-        
-        // Generate mock ask levels
-        double askPrice = 101.0;
-        for (int i = 0; i < m_maxLevels; i++) {
-            data::OrderBookLevel level;
-            level.price = askPrice;
-            level.size = 100.0 + (rand() % 100);  // Random size between 100-200
-            level.cumSize = level.size + (i > 0 ? mockAsks[i-1].cumSize : 0);
-            mockAsks.push_back(level);
-            askPrice += m_priceGrouping;
+    bool isLive = false;
+    data::OrderBook book{};
+    if (m_data) {
+        auto snap = m_data->snapshot(1);
+        if (snap.snapshot_seq > 0) {
+            book = snap.order_book;
+            isLive = true;
         }
     }
 
-    // Display DOM chart
-    ImGui::Text("Depth of Market Chart");
-    
-    // Calculate max size for scaling
-    double maxSize = 0;
-    for (const auto& level : mockBids) maxSize = std::max(maxSize, level.size);
-    for (const auto& level : mockAsks) maxSize = std::max(maxSize, level.size);
-    
-    // Display depth chart
+    // Synthetic fallback.
+    if (!isLive) {
+        static double fallbackMid = 100.0;
+        for (int i = 0; i < m_maxLevels; ++i) {
+            double bid = fallbackMid - (i + 1) * m_priceGrouping - (rand() % 100) / 5000.0;
+            double ask = fallbackMid + (i + 1) * m_priceGrouping + (rand() % 100) / 5000.0;
+            double size = 100.0 + (rand() % 100);
+            book.bids[i] = {bid, size, 0};
+            book.asks[i] = {ask, size, 0};
+            book.bidCount = book.askCount = i + 1;
+        }
+        book.midPrice = fallbackMid;
+        fallbackMid += ((rand() % 100) - 50) / 5000.0;
+    }
+
+    ImGui::Text("Depth of Market Chart%s", isLive ? "" : " (synthetic)");
+
+    double maxSize = 1.0;
+    for (size_t i = 0; i < book.bidCount; ++i) maxSize = std::max(maxSize, book.bids[i].size);
+    for (size_t i = 0; i < book.askCount; ++i) maxSize = std::max(maxSize, book.asks[i].size);
+
     ImVec2 canvasSize = ImVec2(ImGui::GetWindowWidth() - 40, 200);
     ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-    
     ImGui::InvisibleButton("canvas", canvasSize);
-    
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    
-    // Draw background
-    drawList->AddRectFilled(canvasPos, 
-                           ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                           IM_COL32(30, 30, 50, 200));
-    
-    // Find center price (between highest bid and lowest ask)
-    if (!mockBids.empty() && !mockAsks.empty()) {
-        double centerPrice = (mockBids[0].price + mockAsks[0].price) / 2.0;
-        
-        // Draw price levels
-        float priceRange = (mockBids[0].price - mockAsks.back().price);
-        float pixelsPerPrice = canvasSize.y / priceRange;
-        
-        // Draw bid levels (green bars)
-        for (size_t i = 0; i < std::min((size_t)m_maxLevels, mockBids.size()); i++) {
-            auto& level = mockBids[i];
-            
-            float yPos = canvasPos.y + (centerPrice - level.price) * pixelsPerPrice;
-            float barWidth = (level.size / maxSize) * (canvasSize.x / 2 - 10);
-            
-            // Bid bars on the left side
+    drawList->AddRectFilled(canvasPos,
+        ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
+        IM_COL32(30, 30, 50, 200));
+
+    if (book.bidCount > 0 && book.askCount > 0) {
+        double centerPrice = (book.bids[book.bidCount - 1].price + book.asks[0].price) * 0.5;
+        double priceRange = book.bids[0].price - book.asks[book.askCount - 1].price;
+        if (priceRange <= 0) priceRange = m_priceGrouping * m_maxLevels;
+        float pixelsPerPrice = canvasSize.y / static_cast<float>(priceRange);
+
+        // Bid bars (green, left side)
+        for (size_t i = 0; i < book.bidCount && i < static_cast<size_t>(m_maxLevels); ++i) {
+            const auto& level = book.bids[i];
+            float yPos = canvasPos.y + static_cast<float>(centerPrice - level.price) * pixelsPerPrice;
+            float barWidth = static_cast<float>((level.size / maxSize) * (canvasSize.x / 2 - 10));
             ImVec2 p1(canvasPos.x + canvasSize.x / 2 - barWidth, yPos);
             ImVec2 p2(canvasPos.x + canvasSize.x / 2, yPos + 5);
-            
-            drawList->AddRectFilled(p1, p2, IM_COL32(0, 255, 0, 150)); // Green
-            
-            // Price label
+            drawList->AddRectFilled(p1, p2, IM_COL32(0, 255, 0, 150));
             std::stringstream ss;
             ss << std::fixed << std::setprecision(4) << level.price;
-            drawList->AddText(ImVec2(canvasPos.x + canvasSize.x / 2 + 5, yPos), IM_COL32(200, 200, 200, 255), ss.str().c_str());
+            drawList->AddText(ImVec2(canvasPos.x + canvasSize.x / 2 + 5, yPos),
+                              IM_COL32(200, 200, 200, 255), ss.str().c_str());
         }
-        
-        // Draw ask levels (red bars)
-        for (size_t i = 0; i < std::min((size_t)m_maxLevels, mockAsks.size()); i++) {
-            auto& level = mockAsks[i];
-            
-            float yPos = canvasPos.y + (centerPrice - level.price) * pixelsPerPrice;
-            float barWidth = (level.size / maxSize) * (canvasSize.x / 2 - 10);
-            
-            // Ask bars on the right side
+        // Ask bars (red, right side)
+        for (size_t i = 0; i < book.askCount && i < static_cast<size_t>(m_maxLevels); ++i) {
+            const auto& level = book.asks[i];
+            float yPos = canvasPos.y + static_cast<float>(centerPrice - level.price) * pixelsPerPrice;
+            float barWidth = static_cast<float>((level.size / maxSize) * (canvasSize.x / 2 - 10));
             ImVec2 p1(canvasPos.x + canvasSize.x / 2, yPos);
             ImVec2 p2(canvasPos.x + canvasSize.x / 2 + barWidth, yPos + 5);
-            
-            drawList->AddRectFilled(p1, p2, IM_COL32(255, 0, 0, 150)); // Red
-            
-            // Price label
+            drawList->AddRectFilled(p1, p2, IM_COL32(255, 0, 0, 150));
             std::stringstream ss;
             ss << std::fixed << std::setprecision(4) << level.price;
-            drawList->AddText(ImVec2(canvasPos.x + canvasSize.x / 2 - 60, yPos), IM_COL32(200, 200, 200, 255), ss.str().c_str());
+            drawList->AddText(ImVec2(canvasPos.x + canvasSize.x / 2 - 60, yPos),
+                              IM_COL32(200, 200, 200, 255), ss.str().c_str());
         }
-        
-        // Draw center line (mid price)
-        float midY = canvasPos.y + (centerPrice - centerPrice) * pixelsPerPrice;
-        drawList->AddLine(ImVec2(canvasPos.x, midY), ImVec2(canvasPos.x + canvasSize.x, midY), IM_COL32(255, 255, 255, 100));
+        // Mid line
+        float midY = canvasPos.y;
+        drawList->AddLine(ImVec2(canvasPos.x, midY),
+                          ImVec2(canvasPos.x + canvasSize.x, midY),
+                          IM_COL32(255, 255, 255, 100));
     }
 
     ImGui::Separator();
-    
-    // Stats
-    if (!mockBids.empty() && !mockAsks.empty()) {
-        double midPrice = (mockBids[0].price + mockAsks[0].price) / 2.0;
-        double spread = mockAsks[0].price - mockBids[0].price;
-        double spreadPercent = (spread / midPrice) * 100;
-        
-        ImGui::Text("Best Bid: %.4f", mockBids[0].price);
-        ImGui::Text("Best Ask: %.4f", mockAsks[0].price);
-        ImGui::Text("Mid Price: %.4f", midPrice);
-        ImGui::Text("Spread: %.4f (%.2f%%)", spread, spreadPercent);
+
+    if (isLive && book.bidCount > 0 && book.askCount > 0) {
+        double mid = (book.bids[book.bidCount - 1].price + book.asks[0].price) * 0.5;
+        double spread = book.asks[0].price - book.bids[book.bidCount - 1].price;
+        ImGui::Text("Best Bid: %.4f   Best Ask: %.4f   Mid: %.4f   Spread: %.4f",
+                    book.bids[book.bidCount - 1].price, book.asks[0].price, mid, spread);
+    } else {
+        ImGui::Text("Best Bid: %.4f   Best Ask: %.4f   (no producer)",
+                    book.bids[book.bidCount - 1].price,
+                    book.askCount > 0 ? book.asks[0].price : 0.0);
     }
 
     ImGui::End();
@@ -161,4 +141,4 @@ void DOMWidget::setAlignment(const char* mode) {
     m_alignment = mode;
 }
 
-} // namespace btquant::ui
+}  // namespace btquant::ui

@@ -2,10 +2,28 @@
 
 #include <imgui.h>
 
+#include "../widgets/order_book_widget.hpp"
+#include "../widgets/dom_widget.hpp"
+#include "../widgets/trades_widget.hpp"
+#include "../widgets/tpo_widget.hpp"
+
+#include "../data/market_data_processor.hpp"
+
 namespace btquant::ui {
 
-WindowManager::WindowManager() = default;
-WindowManager::~WindowManager() = default;
+WindowManager::WindowManager() {
+    m_orderBookWidget = new OrderBookWidget();
+    m_domWidget = new DOMWidget();
+    m_tradesWidget = new TradesWidget();
+    m_tpoWidget = new TPOWidget();
+}
+
+WindowManager::~WindowManager() {
+    delete m_orderBookWidget;
+    delete m_domWidget;
+    delete m_tradesWidget;
+    delete m_tpoWidget;
+}
 
 void WindowManager::initialize() {
     m_initialized = true;
@@ -16,35 +34,33 @@ void WindowManager::shutdown() {
 }
 
 void WindowManager::beginFrame() {}
-
 void WindowManager::endFrame() {}
+
+void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
+    if (m_orderBookWidget) m_orderBookWidget->setMarketData(data);
+    if (m_domWidget) m_domWidget->setMarketData(data);
+    if (m_tradesWidget) m_tradesWidget->setMarketData(data);
+    if (m_tpoWidget) m_tpoWidget->setMarketData(data);
+}
 
 void WindowManager::showOrderBookWindow() {
     if (!showOrderBook) return;
-    ImGui::Begin("Order Book", &showOrderBook);
-    ImGui::Text("Order Book Widget");
-    ImGui::End();
+    m_orderBookWidget->render();
 }
 
 void WindowManager::showDOMWindow() {
     if (!showDOM) return;
-    ImGui::Begin("DOM", &showDOM);
-    ImGui::Text("Depth of Market");
-    ImGui::End();
+    m_domWidget->render();
 }
 
 void WindowManager::showTradesWindow() {
     if (!showTrades) return;
-    ImGui::Begin("Trades", &showTrades);
-    ImGui::Text("Trades Feed");
-    ImGui::End();
+    m_tradesWidget->render();
 }
 
 void WindowManager::showTPOWindow() {
     if (!showTPO) return;
-    ImGui::Begin("TPO", &showTPO);
-    ImGui::Text("Time Price Opportunity");
-    ImGui::End();
+    m_tpoWidget->render();
 }
 
 void WindowManager::showMainMenu() {

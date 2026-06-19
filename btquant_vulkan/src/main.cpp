@@ -100,6 +100,10 @@ private:
       std::fprintf(stderr, "[BTQuant] MarketDataProcessor start failed: %s\n",
                    err->c_str());
     }
+    // Wire the live data source into all 4 trading widgets. OrderBook, DOM,
+    // Trades, TPO all switch from internal synthetic mock data to live
+    // snapshots; widgets still fall back to mocks if the producer is offline.
+    windowManager.setMarketData(&marketData);
   }
 
   void initCompute() {

@@ -171,6 +171,7 @@ private:
                                    ImGuiDockNodeFlags_PassthruCentralNode);
       windowManager.showMainMenu();
       windowManager.showOrderBookWindow();
+      windowManager.showOrderBookDepthWindow();
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();

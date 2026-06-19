@@ -22,6 +22,7 @@ public:
     void endFrame();
 
     void showOrderBookWindow();
+    void showOrderBookDepthWindow();
     void showDOMWindow();
     void showTradesWindow();
     void showTPOWindow();
@@ -32,12 +33,14 @@ public:
     void setMarketData(::btquant::MarketDataProcessor* data);
 
     bool showOrderBook = true;
+    bool showOrderBookDepth = true;
     bool showDOM = true;
     bool showTrades = true;
     bool showTPO = true;
 
 private:
     class OrderBookWidget* m_orderBookWidget = nullptr;
+    class OrderBookDepthWidget* m_orderBookDepthWidget = nullptr;
     class DOMWidget* m_domWidget = nullptr;
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;

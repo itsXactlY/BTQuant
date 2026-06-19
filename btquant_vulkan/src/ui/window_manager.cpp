@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include "../widgets/order_book_widget.hpp"
+#include "../widgets/order_book_depth_widget.hpp"
 #include "../widgets/dom_widget.hpp"
 #include "../widgets/trades_widget.hpp"
 #include "../widgets/tpo_widget.hpp"
@@ -13,6 +14,7 @@ namespace btquant::ui {
 
 WindowManager::WindowManager() {
     m_orderBookWidget = new OrderBookWidget();
+    m_orderBookDepthWidget = new OrderBookDepthWidget();
     m_domWidget = new DOMWidget();
     m_tradesWidget = new TradesWidget();
     m_tpoWidget = new TPOWidget();
@@ -20,6 +22,7 @@ WindowManager::WindowManager() {
 
 WindowManager::~WindowManager() {
     delete m_orderBookWidget;
+    delete m_orderBookDepthWidget;
     delete m_domWidget;
     delete m_tradesWidget;
     delete m_tpoWidget;
@@ -38,6 +41,7 @@ void WindowManager::endFrame() {}
 
 void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_orderBookWidget) m_orderBookWidget->setMarketData(data);
+    if (m_orderBookDepthWidget) m_orderBookDepthWidget->setMarketData(data);
     if (m_domWidget) m_domWidget->setMarketData(data);
     if (m_tradesWidget) m_tradesWidget->setMarketData(data);
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);
@@ -46,6 +50,11 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
 void WindowManager::showOrderBookWindow() {
     if (!showOrderBook) return;
     m_orderBookWidget->render();
+}
+
+void WindowManager::showOrderBookDepthWindow() {
+    if (!showOrderBookDepth) return;
+    m_orderBookDepthWidget->render();
 }
 
 void WindowManager::showDOMWindow() {

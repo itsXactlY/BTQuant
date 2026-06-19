@@ -1,0 +1,114 @@
+#include "market_data_processor.hpp"
+
+#include "data_spine.hpp"
+#include "market_data.hpp"
+
+#include <cstdio>
+#include <chrono>
+
+namespace btquant {
+
+MarketDataProcessor::MarketDataProcessor() = default;
+
+MarketDataProcessor::~MarketDataProcessor() { stop(); }
+
+std::optional<std::string>
+MarketDataProcessor::start(const std::string& hotspine_path, uint32_t poll_interval_ms) {
+    if (m_running.load()) return std::string("MarketDataProcessor already running");
+
+    m_spine = std::make_unique<data::DataSpine>();
+    if (!m_spine->open(hotspine_path)) {
+        // Spine open failed — fall back to a synthetic generator so the UI
+        // still shows live data when no producer is running.
+        std::fprintf(stderr,
+            "[MarketDataProcessor] could not open %s — falling back to "
+            "synthetic generator (start the mock producer to see real data)\n",
+            hotspine_path.c_str());
+    }
+    m_pollIntervalMs = poll_interval_ms;
+    m_shouldStop.store(false);
+    m_running.store(true);
+    m_thread = std::thread([this]() { runLoop(); });
+    return std::nullopt;
+}
+
+void MarketDataProcessor::stop() {
+    if (!m_running.load()) return;
+    m_shouldStop.store(true);
+    if (m_thread.joinable()) m_thread.join();
+    m_running.store(false);
+    if (m_spine) { m_spine->close(); m_spine.reset(); }
+}
+
+void MarketDataProcessor::runLoop() {
+    using clock = std::chrono::steady_clock;
+    auto last = clock::now();
+
+    // Synthetic state — used when the spine can't be opened.
+    double synthPrice = 100.0;
+    uint64_t synthSeq = 0;
+    double synthBid = 100.0;
+    double synthAsk = 100.0;
+
+    while (!m_shouldStop.load(std::memory_order_acquire)) {
+        bool gotTick = false;
+
+        if (m_spine && m_spine->isOpen()) {
+            // Read all symbols, aggregate each into the aggregator.
+            auto entries = m_spine->readAllEntries();
+            for (const auto& e : entries) {
+                data::MarketTick tick{};
+                tick.price = (e.bid_price + e.ask_price) * 0.5;
+                tick.size = e.bid_size + e.ask_size;
+                tick.timestamp = e.timestamp;
+                tick.isBuy = (e.ask_size > e.bid_size);
+                m_aggregator.update(tick);
+                synthBid = e.bid_price;
+                synthAsk = e.ask_price;
+                synthPrice = tick.price;
+                synthSeq = e.seq;
+                gotTick = true;
+            }
+        } else {
+            // Synthetic tick — small random walk around synthPrice.
+            const double drift = ((double)rand() / RAND_MAX - 0.5) * 0.05;
+            synthPrice += drift;
+            synthBid = synthPrice - 0.01 - (rand() % 100) / 5000.0;
+            synthAsk = synthPrice + 0.01 + (rand() % 100) / 5000.0;
+            data::MarketTick tick{};
+            tick.price = synthPrice;
+            tick.size = 10.0 + (rand() % 100) / 10.0;
+            tick.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            tick.isBuy = (rand() % 2 == 0);
+            m_aggregator.update(tick);
+            ++synthSeq;
+            gotTick = true;
+        }
+
+        if (gotTick) {
+            // Publish snapshot under lock.
+            std::lock_guard<std::mutex> lock(m_snapshotMutex);
+            m_latestSnapshot.snapshot_seq = ++m_snapshotSeq;
+            m_latestSnapshot.order_book = m_aggregator.orderBook();
+            m_latestSnapshot.metrics = m_aggregator.metrics();
+            m_latestSnapshot.recent_trades = m_aggregator.trades();
+        }
+
+        // Sleep until next poll.
+        const auto target = last + std::chrono::milliseconds(m_pollIntervalMs);
+        std::this_thread::sleep_until(target);
+        last = clock::now();
+    }
+}
+
+MarketDataProcessor::Snapshot MarketDataProcessor::snapshot(size_t last_n_trades) const {
+    std::lock_guard<std::mutex> lock(m_snapshotMutex);
+    Snapshot s = m_latestSnapshot;
+    if (s.recent_trades.size() > last_n_trades) {
+        s.recent_trades.resize(last_n_trades);
+    }
+    return s;
+}
+
+}  // namespace btquant

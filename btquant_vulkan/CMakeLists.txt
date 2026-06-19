@@ -45,14 +45,17 @@ set(SOURCES
     src/data/data_spine.cpp
     src/data/ring_buffer.cpp
     src/data/market_data.cpp
+    src/data/market_data_processor.cpp
     src/renderer/render_pipeline.cpp
     src/renderer/gpu_buffers.cpp
+    src/renderer/heatmap_compute.cpp
     src/ui/ui_context.cpp
     src/ui/window_manager.cpp
     src/widgets/order_book_widget.cpp
     src/widgets/dom_widget.cpp
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
+    src/widgets/heatmap_widget.cpp
 )
 
 set(HEADERS
@@ -61,14 +64,18 @@ set(HEADERS
     src/data/data_spine.hpp
     src/data/ring_buffer.hpp
     src/data/market_data.hpp
+    src/data/market_data_processor.hpp
     src/renderer/render_pipeline.hpp
     src/renderer/gpu_buffers.hpp
+    src/renderer/embedded_shaders.hpp
+    src/renderer/heatmap_compute.hpp
     src/ui/ui_context.hpp
     src/ui/window_manager.hpp
     src/widgets/order_book_widget.hpp
     src/widgets/dom_widget.hpp
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp
+    src/widgets/heatmap_widget.hpp
 )
 
 add_executable(btquant_vulkan ${SOURCES} ${HEADERS}
@@ -112,6 +119,11 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
     enable_testing()
     add_subdirectory(test)
+endif()
+
+# Compute shader build target — compiled to SPIR-V and embedded into the binary.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/CMakeLists.txt")
+    add_subdirectory(shaders)
 endif()
 if(glfw3_FOUND)
     if(GLFW3_USES_PKGCONFIG)

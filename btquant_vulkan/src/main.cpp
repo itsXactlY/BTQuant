@@ -13,6 +13,10 @@
 #include "ui/ui_context.hpp"
 #include "ui/window_manager.hpp"
 
+#include "data/market_data_processor.hpp"
+#include "renderer/heatmap_compute.hpp"
+#include "widgets/heatmap_widget.hpp"
+
 using namespace btquant;
 
 class BTQuantApplication {
@@ -21,6 +25,8 @@ public:
     initWindow();
     initVulkan();
     initUI();
+    initData();
+    initCompute();
     mainLoop();
     cleanup();
   }
@@ -30,6 +36,13 @@ private:
   vulkan::VulkanContext vkContext;
   ui::UIContext uiContext;
   ui::WindowManager windowManager;
+
+  // Real-time data pipeline (subscribes to /dev/shm/btquant_hotspine).
+  MarketDataProcessor marketData;
+
+  // GPU compute pipeline for the heatmap texture.
+  renderer::HeatmapCompute heatmapCompute;
+  ui::HeatmapWidget heatmapWidget;
 
   uint32_t width = 1280;
   uint32_t height = 720;
@@ -56,8 +69,6 @@ private:
       throw std::runtime_error("Failed to initialize Vulkan: " + *err);
     }
 
-    // Create surface — must happen AFTER instance creation and BEFORE
-    // any function that needs queue family present support.
     VkSurfaceKHR surface;
     if (glfwCreateWindowSurface(vkContext.instance(), window, nullptr,
                                 &surface) != VK_SUCCESS) {
@@ -65,10 +76,6 @@ private:
     }
     vkContext.setSurface(surface);
 
-    // initialize() runs the rest of the chain: pickPhysicalDevice, createLogicalDevice,
-    // createSwapchain, createRenderPass, createFramebuffers, createCommandPool,
-    // createCommandBuffers, createSyncObjects. createInstance() and setSurface()
-    // are caller responsibilities (surface needs the GLFW window handle).
     if (auto err = vkContext.initialize()) {
       throw std::runtime_error("Failed to complete Vulkan init: " + *err);
     }
@@ -85,21 +92,77 @@ private:
     windowManager.initialize();
   }
 
+  void initData() {
+    // Try /dev/shm/btquant_hotspine first; MarketDataProcessor falls back to
+    // a synthetic generator if the spine can't be opened (mock producer not
+    // running yet).
+    if (auto err = marketData.start("/dev/shm/btquant_hotspine", 16)) {
+      std::fprintf(stderr, "[BTQuant] MarketDataProcessor start failed: %s\n",
+                   err->c_str());
+    }
+  }
+
+  void initCompute() {
+    // Compute queue may be the same as graphics — get whatever compute support
+    // VulkanContext found, falling back to graphics queue.
+    auto qf = vkContext.queueFamilies();
+    uint32_t family = qf.computeFamily.value_or(qf.graphicsFamily.value());
+    if (auto err = heatmapCompute.initialize(
+            vkContext.device(), vkContext.physicalDevice(),
+            vkContext.commandPool(), vkContext.graphicsQueue(),
+            family)) {
+      std::fprintf(stderr, "[BTQuant] HeatmapCompute init failed: %s\n",
+                   err->c_str());
+    } else {
+      (void)heatmapWidget.initialize(heatmapCompute);
+    }
+  }
+
+  void pushTradesToHeatmap() {
+    // Pull recent trades from the data pipeline and push them to the heatmap.
+    // Normalize price to [0,1] using a running min/max window, time to [0,1]
+    // across the rolling window.
+    auto snap = marketData.snapshot(256);
+    if (snap.recent_trades.empty()) return;
+
+    // Compute price range from the snapshot.
+    double pmin = snap.metrics.low;
+    double pmax = snap.metrics.high;
+    if (pmax <= pmin) pmax = pmin + 1e-6;
+    double span = pmax - pmin;
+
+    // Time normalization: oldest trade → 0.0, newest → 1.0 (uniformly distributed
+    // over the rolling window). We treat the last N trades as time bin = i/N.
+    const size_t N = snap.recent_trades.size();
+    for (size_t i = 0; i < N; ++i) {
+      const auto& t = snap.recent_trades[N - 1 - i];  // newest first → oldest last
+      double price_norm = (t.price - pmin) / span;
+      float time_norm = static_cast<float>(i) / static_cast<float>(N - 1);
+      heatmapWidget.push(static_cast<float>(price_norm), time_norm,
+                         static_cast<float>(t.size),
+                         t.isBuy ? 0u : 1u);
+    }
+  }
+
   void mainLoop() {
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
 
-      // Begin a frame: wait for fence, acquire swapchain image, begin render pass.
       VkCommandBuffer cmd = vkContext.beginFrame();
       if (cmd == VK_NULL_HANDLE) {
-        // Swapchain was out of date and got recreated — skip this frame.
         continue;
       }
 
-      // Begin ImGui frame BEFORE starting the render pass (per ImGui convention).
-      uiContext.newFrame();
+      // Pump new trades into the heatmap buffer BEFORE the compute dispatch.
+      pushTradesToHeatmap();
 
-      // DockSpace + menu + 4 widgets.
+      // Record compute dispatch OUTSIDE the render pass. The compute writes
+      // to the storage image (GENERAL layout), then transitions back to
+      // SHADER_READ_ONLY_OPTIMAL so ImGui can sample it inside the render pass.
+      heatmapCompute.dispatch(cmd);
+
+      // ImGui frame + UI.
+      uiContext.newFrame();
       ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
                                    ImGuiDockNodeFlags_PassthruCentralNode);
       windowManager.showMainMenu();
@@ -107,9 +170,8 @@ private:
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
+      heatmapWidget.render();
 
-      // Begin render pass for this swapchain image, hand the command buffer to ImGui,
-      // end render pass, end frame (which submits and presents).
       VkClearValue clearColor = {{{0.031f, 0.035f, 0.039f, 1.0f}}};  // #08090a
       VkRenderPassBeginInfo rpBegin{};
       rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -121,7 +183,7 @@ private:
       rpBegin.pClearValues = &clearColor;
 
       vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-      uiContext.render(cmd);  // ImGui_ImplVulkan_RenderDrawData inside
+      uiContext.render(cmd);
       vkCmdEndRenderPass(cmd);
 
       vkContext.endFrame();
@@ -129,6 +191,8 @@ private:
   }
 
   void cleanup() {
+    heatmapCompute.shutdown();
+    marketData.stop();
     if (window) {
       glfwDestroyWindow(window);
       window = nullptr;

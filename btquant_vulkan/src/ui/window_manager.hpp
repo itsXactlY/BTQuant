@@ -26,6 +26,7 @@ public:
     void showFootprintWindow();
     void showVPVRWindow();
     void showMultiVWAPWindow();
+    void showRiskPanelWindow();
     void showDOMWindow();
     void showTradesWindow();
     void showTPOWindow();
@@ -40,6 +41,7 @@ public:
     bool showFootprint = true;
     bool showVPVR = true;
     bool showMultiVWAP = true;
+    bool showRiskPanel = true;
     bool showDOM = true;
     bool showTrades = true;
     bool showTPO = true;
@@ -50,6 +52,7 @@ private:
     class FootprintWidget* m_footprintWidget = nullptr;
     class VPVRWidget* m_vpvrWidget = nullptr;
     class MultiVWAPWidget* m_multiVwapWidget = nullptr;
+    class RiskPanel* m_riskPanel = nullptr;
     class DOMWidget* m_domWidget = nullptr;
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;

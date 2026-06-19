@@ -7,6 +7,7 @@
 #include "../widgets/footprint_widget.hpp"
 #include "../widgets/vpvr_widget.hpp"
 #include "../widgets/multi_vwap_widget.hpp"
+#include "../widgets/risk_panel.hpp"
 #include "../widgets/dom_widget.hpp"
 #include "../widgets/trades_widget.hpp"
 #include "../widgets/tpo_widget.hpp"
@@ -21,6 +22,7 @@ WindowManager::WindowManager() {
     m_footprintWidget = new FootprintWidget();
     m_vpvrWidget = new VPVRWidget();
     m_multiVwapWidget = new MultiVWAPWidget();
+    m_riskPanel = new RiskPanel();
     m_domWidget = new DOMWidget();
     m_tradesWidget = new TradesWidget();
     m_tpoWidget = new TPOWidget();
@@ -32,6 +34,7 @@ WindowManager::~WindowManager() {
     delete m_footprintWidget;
     delete m_vpvrWidget;
     delete m_multiVwapWidget;
+    delete m_riskPanel;
     delete m_domWidget;
     delete m_tradesWidget;
     delete m_tpoWidget;
@@ -54,6 +57,7 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_footprintWidget) m_footprintWidget->setMarketData(data);
     if (m_vpvrWidget) m_vpvrWidget->setMarketData(data);
     if (m_multiVwapWidget) m_multiVwapWidget->setMarketData(data);
+    if (m_riskPanel) m_riskPanel->setMarketData(data);
     if (m_domWidget) m_domWidget->setMarketData(data);
     if (m_tradesWidget) m_tradesWidget->setMarketData(data);
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);
@@ -82,6 +86,11 @@ void WindowManager::showVPVRWindow() {
 void WindowManager::showMultiVWAPWindow() {
     if (!showMultiVWAP) return;
     m_multiVwapWidget->render();
+}
+
+void WindowManager::showRiskPanelWindow() {
+    if (!showRiskPanel) return;
+    m_riskPanel->render();
 }
 
 void WindowManager::showDOMWindow() {

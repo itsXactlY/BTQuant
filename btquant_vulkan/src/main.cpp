@@ -175,6 +175,7 @@ private:
       windowManager.showFootprintWindow();
       windowManager.showVPVRWindow();
       windowManager.showMultiVWAPWindow();
+      windowManager.showRiskPanelWindow();
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();

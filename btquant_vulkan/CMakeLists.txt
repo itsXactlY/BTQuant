@@ -56,6 +56,7 @@ set(SOURCES
     src/widgets/footprint_widget.cpp
     src/widgets/vpvr_widget.cpp
     src/widgets/multi_vwap_widget.cpp
+    src/widgets/risk_panel.cpp
     src/widgets/dom_widget.cpp
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
@@ -80,6 +81,7 @@ set(HEADERS
     src/widgets/footprint_widget.hpp
     src/widgets/vpvr_widget.hpp
     src/widgets/multi_vwap_widget.hpp
+    src/widgets/risk_panel.hpp
     src/widgets/dom_widget.hpp
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp

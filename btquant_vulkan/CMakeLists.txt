@@ -53,6 +53,7 @@ set(SOURCES
     src/ui/window_manager.cpp
     src/widgets/order_book_widget.cpp
     src/widgets/order_book_depth_widget.cpp
+    src/widgets/footprint_widget.cpp
     src/widgets/dom_widget.cpp
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
@@ -74,6 +75,7 @@ set(HEADERS
     src/ui/window_manager.hpp
     src/widgets/order_book_widget.hpp
     src/widgets/order_book_depth_widget.hpp
+    src/widgets/footprint_widget.hpp
     src/widgets/dom_widget.hpp
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp

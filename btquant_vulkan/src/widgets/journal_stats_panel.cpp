@@ -177,11 +177,12 @@ void JournalStatsPanel::render() {
     if (ImGui::CollapsingHeader("Risk",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("JournalStatsRisk",
-                              2,
+                              3,
                               ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Max drawdown");
             ImGui::TableSetupColumn("Current drawdown");
+            ImGui::TableSetupColumn("Recovery");   // Sprint #96
             ImGui::TableHeadersRow();
             ImGui::TableNextRow();
             // Max DD: always red (it's the worst by definition).
@@ -221,6 +222,28 @@ void JournalStatsPanel::render() {
                 ImGui::TextUnformatted("0.00  (at ATH)");
                 ImGui::PopStyleColor();
             }
+
+            // Recovery (Sprint #96): "recovered on YYYY-MM-DD
+            // (N days)" when there's a recovery date, "— (not
+            // recovered)" when still in DD, "(no DD)" when
+            // maxDrawdown == 0. Dim informational.
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            if (dd.maxDrawdown < 1e-9) {
+                std::snprintf(buf, sizeof(buf), "(no DD)");
+            } else if (!dd.recoveryDate.empty()) {
+                std::snprintf(buf, sizeof(buf),
+                              "%s  (%zu day%s)",
+                              dd.recoveryDate.c_str(),
+                              dd.recoveryDays,
+                              dd.recoveryDays == 1 ? "" : "s");
+            } else {
+                std::snprintf(buf, sizeof(buf),
+                              "—  (not recovered)");
+            }
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
             ImGui::EndTable();
         }
     }
@@ -400,6 +423,52 @@ void JournalStatsPanel::render() {
             }
             ImGui::EndTable();
         }
+
+        // ---- Calmar mini-row (Sprint #96) ----
+        //
+        // Calmar ratio = annualized return / |max DD|. Sourced
+        // from TradeJournal::calmar() (#95). Appended below the
+        // Sharpe table rather than as a separate header — keeps
+        // the panel compact while still giving the trader the
+        // second risk-adjusted metric.
+        //
+        // Color rules: green >= 3.0 (very good risk-adjusted
+        // return), red < 0 (stay away), dim otherwise. Calmar
+        // sentinel of 0 (no DD yet) renders as "—" rather than
+        // "0.00" so the trader knows the metric is undefined,
+        // not zero.
+        auto cm = m_journal->calmar();
+        char buf[64];
+        ImGui::Text("Calmar:");
+        ImGui::SameLine();
+        if (cm.calmarRatio == 0.0 && cm.maxDrawdown < 1e-9) {
+            // No DD yet → metric undefined.
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            ImGui::TextUnformatted("—  (no DD yet)");
+            ImGui::PopStyleColor();
+        } else if (cm.calmarRatio >= 3.0) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+            std::snprintf(buf, sizeof(buf), "%.2f", cm.calmarRatio);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        } else if (cm.calmarRatio < 0.0) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            std::snprintf(buf, sizeof(buf), "%.2f", cm.calmarRatio);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            std::snprintf(buf, sizeof(buf), "%.2f", cm.calmarRatio);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(annRet=$%.0f / maxDD=$%.0f)",
+                            cm.annualizedReturn, cm.maxDrawdown);
     }
 
     ImGui::Separator();
@@ -815,13 +884,14 @@ void JournalStatsPanel::render() {
         if (perTagDD.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerTagRisk",
-                                     4,
+                                     5,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Tag");
             ImGui::TableSetupColumn("Max DD");
             ImGui::TableSetupColumn("Peak → Trough");
             ImGui::TableSetupColumn("Current DD");
+            ImGui::TableSetupColumn("Recovery");   // Sprint #96
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsTagDD; ++i) {
                 const auto& e = perTagDD[i];
@@ -878,6 +948,25 @@ void JournalStatsPanel::render() {
                     ImGui::TextUnformatted("0.00 (at ATH)");
                     ImGui::PopStyleColor();
                 }
+
+                // Recovery (Sprint #96).
+                ImGui::TableSetColumnIndex(4);
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                if (e.maxDrawdown < 1e-9) {
+                    std::snprintf(buf, sizeof(buf), "(no DD)");
+                } else if (!e.recoveryDate.empty()) {
+                    std::snprintf(buf, sizeof(buf),
+                                  "%s  (%zu day%s)",
+                                  e.recoveryDate.c_str(),
+                                  e.recoveryDays,
+                                  e.recoveryDays == 1 ? "" : "s");
+                } else {
+                    std::snprintf(buf, sizeof(buf),
+                                  "—  (not recovered)");
+                }
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
             }
             ImGui::EndTable();
         }
@@ -1011,13 +1100,14 @@ void JournalStatsPanel::render() {
         if (perSymDD.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerSymbolRisk",
-                                     4,
+                                     5,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Symbol");
             ImGui::TableSetupColumn("Max DD");
             ImGui::TableSetupColumn("Peak → Trough");
             ImGui::TableSetupColumn("Current DD");
+            ImGui::TableSetupColumn("Recovery");   // Sprint #96
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsDD; ++i) {
                 const auto& e = perSymDD[i];
@@ -1075,6 +1165,26 @@ void JournalStatsPanel::render() {
                     ImGui::TextUnformatted("0.00 (at ATH)");
                     ImGui::PopStyleColor();
                 }
+
+                // Recovery (Sprint #96). Same format as the
+                // journal-wide Recovery column.
+                ImGui::TableSetColumnIndex(4);
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                if (e.maxDrawdown < 1e-9) {
+                    std::snprintf(buf, sizeof(buf), "(no DD)");
+                } else if (!e.recoveryDate.empty()) {
+                    std::snprintf(buf, sizeof(buf),
+                                  "%s  (%zu day%s)",
+                                  e.recoveryDate.c_str(),
+                                  e.recoveryDays,
+                                  e.recoveryDays == 1 ? "" : "s");
+                } else {
+                    std::snprintf(buf, sizeof(buf),
+                                  "—  (not recovered)");
+                }
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
             }
             ImGui::EndTable();
         }

@@ -710,10 +710,12 @@ TradeJournal::perSymbolDrawdown() const {
             series.emplace_back(std::move(bkv.first), bkv.second);
         }
         auto dd = computeDrawdownFromSeries(series);
-        e.maxDrawdown = dd.maxDrawdown;
-        e.peakDate   = dd.peakDate;
-        e.troughDate = dd.troughDate;
-        e.currentDD  = dd.currentDD;
+        e.maxDrawdown   = dd.maxDrawdown;
+        e.peakDate      = dd.peakDate;
+        e.troughDate    = dd.troughDate;
+        e.recoveryDate  = dd.recoveryDate;     // Sprint #95
+        e.recoveryDays  = dd.recoveryDays;     // Sprint #95
+        e.currentDD     = dd.currentDD;
         out.push_back(std::move(e));
     }
     // Worst-first: symbol with biggest maxDD tops the list. When
@@ -806,10 +808,12 @@ TradeJournal::perTagDrawdown(bool includeUntagged) const {
             series.emplace_back(std::move(bkv.first), bkv.second);
         }
         auto dd = computeDrawdownFromSeries(series);
-        e.maxDrawdown = dd.maxDrawdown;
-        e.peakDate   = dd.peakDate;
-        e.troughDate = dd.troughDate;
-        e.currentDD  = dd.currentDD;
+        e.maxDrawdown   = dd.maxDrawdown;
+        e.peakDate      = dd.peakDate;
+        e.troughDate    = dd.troughDate;
+        e.recoveryDate  = dd.recoveryDate;     // Sprint #95
+        e.recoveryDays  = dd.recoveryDays;     // Sprint #95
+        e.currentDD     = dd.currentDD;
         out.push_back(std::move(e));
     }
     std::sort(out.begin(), out.end(),

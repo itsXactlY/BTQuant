@@ -272,6 +272,8 @@ public:
         double      maxDrawdown = 0.0;
         std::string peakDate;     // YYYY-MM-DD or ""
         std::string troughDate;   // YYYY-MM-DD or ""
+        std::string recoveryDate; // YYYY-MM-DD or "" (Sprint #95)
+        size_t      recoveryDays = 0;   // (Sprint #95)
         double      currentDD   = 0.0;
     };
     std::vector<PerSymbolDrawdown> perSymbolDrawdown() const;
@@ -294,6 +296,8 @@ public:
         double      maxDrawdown = 0.0;
         std::string peakDate;     // YYYY-MM-DD or ""
         std::string troughDate;   // YYYY-MM-DD or ""
+        std::string recoveryDate; // YYYY-MM-DD or "" (Sprint #95)
+        size_t      recoveryDays = 0;   // (Sprint #95)
         double      currentDD   = 0.0;
     };
     std::vector<PerTagDrawdown> perTagDrawdown(

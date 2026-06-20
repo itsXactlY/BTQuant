@@ -60,6 +60,10 @@ public:
     // the render loop.
     double liveRefPrice() const { return m_liveRefPrice; }
 
+    // Tag accessor — the strategy label that flows into the journal
+    // via the submit callback (Sprint #49). Empty string = untagged.
+    const char* tag() const { return m_tag; }
+
     // Side setter — used by hotkeys (Alt+B / Alt+S) to flip the
     // ticket's side without going through the render path. Calling
     // setSideBuy(true) makes the next submit a BUY; false = SELL.
@@ -131,6 +135,7 @@ private:
     char m_limit[32] = "0.00";      // only used when limit
     char m_feeBps[32] = "10";       // 10 bps = 0.10% taker fee
     char m_slipBps[32] = "5";       // 5 bps market slippage estimate
+    char m_tag[32] = "";            // strategy label (Sprint #49)
 
     // Cached latest trade price from the data spine. Updated each
     // frame by refreshRefPrice(). For limit orders the live price is

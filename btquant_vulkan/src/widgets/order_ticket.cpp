@@ -134,6 +134,12 @@ void OrderTicket::render() {
     }
     ImGui::InputText("Fee (bps)",         m_feeBps, sizeof(m_feeBps));
     ImGui::InputText("Slippage (bps)",    m_slipBps,sizeof(m_slipBps));
+    ImGui::InputText("Tag (strategy)",    m_tag,    sizeof(m_tag));
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Free-form strategy label written to the journal "
+                          "with this fill (e.g. 'scalper-1', 'arb-cross'). "
+                          "Leave empty for 'untagged'.");
+    }
     ImGui::PopItemWidth();
 
     // Quick-fill buttons.
@@ -318,6 +324,7 @@ void OrderTicket::resetDraft() {
     std::snprintf(m_limit, sizeof(m_limit), "0.00");
     std::snprintf(m_feeBps,sizeof(m_feeBps),"10");
     std::snprintf(m_slipBps,sizeof(m_slipBps),"5");
+    m_tag[0]      = '\0';
     m_sideIsBuy   = true;
     m_typeIsLimit = false;
 }

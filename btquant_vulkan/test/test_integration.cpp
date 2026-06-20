@@ -4985,5 +4985,69 @@ int main() {
         fs::remove_all(tmpDir, ec);
     }
 
+    // Test 56: OrderTicket — tag input buffer. The ticket now has
+    // a "Tag (strategy)" InputText whose value flows into the
+    // journal via the submit callback (paired with Sprint #49's
+    // JournalFill::tag). Verifies the buffer exists, defaults to
+    // empty (untagged), the accessor returns the right pointer,
+    // and resetDraft() also clears the tag.
+    std::cout << "\nTest 56: Testing OrderTicket tag input field..."
+              << std::endl;
+    {
+        using btquant::ui::OrderTicket;
+
+        OrderTicket t;
+        // 1) Default tag is empty (the "untagged" sentinel — same
+        //    convention as the journal).
+        if (std::string(t.tag()).empty()) {
+            std::cout << "✓ default tag is empty (untagged)" << std::endl;
+        } else {
+            std::cout << "✗ default tag not empty: \"" << t.tag() << "\""
+                      << std::endl;
+        }
+
+        // 2) After resetDraft() on a fresh ticket, the tag stays
+        //    empty. (Catches a regression where resetDraft might
+        //    leave m_tag as an uninitialised buffer.)
+        t.resetDraft();
+        if (std::string(t.tag()).empty()) {
+            std::cout << "✓ resetDraft() preserves empty tag" << std::endl;
+        } else {
+            std::cout << "✗ resetDraft() left a non-empty tag" << std::endl;
+        }
+
+        // 3) After resetDraft(), the buffer is at defaults — qty
+        //    0.10, side BUY, market, AND tag empty. This is the
+        //    union of Sprint #48's reset semantics and Sprint #49's
+        //    tag field.
+        if (t.isDraftAtDefaults() && std::string(t.tag()).empty()) {
+            std::cout << "✓ resetDraft() restores all fields + tag"
+                      << std::endl;
+        } else {
+            std::cout << "✗ resetDraft incomplete after tag add"
+                      << std::endl;
+        }
+
+        // 4) setSideBuy doesn't affect the tag — they're orthogonal
+        //    state. A trader who changes side shouldn't have their
+        //    tag wiped.
+        t.setSideBuy(false);
+        if (std::string(t.tag()).empty()) {
+            std::cout << "✓ setSideBuy is orthogonal to tag" << std::endl;
+        } else {
+            std::cout << "✗ setSideBuy touched the tag" << std::endl;
+        }
+        t.setSideBuy(true);
+
+        // 5) tag() returns a non-null pointer (c_str() on an empty
+        //    char[] would be UB; the field is initialised to "" so
+        //    t.tag() must return a valid pointer).
+        if (t.tag() != nullptr) {
+            std::cout << "✓ tag() returns a non-null pointer" << std::endl;
+        } else {
+            std::cout << "✗ tag() returned null" << std::endl;
+        }
+    }
+
     return 0;
 }

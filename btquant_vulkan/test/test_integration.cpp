@@ -12635,5 +12635,217 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 100: bestTrade() / worstTrade() + per-symbol + per-tag
+    //           mirrors (Sprint #111).
+    //
+    // Single-trade extremes. Tests:
+    //   - Empty journal: zero BestTrade (all defaults).
+    //   - Single fill: best==fill, worst==fill.
+    //   - Multi-fill: best = max realizedDelta, worst = min.
+    //   - perSymbol: only considers that symbol's fills.
+    //   - perTag: only that tag's fills; includeUntagged rolls
+    //     untagged into __untagged__.
+    std::cout << "\nTest 100: bestTrade() / worstTrade()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test100_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag, uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto b = j.bestTrade();
+            auto w = j.worstTrade();
+            if (b.realized == 0.0 && b.symbol.empty() &&
+                w.realized == 0.0 && w.symbol.empty() &&
+                b.timestamp_us == 0 && w.timestamp_us == 0) {
+                std::cout << "✓ empty: zero struct for both"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: b.realized="
+                          << b.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill ----
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "", 1000000ULL));
+            auto b = j.bestTrade();
+            auto w = j.worstTrade();
+            if (std::fabs(b.realized - 100.0) < 1e-9 &&
+                b.symbol == "BTC" &&
+                std::fabs(w.realized - 100.0) < 1e-9 &&
+                w.symbol == "BTC") {
+                std::cout << "✓ single fill: best==worst==the fill"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: b=" << b.realized
+                          << " w=" << w.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-fill ----
+        // BTC +500, ETH -200, BTC +100, SOL +50
+        // best = BTC +500, worst = ETH -200
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 500.0, "", 1000000ULL));
+            j.append(mkFill("ETH", -200.0, "", 2000000ULL));
+            j.append(mkFill("BTC", 100.0, "", 3000000ULL));
+            j.append(mkFill("SOL", 50.0, "",  4000000ULL));
+            auto b = j.bestTrade();
+            auto w = j.worstTrade();
+            if (std::fabs(b.realized - 500.0) < 1e-9 &&
+                b.symbol == "BTC" &&
+                std::fabs(w.realized + 200.0) < 1e-9 &&
+                w.symbol == "ETH") {
+                std::cout << "✓ multi-fill: best=BTC+$500, "
+                          << "worst=ETH-$200"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: b=" << b.realized
+                          << " b.sym=" << b.symbol
+                          << " w=" << w.realized
+                          << " w.sym=" << w.symbol << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- per-symbol: only that symbol's fills ----
+        // BTC +500, BTC +100, ETH -200
+        // bestTradeBySymbol("BTC") = +500
+        // bestTradeBySymbol("ETH") = -200 (only fill!)
+        // worstTradeBySymbol("BTC") = +100
+        // worstTradeBySymbol("ETH") = -200
+        {
+            fs::path p = tmpDir / "persym.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 500.0, "", 1000000ULL));
+            j.append(mkFill("BTC", 100.0, "", 2000000ULL));
+            j.append(mkFill("ETH", -200.0, "", 3000000ULL));
+            auto bBTC = j.bestTradeBySymbol("BTC");
+            auto bETH = j.bestTradeBySymbol("ETH");
+            auto wBTC = j.worstTradeBySymbol("BTC");
+            auto wETH = j.worstTradeBySymbol("ETH");
+            if (std::fabs(bBTC.realized - 500.0) < 1e-9 &&
+                std::fabs(bETH.realized + 200.0) < 1e-9 &&
+                std::fabs(wBTC.realized - 100.0) < 1e-9 &&
+                std::fabs(wETH.realized + 200.0) < 1e-9) {
+                std::cout << "✓ perSymbol: BTC best=$500 worst=$100, "
+                          << "ETH best/worst=$-200"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ perSymbol wrong: bBTC=" << bBTC.realized
+                          << " bETH=" << bETH.realized
+                          << " wBTC=" << wBTC.realized
+                          << " wETH=" << wETH.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- per-symbol: empty symbol (no fills) → zero struct ----
+        {
+            fs::path p = tmpDir / "empty_sym.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "", 1000000ULL));
+            auto b = j.bestTradeBySymbol("NOPE");
+            if (b.realized == 0.0 && b.symbol.empty()) {
+                std::cout << "✓ perSymbol unknown symbol: zero struct"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ unknown sym wrong: realized="
+                          << b.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- per-tag: only that tag's fills ----
+        // 2 scalp fills (+$100, +$50) + 1 arb fill (-$30)
+        // bestTradeByTag("scalp") = +100
+        // worstTradeByTag("scalp") = +50
+        // bestTradeByTag("arb") = -30 (only fill)
+        // bestTradeByTag("nonexistent") = zero struct
+        {
+            fs::path p = tmpDir / "tag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "scalp", 1000000ULL));
+            j.append(mkFill("ETH",  50.0, "scalp", 2000000ULL));
+            j.append(mkFill("BTC", -30.0, "arb",   3000000ULL));
+            auto bS = j.bestTradeByTag("scalp");
+            auto wS = j.worstTradeByTag("scalp");
+            auto bA = j.bestTradeByTag("arb");
+            auto bN = j.bestTradeByTag("nonexistent");
+            if (std::fabs(bS.realized - 100.0) < 1e-9 &&
+                bS.tag == "scalp" &&
+                std::fabs(wS.realized - 50.0) < 1e-9 &&
+                std::fabs(bA.realized + 30.0) < 1e-9 &&
+                bN.realized == 0.0) {
+                std::cout << "✓ perTag: scalp best=$100 worst=$50, "
+                          << "arb best=$-30, unknown=zero"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ perTag wrong: bS=" << bS.realized
+                          << " wS=" << wS.realized
+                          << " bA=" << bA.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- per-tag __untagged__ sentinel ----
+        // 1 untagged fill +$80. bestTradeByTag("__untagged__") = +80.
+        {
+            fs::path p = tmpDir / "untagged.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 80.0, "", 1000000ULL));
+            auto b = j.bestTradeByTag("__untagged__");
+            if (std::fabs(b.realized - 80.0) < 1e-9 &&
+                b.tag.empty()) {
+                std::cout << "✓ perTag __untagged__: catches "
+                          << "tag-less fill (+$80)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ __untagged__ wrong: realized="
+                          << b.realized << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " bestTrade tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

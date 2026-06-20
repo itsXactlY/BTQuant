@@ -1783,6 +1783,97 @@ TradeJournal::rollingSharpeBySymbol(size_t windowDays) const {
 }
 
 namespace {
+// Sprint #111 — single-trade extremes helper. Walks fills,
+// applies an optional filter (by symbol or tag), and tracks
+// the best (max) or worst (min) realizedDelta. The filter
+// closure returns true to KEEP a fill, false to skip it.
+template <typename FilterFn>
+TradeJournal::BestTrade
+extremeTrade(const std::vector<JournalFill>& fills,
+             FilterFn filter,
+             bool findMax) {
+    TradeJournal::BestTrade out;
+    bool   have = false;
+    double bestVal = findMax
+        ? -std::numeric_limits<double>::infinity()
+        :  std::numeric_limits<double>::infinity();
+    for (const auto& f : fills) {
+        if (!filter(f)) continue;
+        bool better = findMax
+            ? (f.realizedDelta > bestVal)
+            : (f.realizedDelta < bestVal);
+        if (!have || better) {
+            have    = true;
+            bestVal = f.realizedDelta;
+            out.timestamp_us = f.timestamp_us;
+            out.symbol       = f.symbol;
+            out.tag          = f.tag;
+            out.realized     = f.realizedDelta;
+        }
+    }
+    return out;
+}
+}  // namespace
+
+TradeJournal::BestTrade
+TradeJournal::bestTrade() const {
+    // Sprint #111. Max realizedDelta across all fills.
+    return extremeTrade(loadAll(),
+        [](const JournalFill&) { return true; },
+        true /*findMax*/);
+}
+
+TradeJournal::BestTrade
+TradeJournal::worstTrade() const {
+    // Sprint #111. Min realizedDelta across all fills.
+    return extremeTrade(loadAll(),
+        [](const JournalFill&) { return true; },
+        false /*findMin*/);
+}
+
+TradeJournal::BestTrade
+TradeJournal::bestTradeBySymbol(const std::string& symbol) const {
+    return extremeTrade(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        }, true);
+}
+
+TradeJournal::BestTrade
+TradeJournal::worstTradeBySymbol(const std::string& symbol) const {
+    return extremeTrade(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        }, false);
+}
+
+TradeJournal::BestTrade
+TradeJournal::bestTradeByTag(const std::string& tag,
+                             bool includeUntagged) const {
+    return extremeTrade(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") {
+                return f.tag.empty();  // all untagged
+            }
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        }, true);
+}
+
+TradeJournal::BestTrade
+TradeJournal::worstTradeByTag(const std::string& tag,
+                              bool includeUntagged) const {
+    return extremeTrade(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") {
+                return f.tag.empty();
+            }
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        }, false);
+}
+
+namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is
 // atomic on POSIX (and on Windows with ReplaceFile semantics on

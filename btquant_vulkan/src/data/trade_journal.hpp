@@ -445,6 +445,35 @@ public:
     };
     PerSymbolDayStats perSymbolDayStats() const;
 
+    // Single-trade extremes — Sprint #111. Return the single
+    // fill with the highest (or lowest) realizedDelta, plus the
+    // fill's full identity (timestamp, symbol, tag). Used by
+    // the headline summary to surface "my best trade ever
+    // was +$2,400 SOL on 2026-06-12 (scalp tag)".
+    //
+    // Empty journal → { realized=0, ts=0, sym="", tag="" }.
+    // The struct deliberately keeps all fields default-
+    // initializable so the empty case is just a zero struct.
+    struct BestTrade {
+        uint64_t    timestamp_us = 0;
+        std::string symbol;
+        std::string tag;
+        double      realized     = 0.0;
+    };
+    BestTrade bestTrade()  const;   // max realizedDelta
+    BestTrade worstTrade() const;   // min realizedDelta
+    // Per-symbol best/worst: the same struct but only over
+    // fills for that symbol. Returns zero struct when symbol
+    // has no fills.
+    BestTrade bestTradeBySymbol(const std::string& symbol) const;
+    BestTrade worstTradeBySymbol(const std::string& symbol) const;
+    // Per-tag best/worst. includeUntagged controls whether
+    // untagged fills roll up under "__untagged__".
+    BestTrade bestTradeByTag(const std::string& tag,
+                             bool includeUntagged = false) const;
+    BestTrade worstTradeByTag(const std::string& tag,
+                              bool includeUntagged = false) const;
+
     // Per-tag daily stats — per-tag mirror. `includeUntagged`
     // matches perTagStats() (#88).
     struct PerTagDayStats {

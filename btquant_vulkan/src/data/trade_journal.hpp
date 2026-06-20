@@ -2324,6 +2324,24 @@ public:
     allSegmentTradeSizeHHIByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment max consecutive winning/losing days
+    // (Sprint #217). Walks days in order, tracks longest
+    // and current streak of positive/negative daily
+    // realized per segment.
+    struct DayStreakSeg {
+        std::string segment;
+        size_t      longestWinDays  = 0;
+        size_t      currentWinDays  = 0;
+        size_t      longestLossDays = 0;
+        size_t      currentLossDays = 0;
+        size_t      totalDays       = 0;
+    };
+    DayStreakSeg dayStreakBySymbol(
+        const std::string& symbol) const;
+    DayStreakSeg dayStreakByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

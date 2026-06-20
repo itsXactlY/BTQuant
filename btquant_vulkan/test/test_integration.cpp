@@ -22914,5 +22914,69 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 203: dayStreakBySymbol/ByTag (Sprint #217).
+    //
+    // Day streak. Tests:
+    //   - BTC 3 days: +50, +50, -25 → longestWin=2,
+    //     longestLoss=1, totalDays=3.
+    std::cout << "\nTest 203: day streak..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test203_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 3 days ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC",  50.0, t0 + day));
+            j.append(mkFill("BTC", -25.0, t0 + 2 * day));
+            auto btcD = j.dayStreakBySymbol("BTC");
+            if (btcD.totalDays == 3 &&
+                btcD.longestWinDays == 2 &&
+                btcD.longestLossDays == 1) {
+                std::cout << "✓ BTC: 3 days, "
+                          << "longestWin=2, "
+                          << "longestLoss=1"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcD.totalDays
+                          << " win=" << btcD.longestWinDays
+                          << " loss=" << btcD.longestLossDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " day-streak tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

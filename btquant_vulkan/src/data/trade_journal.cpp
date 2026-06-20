@@ -9334,4 +9334,72 @@ TradeJournal::allSegmentTradeSizeHHIByTag(
     return out;
 }
 
+namespace {
+// Sprint #217 — per-segment day streak builder.
+template <typename Pred>
+TradeJournal::DayStreakSeg
+buildDayStreakBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::DayStreakSeg d;
+    std::map<std::string, double> dailyPnL;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        dailyPnL[buf] += f.realizedDelta;
+    }
+    if (dailyPnL.empty()) return d;
+    d.totalDays = dailyPnL.size();
+    size_t lw = 0, cw = 0, ll = 0, cl = 0;
+    for (const auto& kv : dailyPnL) {
+        if (kv.second > 0) {
+            cw++;
+            if (cw > lw) lw = cw;
+            cl = 0;
+        } else if (kv.second < 0) {
+            cl++;
+            if (cl > ll) ll = cl;
+            cw = 0;
+        } else {
+            cw = 0;
+            cl = 0;
+        }
+    }
+    d.longestWinDays = lw;
+    d.currentWinDays = cw;
+    d.longestLossDays = ll;
+    d.currentLossDays = cl;
+    return d;
+}
+}  // namespace
+
+TradeJournal::DayStreakSeg
+TradeJournal::dayStreakBySymbol(
+    const std::string& symbol) const {
+    auto d = buildDayStreakBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    d.segment = symbol;
+    return d;
+}
+
+TradeJournal::DayStreakSeg
+TradeJournal::dayStreakByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto d = buildDayStreakBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    d.segment = tag;
+    return d;
+}
+
 } // namespace btquant

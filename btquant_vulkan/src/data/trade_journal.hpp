@@ -1546,6 +1546,25 @@ public:
         bool byFillCount = false,
         size_t fillCount = 30) const;
 
+    // Per-segment drawdown summary (Sprint #156).
+    // Aggregates drawdown statistics for a single symbol
+    // or tag in one struct: count, mean depth, max depth,
+    // mean duration (in days), longest duration (days),
+    // mean recovery ratio (L/V shape indicator).
+    struct SegmentDrawdownStats {
+        size_t  count           = 0;
+        double  meanDepth       = 0.0;
+        double  maxDepth        = 0.0;
+        double  meanDrawdownDays = 0.0;
+        double  maxDrawdownDays  = 0.0;
+        double  meanRecoveryRatio = 0.0;  // rec / desc
+    };
+    SegmentDrawdownStats segmentDrawdownStatsBySymbol(
+        const std::string& symbol) const;
+    SegmentDrawdownStats segmentDrawdownStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

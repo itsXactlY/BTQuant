@@ -1497,7 +1497,7 @@ double TradeJournal::recoverySpeed(const DrawdownEvent& ev) {
 }
 
 double TradeJournal::maxDepth(
-    const std::vector<DrawdownEvent>& events) {
+    const std::vector<TradeJournal::DrawdownEvent>& events) {
     if (events.empty()) return 0.0;
     double m = 0.0;
     for (const auto& e : events) {
@@ -1507,7 +1507,7 @@ double TradeJournal::maxDepth(
 }
 
 double TradeJournal::avgDepth(
-    const std::vector<DrawdownEvent>& events) {
+    const std::vector<TradeJournal::DrawdownEvent>& events) {
     if (events.empty()) return 0.0;
     double sum = 0.0;
     for (const auto& e : events) sum += e.trough_depth;
@@ -1515,7 +1515,7 @@ double TradeJournal::avgDepth(
 }
 
 double TradeJournal::avgRecoveryRatio(
-    const std::vector<DrawdownEvent>& events) {
+    const std::vector<TradeJournal::DrawdownEvent>& events) {
     // Geometric mean of recoveryRatio across events.
     // Symmetric in log-space: avg of ratios == exp(avg of
     // log(ratio)). Guards against zero drawdown_us by
@@ -5846,6 +5846,57 @@ TradeJournal::recentPerformanceByTag(
             if (includeUntagged && f.tag.empty()) return false;
             return f.tag == tag;
         });
+}
+
+namespace {
+// Sprint #156 — per-segment drawdown stats builder.
+// Aggregates completed DDs for a segment into one struct.
+template <typename Pred>
+TradeJournal::SegmentDrawdownStats
+buildSegmentDrawdownStats(
+    const std::vector<TradeJournal::DrawdownEvent>& events, Pred pred) {
+    TradeJournal::SegmentDrawdownStats s;
+    double sumDepth = 0.0, sumDays = 0.0, sumRatio = 0.0;
+    for (const auto& e : events) {
+        if (!pred(e)) continue;
+        s.count++;
+        sumDepth += e.trough_depth;
+        double days = static_cast<double>(e.drawdown_us) /
+                      (86400.0 * 1000000.0);
+        sumDays += days;
+        if (e.drawdown_us > 0 &&
+            e.recovery_us > 0) {
+            sumRatio += static_cast<double>(e.recovery_us) /
+                        static_cast<double>(e.drawdown_us);
+        }
+        if (e.trough_depth > s.maxDepth) s.maxDepth = e.trough_depth;
+        if (days > s.maxDrawdownDays) s.maxDrawdownDays = days;
+    }
+    if (s.count > 0) {
+        s.meanDepth = sumDepth / static_cast<double>(s.count);
+        s.meanDrawdownDays = sumDays / static_cast<double>(s.count);
+        s.meanRecoveryRatio = sumRatio /
+                              static_cast<double>(s.count);
+    }
+    return s;
+}
+}  // namespace
+
+TradeJournal::SegmentDrawdownStats
+TradeJournal::segmentDrawdownStatsBySymbol(
+    const std::string& symbol) const {
+    auto events = drawdownRecoveriesBySymbol(symbol);
+    return buildSegmentDrawdownStats(events,
+        [](const DrawdownEvent&) { return true; });
+}
+
+TradeJournal::SegmentDrawdownStats
+TradeJournal::segmentDrawdownStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    auto events = drawdownRecoveriesByTag(tag, includeUntagged);
+    return buildSegmentDrawdownStats(events,
+        [](const DrawdownEvent&) { return true; });
 }
 
 } // namespace btquant

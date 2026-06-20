@@ -18791,5 +18791,79 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 143: segmentDrawdownStatsBySymbol/ByTag
+    //   (Sprint #156).
+    //
+    // Per-segment DD stats. Tests:
+    //   - BTC: 1 completed DD (depth=50, drawdown=2h,
+    //     recovery=1h → ratio=0.5).
+    //   - ETH: 0 DDs (empty).
+    std::cout << "\nTest 143: segment DD stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test143_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 1 DD, depth=50, drawdown=2h, rec=1h ----
+        // Use 2 days apart so perSymbolDrawdown() (which
+        // buckets by local day) detects the DD.
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 2 * day));
+            j.append(mkFill("BTC",   60.0, "",
+                             t0 + 4 * day));
+            auto btcS = j.segmentDrawdownStatsBySymbol("BTC");
+            auto ethS = j.segmentDrawdownStatsBySymbol("ETH");
+            if (btcS.count == 1 &&
+                std::fabs(btcS.meanDepth - 50.0) < 1e-9 &&
+                std::fabs(btcS.maxDepth - 50.0) < 1e-9 &&
+                btcS.maxDrawdownDays > 0.0 &&
+                ethS.count == 0) {
+                std::cout << "✓ BTC: 1 DD (depth=50), "
+                          << "maxDD=" << btcS.maxDrawdownDays
+                          << "d; ETH=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: count="
+                          << btcS.count
+                          << " depth=" << btcS.meanDepth
+                          << " ETH count=" << ethS.count
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " seg-DD tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

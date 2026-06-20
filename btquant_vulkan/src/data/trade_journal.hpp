@@ -474,6 +474,22 @@ public:
     BestTrade worstTradeByTag(const std::string& tag,
                               bool includeUntagged = false) const;
 
+    // CSV export (Sprint #112). Two writers:
+    //   exportFillsToCsv(path)  — one row per fill (ts, symbol,
+    //                             realized, tag). For traders who
+    //                             want to analyze in Excel.
+    //   exportStatsToCsv(path)  — two sections (per-symbol +
+    //                             per-tag) of summary analytics
+    //                             including realized, W/L/PF/
+    //                             expectancy, Sharpe/Sortino/
+    //                             Calmar. Single file with '#'
+    //                             section headers.
+    //
+    // Returns true on success, false on I/O error. The path's
+    // parent dirs are created if they don't exist.
+    bool exportFillsToCsv(const std::string& path) const;
+    bool exportStatsToCsv(const std::string& path) const;
+
     // Per-tag daily stats — per-tag mirror. `includeUntagged`
     // matches perTagStats() (#88).
     struct PerTagDayStats {

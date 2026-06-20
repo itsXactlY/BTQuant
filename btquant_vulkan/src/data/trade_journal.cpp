@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <set>
@@ -1871,6 +1872,159 @@ TradeJournal::worstTradeByTag(const std::string& tag,
             if (includeUntagged && f.tag.empty()) return false;
             return f.tag == tag;
         }, false);
+}
+
+namespace {
+// Sprint #112 — RFC-4180-style CSV quote. Wraps a field in
+// double quotes when it contains a comma, quote, or newline;
+// doubles any embedded quote. None of the current JournalFill
+// fields strictly need it (symbol/timestamp are ASCII-clean,
+// numbers are locale-neutral via snprintf), but the hook
+// stays in case future fields like user-supplied tags land.
+std::string csvQuote(const std::string& s) {
+    if (s.find(',')  == std::string::npos &&
+        s.find('"')  == std::string::npos &&
+        s.find('\n') == std::string::npos) {
+        return s;
+    }
+    std::string out;
+    out.reserve(s.size() + 2);
+    out.push_back('"');
+    for (char c : s) {
+        if (c == '"') out.push_back('"');
+        out.push_back(c);
+    }
+    out.push_back('"');
+    return out;
+}
+
+// ISO-8601-ish "YYYY-MM-DDTHH:MM:SS" from microsecond ts.
+// Used by exportFillsToCsv() for human-readable timestamps.
+std::string isoTimestamp(uint64_t ts_us) {
+    std::time_t secs = static_cast<std::time_t>(ts_us / 1000000ULL);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &secs);
+#else
+    localtime_r(&secs, &tm);
+#endif
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &tm);
+    return buf;
+}
+}  // namespace
+
+bool TradeJournal::exportFillsToCsv(const std::string& path) const {
+    // Sprint #112. One row per fill: timestamp, symbol,
+    // realized, tag. Sorted by timestamp ASC.
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(path);
+        if (p.has_parent_path())
+            fs::create_directories(p.parent_path());
+        std::ofstream out(path, std::ios::trunc);
+        if (!out.is_open()) return false;
+        out << "timestamp_iso,timestamp_us,symbol,realized,tag\n";
+        auto fills = loadAll();
+        std::sort(fills.begin(), fills.end(),
+                  [](const JournalFill& a, const JournalFill& b) {
+                      return a.timestamp_us < b.timestamp_us;
+                  });
+        for (const auto& f : fills) {
+            out << csvQuote(isoTimestamp(f.timestamp_us))
+                << "," << f.timestamp_us
+                << "," << csvQuote(f.symbol)
+                << "," << std::fixed << std::setprecision(6)
+                << f.realizedDelta
+                << "," << csvQuote(f.tag) << "\n";
+        }
+        out.flush();
+        return out.good();
+    } catch (...) {
+        return false;
+    }
+}
+
+bool TradeJournal::exportStatsToCsv(const std::string& path) const {
+    // Sprint #112. Two sections in one CSV:
+    //   # per-symbol header
+    //   symbol,realized,roundTrips,wins,losses,winRate,
+    //   avgWinner,avgLoser,profitFactor,expectancy,
+    //   sharpe,sortino,calmar
+    //   ...rows...
+    //   # per-tag header
+    //   tag,realized,roundTrips,wins,losses,winRate,
+    //   avgWinner,avgLoser,profitFactor,expectancy,
+    //   sharpe,sortino,calmar
+    //   ...rows...
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(path);
+        if (p.has_parent_path())
+            fs::create_directories(p.parent_path());
+        std::ofstream out(path, std::ios::trunc);
+        if (!out.is_open()) return false;
+        // ---- Per-symbol ----
+        out << "# per_symbol_stats\n";
+        out << "symbol,realized,roundTrips,wins,losses,winRate,"
+            << "avgWinner,avgLoser,profitFactor,expectancy,"
+            << "sharpe,sortino,calmar\n";
+        auto perSymSh  = perSymbolSharpe();
+        auto perSymSo  = perSymbolSortino();
+        auto perSymCl  = perSymbolCalmar();
+        std::unordered_map<std::string, double> shBySym, soBySym, clBySym;
+        for (const auto& s : perSymSh) shBySym[s.symbol] = s.annualizedSharpe;
+        for (const auto& s : perSymSo) soBySym[s.symbol] = s.annualizedSortino;
+        for (const auto& s : perSymCl) clBySym[s.symbol] = s.calmarRatio;
+        for (const auto& s : perSymbolStats()) {
+            out << csvQuote(s.symbol)
+                << "," << std::fixed << std::setprecision(6) << s.realized
+                << "," << s.roundTripCount
+                << "," << s.winCount
+                << "," << s.lossCount
+                << "," << std::setprecision(4) << s.winRate
+                << "," << std::setprecision(6) << s.avgWinner
+                << "," << s.avgLoser
+                << "," << s.profitFactor
+                << "," << s.expectancy
+                << "," << shBySym[s.symbol]
+                << "," << soBySym[s.symbol]
+                << "," << clBySym[s.symbol]
+                << "\n";
+        }
+        // ---- Per-tag ----
+        out << "# per_tag_stats\n";
+        out << "tag,realized,roundTrips,wins,losses,winRate,"
+            << "avgWinner,avgLoser,profitFactor,expectancy,"
+            << "sharpe,sortino,calmar\n";
+        auto perTagSh  = perTagSharpe(true);
+        auto perTagSo  = perTagSortino(true);
+        auto perTagCl  = perTagCalmar(true);
+        std::unordered_map<std::string, double> shByTag, soByTag, clByTag;
+        for (const auto& s : perTagSh) shByTag[s.tag] = s.annualizedSharpe;
+        for (const auto& s : perTagSo) soByTag[s.tag] = s.annualizedSortino;
+        for (const auto& s : perTagCl) clByTag[s.tag] = s.calmarRatio;
+        for (const auto& s : perTagStats(true)) {
+            out << csvQuote(s.tag)
+                << "," << std::fixed << std::setprecision(6) << s.realized
+                << "," << s.roundTripCount
+                << "," << s.winCount
+                << "," << s.lossCount
+                << "," << std::setprecision(4) << s.winRate
+                << "," << std::setprecision(6) << s.avgWinner
+                << "," << s.avgLoser
+                << "," << s.profitFactor
+                << "," << s.expectancy
+                << "," << shByTag[s.tag]
+                << "," << soByTag[s.tag]
+                << "," << clByTag[s.tag]
+                << "\n";
+        }
+        out.flush();
+        return out.good();
+    } catch (...) {
+        return false;
+    }
 }
 
 namespace {

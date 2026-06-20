@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <unordered_map>
 
 #include "../data/trade_journal.hpp"
@@ -9,6 +10,21 @@
 #include "imgui.h"
 
 namespace btquant::ui {
+
+void JournalStatsPanel::setJournal(::btquant::TradeJournal* j) {
+    m_journal = j;
+    // Sprint #112 — default the export path next to the
+    // existing journal JSONL when possible. The trader
+    // gets a sensible one-click default.
+    if (m_journal && m_csvPathBuf[0] == '\0') {
+        const std::string& src = m_journal->path();
+        std::snprintf(m_csvPathBuf, sizeof(m_csvPathBuf),
+                      "%s", src.c_str());
+        char* dot = ::strrchr(m_csvPathBuf, '.');
+        if (dot) ::strcpy(dot, ".csv");
+        else     ::strcat(m_csvPathBuf, ".csv");
+    }
+}
 
 // Color rules for the breakdown rows:
 //   green   — winner  (realized > 0)
@@ -1837,6 +1853,66 @@ void JournalStatsPanel::render() {
         ImGui::EndTabItem();
         }   // End Calendar BeginTabItem
     }       // End BeginTabBar
+
+    // Sprint #112 — CSV export buttons (footer of the panel).
+    // Two paths: one for raw fills, one for summary stats.
+    // Both write via TradeJournal::* — parent dirs are created
+    // automatically. On success, shows a brief success text for
+    // ~2 seconds (no popup, no modal — keeps the panel fluid).
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Export (Sprint #112)");
+    ImGui::SameLine();
+    ImGui::InputText("##csvPath", m_csvPathBuf,
+                     sizeof(m_csvPathBuf));
+    ImGui::SameLine();
+    if (ImGui::Button("Fills -> CSV##jsf")) {
+        if (m_journal) {
+            if (m_journal->exportFillsToCsv(m_csvPathBuf)) {
+                std::snprintf(m_csvStatus,
+                              sizeof(m_csvStatus),
+                              "✓ %zu bytes written",
+                              std::filesystem::exists(m_csvPathBuf)
+                                  ? std::filesystem::file_size(
+                                        m_csvPathBuf)
+                                  : 0);
+            } else {
+                std::snprintf(m_csvStatus, sizeof(m_csvStatus),
+                              "✗ I/O error");
+            }
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "One row per fill: ISO timestamp, microsecond ts, "
+            "symbol, realized, tag.");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stats -> CSV##jss")) {
+        if (m_journal) {
+            if (m_journal->exportStatsToCsv(m_csvPathBuf)) {
+                std::snprintf(m_csvStatus,
+                              sizeof(m_csvStatus),
+                              "✓ %zu bytes written",
+                              std::filesystem::exists(m_csvPathBuf)
+                                  ? std::filesystem::file_size(
+                                        m_csvPathBuf)
+                                  : 0);
+            } else {
+                std::snprintf(m_csvStatus, sizeof(m_csvStatus),
+                              "✗ I/O error");
+            }
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Two-section summary CSV: per-symbol stats + per-tag "
+            "stats with W/L/PF/expectancy/Sharpe/Sortino/Calmar.");
+    }
+    if (m_csvStatus[0]) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", m_csvStatus);
+    }
 
     ImGui::End();
 }

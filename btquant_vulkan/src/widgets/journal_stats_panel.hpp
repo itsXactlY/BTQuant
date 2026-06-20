@@ -30,7 +30,7 @@ namespace btquant::ui {
 // Sprint #74.
 class JournalStatsPanel {
 public:
-    void setJournal(::btquant::TradeJournal* j) { m_journal = j; }
+    void setJournal(::btquant::TradeJournal* j);
 
     // When true (default), fills with an empty tag are aggregated
     // under the synthetic key "__untagged__". When false, untagged
@@ -69,8 +69,10 @@ private:
 
     // Sprint #108 — tabbed UI. Tab order matches the visual
     // left-to-right order in the tab bar.
-    enum class Tab { Overview, BySymbol, ByTag, Calendar };
-    Tab m_activeTab = Tab::Overview;   // default open on Overview
+    char m_csvPathBuf[256];
+    char m_csvStatus[64];
+    enum class Tab { Overview, BySymbol, ByTag, Calendar } m_activeTab
+        = Tab::Overview;
 
     // Calendar tab mode (Sprint #108). Symbol = perSymbol*
     // methods; Tag = perTag* methods (honors includeUntagged).

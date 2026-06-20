@@ -12847,5 +12847,195 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 101: exportFillsToCsv() / exportStatsToCsv() (Sprint #112).
+    //
+    // CSV writers. Tests:
+    //   - Empty journal: header-only file, both writers succeed.
+    //   - exportFillsToCsv: 3 fills → 4 lines (header + 3).
+    //     Verifies timestamps are present, sorted ASC, and the
+    //     realized column matches.
+    //   - exportStatsToCsv: 3 fills → per-symbol + per-tag
+    //     sections, each with a header + at least 1 row.
+    //   - Parent dir creation: writing to a nested path
+    //     creates the intermediate dirs.
+    std::cout << "\nTest 101: exportFillsToCsv() / exportStatsToCsv()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test101_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag, uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty journal: both writers succeed, header only ----
+        {
+            fs::path p = tmpDir / "empty_fills.csv";
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            bool ok = j.exportFillsToCsv(p.string());
+            std::ifstream in(p);
+            std::string line;
+            int n = 0;
+            while (std::getline(in, line)) ++n;
+            if (ok && n == 1) {  // header only
+                std::cout << "✓ empty fills: header-only CSV (1 line)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty fills wrong: ok=" << ok
+                          << " lines=" << n << std::endl;
+                ++fail;
+            }
+        }
+        {
+            fs::path p = tmpDir / "empty_stats.csv";
+            TradeJournal j((tmpDir / "empty2.jsonl").string());
+            bool ok = j.exportStatsToCsv(p.string());
+            std::ifstream in(p);
+            std::string line;
+            int n = 0;
+            while (std::getline(in, line)) ++n;
+            // 1 # header + 1 col header + 0 rows + 1 # tag header
+            //   + 1 col header + 0 rows = 4 lines.
+            if (ok && n == 4) {
+                std::cout << "✓ empty stats: 4-line CSV (2 section "
+                          << "headers + 2 col headers, no rows)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty stats wrong: ok=" << ok
+                          << " lines=" << n << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- exportFillsToCsv: 3 fills, sorted ASC ----
+        {
+            fs::path p = tmpDir / "fills.csv";
+            TradeJournal j((tmpDir / "f.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "",       3000000ULL));
+            j.append(mkFill("ETH", -50.0, "scalp",  1000000ULL));
+            j.append(mkFill("BTC", 200.0, "scalp",  2000000ULL));
+            bool ok = j.exportFillsToCsv(p.string());
+            std::ifstream in(p);
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(in, line)) lines.push_back(line);
+            if (!ok || lines.size() != 4) {
+                std::cout << "✗ fills wrong: ok=" << ok
+                          << " lines=" << lines.size() << std::endl;
+                ++fail;
+            } else if (lines[0].find("timestamp_iso") == std::string::npos) {
+                std::cout << "✗ fills header wrong: " << lines[0]
+                          << std::endl;
+                ++fail;
+            } else {
+                // Verify rows sorted ASC by ts (ETH@1M, BTC@2M, BTC@3M).
+                bool symOrder = (lines[1].find("ETH") != std::string::npos) &&
+                                (lines[2].find("BTC") != std::string::npos) &&
+                                (lines[3].find("BTC") != std::string::npos);
+                // Verify the realized value -50 appears in row 1.
+                bool valOk = (lines[1].find("-50.000000") != std::string::npos);
+                if (symOrder && valOk) {
+                    std::cout << "✓ fills: 3 rows sorted ASC "
+                              << "(ETH@1M, BTC@2M, BTC@3M), "
+                              << "realized column present"
+                              << std::endl;
+                    ++pass;
+                } else {
+                    std::cout << "✗ fills content wrong: symOrder="
+                              << symOrder << " valOk=" << valOk
+                              << std::endl;
+                    ++fail;
+                }
+            }
+        }
+
+        // ---- exportStatsToCsv: per-symbol + per-tag ----
+        {
+            fs::path p = tmpDir / "stats.csv";
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "scalp", 1000000ULL));
+            j.append(mkFill("BTC",  50.0, "scalp", 2000000ULL));
+            j.append(mkFill("ETH", -30.0, "arb",   3000000ULL));
+            bool ok = j.exportStatsToCsv(p.string());
+            std::ifstream in(p);
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(in, line)) lines.push_back(line);
+            // Expected:
+            //   # per_symbol_stats
+            //   symbol,realized,...
+            //   BTCUSDT,...
+            //   ETHUSDT,...
+            //   # per_tag_stats
+            //   tag,realized,...
+            //   arb,...
+            //   scalp,...
+            // = 8 lines (no __untagged__ row since all 3 fills
+            //           have explicit tags; perTagStats only emits
+            //           a row for tags that actually appear).
+            // Fills use "BTC" / "ETH" (no USDT suffix in test).
+            if (ok && lines.size() == 8 &&
+                lines[0] == "# per_symbol_stats" &&
+                lines[4] == "# per_tag_stats" &&
+                (lines[2].find("BTC") != std::string::npos ||
+                 lines[3].find("BTC") != std::string::npos) &&
+                (lines[2].find("ETH") != std::string::npos ||
+                 lines[3].find("ETH") != std::string::npos) &&
+                (lines[6].find("scalp") != std::string::npos ||
+                 lines[7].find("scalp") != std::string::npos) &&
+                (lines[6].find("arb") != std::string::npos ||
+                 lines[7].find("arb") != std::string::npos)) {
+                std::cout << "✓ stats: 8-line CSV with per-symbol "
+                          << "(BTC+ETH) + per-tag (__untagged__+"
+                          << "scalp+arb) sections"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ stats wrong: lines=" << lines.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Parent dir creation ----
+        {
+            fs::path nested = tmpDir / "deep" / "nested" / "path";
+            fs::create_directories(tmpDir / "deep");  // half-way
+            fs::path p = nested / "fills.csv";
+            TradeJournal j((tmpDir / "n.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "", 1000000ULL));
+            bool ok = j.exportFillsToCsv(p.string());
+            if (ok && fs::exists(p)) {
+                std::cout << "✓ parent dir creation: " << p << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ parent dir wrong: ok=" << ok
+                          << " exists=" << fs::exists(p) << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " CSV tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

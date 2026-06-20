@@ -108,6 +108,32 @@ public:
     std::vector<std::pair<std::string, double>>
     sessionRealizedBySymbol() const;
 
+    // ---- Session-realized history (Sprint #61) ----
+    //
+    // Bounded time-series of sessionRealized() snapshots for the
+    // RiskPanel equity-curve sparkline. WindowManager calls
+    // sampleSessionRealized() each render frame; the guard only
+    // pushes to history when the value actually changes (so idle
+    // frames don't pollute the series). Capped at kMaxRealizedHistory
+    // (1000) — at typical 60fps that's ~16s of dense sampling, but
+    // since we dedupe on change, the cap is more of a long-session
+    // safety than an active limit. Old samples are evicted FIFO.
+    static constexpr std::size_t kMaxRealizedHistory = 1000;
+
+    // Push a snapshot of sessionRealized() to the history if it
+    // differs from the last sample. No-op when value unchanged.
+    void sampleSessionRealized();
+
+    // Snapshot of session-realized samples, oldest first. The
+    // sparkline renderer reads this directly.
+    const std::vector<double>& sessionRealizedHistory() const {
+        return m_realizedHistory;
+    }
+
+    // Clear the history (used by tests + the "Reset session" UI
+    // button when the trader wants to start fresh).
+    void clearSessionRealizedHistory() { m_realizedHistory.clear(); }
+
     // Symbol names that have ever booked a delta this session, in
     // insertion order (insertion = first delta for that symbol).
     // Useful when the panel wants to display a stable column order
@@ -199,6 +225,10 @@ private:
     // session losses. Absent key = use global threshold. setConfig()
     // does not touch this map.
     std::unordered_map<std::string, double> m_killOnDailyLossBySymbol;
+
+    // Session-realized time-series for the RiskPanel sparkline
+    // (Sprint #61). Oldest first. Capped at kMaxRealizedHistory.
+    std::vector<double> m_realizedHistory;
 };
 
 } // namespace btquant

@@ -184,6 +184,55 @@ void RiskPanel::render() {
     ImGui::Text("Position + P&L — %s   (last %zu trades)",
                 isLive ? "LIVE" : "synthetic", trades.size());
 
+    // ---- Equity curve sparkline (Sprint #61) ----
+    //
+    // Renders the time-series of sessionRealized() as a small line
+    // chart at the top of the panel. Sample-on-change (driven by
+    // WindowManager's per-frame call to sampleSessionRealized())
+    // means idle frames don't pollute the series — only frames
+    // where the value actually moved add a point. The chart auto-
+    // scales to the data's min/max so the trader sees the shape of
+    // the session regardless of absolute P&L.
+    if (m_riskGuard) {
+        const auto& hist = m_riskGuard->sessionRealizedHistory();
+        if (hist.size() >= 2) {
+            // ImGui::PlotLines takes const float* — convert per
+            // render. Cost is O(N) but N is capped at 1000 so this
+            // is ~negligible (a few microseconds at most).
+            static std::vector<float> scratch;
+            scratch.resize(hist.size());
+            for (size_t i = 0; i < hist.size(); ++i) {
+                scratch[i] = static_cast<float>(hist[i]);
+            }
+            double mn = hist[0], mx = hist[0];
+            for (double v : hist) {
+                if (v < mn) mn = v;
+                if (v > mx) mx = v;
+            }
+            double pad = (mx - mn) > 1e-9 ? (mx - mn) * 0.05 : 1.0;
+            mn -= pad;
+            mx += pad;
+            char overlay[64];
+            std::snprintf(overlay, sizeof(overlay), "%zu pts | %+.0f -> %+.0f",
+                          hist.size(), hist.front(), hist.back());
+            ImGui::PushStyleColor(ImGuiCol_PlotLines,
+                hist.back() >= 0 ? ImVec4(0.30f, 0.85f, 0.40f, 1.0f)
+                                  : ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            ImGui::PlotLines("##equity_curve",
+                             scratch.data(),
+                             static_cast<int>(scratch.size()),
+                             0, overlay,
+                             static_cast<float>(mn),
+                             static_cast<float>(mx),
+                             ImVec2(-1, 60));
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::TextDisabled("(equity curve: %zu sample%s - "
+                                "need >= 2 to plot)",
+                                hist.size(), hist.size() == 1 ? "" : "s");
+        }
+    }
+
     if (trades.empty()) {
         ImGui::Text("No trades");
         ImGui::End();

@@ -220,6 +220,9 @@ void RiskGuard::resetSession() {
     m_sessionRealized = 0.0;
     m_sessionRealizedBySymbol.clear();
     m_symbolOrder.clear();
+    // Clear the equity curve too — a "Reset session" means start
+    // a new trading day, not pick up where the old one left off.
+    m_realizedHistory.clear();
 }
 
 double RiskGuard::sessionRealizedFor(const std::string& symbol) const {
@@ -252,6 +255,18 @@ RiskGuard::sessionRealizedBySymbol() const {
 std::vector<std::string>
 RiskGuard::symbolsBookedThisSession() const {
     return m_symbolOrder;
+}
+
+void RiskGuard::sampleSessionRealized() {
+    double v = m_sessionRealized;
+    if (!m_realizedHistory.empty() &&
+        m_realizedHistory.back() == v) {
+        return;  // dedupe — no change since last sample
+    }
+    m_realizedHistory.push_back(v);
+    while (m_realizedHistory.size() > kMaxRealizedHistory) {
+        m_realizedHistory.erase(m_realizedHistory.begin());
+    }
 }
 
 bool RiskGuard::isKillTripped() const {

@@ -1013,6 +1013,10 @@ void WindowManager::showPositionPanelWindow() {
             m_positionBook->markToMarket(snap.order_book.midPrice);
         }
     }
+    // Sample the equity curve BEFORE the panel renders so the
+    // sparkline shows the current frame's state (otherwise the
+    // curve lags by one frame which is visible at high tick rates).
+    if (m_riskGuard) m_riskGuard->sampleSessionRealized();
     if (m_positionPanel) m_positionPanel->render();
 }
 

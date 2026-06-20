@@ -6220,5 +6220,146 @@ int main() {
         }
     }
 
+    // Test 65: RiskGuard — session-realized history (equity curve).
+    // sampleSessionRealized() pushes the current value to a bounded
+    // time-series (max 1000). Dedupe-on-change means idle frames
+    // don't pollute the series. resetSession() clears the history
+    // so a new trading day starts with a clean curve.
+    std::cout << "\nTest 65: Testing RiskGuard session-realized history..."
+              << std::endl;
+    {
+        using btquant::RiskGuard;
+
+        // 1) Empty history on construction.
+        {
+            RiskGuard g;
+            if (g.sessionRealizedHistory().empty()) {
+                std::cout << "✓ fresh guard has empty history"
+                          << std::endl;
+            } else {
+                std::cout << "✗ fresh guard has non-empty history"
+                          << std::endl;
+            }
+        }
+
+        // 2) sampleSessionRealized pushes initial 0.0.
+        {
+            RiskGuard g;
+            g.sampleSessionRealized();
+            const auto& h = g.sessionRealizedHistory();
+            if (h.size() == 1 && h[0] == 0.0) {
+                std::cout << "✓ first sample pushes initial 0.0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ first sample: size=" << h.size()
+                          << " val=" << (h.empty() ? -1.0 : h[0])
+                          << std::endl;
+            }
+        }
+
+        // 3) Dedupe on unchanged value.
+        {
+            RiskGuard g;
+            g.sampleSessionRealized();
+            g.sampleSessionRealized();
+            g.sampleSessionRealized();
+            if (g.sessionRealizedHistory().size() == 1) {
+                std::cout << "✓ 3 samples of unchanged value = 1 stored"
+                          << std::endl;
+            } else {
+                std::cout << "✗ dedupe failed: size="
+                          << g.sessionRealizedHistory().size()
+                          << std::endl;
+            }
+        }
+
+        // 4) Sample after addRealized reflects new value.
+        {
+            RiskGuard g;
+            g.sampleSessionRealized();           // 0.0
+            g.addRealized(-100.0);               // → -100.0
+            g.sampleSessionRealized();           // -100.0
+            const auto& h = g.sessionRealizedHistory();
+            if (h.size() == 2 && h[0] == 0.0 &&
+                std::fabs(h[1] - (-100.0)) < 1e-9) {
+                std::cout << "✓ samples track sessionRealized() changes"
+                          << std::endl;
+            } else {
+                std::cout << "✗ tracking failed" << std::endl;
+            }
+        }
+
+        // 5) Capped at kMaxRealizedHistory.
+        {
+            RiskGuard g;
+            for (std::size_t i = 0;
+                 i < RiskGuard::kMaxRealizedHistory + 50; ++i) {
+                g.addRealized(static_cast<double>(i));
+                g.sampleSessionRealized();
+            }
+            if (g.sessionRealizedHistory().size() ==
+                RiskGuard::kMaxRealizedHistory) {
+                std::cout << "✓ capped at kMaxRealizedHistory ("
+                          << RiskGuard::kMaxRealizedHistory << ")"
+                          << std::endl;
+            } else {
+                std::cout << "✗ cap wrong: size="
+                          << g.sessionRealizedHistory().size()
+                          << std::endl;
+            }
+        }
+
+        // 6) resetSession clears history.
+        {
+            RiskGuard g;
+            g.addRealized(-50.0);
+            g.sampleSessionRealized();
+            g.addRealized(-100.0);
+            g.sampleSessionRealized();
+            g.resetSession();
+            if (g.sessionRealizedHistory().empty()) {
+                std::cout << "✓ resetSession clears history "
+                             "(new day starts clean)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ resetSession left history"
+                          << std::endl;
+            }
+        }
+
+        // 7) clearSessionRealizedHistory alone (without full reset).
+        {
+            RiskGuard g;
+            g.addRealized(-50.0);
+            g.sampleSessionRealized();
+            g.clearSessionRealizedHistory();
+            if (g.sessionRealizedHistory().empty() &&
+                std::fabs(g.sessionRealized() - (-50.0)) < 1e-9) {
+                std::cout << "✓ clearSessionRealizedHistory clears "
+                             "history but preserves total"
+                          << std::endl;
+            } else {
+                std::cout << "✗ selective clear failed" << std::endl;
+            }
+        }
+
+        // 8) Per-symbol addRealized also shows up in history.
+        {
+            RiskGuard g;
+            g.sampleSessionRealized();                  // 0.0
+            g.addRealized(-200.0, std::string("BTCUSDT"));  // total -200
+            g.sampleSessionRealized();
+            const auto& h = g.sessionRealizedHistory();
+            if (h.size() == 2 &&
+                std::fabs(h[1] - (-200.0)) < 1e-9) {
+                std::cout << "✓ per-symbol addRealized also "
+                             "tracked in history"
+                          << std::endl;
+            } else {
+                std::cout << "✗ per-symbol not tracked" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

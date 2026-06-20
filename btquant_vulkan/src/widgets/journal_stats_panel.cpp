@@ -516,47 +516,108 @@ void JournalStatsPanel::render() {
         }
     }
 
-    // ---- By-tag table (Sprint #73) ----
+    // ---- By-tag table (Sprint #73 + Sprint #89) ----
     //
-    // Same shape as by-symbol, but reads from realizedByTag(). The
-    // includeUntagged toggle controls whether untagged fills appear
-    // under "__untagged__" — the Checkbox is right above the table so
+    // Surfaces per-tag performance. Sprint #73 used realizedByTag()
+    // for just (tag, realized); Sprint #89 upgrades to
+    // perTagStats() (#88) so the table also shows win rate +
+    // profit factor + W/L counts. Six columns: tag, realized,
+    // win rate, PF, W/L, % total.
+    //
+    // Sourced from perTagStats() — sorted by abs-realized DESC,
+    // same convention as realizedByTag() and perSymbolStats().
+    // Color rules mirror the by-symbol table. The
+    // "Include untagged" Checkbox is right above the table so
     // the trader can flip it without scrolling.
     ImGui::Separator();
     bool incl = m_includeUntagged;
     if (ImGui::Checkbox("Include untagged (as __untagged__)", &incl)) {
         m_includeUntagged = incl;
     }
-    auto byTag = m_journal->realizedByTag(m_includeUntagged);
+    auto byTag = m_journal->perTagStats(m_includeUntagged);
     size_t rowsTag = std::min(m_maxRows, byTag.size());
     if (ImGui::CollapsingHeader("By tag", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (byTag.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsByTag",
-                                     3,
+                                     6,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Tag");
             ImGui::TableSetupColumn("Realized");
+            ImGui::TableSetupColumn("Win rate");
+            ImGui::TableSetupColumn("PF");
+            ImGui::TableSetupColumn("W / L");
             ImGui::TableSetupColumn("% total");
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsTag; ++i) {
-                const auto& kv = byTag[i];
+                const auto& s = byTag[i];
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(kv.first.c_str());
+                ImGui::TextUnformatted(s.tag.c_str());
+
                 ImGui::TableSetColumnIndex(1);
-                colorizeRow(kv.second);
+                colorizeRow(s.realized);
                 char buf[64];
-                std::snprintf(buf, sizeof(buf), "%+.2f", kv.second);
+                std::snprintf(buf, sizeof(buf), "%+.2f", s.realized);
                 ImGui::TextUnformatted(buf);
                 ImGui::PopStyleColor();
+
+                // Win rate: green >= 50%, red < 50%, dim at 0.
                 ImGui::TableSetColumnIndex(2);
-                if (std::fabs(total) > 1e-9) {
-                    std::snprintf(buf, sizeof(buf),
-                                  "%+.1f%%",
-                                  100.0 * kv.second / total);
+                if (s.winRate >= 0.5) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                } else if (s.winRate > 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                }
+                std::snprintf(buf, sizeof(buf), "%.1f%%",
+                              s.winRate * 100.0);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+
+                // PF: green >= 1.5, red < 1.0, dim otherwise.
+                ImGui::TableSetColumnIndex(3);
+                if (std::isinf(s.profitFactor)) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    ImGui::TextUnformatted("∞");
+                    ImGui::PopStyleColor();
+                } else if (s.profitFactor >= 1.5) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
                     ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (s.profitFactor < 1.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
+                    ImGui::TextUnformatted(buf);
+                }
+
+                // W / L counts (dim).
+                ImGui::TableSetColumnIndex(4);
+                std::snprintf(buf, sizeof(buf), "%zu / %zu",
+                              s.winCount, s.lossCount);
+                ImGui::TextUnformatted(buf);
+
+                // % total (colorized to match realized).
+                ImGui::TableSetColumnIndex(5);
+                if (std::fabs(total) > 1e-9) {
+                    double pct = 100.0 * s.realized / total;
+                    colorizeRow(pct);
+                    std::snprintf(buf, sizeof(buf), "%+.1f%%", pct);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
                 } else {
                     ImGui::TextUnformatted("-");
                 }

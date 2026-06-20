@@ -57,6 +57,62 @@ void JournalStatsPanel::render() {
     ImGui::TextDisabled("(%zu fill%s on disk)",
                         nFills, nFills == 1 ? "" : "s");
 
+    // ---- Headline summary (Sprint #100) ----
+    //
+    // One-line at-a-glance: "Best: BTC (Calmar=4.2, Sharpe=1.8)
+    // Worst: SOL (Calmar=-0.5, Sharpe=-0.3)". The trader's eyes
+    // land here first — answers "where am I winning, where am I
+    // bleeding?" without scrolling through 12 sub-tables.
+    //
+    // Sort: by Calmar DESC (best strategy per unit of worst DD —
+    // same metric the trader uses to size positions). Tie-break
+    // by Sharpe. When only one symbol/tag exists, "Worst" is
+    // suppressed (it's the same symbol).
+    {
+        auto perSymCl = m_journal->perSymbolCalmar();
+        auto perSymSh = m_journal->perSymbolSharpe();
+        if (!perSymCl.empty()) {
+            // Calmar is sorted DESC by the method (#97); first
+            // is best, last is worst. Filter out calmarRatio==0
+            // (no DD yet) from the worst side — those aren't
+            // really "best" or "worst", they're unrankable.
+            const auto& best = perSymCl.front();
+            const TradeJournal::PerSymbolCalmar* worst = nullptr;
+            for (auto it = perSymCl.rbegin(); it != perSymCl.rend();
+                 ++it) {
+                if (it->calmarRatio < -1e-9 ||
+                    it->maxDrawdown > 1e-9) {
+                    worst = &(*it);
+                    break;
+                }
+            }
+            // Find matching Sharpe for "Best" and "Worst".
+            auto findSharpe = [&](const std::string& sym) {
+                for (const auto& s : perSymSh)
+                    if (s.symbol == sym) return s.annualizedSharpe;
+                return 0.0;
+            };
+            float bestSh = static_cast<float>(
+                findSharpe(best.symbol));
+            char headline[160];
+            if (worst && worst->symbol != best.symbol) {
+                float worstSh = static_cast<float>(
+                    findSharpe(worst->symbol));
+                std::snprintf(headline, sizeof(headline),
+                    "Best: %s (Calmar=%.2f, Sharpe=%.2f)   "
+                    "Worst: %s (Calmar=%.2f, Sharpe=%.2f)",
+                    best.symbol.c_str(), best.calmarRatio, bestSh,
+                    worst->symbol.c_str(), worst->calmarRatio,
+                    worstSh);
+            } else {
+                std::snprintf(headline, sizeof(headline),
+                    "Best: %s (Calmar=%.2f, Sharpe=%.2f)",
+                    best.symbol.c_str(), best.calmarRatio, bestSh);
+            }
+            ImGui::TextUnformatted(headline);
+        }
+    }
+
     // ---- Stats header (Sprint #76) ----
     //
     // Win rate + profit factor + expectancy + win/loss counts in a
@@ -470,6 +526,63 @@ void JournalStatsPanel::render() {
         ImGui::SameLine();
         ImGui::TextDisabled("(annRet=$%.0f / maxDD=$%.0f)",
                             cm.annualizedReturn, cm.maxDrawdown);
+
+        // ---- Sortino mini-row (Sprint #100) ----
+        //
+        // Sortino = mean(daily) / downsideDeviation × sqrt(252).
+        // Companion to Calmar/Sharpe — penalizes only downside
+        // vol instead of all vol. Rendered below Calmar as the
+        // third risk-adjusted metric in the journal-wide
+        // Risk-Adjusted section.
+        //
+        // Color rules: green >= 2.0 (excellent risk-adjusted
+        // return), red < 0 (stay away), dim otherwise. The
+        // "∞" sentinel (downsideDeviation == 0, all-positive
+        // days) renders as such.
+        auto so = m_journal->sortino();
+        ImGui::Text("Sortino:");
+        ImGui::SameLine();
+        if (so.downsideDeviation < 1e-9 && so.sampleSize >= 1) {
+            // All-positive days → no downside → "∞" (same
+            // convention used by profit-factor when there are
+            // no losses).
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+            ImGui::TextUnformatted("∞");
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::TextDisabled("(all-positive days, N=%zu)",
+                                so.sampleSize);
+        } else if (so.sampleSize < 1) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            ImGui::TextUnformatted("—");
+            ImGui::PopStyleColor();
+        } else if (so.annualizedSortino >= 2.0) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+            std::snprintf(buf, sizeof(buf), "%.2f",
+                          so.annualizedSortino);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        } else if (so.annualizedSortino < 0.0) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            std::snprintf(buf, sizeof(buf), "%.2f",
+                          so.annualizedSortino);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            std::snprintf(buf, sizeof(buf), "%.2f",
+                          so.annualizedSortino);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(daily=%.2f, dev=%.2f)",
+                            so.dailySortino, so.downsideDeviation);
     }
 
     ImGui::Separator();
@@ -993,12 +1106,14 @@ void JournalStatsPanel::render() {
     std::unordered_map<std::string, double> calmarByTag;
     calmarByTag.reserve(perTagCl.size());
     for (const auto& c : perTagCl) calmarByTag[c.tag] = c.calmarRatio;
+    // Sortino by-tag (#100) — same pattern as per-symbol.
+    auto perTagSo_ = m_journal->perTagSortino(m_includeUntagged);
     if (ImGui::CollapsingHeader("Per-tag risk-adjusted",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (perTagSh.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerTagSharpe",
-                                     5,
+                                     6,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Tag");
@@ -1006,6 +1121,7 @@ void JournalStatsPanel::render() {
             ImGui::TableSetupColumn("Daily Sharpe");
             ImGui::TableSetupColumn("Annualized");
             ImGui::TableSetupColumn("Calmar");   // Sprint #98
+            ImGui::TableSetupColumn("Sortino");  // Sprint #100
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsTagSh; ++i) {
                 const auto& e = perTagSh[i];
@@ -1104,6 +1220,52 @@ void JournalStatsPanel::render() {
                         ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
                     std::snprintf(buf, sizeof(buf), "%.2f",
                                   tagCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "—");
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+
+                // Sortino (Sprint #100): same threshold rules as
+                // the per-symbol Sortino column.
+                ImGui::TableSetColumnIndex(5);
+                double tagSo = 0.0;
+                bool   tagHasSo = false;
+                bool   tagSoNoDownside = false;
+                for (const auto& so : perTagSo_) {
+                    if (so.tag == e.tag) {
+                        tagSo = so.annualizedSortino;
+                        tagHasSo = true;
+                        tagSoNoDownside = (so.downsideDeviation < 1e-9
+                                           && so.sampleSize >= 1);
+                        break;
+                    }
+                }
+                if (tagHasSo && tagSoNoDownside) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    ImGui::TextUnformatted("∞");
+                    ImGui::PopStyleColor();
+                } else if (tagHasSo && tagSo >= 2.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", tagSo);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (tagHasSo && tagSo < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", tagSo);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (tagHasSo) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f", tagSo);
                     ImGui::TextUnformatted(buf);
                     ImGui::PopStyleColor();
                 } else {
@@ -1269,12 +1431,16 @@ void JournalStatsPanel::render() {
     std::unordered_map<std::string, double> calmarBySymbol;
     calmarBySymbol.reserve(perSymCl.size());
     for (const auto& c : perSymCl) calmarBySymbol[c.symbol] = c.calmarRatio;
+    // Sortino by-symbol (#100) — same pattern as Calmar. Stored
+    // as a vector (not a map) since the per-row lookup is a
+    // small linear scan over typically <10 symbols.
+    auto perSymSo_ = m_journal->perSymbolSortino();
     if (ImGui::CollapsingHeader("Per-symbol risk-adjusted",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (perSymSh.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerSymbolSharpe",
-                                     5,
+                                     6,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Symbol");
@@ -1282,6 +1448,7 @@ void JournalStatsPanel::render() {
             ImGui::TableSetupColumn("Daily Sharpe");
             ImGui::TableSetupColumn("Annualized");
             ImGui::TableSetupColumn("Calmar");   // Sprint #98
+            ImGui::TableSetupColumn("Sortino");  // Sprint #100
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsSh; ++i) {
                 const auto& e = perSymSh[i];
@@ -1383,6 +1550,54 @@ void JournalStatsPanel::render() {
                         ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
                     std::snprintf(buf, sizeof(buf), "%.2f",
                                   symCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "—");
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+
+                // Sortino (Sprint #100): same threshold rules as
+                // the journal-wide Sortino row.
+                ImGui::TableSetColumnIndex(5);
+                double symSo = 0.0;
+                bool   symHasSo = false;
+                size_t symSoN = 0;
+                bool   symSoNoDownside = false;
+                for (const auto& so : perSymSo_) {
+                    if (so.symbol == e.symbol) {
+                        symSo = so.annualizedSortino;
+                        symHasSo = true;
+                        symSoN = so.sampleSize;
+                        symSoNoDownside = (so.downsideDeviation < 1e-9
+                                           && so.sampleSize >= 1);
+                        break;
+                    }
+                }
+                if (symHasSo && symSoNoDownside) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    ImGui::TextUnformatted("∞");
+                    ImGui::PopStyleColor();
+                } else if (symHasSo && symSo >= 2.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", symSo);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (symHasSo && symSo < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", symSo);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (symHasSo) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f", symSo);
                     ImGui::TextUnformatted(buf);
                     ImGui::PopStyleColor();
                 } else {

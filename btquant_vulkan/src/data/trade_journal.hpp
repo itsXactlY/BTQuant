@@ -2247,6 +2247,23 @@ public:
     allSegmentTradeSizeStatsByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment risk-reward ratio (Sprint #211). For
+    // each segment: ratio of average winning trade to
+    // average losing trade. R > 1 = favorable edge.
+    struct RiskRewardRatio {
+        std::string segment;
+        double      avgWin     = 0.0;
+        double      avgLoss    = 0.0;  // |avgL|
+        double      ratio      = 0.0;  // avgW / |avgL|
+        size_t      winCount   = 0;
+        size_t      lossCount  = 0;
+    };
+    RiskRewardRatio riskRewardRatioBySymbol(
+        const std::string& symbol) const;
+    RiskRewardRatio riskRewardRatioByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

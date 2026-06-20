@@ -22548,5 +22548,67 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 197: riskRewardRatioBySymbol/ByTag (Sprint #211).
+    //
+    // Per-segment risk-reward ratio. Tests:
+    //   - BTC: 2W @ +50, 1L @ -25 → avgW=50, |avgL|=25,
+    //     ratio=2.0.
+    std::cout << "\nTest 197: risk-reward ratio..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test197_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2W +50, 1L -25 → ratio = 2.0 ----
+        {
+            TradeJournal j((tmpDir / "r.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC",  50.0, t0 + 1));
+            j.append(mkFill("BTC", -25.0, t0 + 2));
+            auto btcR = j.riskRewardRatioBySymbol("BTC");
+            if (btcR.winCount == 2 &&
+                btcR.lossCount == 1 &&
+                std::fabs(btcR.ratio - 2.0) < 1e-9) {
+                std::cout << "✓ BTC: avgW=50, "
+                          << "avgL=25, R=2.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: R="
+                          << btcR.ratio
+                          << " wins=" << btcR.winCount
+                          << " losses=" << btcR.lossCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " risk-reward tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

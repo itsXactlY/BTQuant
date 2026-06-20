@@ -9036,4 +9036,61 @@ TradeJournal::allSegmentTradeSizeStatsByTag(
     return out;
 }
 
+namespace {
+// Sprint #211 — per-segment risk-reward ratio builder.
+template <typename Pred>
+TradeJournal::RiskRewardRatio
+buildRiskRewardRatioBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::RiskRewardRatio r;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            grossWin += f.realizedDelta;
+            wins++;
+        } else if (f.realizedDelta < 0) {
+            grossLoss += f.realizedDelta;
+            losses++;
+        }
+    }
+    r.winCount = wins;
+    r.lossCount = losses;
+    if (wins > 0) r.avgWin = grossWin / static_cast<double>(wins);
+    if (losses > 0) {
+        r.avgLoss = std::fabs(
+            grossLoss / static_cast<double>(losses));
+    }
+    if (r.avgLoss > 1e-9) {
+        r.ratio = r.avgWin / r.avgLoss;
+    }
+    return r;
+}
+}  // namespace
+
+TradeJournal::RiskRewardRatio
+TradeJournal::riskRewardRatioBySymbol(
+    const std::string& symbol) const {
+    auto r = buildRiskRewardRatioBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    r.segment = symbol;
+    return r;
+}
+
+TradeJournal::RiskRewardRatio
+TradeJournal::riskRewardRatioByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto r = buildRiskRewardRatioBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    r.segment = tag;
+    return r;
+}
+
 } // namespace btquant

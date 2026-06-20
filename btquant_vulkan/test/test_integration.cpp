@@ -21098,5 +21098,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 174: tradeCountSummaryBySymbol/ByTag (Sprint #188).
+    //
+    // Per-segment trade count summary. Tests:
+    //   - BTC 3 fills same day → lastDayFills=3.
+    std::cout << "\nTest 174: per-seg trade count..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test174_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 3 fills, ETH 2 fills ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "c.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 10.0, "scalp",
+                                t0 + i * hour));
+            }
+            j.append(mkFill("ETH", 5.0, "arb",
+                             t0 + 4 * hour));
+            j.append(mkFill("ETH", 5.0, "arb",
+                             t0 + 5 * hour));
+            auto btcS = j.tradeCountSummaryBySymbol("BTC");
+            auto ethS = j.tradeCountSummaryBySymbol("ETH");
+            if (btcS.totalFills == 3 &&
+                btcS.lastDayFills == 3 &&
+                ethS.totalFills == 2 &&
+                ethS.lastDayFills == 2) {
+                std::cout << "✓ BTC: 3 fills day=3; "
+                          << "ETH: 2 fills day=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC total="
+                          << btcS.totalFills
+                          << " ETH total="
+                          << ethS.totalFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg-count tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

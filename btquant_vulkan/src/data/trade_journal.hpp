@@ -1963,6 +1963,15 @@ public:
     };
     TradeCountSummary tradeCountSummary() const;
 
+    // Per-segment trade count summary (Sprint #188).
+    // Same windowed counts as tradeCountSummary, filtered
+    // to a single symbol or tag.
+    TradeCountSummary tradeCountSummaryBySymbol(
+        const std::string& symbol) const;
+    TradeCountSummary tradeCountSummaryByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

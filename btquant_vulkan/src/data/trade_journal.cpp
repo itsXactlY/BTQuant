@@ -7869,4 +7869,81 @@ TradeJournal::tradeCountSummary() const {
     return s;
 }
 
+namespace {
+// Sprint #188 — per-segment trade count summary builder.
+template <typename Pred>
+TradeJournal::TradeCountSummary
+buildTradeCountSummaryBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::TradeCountSummary s;
+    if (fills.empty()) return s;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f) && std::fabs(f.realizedDelta) > 1e-9) {
+            sub.push_back(f);
+        }
+    }
+    if (sub.empty()) return s;
+    s.totalFills = sub.size();
+    uint64_t nowUs = sub.back().timestamp_us;
+    uint64_t dayUs = 86400ULL * 1000000ULL;
+    uint64_t weekUs = 7ULL * dayUs;
+    uint64_t monthUs = 30ULL * dayUs;
+    uint64_t yearUs = 365ULL * dayUs;
+    for (const auto& f : sub) {
+        if (f.timestamp_us + dayUs > nowUs)
+            s.lastDayFills++;
+        if (f.timestamp_us + weekUs > nowUs)
+            s.lastWeekFills++;
+        if (f.timestamp_us + monthUs > nowUs)
+            s.lastMonthFills++;
+        if (f.timestamp_us + yearUs > nowUs)
+            s.lastYearFills++;
+    }
+    std::set<std::string> activeDays;
+    for (const auto& f : sub) {
+        if (f.timestamp_us + monthUs > nowUs) {
+            std::time_t t = static_cast<std::time_t>(
+                f.timestamp_us / 1000000ULL);
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            char buf[16];
+            std::strftime(buf, sizeof(buf),
+                          "%Y-%m-%d", &tm);
+            activeDays.insert(buf);
+        }
+    }
+    if (!activeDays.empty()) {
+        s.fillsPerActiveDay =
+            static_cast<double>(s.lastMonthFills) /
+            static_cast<double>(activeDays.size());
+    }
+    s.lastFillAgeHours = static_cast<double>(
+        nowUs - sub.back().timestamp_us) /
+        (3600.0 * 1000000.0);
+    return s;
+}
+}  // namespace
+
+TradeJournal::TradeCountSummary
+TradeJournal::tradeCountSummaryBySymbol(
+    const std::string& symbol) const {
+    return buildTradeCountSummaryBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::TradeCountSummary
+TradeJournal::tradeCountSummaryByTag(
+    const std::string& tag, bool includeUntagged) const {
+    return buildTradeCountSummaryBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

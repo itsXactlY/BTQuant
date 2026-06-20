@@ -13,6 +13,7 @@
 namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
 namespace btquant { class RiskGuard; }
+namespace btquant { class TradeJournal; }
 
 namespace btquant::ui {
 
@@ -189,6 +190,8 @@ private:
     ::btquant::PositionBook*       m_positionBook   = nullptr;
     // RiskGuard — pre-trade checks + session P&L + kill switch.
     ::btquant::RiskGuard*          m_riskGuard      = nullptr;
+    // TradeJournal — append-only JSONL file at ~/.config/btquant_vulkan/journal.jsonl
+    ::btquant::TradeJournal*       m_tradeJournal   = nullptr;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

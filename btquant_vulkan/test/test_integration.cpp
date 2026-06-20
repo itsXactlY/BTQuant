@@ -21,6 +21,7 @@
 #include "../src/widgets/position_panel.hpp"
 #include "../src/data/position_book.hpp"
 #include "../src/data/risk_guard.hpp"
+#include "../src/data/trade_journal.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -1649,6 +1650,160 @@ int main() {
             std::cout << "✗ remaining after loss: "
                       << gb.remainingLossBudget() << std::endl;
         }
+    }
+
+    // Test 25: TradeJournal — JSONL persistence round-trip.
+    std::cout << "\nTest 25: Testing TradeJournal..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+        using btquant::JournalFill;
+        using btquant::TradeJournal;
+
+        fs::path tmp = fs::temp_directory_path() /
+                       ("btquant_journal_" + std::to_string(static_cast<long>(::time(nullptr))) + ".jsonl");
+        // Start clean.
+        std::error_code ec;
+        fs::remove(tmp, ec);
+
+        TradeJournal j(tmp.string());
+
+        // 1) Empty file: count 0, loadAll empty, skipped 0.
+        if (j.count() == 0) {
+            std::cout << "✓ empty journal → count 0" << std::endl;
+        } else {
+            std::cout << "✗ empty count: " << j.count() << std::endl;
+        }
+        int skipped = 0;
+        auto all = j.loadAll(&skipped);
+        if (all.empty() && skipped == 0) {
+            std::cout << "✓ empty journal → loadAll empty (skipped 0)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ empty loadAll: size=" << all.size()
+                      << " skipped=" << skipped << std::endl;
+        }
+
+        // 2) Append 3 fills.
+        JournalFill a; a.timestamp_us = 1000; a.symbol = "BTC/USDT";
+        a.isLong = true;  a.qty = 0.5;  a.price = 67000.0; a.realizedDelta = 0.0;
+        JournalFill b; b.timestamp_us = 2000; b.symbol = "BTC/USDT";
+        b.isLong = true;  b.qty = 0.3;  b.price = 68000.0; b.realizedDelta = 0.0;
+        JournalFill c; c.timestamp_us = 3000; c.symbol = "BTC/USDT";
+        c.isLong = false; c.qty = 0.8;  c.price = 68500.0; c.realizedDelta = 750.0;
+        j.append(a); j.append(b); j.append(c);
+
+        if (j.count() == 3) {
+            std::cout << "✓ append 3 → count 3" << std::endl;
+        } else {
+            std::cout << "✗ append count: " << j.count() << std::endl;
+        }
+
+        // 3) loadAll returns oldest-first, values intact.
+        all = j.loadAll(&skipped);
+        if (all.size() == 3 && skipped == 0 &&
+            all[0].symbol == "BTC/USDT" &&
+            std::abs(all[0].qty - 0.5) < 1e-9 &&
+            std::abs(all[0].price - 67000.0) < 1e-6 &&
+            all[0].isLong == true &&
+            std::abs(all[2].realizedDelta - 750.0) < 1e-6 &&
+            all[2].isLong == false) {
+            std::cout << "✓ round-trip: fields intact (qty, price, side, "
+                         "realized)" << std::endl;
+        } else {
+            std::cout << "✗ round-trip wrong: size=" << all.size()
+                      << " skipped=" << skipped << std::endl;
+        }
+
+        // 4) recent(2) returns the last 2 in newest-first order.
+        auto r2 = j.recent(2);
+        if (r2.size() == 2 &&
+            r2[0].timestamp_us == 3000 &&
+            r2[1].timestamp_us == 2000) {
+            std::cout << "✓ recent(2) newest-first: ts=3000,2000"
+                      << std::endl;
+        } else {
+            std::cout << "✗ recent wrong: size=" << r2.size() << std::endl;
+        }
+
+        // 5) recent(N) where N > size returns all reversed.
+        auto r10 = j.recent(10);
+        if (r10.size() == 3 && r10[0].timestamp_us == 3000 &&
+            r10[2].timestamp_us == 1000) {
+            std::cout << "✓ recent(N>size) returns all reversed" << std::endl;
+        } else {
+            std::cout << "✗ recent(N>size) wrong" << std::endl;
+        }
+
+        // 6) Malformed line is skipped, not fatal.
+        {
+            std::ofstream bad(tmp.string(), std::ios::app);
+            bad << "this is not valid json\n";
+            bad << "{\"sym\":\"ETH/USDT\",\"side\":\"buy\",\"qty\":2.0,"
+                   "\"px\":3500.0,\"realized\":0.0,\"ts\":9999}\n";
+        }
+        all = j.loadAll(&skipped);
+        if (all.size() == 4 && skipped == 1) {
+            std::cout << "✓ malformed line skipped (size=4, skipped=1)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ malformed handling: size=" << all.size()
+                      << " skipped=" << skipped << std::endl;
+        }
+
+        // 7) clear() removes file.
+        if (j.clear() && !fs::exists(tmp, ec) && j.count() == 0) {
+            std::cout << "✓ clear() removes file" << std::endl;
+        } else {
+            std::cout << "✗ clear failed: exists="
+                      << fs::exists(tmp, ec) << " count=" << j.count()
+                      << std::endl;
+        }
+
+        // 8) Pure: toJsonLine + fromJsonLine round-trip.
+        JournalFill r; r.timestamp_us = 12345; r.symbol = "ETH/USDT";
+        r.isLong = false; r.qty = 1.5; r.price = 3500.5; r.realizedDelta = -42.5;
+        std::string line = TradeJournal::toJsonLine(r);
+        auto parsed = TradeJournal::fromJsonLine(line);
+        if (parsed.has_value() &&
+            parsed->timestamp_us == 12345 &&
+            parsed->symbol == "ETH/USDT" &&
+            parsed->isLong == false &&
+            std::abs(parsed->qty - 1.5) < 1e-9 &&
+            std::abs(parsed->price - 3500.5) < 1e-6 &&
+            std::abs(parsed->realizedDelta - (-42.5)) < 1e-6) {
+            std::cout << "✓ toJsonLine + fromJsonLine round-trip" << std::endl;
+        } else {
+            std::cout << "✗ pure round-trip failed" << std::endl;
+        }
+
+        // 9) Pure: malformed line → nullopt.
+        if (!TradeJournal::fromJsonLine("garbage").has_value() &&
+            !TradeJournal::fromJsonLine("").has_value() &&
+            !TradeJournal::fromJsonLine("{}").has_value() &&
+            !TradeJournal::fromJsonLine("{\"sym\":\"x\"}").has_value()) {
+            std::cout << "✓ malformed/empty/missing-fields → nullopt"
+                      << std::endl;
+        } else {
+            std::cout << "✗ malformed handling (pure) wrong" << std::endl;
+        }
+
+        // 10) Symbol with quote + special chars survives the round-trip.
+        JournalFill esc; esc.symbol = "weird/\"sym\\name";
+        esc.isLong = true; esc.qty = 1.0; esc.price = 100.0;
+        std::string escLine = TradeJournal::toJsonLine(esc);
+        auto escParsed = TradeJournal::fromJsonLine(escLine);
+        if (escParsed.has_value() &&
+            escParsed->symbol == "weird/\"sym\\name") {
+            std::cout << "✓ escape round-trip: " << escParsed->symbol
+                      << std::endl;
+        } else {
+            std::cout << "✗ escape round-trip failed: "
+                      << (escParsed ? escParsed->symbol : "(nullopt)")
+                      << std::endl;
+        }
+
+        // Cleanup.
+        fs::remove(tmp, ec);
     }
 
     return 0;

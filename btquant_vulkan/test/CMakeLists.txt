@@ -95,6 +95,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/position_panel.cpp
     ../src/data/position_book.cpp
     ../src/data/risk_guard.cpp
+    ../src/data/trade_journal.cpp
 )
 
 # Set C++ standard

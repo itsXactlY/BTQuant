@@ -30,6 +30,7 @@
 #include "../widgets/position_panel.hpp"
 #include "../data/position_book.hpp"
 #include "../data/risk_guard.hpp"
+#include "../data/trade_journal.hpp"
 #include "../data/market_data.hpp"
 
 using btquant::ui::LogPanel;
@@ -131,6 +132,18 @@ WindowManager::WindowManager() {
     m_positionPanel = new PositionPanel();
     m_positionPanel->setPositionBook(m_positionBook);
     m_riskGuard     = new ::btquant::RiskGuard();
+    // Trade journal lives in the user's config dir alongside settings.ini.
+    const char* home = std::getenv("HOME");
+    std::string journalPath = std::string(home ? home : "/tmp") +
+                              "/.config/btquant_vulkan/journal.jsonl";
+    m_tradeJournal  = new ::btquant::TradeJournal(journalPath);
+    {
+        int skipped = 0;
+        size_t onDisk = m_tradeJournal->count();
+        auto history  = m_tradeJournal->loadAll(&skipped);
+        BTQ_LOG_INFO("TradeJournal: %zu fills on disk at %s (skipped %d)",
+                     onDisk, journalPath.c_str(), skipped);
+    }
 
     // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
     // size (positive for buy, negative for sell) is what feeds the book;
@@ -175,6 +188,21 @@ WindowManager::WindowManager() {
                         m_riskGuard->config().killOnDailyLossUSD).c_str());
             }
         }
+        // Append to trade journal for cross-restart persistence.
+        if (m_tradeJournal) {
+            ::btquant::JournalFill jf;
+            jf.timestamp_us  = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            jf.symbol        = sym;
+            jf.isLong        = isBuy;
+            jf.qty           = qty;
+            jf.price         = price;
+            jf.realizedDelta = realized;
+            if (!m_tradeJournal->append(jf)) {
+                BTQ_LOG_WARN("TradeJournal.append failed at %s",
+                             m_tradeJournal->path().c_str());
+            }
+        }
         if (m_positionPanel) {
             PositionPanel::FillRecord r;
             r.symbol         = sym;
@@ -213,6 +241,7 @@ WindowManager::~WindowManager() {
     delete m_positionPanel;
     delete m_positionBook;
     delete m_riskGuard;
+    delete m_tradeJournal;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -482,6 +511,17 @@ void WindowManager::processHotkeys(void* glfwWindow) {
             } else {
                 double realized = m_positionBook->flatten(px);
                 if (m_riskGuard) m_riskGuard->addRealized(realized);
+                if (m_tradeJournal) {
+                    ::btquant::JournalFill jf;
+                    jf.timestamp_us  = std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    jf.symbol        = m_positionBook->position().symbol;
+                    jf.isLong        = !m_positionBook->position().isLong;  // closing
+                    jf.qty           = m_positionBook->position().size;
+                    jf.price         = px;
+                    jf.realizedDelta = realized;
+                    m_tradeJournal->append(jf);
+                }
                 BTQ_LOG_WARN("KILL SWITCH (Ctrl+K): flattened %s at $%.2f, "
                              "realized %s$%.2f, session P&L %s$%.2f",
                              m_positionBook->position().symbol.c_str(),

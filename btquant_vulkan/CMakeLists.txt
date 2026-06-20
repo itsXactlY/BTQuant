@@ -75,6 +75,7 @@ set(SOURCES
     src/widgets/position_panel.cpp
     src/data/position_book.cpp
     src/data/risk_guard.cpp
+    src/data/trade_journal.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
 )
@@ -116,6 +117,7 @@ set(HEADERS
     src/widgets/position_panel.hpp
     src/data/position_book.hpp
     src/data/risk_guard.hpp
+    src/data/trade_journal.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp
 )

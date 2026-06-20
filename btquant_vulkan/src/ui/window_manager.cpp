@@ -19,6 +19,7 @@
 #include "../widgets/alerts_panel.hpp"
 #include "../widgets/watchlist_widget.hpp"
 #include "../widgets/log_panel.hpp"
+#include "../widgets/connection_panel.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -83,6 +84,7 @@ WindowManager::WindowManager() {
     m_watchlistWidget = new WatchlistWidget();
     m_watchlistWidget->setSymbols({"BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"});
     m_logPanel = &LogPanel::instance();
+    m_connectionPanel = new ConnectionPanel();
 }
 
 WindowManager::~WindowManager() {
@@ -97,6 +99,7 @@ WindowManager::~WindowManager() {
     delete m_tpoWidget;
     delete m_alertsPanel;
     delete m_watchlistWidget;
+    delete m_connectionPanel;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -270,6 +273,9 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_tradesWidget) m_tradesWidget->setMarketData(data);
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);
     if (m_alertsPanel) m_alertsPanel->setMarketData(data);
+    if (m_connectionPanel) m_connectionPanel->setMarketData(data);
+    // Watchlist uses push-only API (WindowManager::updateWatchlist) — no
+    // setMarketData hook needed.
 }
 
 void WindowManager::showOrderBookWindow() {
@@ -337,6 +343,11 @@ void WindowManager::showLogWindow() {
     if (m_logPanel) m_logPanel->render();
 }
 
+void WindowManager::showConnectionWindow() {
+    if (!showConnection) return;
+    if (m_connectionPanel) m_connectionPanel->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -352,6 +363,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Alerts",            nullptr, &showAlerts))          markSettingsDirty();
             if (ImGui::MenuItem("Watchlist",         nullptr, &showWatchlist))       markSettingsDirty();
             if (ImGui::MenuItem("Log Panel",         nullptr, &showLog))             markSettingsDirty();
+            if (ImGui::MenuItem("Connection",        nullptr, &showConnection))      markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

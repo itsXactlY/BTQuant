@@ -291,6 +291,7 @@ private:
       windowManager.showAlertsWindow();
       windowManager.showWatchlistWindow();
       windowManager.showLogWindow();
+      windowManager.showConnectionWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

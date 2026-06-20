@@ -85,6 +85,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/alerts_panel.cpp
     ../src/widgets/watchlist_widget.cpp
     ../src/widgets/log_panel.cpp
+    ../src/widgets/connection_panel.cpp
 )
 
 # Set C++ standard

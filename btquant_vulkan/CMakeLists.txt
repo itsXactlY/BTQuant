@@ -64,6 +64,7 @@ set(SOURCES
     src/widgets/alerts_panel.cpp
     src/widgets/watchlist_widget.cpp
     src/widgets/log_panel.cpp
+    src/widgets/connection_panel.cpp
     src/util/settings.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
@@ -95,6 +96,7 @@ set(HEADERS
     src/widgets/alerts_panel.hpp
     src/widgets/watchlist_widget.hpp
     src/widgets/log_panel.hpp
+    src/widgets/connection_panel.hpp
     src/util/settings.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp

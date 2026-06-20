@@ -55,6 +55,9 @@ public:
     // Log panel toggle.
     bool showLog = true;
 
+    // Connection panel toggle.
+    bool showConnection = true;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -107,6 +110,7 @@ public:
     void showWatchlistWindow();
     void updateWatchlist(const std::string& sym, double p, double s, bool b, uint64_t ts);
     void showLogWindow();
+    void showConnectionWindow();
     void showMainMenu();
 
     // Bind the live data source to all 4 trading widgets. Passing nullptr
@@ -139,6 +143,7 @@ private:
     class AlertsPanel* m_alertsPanel = nullptr;
     class WatchlistWidget* m_watchlistWidget = nullptr;
     class LogPanel* m_logPanel = nullptr;
+    class ConnectionPanel* m_connectionPanel = nullptr;
     StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;

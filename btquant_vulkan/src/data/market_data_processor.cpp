@@ -16,6 +16,9 @@ std::optional<std::string>
 MarketDataProcessor::start(const std::string& hotspine_path, uint32_t poll_interval_ms) {
     if (m_running.load()) return std::string("MarketDataProcessor already running");
 
+    m_sourcePath = hotspine_path;
+    m_ticksSeen.store(0, std::memory_order_relaxed);
+    m_parseErrors.store(0, std::memory_order_relaxed);
     m_spine = std::make_unique<data::DataSpine>();
     if (!m_spine->open(hotspine_path)) {
         // Spine open failed — fall back to a synthetic generator so the UI
@@ -63,10 +66,10 @@ void MarketDataProcessor::runLoop() {
                 tick.timestamp = e.timestamp;
                 tick.isBuy = (e.ask_size > e.bid_size);
                 m_aggregator.update(tick);
+                m_ticksSeen.fetch_add(1, std::memory_order_relaxed);
                 synthBid = e.bid_price;
                 synthAsk = e.ask_price;
                 synthPrice = tick.price;
-                synthSeq = e.seq;
                 gotTick = true;
             }
         } else {
@@ -83,6 +86,7 @@ void MarketDataProcessor::runLoop() {
             tick.isBuy = (rand() % 2 == 0);
             m_aggregator.update(tick);
             ++synthSeq;
+            m_ticksSeen.fetch_add(1, std::memory_order_relaxed);
             gotTick = true;
         }
 

@@ -40,6 +40,12 @@ public:
     // Stop the background thread and close the spine.
     void stop();
 
+    // Active source path and synthetic symbol name.
+    const std::string& sourcePath() const noexcept { return m_sourcePath; }
+    const std::string& symbol    () const noexcept { return m_symbol; }
+    uint64_t           ticksSeen () const noexcept { return m_ticksSeen.load(std::memory_order_relaxed); }
+    uint64_t           parseErrors() const noexcept { return m_parseErrors.load(std::memory_order_relaxed); }
+
     // Snapshot of the current state — thread-safe, returns by-value copy.
     // Trade list is bounded to last_n_trades; candles by last_n_candles.
     // recent_candles holds bucket-finalized candles; current_candle is a
@@ -68,9 +74,13 @@ private:
 
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_shouldStop{false};
+    std::atomic<uint64_t> m_ticksSeen{0};
+    std::atomic<uint64_t> m_parseErrors{0};
     std::thread m_thread;
     uint32_t m_pollIntervalMs = 16;
     uint64_t m_snapshotSeq = 0;
+    std::string m_sourcePath;
+    std::string m_symbol = "BTC/USDT";
 };
 
 }  // namespace btquant

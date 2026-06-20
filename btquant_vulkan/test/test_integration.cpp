@@ -11,6 +11,7 @@
 #include "../src/widgets/watchlist_widget.hpp"
 #include "../src/widgets/log_panel.hpp"
 #include "../src/widgets/risk_panel.hpp"
+#include "../src/widgets/connection_panel.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -654,6 +655,58 @@ int main() {
             std::cout << "✓ empty input → all-zero metrics" << std::endl;
         } else {
             std::cout << "✗ empty-input invariants broken" << std::endl;
+        }
+    }
+
+    // Test 15: ConnectionPanel + MarketDataProcessor accessors.
+    std::cout << "\nTest 15: Testing ConnectionPanel + MarketDataProcessor..." << std::endl;
+    {
+        btquant::ui::ConnectionPanel cp;
+        if (cp.tickRateEwma() == 0.0) {
+            std::cout << "✓ ConnectionPanel: EWMA starts at 0" << std::endl;
+        } else {
+            std::cout << "✗ ConnectionPanel initial EWMA: " << cp.tickRateEwma() << std::endl;
+        }
+
+        // Wire up a processor; let it run for a tick window.
+        btquant::MarketDataProcessor mdp;
+        auto err = mdp.start("/dev/shm/btquant_test_panel", 50);
+        if (err) std::cout << "  (mdp.start: " << *err << ")" << std::endl;
+        cp.setMarketData(&mdp);
+
+        // Without an ImGui context we can't actually call render(), but the
+        // accessor surface should be safe.
+        if (mdp.sourcePath() == "/dev/shm/btquant_test_panel") {
+            std::cout << "✓ MarketDataProcessor.sourcePath(): "
+                      << mdp.sourcePath() << std::endl;
+        } else {
+            std::cout << "✗ sourcePath: " << mdp.sourcePath() << std::endl;
+        }
+        if (mdp.symbol() == "BTC/USDT") {
+            std::cout << "✓ MarketDataProcessor.symbol(): " << mdp.symbol() << std::endl;
+        } else {
+            std::cout << "✗ symbol: " << mdp.symbol() << std::endl;
+        }
+        if (mdp.isRunning()) {
+            std::cout << "✓ MarketDataProcessor.isRunning() true" << std::endl;
+        } else {
+            std::cout << "✗ isRunning false" << std::endl;
+        }
+
+        // After a small sleep, ticksSeen should be > 0 (synthetic fallback
+        // produces ~50 ms ticks; even 250 ms gives ~5 ticks).
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        if (mdp.ticksSeen() > 0) {
+            std::cout << "✓ ticksSeen() advanced: " << mdp.ticksSeen() << std::endl;
+        } else {
+            std::cout << "✗ ticksSeen still 0 after 300ms" << std::endl;
+        }
+
+        mdp.stop();
+        if (!mdp.isRunning()) {
+            std::cout << "✓ MarketDataProcessor.stop() halts runloop" << std::endl;
+        } else {
+            std::cout << "✗ isRunning still true after stop()" << std::endl;
         }
     }
 

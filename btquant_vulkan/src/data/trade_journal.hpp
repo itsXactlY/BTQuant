@@ -1410,6 +1410,21 @@ public:
     std::vector<BestTrade> topWinners(size_t n = 5) const;
     std::vector<BestTrade> topLosers(size_t n = 5) const;
 
+    // Per-segment top trades (Sprint #147). Same shape as
+    // topWinners()/topLosers() (#146) but filtered to a
+    // single symbol or tag. Useful for "what were my
+    // biggest BTC wins?" or "biggest scalp losses?"
+    std::vector<BestTrade> topWinnersBySymbol(
+        const std::string& symbol, size_t n = 5) const;
+    std::vector<BestTrade> topLosersBySymbol(
+        const std::string& symbol, size_t n = 5) const;
+    std::vector<BestTrade> topWinnersByTag(
+        const std::string& tag, bool includeUntagged = false,
+        size_t n = 5) const;
+    std::vector<BestTrade> topLosersByTag(
+        const std::string& tag, bool includeUntagged = false,
+        size_t n = 5) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -4214,6 +4214,101 @@ TradeJournal::topLosers(size_t n) const {
 }
 
 namespace {
+// Sprint #147 — shared top-trades builder.
+template <typename Pred>
+std::vector<TradeJournal::BestTrade>
+buildTopWinners(const std::vector<JournalFill>& fills,
+                 size_t n, Pred pred) {
+    std::vector<JournalFill> wins;
+    for (const auto& f : fills) {
+        if (pred(f) && f.realizedDelta > 0) wins.push_back(f);
+    }
+    std::sort(wins.begin(), wins.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.realizedDelta > b.realizedDelta;
+        });
+    std::vector<TradeJournal::BestTrade> out;
+    size_t take = std::min(n, wins.size());
+    out.reserve(take);
+    for (size_t i = 0; i < take; ++i) {
+        TradeJournal::BestTrade bt;
+        bt.symbol = wins[i].symbol;
+        bt.realized = wins[i].realizedDelta;
+        bt.tag = wins[i].tag;
+        bt.timestamp_us = wins[i].timestamp_us;
+        out.push_back(bt);
+    }
+    return out;
+}
+
+template <typename Pred>
+std::vector<TradeJournal::BestTrade>
+buildTopLosers(const std::vector<JournalFill>& fills,
+                size_t n, Pred pred) {
+    std::vector<JournalFill> losses;
+    for (const auto& f : fills) {
+        if (pred(f) && f.realizedDelta < 0) losses.push_back(f);
+    }
+    std::sort(losses.begin(), losses.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.realizedDelta < b.realizedDelta;
+        });
+    std::vector<TradeJournal::BestTrade> out;
+    size_t take = std::min(n, losses.size());
+    out.reserve(take);
+    for (size_t i = 0; i < take; ++i) {
+        TradeJournal::BestTrade bt;
+        bt.symbol = losses[i].symbol;
+        bt.realized = losses[i].realizedDelta;
+        bt.tag = losses[i].tag;
+        bt.timestamp_us = losses[i].timestamp_us;
+        out.push_back(bt);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topWinnersBySymbol(
+    const std::string& symbol, size_t n) const {
+    return buildTopWinners(loadAll(), n,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topLosersBySymbol(
+    const std::string& symbol, size_t n) const {
+    return buildTopLosers(loadAll(), n,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topWinnersByTag(
+    const std::string& tag, bool includeUntagged, size_t n) const {
+    return buildTopWinners(loadAll(), n,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topLosersByTag(
+    const std::string& tag, bool includeUntagged, size_t n) const {
+    return buildTopLosers(loadAll(), n,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

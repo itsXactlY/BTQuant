@@ -17974,5 +17974,112 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 134: topWinnersBySymbol/ByTag +
+    //   topLosersBySymbol/ByTag (Sprint #147).
+    //
+    // Per-segment top N. Tests:
+    //   - BTC has [300, -50, 200, -100, 400].
+    //     topWinnersBySymbol(BTC,2) = [400, 300].
+    //     topLosersBySymbol(BTC,2)  = [-100, -50].
+    //   - scalp tag has 3 fills [+300, +200, -100].
+    //     topWinnersByTag("scalp",1) = [300].
+    //     topLosersByTag("scalp",1)  = [-100].
+    std::cout << "\nTest 134: per-segment top trades..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test134_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 5 fills, expect top 2 W / top 2 L ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  300.0, "scalp", t0));
+            j.append(mkFill("ETH",   50.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC",  200.0, "scalp",
+                             t0 + 3));
+            j.append(mkFill("BTC", -100.0, "scalp",
+                             t0 + 4));
+            j.append(mkFill("BTC",  400.0, "scalp",
+                             t0 + 5));
+            auto w = j.topWinnersBySymbol("BTC", 2);
+            auto l = j.topLosersBySymbol("BTC", 2);
+            if (w.size() == 2 &&
+                std::fabs(w[0].realized - 400.0) < 1e-9 &&
+                std::fabs(w[1].realized - 300.0) < 1e-9 &&
+                l.size() == 2 &&
+                std::fabs(l[0].realized + 100.0) < 1e-9 &&
+                std::fabs(l[1].realized +  50.0) < 1e-9) {
+                std::cout << "✓ BTC: topW=[400,300], "
+                          << "topL=[-100,-50]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: W[0]="
+                          << (w.size() > 0 ? w[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- scalp tag: 4 fills (BTC only) ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  300.0, "scalp", t0));
+            j.append(mkFill("BTC",  200.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC", -100.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("ETH",   50.0, "scalp",
+                             t0 + 3));
+            auto w = j.topWinnersByTag("scalp", false, 1);
+            auto l = j.topLosersByTag("scalp", false, 1);
+            if (w.size() == 1 &&
+                std::fabs(w[0].realized - 300.0) < 1e-9 &&
+                l.size() == 1 &&
+                std::fabs(l[0].realized + 100.0) < 1e-9) {
+                std::cout << "✓ scalp tag: topW=[300], "
+                          << "topL=[-100]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: W[0]="
+                          << (w.size() > 0 ? w[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg top-trades tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

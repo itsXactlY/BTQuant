@@ -1898,6 +1898,17 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
+    // Per-segment equity curve methods already declared
+    // above (lines ~1887): equityCurveBySymbol,
+    // equityCurveByTag. They return vector<EquityPoint>
+    // filtered to one symbol / tag.
+    //
+    // Sprint #182 was discovered to duplicate existing
+    // declarations — the per-segment rolling-window Sharpe
+    // methods already exist from Sprint #134.
+    // (rollingWindowSharpeBySymbol, rollingWindowSharpeByTag
+    // are at lines ~1188.)
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

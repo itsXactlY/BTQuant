@@ -7585,4 +7585,9 @@ TradeJournal::rollingWinRateByTag(
     return out;
 }
 
+// Sprint #182 — per-segment rolling-window Sharpe methods
+// already exist from Sprint #134. The duplicates added in
+// this patch were detected and removed; the implementations
+// above (rollingWindowSharpeBySymbol/ByTag) are reused.
+
 } // namespace btquant

@@ -1169,6 +1169,30 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Sliding-window Sharpe (Sprint #134). For each
+    // round-trip at index i ≥ N-1, compute the Sharpe
+    // (mean / stddev) over the window [i-N+1, i] using
+    // the round-trip realizedDelta values as returns.
+    //
+    // Returns empty vector if rt.size() < window. One
+    // point per eligible fill, sorted by timestamp ASC.
+    struct WindowSharpePoint {
+        uint64_t timestamp_us = 0;
+        double   sharpe        = 0.0;
+        double   mean          = 0.0;
+        double   stddev        = 0.0;
+        size_t   count         = 0;
+    };
+    std::vector<WindowSharpePoint> rollingWindowSharpe(
+        size_t window = 30) const;
+    std::vector<WindowSharpePoint> rollingWindowSharpeBySymbol(
+        const std::string& symbol,
+        size_t window = 30) const;
+    std::vector<WindowSharpePoint> rollingWindowSharpeByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

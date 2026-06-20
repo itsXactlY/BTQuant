@@ -3296,6 +3296,120 @@ TradeJournal::equityAnnotationsByTag(
 }
 
 namespace {
+// Sprint #134 — shared rolling-Sharpe builder. Same
+// ring-buffer pattern as rollingProfitFactor (#124) but
+// computes (mean / stddev) over the window. Returns 0
+// when stddev == 0 (all returns identical).
+template <typename Pred>
+std::vector<TradeJournal::WindowSharpePoint>
+buildRollingSharpe(const std::vector<JournalFill>& fills,
+                    size_t window, Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    std::sort(filtered.begin(), filtered.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::vector<double> rt;
+    rt.reserve(filtered.size());
+    for (const auto& f : filtered) {
+        if (std::fabs(f.realizedDelta) > 1e-9) {
+            rt.push_back(f.realizedDelta);
+        }
+    }
+    if (rt.size() < window) return {};
+    std::vector<TradeJournal::WindowSharpePoint> out;
+    out.reserve(rt.size() - window + 1);
+    auto computeStats = [&](size_t start, size_t end) {
+        // Returns (mean, stddev).
+        double sum = 0.0;
+        for (size_t k = start; k < end; ++k) sum += rt[k];
+        double mean = sum / static_cast<double>(end - start);
+        double var = 0.0;
+        for (size_t k = start; k < end; ++k) {
+            double d = rt[k] - mean;
+            var += d * d;
+        }
+        double stddev = end - start > 1
+            ? std::sqrt(var / static_cast<double>(end - start - 1))
+            : 0.0;
+        return std::make_pair(mean, stddev);
+    };
+    // Emit the first point.
+    {
+        auto [mean, stddev] = computeStats(0, window);
+        TradeJournal::WindowSharpePoint p;
+        p.timestamp_us = filtered[window - 1].timestamp_us;
+        p.count = window;
+        p.mean = mean;
+        p.stddev = stddev;
+        p.sharpe = stddev > 1e-9 ? mean / stddev : 0.0;
+        out.push_back(p);
+    }
+    // Slide the window: drop rt[i-window], add rt[i].
+    // Maintain running sum + sum-of-squares for O(1)
+    // window updates.
+    double sum   = 0.0;
+    double sumSq = 0.0;
+    for (size_t k = 0; k < window; ++k) {
+        sum   += rt[k];
+        sumSq += rt[k] * rt[k];
+    }
+    for (size_t i = window; i < rt.size(); ++i) {
+        double dropped = rt[i - window];
+        double added   = rt[i];
+        sum   = sum - dropped + added;
+        sumSq = sumSq - dropped * dropped + added * added;
+        double mean = sum / static_cast<double>(window);
+        double var  = (sumSq - static_cast<double>(window) *
+                       mean * mean) /
+                      static_cast<double>(window - 1);
+        double stddev = var > 0 ? std::sqrt(var) : 0.0;
+        TradeJournal::WindowSharpePoint p;
+        p.timestamp_us = filtered[i].timestamp_us;
+        p.count = window;
+        p.mean = mean;
+        p.stddev = stddev;
+        p.sharpe = stddev > 1e-9 ? mean / stddev : 0.0;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::WindowSharpePoint>
+TradeJournal::rollingWindowSharpe(size_t window) const {
+    return buildRollingSharpe(loadAll(), window,
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::WindowSharpePoint>
+TradeJournal::rollingWindowSharpeBySymbol(
+    const std::string& symbol,
+    size_t window) const {
+    return buildRollingSharpe(loadAll(), window,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::WindowSharpePoint>
+TradeJournal::rollingWindowSharpeByTag(
+    const std::string& tag,
+    bool includeUntagged,
+    size_t window) const {
+    return buildRollingSharpe(loadAll(), window,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week
@@ -3556,7 +3670,7 @@ bucketByDay(const std::vector<JournalFill>& fills,
 }
 
 // Parse "YYYY-MM-DD" to time_t (midnight local). Used by
-// rollingSharpe() to align daily series with calendar days.
+// rollingWindowSharpe() to align daily series with calendar days.
 std::time_t parseDay(const std::string& iso) {
     std::tm tm{};
     std::sscanf(iso.c_str(), "%d-%d-%d",

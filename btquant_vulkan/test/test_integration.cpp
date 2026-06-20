@@ -16581,5 +16581,167 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 121: rollingWindowSharpe() / BySymbol / ByTag
+    //   (Sprint #134).
+    //
+    // Sliding-window Sharpe. Tests:
+    //   - Window > fills: empty.
+    //   - Constant returns (stddev=0): sharpe=0.
+    //   - 5 fills [+2, +1, -1, +1, +3] with window=3:
+    //     3 points, each mean/stddev over 3 returns.
+    //   - Per-symbol filtering.
+    std::cout << "\nTest 121: rolling window Sharpe..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test121_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty/window > fills ----
+        {
+            TradeJournal j((tmpDir / "few.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 100.0, "",
+                                1774000000000000ULL + i));
+            }
+            auto v = j.rollingWindowSharpe(20);
+            if (v.empty()) {
+                std::cout << "✓ window>fills: empty"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ window>fills wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All identical: sharpe=0 ----
+        {
+            TradeJournal j((tmpDir / "same.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "", t0 + i));
+            }
+            auto v = j.rollingWindowSharpe(3);
+            if (v.size() == 3 &&
+                std::fabs(v[0].sharpe) < 1e-9 &&
+                std::fabs(v[0].stddev) < 1e-9) {
+                std::cout << "✓ constant: sharpe=0, stddev=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ constant wrong: sharpe="
+                          << (v.empty() ? -1.0 : v[0].sharpe)
+                          << " stddev="
+                          << (v.empty() ? -1.0 : v[0].stddev)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills [2, 1, -1, 1, 3] window=3 ----
+        // Window [0..2]: [2, 1, -1]. mean=2/3, diffs
+        //   4/3, 1/3, -5/3. sq sum = (16+1+25)/9 = 42/9.
+        //   sample var (N-1=2) = (42/9)/2 = 7/3.
+        //   stddev ≈ 1.5275. sharpe ≈ 0.4364.
+        // Window [1..3]: [1, -1, 1]. mean=1/3, diffs
+        //   2/3, -4/3, 2/3. sq sum = (4+16+4)/9 = 24/9.
+        //   var = (24/9)/2 = 4/3.
+        //   stddev ≈ 1.1547. sharpe ≈ 0.2887.
+        // Window [2..4]: [-1, 1, 3]. mean=1, diffs
+        //   -2, 0, 2. sq sum = 8.
+        //   var = 8/2 = 4.
+        //   stddev = 2. sharpe = 0.5.
+        {
+            TradeJournal j((tmpDir / "sharpe.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            double vals[] = {2.0, 1.0, -1.0, 1.0, 3.0};
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", vals[i],
+                                "", t0 + i));
+            }
+            auto v = j.rollingWindowSharpe(3);
+            double w0sh = 2.0/3.0 / std::sqrt(7.0/3.0);
+            double w1sh = 1.0/3.0 / std::sqrt(4.0/3.0);
+            double w2sh = 1.0   / 2.0;
+            if (v.size() == 3 &&
+                std::fabs(v[0].sharpe - w0sh) < 1e-3 &&
+                std::fabs(v[1].sharpe - w1sh) < 1e-3 &&
+                std::fabs(v[2].sharpe - w2sh) < 1e-3) {
+                std::cout << "✓ 5 fills window=3: "
+                          << "sharpes ≈ 0.4364, 0.2887, 0.5"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ sharpe wrong: "
+                          << (v.size() > 0 ? v[0].sharpe : 0.0)
+                          << ", "
+                          << (v.size() > 1 ? v[1].sharpe : 0.0)
+                          << ", "
+                          << (v.size() > 2 ? v[2].sharpe : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // BTC: [2, 1, -1, 1, 3] window=3, 3 points.
+            // ETH: [10, 20] only 2 fills → empty.
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC",
+                    i == 0 ? 2.0 : i == 1 ? 1.0 :
+                    i == 2 ? -1.0 : i == 3 ? 1.0 : 3.0,
+                    "", t0 + i));
+            }
+            j.append(mkFill("ETH", 10.0, "", t0 + 5));
+            j.append(mkFill("ETH", 20.0, "", t0 + 6));
+            auto btcV = j.rollingWindowSharpeBySymbol(
+                "BTC", 3);
+            auto ethV = j.rollingWindowSharpeBySymbol(
+                "ETH", 3);
+            if (btcV.size() == 3 &&
+                ethV.empty()) {
+                std::cout << "✓ per-symbol: BTC=3 points, "
+                          << "ETH=0 (only 2 fills)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: btc="
+                          << btcV.size() << " eth="
+                          << ethV.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " rolling-window-sharpe tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

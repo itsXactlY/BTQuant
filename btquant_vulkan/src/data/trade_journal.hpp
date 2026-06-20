@@ -1664,6 +1664,19 @@ public:
     allDrawdownRecoveriesByTag(
         bool includeUntagged = true) const;
 
+    // DD contribution per segment (Sprint #166). For each
+    // segment, fraction of total journal-wide max DD that
+    // it contributed. Returns sorted DESC by
+    // contribution share.
+    struct DDContribution {
+        std::string segment;
+        double      segmentMaxDD  = 0.0;
+        double      contribution  = 0.0;  // share [0,1]
+    };
+    std::vector<DDContribution> ddContributionBySymbol() const;
+    std::vector<DDContribution> ddContributionByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

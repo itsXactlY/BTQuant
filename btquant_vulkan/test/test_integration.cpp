@@ -19595,5 +19595,78 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 153: ddContributionBySymbol/ByTag (Sprint #166).
+    //
+    // Per-segment fraction of total max DD. Tests:
+    //   - 2 symbols, contributions sum to 1.0.
+    std::cout << "\nTest 153: DD contribution..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test153_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols with equal DD ----
+        {
+            TradeJournal j((tmpDir / "dd.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + day));
+            j.append(mkFill("BTC",   60.0, "scalp",
+                             t0 + 2 * day));
+            j.append(mkFill("ETH",   50.0, "arb",
+                             t0 + 3 * day));
+            j.append(mkFill("ETH",  -25.0, "arb",
+                             t0 + 4 * day));
+            j.append(mkFill("ETH",   30.0, "arb",
+                             t0 + 5 * day));
+            auto symV = j.ddContributionBySymbol();
+            // BTC has DD=50, ETH has DD=25. BTC share
+            // should be > ETH share since BTC is deeper.
+            if (symV.size() == 2 &&
+                symV[0].segment == "BTC" &&
+                symV[0].contribution > symV[1].contribution) {
+                std::cout << "✓ 2 syms sorted DESC: "
+                          << "BTC(50) > ETH(25)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << symV.size()
+                          << " top=" << (symV.size() > 0
+                              ? symV[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-contribution tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

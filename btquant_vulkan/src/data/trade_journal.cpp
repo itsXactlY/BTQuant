@@ -6502,4 +6502,77 @@ TradeJournal::allDrawdownRecoveriesByTag(
     return out;
 }
 
+std::vector<TradeJournal::DDContribution>
+TradeJournal::ddContributionBySymbol() const {
+    // Sprint #166. Each symbol's max DD as a fraction
+    // of total journal max DD. Sorted DESC.
+    std::vector<DDContribution> out;
+    double totalDD = maxDrawdown().maxDrawdown;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        auto psd = perSymbolDrawdown();
+        double segMax = 0.0;
+        for (const auto& psdRow : psd) {
+            if (psdRow.symbol == s) {
+                segMax = psdRow.maxDrawdown;
+                break;
+            }
+        }
+        DDContribution c;
+        c.segment = s;
+        c.segmentMaxDD = segMax;
+        c.contribution = totalDD > 1e-9
+            ? segMax / totalDD : 0.0;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDContribution& a, const DDContribution& b) {
+            return a.contribution > b.contribution;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::DDContribution>
+TradeJournal::ddContributionByTag(
+    bool includeUntagged) const {
+    // Sprint #166. Same as ddContributionBySymbol but
+    // for tags.
+    std::vector<DDContribution> out;
+    double totalDD = maxDrawdown().maxDrawdown;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        auto ptd = perTagDrawdown();
+        double segMax = 0.0;
+        for (const auto& ptdRow : ptd) {
+            if (ptdRow.tag == t) {
+                segMax = ptdRow.maxDrawdown;
+                break;
+            }
+        }
+        DDContribution c;
+        c.segment = t;
+        c.segmentMaxDD = segMax;
+        c.contribution = totalDD > 1e-9
+            ? segMax / totalDD : 0.0;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDContribution& a, const DDContribution& b) {
+            return a.contribution > b.contribution;
+        });
+    return out;
+}
+
 } // namespace btquant

@@ -21356,5 +21356,73 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 178: allSegmentTradeCountSummary +
+    //   allSegmentTradeCountSummaryByTag (Sprint #192).
+    //
+    // Bulk trade count. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 178: all-seg trade count bulk..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test178_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "c.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 10.0, "scalp",
+                                t0 + i * hour));
+            }
+            j.append(mkFill("ETH", 5.0, "arb",
+                             t0 + 4 * hour));
+            auto v = j.allSegmentTradeCountSummary();
+            if (v.size() == 2 &&
+                v[0].segment == "BTC" &&
+                v[0].summary.totalFills == 3 &&
+                v[1].segment == "ETH" &&
+                v[1].summary.totalFills == 1) {
+                std::cout << "✓ 2 syms: BTC=3 fills, "
+                          << "ETH=1 fill"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top="
+                          << (v.size() > 0
+                              ? v[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-count-bulk tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -2002,6 +2002,18 @@ public:
     std::vector<ProfitPerTrade> allProfitPerTradeByTag(
         bool includeUntagged = true) const;
 
+    // All-segment trade count summary bulk (Sprint #192).
+    // Returns TradeCountSummary for every segment.
+    struct SegmentTradeCount {
+        std::string segment;
+        TradeCountSummary summary;
+    };
+    std::vector<SegmentTradeCount>
+    allSegmentTradeCountSummary() const;
+    std::vector<SegmentTradeCount>
+    allSegmentTradeCountSummaryByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

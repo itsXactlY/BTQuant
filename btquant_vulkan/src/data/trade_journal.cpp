@@ -8080,4 +8080,56 @@ TradeJournal::allProfitPerTradeByTag(
     return out;
 }
 
+std::vector<TradeJournal::SegmentTradeCount>
+TradeJournal::allSegmentTradeCountSummary() const {
+    // Sprint #192. Bulk per-segment TradeCountSummary.
+    std::vector<SegmentTradeCount> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        SegmentTradeCount c;
+        c.segment = s;
+        c.summary = tradeCountSummaryBySymbol(s);
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentTradeCount& a,
+           const SegmentTradeCount& b) {
+            return a.summary.totalFills >
+                   b.summary.totalFills;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SegmentTradeCount>
+TradeJournal::allSegmentTradeCountSummaryByTag(
+    bool includeUntagged) const {
+    std::vector<SegmentTradeCount> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        SegmentTradeCount c;
+        c.segment = t;
+        c.summary = tradeCountSummaryByTag(t, includeUntagged);
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentTradeCount& a,
+           const SegmentTradeCount& b) {
+            return a.summary.totalFills >
+                   b.summary.totalFills;
+        });
+    return out;
+}
+
 } // namespace btquant

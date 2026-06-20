@@ -113,6 +113,56 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- Headline summary by-tag (Sprint #101) ----
+    //
+    // Mirror of the by-symbol headline above, but ranked by
+    // perTagCalmar(). Answers "which strategy tag is winning,
+    // which is bleeding?" without scrolling through the per-tag
+    // tables.
+    //
+    // Same semantics: best = first (Calmar DESC), worst = last
+    // with Calmar<0 or maxDD>0. Suppresses Worst when there's
+    // only one tagged bucket.
+    {
+        auto perTagCl = m_journal->perTagCalmar(m_includeUntagged);
+        auto perTagSh = m_journal->perTagSharpe(m_includeUntagged);
+        if (!perTagCl.empty()) {
+            const auto& best = perTagCl.front();
+            const TradeJournal::PerTagCalmar* worst = nullptr;
+            for (auto it = perTagCl.rbegin(); it != perTagCl.rend();
+                 ++it) {
+                if (it->calmarRatio < -1e-9 ||
+                    it->maxDrawdown > 1e-9) {
+                    worst = &(*it);
+                    break;
+                }
+            }
+            auto findSharpe = [&](const std::string& tag) {
+                for (const auto& s : perTagSh)
+                    if (s.tag == tag) return s.annualizedSharpe;
+                return 0.0;
+            };
+            float bestSh = static_cast<float>(
+                findSharpe(best.tag));
+            char headline[160];
+            if (worst && worst->tag != best.tag) {
+                float worstSh = static_cast<float>(
+                    findSharpe(worst->tag));
+                std::snprintf(headline, sizeof(headline),
+                    "Best strategy: %s (Calmar=%.2f, Sharpe=%.2f)   "
+                    "Worst: %s (Calmar=%.2f, Sharpe=%.2f)",
+                    best.tag.c_str(), best.calmarRatio, bestSh,
+                    worst->tag.c_str(), worst->calmarRatio,
+                    worstSh);
+            } else {
+                std::snprintf(headline, sizeof(headline),
+                    "Best strategy: %s (Calmar=%.2f, Sharpe=%.2f)",
+                    best.tag.c_str(), best.calmarRatio, bestSh);
+            }
+            ImGui::TextUnformatted(headline);
+        }
+    }
+
     // ---- Stats header (Sprint #76) ----
     //
     // Win rate + profit factor + expectancy + win/loss counts in a

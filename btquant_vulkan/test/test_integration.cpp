@@ -11511,5 +11511,223 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 95: perSymbolDayStats() / perTagDayStats() (Sprint #102).
+    //
+    // Heatmap-ready grid: rows × cols → DayCell. Tests:
+    //   - Empty journal: empty symbols/tags + dates + grid.
+    //   - Single symbol, single day: 1×1 grid with the day's data.
+    //   - Multi-symbol: distinct symbols sorted ASC.
+    //   - Multi-day: distinct dates sorted ASC (chronological).
+    //   - No-fill cells: zeroed DayCell (heatmap renders neutral).
+    //   - perTagDayStats default skip-untagged: only tagged fills.
+    //   - perTagDayStats includeUntagged: rolls under __untagged__.
+    std::cout << "\nTest 95: perSymbolDayStats() / perTagDayStats()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test95_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto ps = j.perSymbolDayStats();
+            auto pt = j.perTagDayStats();
+            if (ps.symbols.empty() && ps.dates.empty() && ps.grid.empty() &&
+                pt.tags.empty() && pt.dates.empty() && pt.grid.empty()) {
+                std::cout << "✓ empty journal: empty grid"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: sym=" << ps.symbols.size()
+                          << " tag=" << pt.tags.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single-symbol, single day ----
+        // Day -1: BTCUSDT +$100 (round-trip).
+        // Grid: 1×1. Cell.realized=$100, roundTrips=1, wins=1.
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 100.0, "", 1, 10));
+            auto ps = j.perSymbolDayStats();
+            if (ps.symbols.size() == 1 && ps.symbols[0] == "BTCUSDT" &&
+                ps.dates.size() == 1 && ps.grid.size() == 1 &&
+                std::fabs(ps.grid[0].realized - 100.0) < 1e-9 &&
+                ps.grid[0].roundTrips == 1 &&
+                ps.grid[0].wins == 1 && ps.grid[0].losses == 0) {
+                std::cout << "✓ single-symbol single-day: 1×1 grid "
+                          << "with realized=$100" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: grid.size="
+                          << ps.grid.size()
+                          << " realized=" << ps.grid[0].realized
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-symbol, multi-day ----
+        // Day -2: BTC +$50 (win), ETH -$20 (loss)
+        // Day -1: BTC +$30 (win), ETH +$40 (win)
+        // Grid: 2 symbols × 2 dates = 4 cells.
+        //   [BTC, day-2] = +50, [BTC, day-1] = +30
+        //   [ETH, day-2] = -20, [ETH, day-1] = +40
+        // Symbols sorted: BTC < ETH. Dates sorted: day-2 < day-1.
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  50.0, "", 2, 10));
+            j.append(mkFill("BTCUSDT",  30.0, "", 1, 10));
+            j.append(mkFill("ETHUSDT", -20.0, "", 2, 10));
+            j.append(mkFill("ETHUSDT",  40.0, "", 1, 10));
+            auto ps = j.perSymbolDayStats();
+            if (ps.symbols.size() == 2 &&
+                ps.symbols[0] == "BTCUSDT" &&
+                ps.symbols[1] == "ETHUSDT" &&
+                ps.dates.size() == 2 &&
+                ps.grid.size() == 4 &&
+                std::fabs(ps.grid[0].realized - 50.0) < 1e-9 &&  // BTC day-2
+                std::fabs(ps.grid[1].realized - 30.0) < 1e-9 &&  // BTC day-1
+                std::fabs(ps.grid[2].realized + 20.0) < 1e-9 &&  // ETH day-2
+                std::fabs(ps.grid[3].realized - 40.0) < 1e-9) {  // ETH day-1
+                std::cout << "✓ multi-symbol multi-day: 2×2 grid "
+                          << "with all 4 cells correct"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: "
+                          << "sym=" << ps.symbols.size()
+                          << " dates=" << ps.dates.size()
+                          << " grid.size=" << ps.grid.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Sparse grid: cell with no fills → zeroed DayCell ----
+        // BTC fills on day-3 and day-1, but ETH fills on day-2.
+        // Day-2 appears in the union but BTC's cell there is
+        // zeroed (heatmap renders neutral).
+        //   [BTC, day-3] = +10
+        //   [BTC, day-2] = (zeroed — no BTC fill that day)
+        //   [BTC, day-1] = +20
+        {
+            fs::path p = tmpDir / "sparse.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 10.0, "", 3, 10));
+            j.append(mkFill("BTCUSDT", 20.0, "", 1, 10));
+            j.append(mkFill("ETHUSDT", -5.0, "", 2, 10));  // adds day-2
+            auto ps = j.perSymbolDayStats();
+            // Filter to BTC's row for clarity.
+            size_t btcIdx = 0;
+            for (size_t i = 0; i < ps.symbols.size(); ++i)
+                if (ps.symbols[i] == "BTCUSDT") btcIdx = i;
+            size_t D = ps.dates.size();
+            auto cell = [&](size_t sym, size_t date) {
+                return ps.grid[sym * D + date];
+            };
+            if (ps.dates.size() == 3 && ps.grid.size() == 6 &&
+                std::fabs(cell(btcIdx, 0).realized - 10.0) < 1e-9 &&
+                cell(btcIdx, 1).roundTrips == 0 &&   // sparse middle
+                cell(btcIdx, 1).realized == 0.0 &&
+                std::fabs(cell(btcIdx, 2).realized - 20.0) < 1e-9) {
+                std::cout << "✓ sparse grid: middle cell zeroed "
+                          << "(no BTC fill on day-2, but ETH has one)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ sparse wrong: dates="
+                          << ps.dates.size() << " grid[1] realized="
+                          << cell(btcIdx, 1).realized
+                          << " (expected 0)" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- perTagDayStats default: skip untagged ----
+        {
+            fs::path p = tmpDir / "tagdefault.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 50.0, "scalp", 1, 10));
+            j.append(mkFill("ETH", 30.0, "",      1, 11));
+            auto pt = j.perTagDayStats();  // default: skip untagged
+            if (pt.tags.size() == 1 && pt.tags[0] == "scalp" &&
+                pt.grid.size() == 1 &&
+                std::fabs(pt.grid[0].realized - 50.0) < 1e-9) {
+                std::cout << "✓ perTag default skip-untagged: "
+                          << "1×1 grid (only 'scalp' bucket)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ default wrong: tags="
+                          << pt.tags.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- perTagDayStats includeUntagged: rollup under __untagged__ ----
+        {
+            fs::path p = tmpDir / "tagrollup.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 50.0, "scalp", 1, 10));
+            j.append(mkFill("ETH", 30.0, "",      1, 11));
+            auto pt = j.perTagDayStats(true);
+            if (pt.tags.size() == 2 &&
+                pt.tags[0] == "__untagged__" &&
+                pt.tags[1] == "scalp" &&
+                pt.grid.size() == 2 &&
+                std::fabs(pt.grid[0].realized - 30.0) < 1e-9 &&
+                std::fabs(pt.grid[1].realized - 50.0) < 1e-9) {
+                std::cout << "✓ perTag includeUntagged: 2 tags "
+                          << "(__untagged__, scalp), 2 cells"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rollup wrong: tags="
+                          << pt.tags.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dayStats tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

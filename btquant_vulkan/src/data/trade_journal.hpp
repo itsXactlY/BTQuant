@@ -414,6 +414,46 @@ public:
     };
     std::vector<PerSymbolSortino> perSymbolSortino() const;
 
+    // Per-symbol daily stats — heatmap-ready grid (Sprint #102).
+    // For each (symbol, date) bucket with at least one fill,
+    // computes realized + W/L/round-trip counts. Returns the
+    // data shaped for direct rendering as a 2-D grid:
+    //   rows = symbols (sorted ASC)
+    //   cols = dates   (sorted ASC, chronological)
+    //   cells = realized / roundTrips / wins / losses
+    //
+    // Grid dimensions: symbols.size() × dates.size(). A cell of
+    // NaN in the grid means "no fills on this day for this
+    // symbol" — the heatmap renders it as a neutral color.
+    //
+    // Designed for a calendar-style P&L heatmap widget where the
+    // trader can see at a glance which symbols performed on
+    // which days ("Mondays are bad for SOL", etc.).
+    struct DayCell {
+        double realized    = 0.0;   // sum of realizedDelta on this day
+        size_t roundTrips  = 0;     // round-trip fills (realized != 0)
+        size_t wins        = 0;
+        size_t losses      = 0;
+    };
+    struct PerSymbolDayStats {
+        std::vector<std::string> symbols;      // rows (sorted ASC)
+        std::vector<std::string> dates;        // cols (sorted ASC)
+        // Outer index = symbol index, inner = date index.
+        // Indexed access: grid[symbolIdx * dates.size() + dateIdx].
+        std::vector<DayCell> grid;
+    };
+    PerSymbolDayStats perSymbolDayStats() const;
+
+    // Per-tag daily stats — per-tag mirror. `includeUntagged`
+    // matches perTagStats() (#88).
+    struct PerTagDayStats {
+        std::vector<std::string> tags;
+        std::vector<std::string> dates;
+        std::vector<DayCell> grid;
+    };
+    PerTagDayStats perTagDayStats(
+        bool includeUntagged = false) const;
+
     // Per-tag Sortino (Sprint #99). Per-tag mirror.
     struct PerTagSortino {
         std::string tag;

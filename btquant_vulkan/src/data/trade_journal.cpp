@@ -8,8 +8,10 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 
@@ -1097,6 +1099,58 @@ TradeJournal::perSymbolSortino() const {
     return out;
 }
 
+// ---- perSymbolDayStats() / perTagDayStats() helpers (#102) ----
+//
+// Heatmap-ready bucketing: for each (axis, day) pair with at
+// least one fill, sum realized + count round-trips. Returns
+// the data in a row-major indexed form so a heatmap widget
+// can iterate without rebuilding the lookup structure.
+//
+// Two helper entry points: one for symbol-keyed buckets, one
+// for tag-keyed. Both build (axis, day) → DayCell maps, then
+// flatten into (sorted-axes) × (sorted-dates) indexed grids.
+namespace {
+
+template <typename GroupKey>
+std::map<std::string, std::map<std::string, TradeJournal::DayCell>>
+bucketByDayPerAxis(const std::vector<JournalFill>& fills,
+                   std::function<std::string(const JournalFill&)> keyFn,
+                   bool includeUntagged = true) {
+    std::map<std::string, std::map<std::string, TradeJournal::DayCell>> out;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        // tag-specific filter — passed through keyFn (the symbol
+        // extractor ignores tag state; the tag extractor honors
+        // includeUntagged).
+        if constexpr (false) {}  // placeholder for compile-time if
+        std::string key = keyFn(f);
+        // For tag mode with empty tag, the keyFn returns
+        // "__untagged__" when includeUntagged=true, or "" when
+        // includeUntagged=false. Empty key means "skip".
+        if (key.empty()) continue;
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        char date[16];
+        std::strftime(date, sizeof(date), "%Y-%m-%d", &tm);
+        auto& cell = out[key][date];
+        cell.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) > kEps) {
+            cell.roundTrips++;
+            if (f.realizedDelta > kEps) cell.wins++;
+            else cell.losses++;
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
 std::vector<TradeJournal::PerTagSortino>
 TradeJournal::perTagSortino(bool includeUntagged) const {
     // Per-tag Sortino. Same shape as perSymbolSortino() but
@@ -1139,6 +1193,65 @@ TradeJournal::perTagSortino(bool includeUntagged) const {
                       return a.meanDailyReturn > b.meanDailyReturn;
                   return a.tag < b.tag;
               });
+    return out;
+}
+
+TradeJournal::PerSymbolDayStats
+TradeJournal::perSymbolDayStats() const {
+    // Sprint #102. Heatmap-ready grid: symbols × dates → DayCell.
+    auto buckets = bucketByDayPerAxis<JournalFill>(
+        loadAll(),
+        [](const JournalFill& f) { return f.symbol; });
+    PerSymbolDayStats out;
+    out.symbols.reserve(buckets.size());
+    for (const auto& kv : buckets) out.symbols.push_back(kv.first);
+    // Union of all dates across all symbols, sorted ASC.
+    std::set<std::string> dateSet;
+    for (const auto& kv : buckets)
+        for (const auto& dk : kv.second) dateSet.insert(dk.first);
+    out.dates.assign(dateSet.begin(), dateSet.end());
+    // Fill grid row-major: out.grid[symbolIdx * dates.size() + dateIdx].
+    out.grid.assign(out.symbols.size() * out.dates.size(), DayCell{});
+    for (size_t si = 0; si < out.symbols.size(); ++si) {
+        const auto& symBuckets = buckets.at(out.symbols[si]);
+        for (size_t di = 0; di < out.dates.size(); ++di) {
+            auto it = symBuckets.find(out.dates[di]);
+            if (it != symBuckets.end())
+                out.grid[si * out.dates.size() + di] = it->second;
+            // else: DayCell default (all zeros) means "no fills"
+        }
+    }
+    return out;
+}
+
+TradeJournal::PerTagDayStats
+TradeJournal::perTagDayStats(bool includeUntagged) const {
+    // Sprint #102. Per-tag mirror. Tag mode honors
+    // includeUntagged.
+    auto buckets = bucketByDayPerAxis<JournalFill>(
+        loadAll(),
+        [includeUntagged](const JournalFill& f) -> std::string {
+            if (f.tag.empty()) {
+                return includeUntagged ? "__untagged__" : "";
+            }
+            return f.tag;
+        });
+    PerTagDayStats out;
+    out.tags.reserve(buckets.size());
+    for (const auto& kv : buckets) out.tags.push_back(kv.first);
+    std::set<std::string> dateSet;
+    for (const auto& kv : buckets)
+        for (const auto& dk : kv.second) dateSet.insert(dk.first);
+    out.dates.assign(dateSet.begin(), dateSet.end());
+    out.grid.assign(out.tags.size() * out.dates.size(), DayCell{});
+    for (size_t ti = 0; ti < out.tags.size(); ++ti) {
+        const auto& tagBuckets = buckets.at(out.tags[ti]);
+        for (size_t di = 0; di < out.dates.size(); ++di) {
+            auto it = tagBuckets.find(out.dates[di]);
+            if (it != tagBuckets.end())
+                out.grid[ti * out.dates.size() + di] = it->second;
+        }
+    }
     return out;
 }
 

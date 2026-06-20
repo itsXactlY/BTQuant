@@ -100,21 +100,24 @@ private:
     auto iniPath = (settingsPath.parent_path() / "imgui.ini").string();
     if (const char* env = std::getenv("BTQUANT_INI")) iniPath = env;
 
+    // Load persisted settings BEFORE initializing UIContext so the theme is
+    // applied on the very first frame (no flash-of-dark-theme).
+    auto settings = util::Settings::load(settingsPath);
+    std::fprintf(stderr, "[BTQuant] loaded settings from %s\n",
+                 settingsPath.c_str());
+
     if (!uiContext.initialize(window, vkContext.instance(),
                               vkContext.physicalDevice(), vkContext.device(),
                               vkContext.queueFamilies().graphicsFamily.value(),
                               vkContext.graphicsQueue(),
                               vkContext.renderPass(),
-                              iniPath.c_str())) {
+                              iniPath.c_str(),
+                              settings.theme == 0 ? ui::UIContext::Theme::Dark
+                                                  : ui::UIContext::Theme::Light)) {
       throw std::runtime_error("Failed to initialize UI Context");
     }
 
-    // Load persisted settings BEFORE WindowManager initializes so the showXxx
-    // booleans reflect the user's last session.
-    auto settings = util::Settings::load(settingsPath);
-    std::fprintf(stderr, "[BTQuant] loaded settings from %s\n",
-                 settingsPath.c_str());
-
+    // settings is already loaded — push visibility flags into WindowManager.
     windowManager.initialize();
     windowManager.showOrderBook       = settings.showOrderBook;
     windowManager.showOrderBookDepth  = settings.showOrderBookDepth;
@@ -127,6 +130,7 @@ private:
     windowManager.showTPO             = settings.showTPO;
     windowManager.showSettings        = settings.showSettings;
     windowManager.showStatsOverlay    = settings.showStatsOverlay;
+    windowManager.theme               = settings.theme;
     windowManager.fpsLimit            = settings.fpsLimit;
     windowManager.heatmapDensity      = settings.heatmapDensity;
     glfwSwapInterval(windowManager.fpsLimit > 0 ? 1 : 0);
@@ -223,6 +227,13 @@ private:
         windowManager.lastAppliedHeatmapDensity = static_cast<long>(target);
       }
 
+      // Apply theme changes from the View → Theme menu.
+      if (static_cast<long>(uiContext.theme()) != windowManager.theme) {
+        uiContext.applyTheme(windowManager.theme == 0
+                                 ? ui::UIContext::Theme::Dark
+                                 : ui::UIContext::Theme::Light);
+      }
+
       // Record compute dispatch OUTSIDE the render pass. The compute writes
       // to the storage image (GENERAL layout), then transitions back to
       // SHADER_READ_ONLY_OPTIMAL so ImGui can sample it inside the render pass.
@@ -244,6 +255,7 @@ private:
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
       windowManager.showSettingsWindow();
+      windowManager.showHotkeyHelpWindow();
 
       // Stats overlay (top-right). Pass live queue/candle counters so the user
       // can see when MarketDataProcessor is falling behind.
@@ -272,6 +284,7 @@ private:
         s.showTPO             = windowManager.showTPO;
         s.showSettings        = windowManager.showSettings;
         s.showStatsOverlay    = windowManager.showStatsOverlay;
+        s.theme               = windowManager.theme;
         s.fpsLimit            = windowManager.fpsLimit;
         s.heatmapDensity      = windowManager.heatmapDensity;
         s.save(settingsPath);

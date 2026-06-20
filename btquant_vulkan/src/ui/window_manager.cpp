@@ -36,6 +36,11 @@ const long kFps240 = 240;
 const long kHeatmapMin = 64;
 const long kHeatmapMax = 512;
 
+// Stable references for theme radio buttons. MenuItem(selected=ptr) wants a
+// stable bool that the radio can point at; these never change.
+bool kBoolTrue = true;
+bool kBoolFalse = false;
+
 #ifdef BTQUANT_USE_GLFW
 // Toggle widget given its F-key hotkey (F2-F9) — looks up in a static table.
 struct HotkeyBinding { int glfwKey; bool WindowManager::*flag; const char* name; };
@@ -208,6 +213,19 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         markSettingsDirty();
     }
     prevShiftF1 = currShiftF1;
+
+    // ? (Shift+/) toggles the hotkey reference overlay. Suppressed when user
+    // is typing into a text field so search filters work normally.
+    static bool prevQuestionMark = false;
+    bool currQuestionMark = !textFieldFocus &&
+                            glfwGetKey(win, GLFW_KEY_SLASH) == GLFW_PRESS &&
+                            (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                             glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+    if (currQuestionMark && !prevQuestionMark) {
+        showHotkeyHelp = !showHotkeyHelp;
+        markSettingsDirty();
+    }
+    prevQuestionMark = currQuestionMark;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -288,6 +306,17 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel))       markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
+            if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Theme")) {
+                if (ImGui::MenuItem("Dark (Kraken Purple)", nullptr, theme == 0 ? &kBoolTrue : &kBoolFalse)) {
+                    theme = 0; markSettingsDirty();
+                }
+                if (ImGui::MenuItem("Light (off-white)",    nullptr, theme == 1 ? &kBoolTrue : &kBoolFalse)) {
+                    theme = 1; markSettingsDirty();
+                }
+                ImGui::EndMenu();
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) {
                 requestDockLayoutReset();
@@ -296,11 +325,58 @@ void WindowManager::showMainMenu() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("Hotkey Reference", nullptr, &showHotkeyHelp)) markSettingsDirty();
             ImGui::MenuItem("About", nullptr, nullptr);
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
     }
+}
+
+void WindowManager::showHotkeyHelpWindow() {
+    if (!showHotkeyHelp) return;
+    ImGui::SetNextWindowSize(ImVec2(440, 460), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Hotkey Reference", &showHotkeyHelp)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::TextWrapped("Global shortcuts. Hotkeys are suppressed while typing into a "
+                       "text field so search bars stay usable.");
+    ImGui::Separator();
+
+    if (ImGui::BeginTable("hotkeys", 2, ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Key",  ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Action");
+        ImGui::TableHeadersRow();
+
+        auto row = [](const char* key, const char* action) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(key);
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(action);
+        };
+
+        row("F2",       "Toggle Order Book");
+        row("F3",       "Toggle Order Book Depth");
+        row("F4",       "Toggle DOM");
+        row("F5",       "Toggle Trades");
+        row("F6",       "Toggle TPO");
+        row("F7",       "Toggle Footprint");
+        row("F8",       "Toggle VPVR");
+        row("F10",      "Toggle Multi VWAP");
+        row("F11",      "Toggle Risk Panel");
+        row("F12",      "Toggle Settings window");
+        row("Shift+F1", "Toggle Stats overlay");
+        row("?",        "Toggle this Hotkey Reference");
+        row("Ctrl+L",   "Reset docking layout");
+        row("ESC",      "Close topmost popup / window");
+
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button("Close")) showHotkeyHelp = false;
+    ImGui::End();
 }
 
 void WindowManager::showSettingsWindow() {

@@ -35,6 +35,14 @@ public:
     void showSettingsWindow();
     void setShowSettings(bool v) { showSettings = v; }
 
+    // Hotkey help overlay (toggled by `?` key). Shows all shortcuts in a table.
+    void showHotkeyHelpWindow();
+    bool showHotkeyHelp = false;
+
+    // Theme — owned by UIContext but the WindowManager menu triggers changes.
+    // We store the current theme here so we can detect changes and rebuild.
+    long theme = 0;  // 0 = Dark, 1 = Light
+
     bool showSettings = false;
 
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or

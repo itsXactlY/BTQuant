@@ -8,6 +8,14 @@
 
 # ===== Build & output =====
 build.sh
+
+# ImGui fallback ini (single-digit filename) when no IniFilename is set or path
+# is invalid. Shouldn't happen with our wired ~/.config/btquant_vulkan/imgui.ini
+# but guard against future regressions.
+/0
+/btquant_vulkan/0
+/btquant_vulkan/src/0
+/btquant_vulkan/build/0
 dependencies/BTQ_Render_Engine/build_tests/
 dependencies/BTQ_Render_Engine/build_tests/
 

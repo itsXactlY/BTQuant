@@ -23,7 +23,8 @@ UIContext::~UIContext() = default;
 bool UIContext::initialize(void* window, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device,
                             uint32_t graphicsQueueFamily, VkQueue graphicsQueue,
-                            VkRenderPass renderPass, const char* iniFilename) {
+                            VkRenderPass renderPass, const char* iniFilename,
+                            Theme theme) {
     if (!window || !instance || !device || !renderPass) {
         std::fprintf(stderr, "[UIContext] initialize: invalid handles (window=%p, inst=%p, dev=%p, rp=%p)\n",
                      window, (void*)instance, (void*)device, (void*)renderPass);
@@ -52,20 +53,12 @@ bool UIContext::initialize(void* window, VkInstance instance,
         m_iniFilename.clear();
     }
 
-    // 2. Apply BTQuant theme (Linear Dark + Kraken Purple per btquant-ui-design.md).
-    ImGui::StyleColorsDark();
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 8.0f;
-    style.FrameRounding = 4.0f;
-    style.GrabRounding = 4.0f;
-    style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.031f, 0.035f, 0.039f, 1.0f);  // #08090a
-    style.Colors[ImGuiCol_Text]           = ImVec4(0.969f, 0.973f, 0.973f, 1.0f);  // #f7f8f8
-    style.Colors[ImGuiCol_Border]         = ImVec4(1.000f, 1.000f, 1.000f, 0.08f);
-    style.Colors[ImGuiCol_Button]         = ImVec4(0.443f, 0.196f, 0.961f, 1.0f);  // #7132f5
-    style.Colors[ImGuiCol_ButtonHovered]  = ImVec4(0.523f, 0.286f, 1.000f, 1.0f);
-    style.Colors[ImGuiCol_ButtonActive]   = ImVec4(0.392f, 0.157f, 0.886f, 1.0f);
-    style.Colors[ImGuiCol_FrameBg]        = ImVec4(1.000f, 1.000f, 1.000f, 0.02f);
-    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
+    m_theme = theme;
+
+    // 2. Apply BTQuant theme (Dark = Kraken Purple per btquant-ui-design.md,
+    //    Light = off-white + blue accents). applyTheme() sets the base palette
+    //    AND the BTQuant overrides.
+    applyTheme(theme);
 
     // 3. Init GLFW backend.
     if (!ImGui_ImplGlfw_InitForVulkan(static_cast<GLFWwindow*>(window), true)) {
@@ -172,6 +165,57 @@ void UIContext::render(VkCommandBuffer commandBuffer) {
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data && draw_data->CmdListsCount > 0) {
         ImGui_ImplVulkan_RenderDrawData(draw_data, commandBuffer);
+    }
+}
+
+void UIContext::applyTheme(Theme t) {
+    m_theme = t;
+    // Start from ImGui's base palette, then layer BTQuant overrides on top.
+    if (t == Theme::Dark) {
+        ImGui::StyleColorsDark();
+    } else {
+        ImGui::StyleColorsLight();
+    }
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 8.0f;
+    style.FrameRounding  = 4.0f;
+    style.GrabRounding   = 4.0f;
+    style.ScrollbarSize  = 12.0f;
+
+    if (t == Theme::Dark) {
+        // Kraken Purple on near-black — matches btquant-ui-design.md.
+        style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.031f, 0.035f, 0.039f, 1.0f);  // #08090a
+        style.Colors[ImGuiCol_Text]           = ImVec4(0.969f, 0.973f, 0.973f, 1.0f);  // #f7f8f8
+        style.Colors[ImGuiCol_Border]         = ImVec4(1.000f, 1.000f, 1.000f, 0.08f);
+        style.Colors[ImGuiCol_Button]         = ImVec4(0.443f, 0.196f, 0.961f, 1.0f);  // #7132f5
+        style.Colors[ImGuiCol_ButtonHovered]  = ImVec4(0.523f, 0.286f, 1.000f, 1.0f);
+        style.Colors[ImGuiCol_ButtonActive]   = ImVec4(0.392f, 0.157f, 0.886f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]        = ImVec4(1.000f, 1.000f, 1.000f, 0.02f);
+        style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
+        style.Colors[ImGuiCol_TitleBg]        = ImVec4(0.078f, 0.086f, 0.102f, 1.0f);  // #14161a
+        style.Colors[ImGuiCol_TitleBgActive]  = ImVec4(0.078f, 0.086f, 0.102f, 1.0f);
+        style.Colors[ImGuiCol_MenuBarBg]      = ImVec4(0.063f, 0.071f, 0.082f, 1.0f);  // #101215
+        style.Colors[ImGuiCol_Header]         = ImVec4(0.443f, 0.196f, 0.961f, 0.40f);
+        style.Colors[ImGuiCol_HeaderHovered]  = ImVec4(0.523f, 0.286f, 1.000f, 0.60f);
+        style.Colors[ImGuiCol_HeaderActive]   = ImVec4(0.392f, 0.157f, 0.886f, 0.80f);
+    } else {
+        // Off-white background, near-black text, blue accents (matching Linear's
+        // light theme vibe). Lower saturation than ImGui's stock light palette.
+        style.Colors[ImGuiCol_WindowBg]        = ImVec4(0.973f, 0.973f, 0.980f, 1.0f);  // #f8f8fa
+        style.Colors[ImGuiCol_Text]           = ImVec4(0.078f, 0.086f, 0.102f, 1.0f);  // #14161a
+        style.Colors[ImGuiCol_Border]         = ImVec4(0.078f, 0.086f, 0.102f, 0.10f);
+        style.Colors[ImGuiCol_Button]         = ImVec4(0.196f, 0.408f, 0.961f, 1.0f);  // #3268f5
+        style.Colors[ImGuiCol_ButtonHovered]  = ImVec4(0.286f, 0.475f, 1.000f, 1.0f);
+        style.Colors[ImGuiCol_ButtonActive]   = ImVec4(0.157f, 0.353f, 0.886f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]        = ImVec4(0.078f, 0.086f, 0.102f, 0.04f);
+        style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.078f, 0.086f, 0.102f, 0.08f);
+        style.Colors[ImGuiCol_TitleBg]        = ImVec4(0.910f, 0.918f, 0.937f, 1.0f);  // #e8eaef
+        style.Colors[ImGuiCol_TitleBgActive]  = ImVec4(0.831f, 0.847f, 0.886f, 1.0f);
+        style.Colors[ImGuiCol_MenuBarBg]      = ImVec4(0.910f, 0.918f, 0.937f, 1.0f);
+        style.Colors[ImGuiCol_Header]         = ImVec4(0.196f, 0.408f, 0.961f, 0.30f);
+        style.Colors[ImGuiCol_HeaderHovered]  = ImVec4(0.286f, 0.475f, 1.000f, 0.50f);
+        style.Colors[ImGuiCol_HeaderActive]   = ImVec4(0.157f, 0.353f, 0.886f, 0.70f);
     }
 }
 

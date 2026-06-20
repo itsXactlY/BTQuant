@@ -73,6 +73,11 @@ Settings Settings::load(const std::filesystem::path& path) {
         else if (key == "heatmapDensity" && isInt)    s.heatmapDensity = std::stol(val);
         else if (key == "tradeWindowSeconds" && isDouble)
             s.tradeWindowSeconds = std::stod(val);
+        else if (key == "theme") {
+            if (val == "dark" || val == "0") s.theme = 0;
+            else if (val == "light" || val == "1") s.theme = 1;
+            else if (isInt) s.theme = std::stol(val);
+        }
     }
     return s;
 }
@@ -104,6 +109,7 @@ void Settings::save(const std::filesystem::path& path) const {
     // isDouble heuristic (looks for '.') matches on roundtrip.
     out << "tradeWindowSeconds=" << std::fixed << std::setprecision(6)
         << tradeWindowSeconds << "\n";
+    out << "theme=" << (theme == 0 ? "dark" : "light") << "\n";
     out.close();
 
     std::error_code ec;

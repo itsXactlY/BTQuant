@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 int main() {
@@ -214,6 +215,7 @@ int main() {
         s.fpsLimit            = 144;
         s.heatmapDensity      = 256;
         s.tradeWindowSeconds  = 30.0;
+        s.theme               = 1;  // Light
         s.save(tmpFile);
 
         auto loaded = btquant::util::Settings::load(tmpFile);
@@ -222,14 +224,38 @@ int main() {
                   !loaded.showMultiVWAP && loaded.showRiskPanel &&
                   loaded.showDOM && !loaded.showTrades && loaded.showTPO &&
                   loaded.fpsLimit == 144 && loaded.heatmapDensity == 256 &&
-                  loaded.tradeWindowSeconds > 29.9 && loaded.tradeWindowSeconds < 30.1;
+                  loaded.tradeWindowSeconds > 29.9 && loaded.tradeWindowSeconds < 30.1 &&
+                  loaded.theme == 1;
         if (ok) {
-            std::cout << "✓ Roundtrip preserved all 12 fields" << std::endl;
+            std::cout << "✓ Roundtrip preserved all 15 fields (incl. theme=light)" << std::endl;
         } else {
             std::cout << "✗ Roundtrip lost data (ob=" << loaded.showOrderBook
                       << " fps=" << loaded.fpsLimit
                       << " density=" << loaded.heatmapDensity
-                      << " tw=" << loaded.tradeWindowSeconds << ")" << std::endl;
+                      << " tw=" << loaded.tradeWindowSeconds
+                      << " theme=" << loaded.theme << ")" << std::endl;
+        }
+
+        // Verify string-form theme values ("dark"/"light") parse too.
+        {
+            std::ofstream f(tmpFile, std::ios::trunc);
+            f << "theme=light\n";
+            f.close();
+            auto s2 = btquant::util::Settings::load(tmpFile);
+            if (s2.theme == 1) {
+                std::cout << "✓ theme=\"light\" string form parses to 1" << std::endl;
+            } else {
+                std::cout << "✗ theme=\"light\" parsed as " << s2.theme << std::endl;
+            }
+            std::ofstream f2(tmpFile, std::ios::trunc);
+            f2 << "theme=dark\n";
+            f2.close();
+            auto s3 = btquant::util::Settings::load(tmpFile);
+            if (s3.theme == 0) {
+                std::cout << "✓ theme=\"dark\" string form parses to 0" << std::endl;
+            } else {
+                std::cout << "✗ theme=\"dark\" parsed as " << s3.theme << std::endl;
+            }
         }
 
         // Cleanup.

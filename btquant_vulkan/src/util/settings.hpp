@@ -42,6 +42,10 @@ struct Settings {
     long heatmapDensity = 128;   // resolution of GPU heatmap texture
     double tradeWindowSeconds = 60.0;
 
+    // Theme: 0 = Dark (Kraken Purple), 1 = Light (off-white + blue).
+    // String "dark"/"light" also accepted for human readability.
+    long theme = 0;
+
     // Resolve the canonical config path (~/.config/btquant_vulkan/state.ini by
     // default, overridable via BTQUANT_CONFIG env var).
     static std::filesystem::path defaultPath();

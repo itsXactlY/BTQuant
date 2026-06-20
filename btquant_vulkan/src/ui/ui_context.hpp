@@ -26,7 +26,11 @@ public:
     UIContext();
     ~UIContext();
 
-    bool initialize(void* window, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, uint32_t graphicsQueueFamily, VkQueue graphicsQueue, VkRenderPass renderPass, const char* iniFilename = nullptr);
+    // Theme palette selector. Dark = the original Kraken Purple theme,
+    // Light = off-white background with dark text + blue accents.
+    enum class Theme { Dark = 0, Light = 1 };
+
+    bool initialize(void* window, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, uint32_t graphicsQueueFamily, VkQueue graphicsQueue, VkRenderPass renderPass, const char* iniFilename = nullptr, Theme theme = Theme::Dark);
     void shutdown();
     void newFrame();
     void render(VkCommandBuffer commandBuffer);
@@ -34,6 +38,11 @@ public:
     // Persist ImGui's internal state (window positions, dock layout customisation,
     // collapsed flags, sort orders) to disk. Called from main loop on shutdown.
     void saveIniSettings() const;
+
+    // Switch theme at runtime. Re-applies the palette and the BTQuant custom
+    // colour overrides. Cheap (no allocations, just style table writes).
+    void applyTheme(Theme t);
+    Theme theme() const { return m_theme; }
 
     [[nodiscard]] const UIConfig& config() const { return m_config; }
     [[nodiscard]] UIConfig& config() { return m_config; }
@@ -44,6 +53,7 @@ private:
     VkDevice m_imguiDevice = VK_NULL_HANDLE;
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
     std::string m_iniFilename;  // empty → no ini save
+    Theme m_theme = Theme::Dark;
 };
 
 } // namespace btquant::ui

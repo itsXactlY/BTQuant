@@ -71,6 +71,7 @@ set(SOURCES
     src/util/settings.cpp
     src/util/theme_io.cpp
     src/util/hotkey_config.cpp
+    src/util/layout_io.cpp
     src/widgets/position_calculator.cpp
     src/widgets/order_ticket.cpp
     src/widgets/position_panel.cpp
@@ -117,6 +118,7 @@ set(HEADERS
     src/util/settings.hpp
     src/util/theme_io.hpp
     src/util/hotkey_config.hpp
+    src/util/layout_io.hpp
     src/widgets/position_calculator.hpp
     src/widgets/order_ticket.hpp
     src/widgets/position_panel.hpp

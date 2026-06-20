@@ -7,6 +7,7 @@
 #include "../src/data/market_data.hpp"
 #include "../src/util/settings.hpp"
 #include "../src/util/hotkey_config.hpp"
+#include "../src/util/layout_io.hpp"
 #include "../src/ui/stats_overlay.hpp"
 #include "../src/data/mock_producer.hpp"
 #include "../src/widgets/alerts_panel.hpp"
@@ -2387,6 +2388,17 @@ int main() {
     {
         namespace fs = std::filesystem;
 
+        // Clean tmp dirs first — Test 32 writes to fixed paths, and
+        // prior runs may have left appendable journal files behind.
+        for (const char* dir : {"btquant_test_replay_empty",
+                                "btquant_test_replay_long",
+                                "btquant_test_replay_flat",
+                                "btquant_test_replay_mark",
+                                "btquant_test_replay_multi"}) {
+            std::error_code ec;
+            fs::remove_all(fs::temp_directory_path() / dir, ec);
+        }
+
         // 1) Empty journal → empty PositionBook, no crash.
         {
             fs::path tmpJournal = fs::temp_directory_path() /
@@ -2561,6 +2573,160 @@ int main() {
                           << bk.position().symbol
                           << " size=" << bk.position().size << ")" << std::endl;
             }
+        }
+    }
+
+    // Test 33: LayoutSnapshot JSON round-trip via LayoutIO.
+    std::cout << "\nTest 33: Testing layout profile (.btqlayout) round-trip..."
+              << std::endl;
+    {
+        using btquant::util::LayoutSnapshot;
+        using btquant::util::LayoutIO;
+        using btquant::util::Settings;
+        namespace fs = std::filesystem;
+
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_layout";
+        fs::create_directories(tmpDir);
+        fs::path profilePath = tmpDir / "Scalper.btqlayout";
+
+        // 1) Build a non-default snapshot with all four blocks populated.
+        Settings s;
+        s.showOrderBook      = false;
+        s.showOrderBookDepth = true;
+        s.showFootprint      = true;
+        s.showVPVR           = false;
+        s.showMultiVWAP      = true;
+        s.showRiskPanel      = true;
+        s.showDOM            = false;
+        s.showTrades         = true;
+        s.showTPO            = false;
+        s.showSettings       = true;
+        s.showStatsOverlay   = true;
+        s.fpsLimit           = 144;
+        s.heatmapDensity     = 256;
+        s.tradeWindowSeconds = 30.5;
+        s.theme              = 1;
+        s.risk_maxPositionSizeUSD = 500000.0;
+        s.risk_maxLeverage        = 20.0;
+        s.risk_killOnDailyLossUSD = 8000.0;
+        s.risk_equityUSD          = 25000.0;
+        LayoutSnapshot snap = LayoutIO::fromSettings(
+            s, "DockBuilder JSON placeholder text", "Scalper");
+        if (LayoutIO::save(profilePath, snap)) {
+            std::cout << "✓ save wrote " << profilePath << std::endl;
+        } else {
+            std::cout << "✗ save failed" << std::endl;
+        }
+
+        // 2) Round-trip: load → verify all fields.
+        auto loaded = LayoutIO::load(profilePath);
+        if (!loaded.has_value()) {
+            std::cout << "✗ load returned nullopt" << std::endl;
+        } else if (
+            loaded->settings.showOrderBook      == false &&
+            loaded->settings.showOrderBookDepth == true  &&
+            loaded->settings.showFootprint      == true  &&
+            loaded->settings.showVPVR           == false &&
+            loaded->settings.showMultiVWAP      == true  &&
+            loaded->settings.showRiskPanel      == true  &&
+            loaded->settings.showDOM            == false &&
+            loaded->settings.showTrades         == true  &&
+            loaded->settings.showTPO            == false &&
+            loaded->settings.showSettings       == true  &&
+            loaded->settings.showStatsOverlay   == true  &&
+            loaded->settings.fpsLimit           == 144   &&
+            loaded->settings.heatmapDensity     == 256   &&
+            loaded->settings.tradeWindowSeconds == 30.5  &&
+            loaded->settings.theme              == 1     &&
+            loaded->settings.risk_maxPositionSizeUSD == 500000.0 &&
+            loaded->settings.risk_maxLeverage        == 20.0    &&
+            loaded->settings.risk_killOnDailyLossUSD == 8000.0  &&
+            loaded->settings.risk_equityUSD          == 25000.0 &&
+            loaded->dockLayout == "DockBuilder JSON placeholder text" &&
+            loaded->version    == LayoutSnapshot::kLayoutVersion &&
+            loaded->name       == "Scalper") {
+            std::cout << "✓ all 22 fields + dockLayout + version round-trip"
+                      << std::endl;
+        } else {
+            std::cout << "✗ round-trip lost values" << std::endl;
+        }
+
+        // 3) Missing file → nullopt.
+        auto missing = LayoutIO::load(tmpDir / "Nope.btqlayout");
+        if (!missing.has_value()) {
+            std::cout << "✓ missing file → nullopt" << std::endl;
+        } else {
+            std::cout << "✗ missing file didn't nullopt" << std::endl;
+        }
+
+        // 4) Future version rejected explicitly.
+        {
+            std::ofstream bad(tmpDir / "Future.btqlayout");
+            bad << "{\n  \"version\": 999,\n  \"widgets\": {}\n}\n";
+        }
+        auto future = LayoutIO::load(tmpDir / "Future.btqlayout");
+        if (!future.has_value()) {
+            std::cout << "✓ future version rejected" << std::endl;
+        } else {
+            std::cout << "✗ future version accepted (v="
+                      << future->version << ")" << std::endl;
+        }
+
+        // 5) Malformed JSON → nullopt (no crash).
+        {
+            std::ofstream bad(tmpDir / "Bad.btqlayout");
+            bad << "{ this is not json";
+        }
+        auto malformed = LayoutIO::load(tmpDir / "Bad.btqlayout");
+        if (!malformed.has_value()) {
+            std::cout << "✓ malformed JSON → nullopt" << std::endl;
+        } else {
+            std::cout << "✗ malformed JSON accepted" << std::endl;
+        }
+
+        // 6) Unknown keys ignored (forward-compat).
+        {
+            std::ofstream good(tmpDir / "ForwardCompat.btqlayout");
+            good << "{\n"
+                    "  \"version\": 1,\n"
+                    "  \"widgets\": { \"showOrderBook\": true },\n"
+                    "  \"future_field_we_dont_know\": \"ignored\",\n"
+                    "  \"general\": { \"fpsLimit\": 90 }\n"
+                    "}\n";
+        }
+        auto fwd = LayoutIO::load(tmpDir / "ForwardCompat.btqlayout");
+        if (fwd.has_value() &&
+            fwd->settings.showOrderBook == true &&
+            fwd->settings.fpsLimit == 90) {
+            std::cout << "✓ unknown keys ignored, known keys loaded"
+                      << std::endl;
+        } else {
+            std::cout << "✗ forward-compat parse failed" << std::endl;
+        }
+
+        // 7) layoutPath sanitizes dangerous names.
+        auto evil = LayoutIO::layoutPath("../../etc/passwd");
+        std::string s1 = evil.string();
+        bool containsTraversal = s1.find("..") != std::string::npos ||
+                                s1.find("/etc/passwd") != std::string::npos;
+        if (!containsTraversal) {
+            std::cout << "✓ layoutPath sanitizes name → " << s1 << std::endl;
+        } else {
+            std::cout << "✗ layoutPath didn't sanitize → " << s1 << std::endl;
+        }
+
+        // 8) list() finds profiles in the dir.
+        auto found = LayoutIO::list(tmpDir);
+        // We wrote Scalper.btqlayout + Future + Bad + ForwardCompat = 4.
+        size_t btqlayoutCount = 0;
+        for (const auto& p : found) {
+            if (p.extension() == ".btqlayout") ++btqlayoutCount;
+        }
+        if (btqlayoutCount >= 1) {
+            std::cout << "✓ list() found " << btqlayoutCount
+                      << " .btqlayout file(s)" << std::endl;
+        } else {
+            std::cout << "✗ list() missed profiles" << std::endl;
         }
     }
 

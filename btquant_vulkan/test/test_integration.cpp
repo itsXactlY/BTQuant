@@ -21168,5 +21168,63 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 175: journalSummaryJson() (Sprint #189).
+    //
+    // JSON summary export. Tests:
+    //   - 3 fills → JSON contains "totalFills": 3.
+    std::cout << "\nTest 175: journal summary JSON..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test175_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](double realized, uint64_t ts) {
+            JournalFill f;
+            f.symbol = "BTC"; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 fills ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "c.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill(10.0, t0 + i));
+            }
+            std::string json = j.journalSummaryJson();
+            if (json.find("\"totalFills\": 3") != std::string::npos &&
+                json.find("\"totalRealized\": 30") !=
+                    std::string::npos &&
+                json.find("\"maxDD\"") != std::string::npos) {
+                std::cout << "✓ JSON contains "
+                          << "totalFills=3, totalRealized=30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: "
+                          << json.substr(0, 200)
+                          << "..." << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " journal-json tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

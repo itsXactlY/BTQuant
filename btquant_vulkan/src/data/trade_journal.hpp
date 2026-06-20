@@ -1972,6 +1972,12 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Trade journal JSON summary (Sprint #189). Returns a
+    // human-readable JSON string with all key stats.
+    // Useful for export, debugging, or programmatic
+    // inspection without parsing the JSONL file.
+    std::string journalSummaryJson() const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

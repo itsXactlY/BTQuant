@@ -7946,4 +7946,36 @@ TradeJournal::tradeCountSummaryByTag(
         });
 }
 
+std::string TradeJournal::journalSummaryJson() const {
+    // Sprint #189. Manual JSON serialization (avoid
+    // pulling in a JSON library). Format:
+    //   {
+    //     "totalFills": N,
+    //     "totalRealized": X,
+    //     "sharpe": S,
+    //     "maxDD": D,
+    //     ...
+    //   }
+    auto m = journalMetadata();
+    auto r = riskScore();
+    auto c = tradeCountSummary();
+    std::ostringstream os;
+    os << "{\n";
+    os << "  \"totalFills\": " << m.totalFills << ",\n";
+    os << "  \"totalSymbols\": " << m.totalSymbols << ",\n";
+    os << "  \"totalTags\": " << m.totalTags << ",\n";
+    os << "  \"activeDays\": " << m.activeDays << ",\n";
+    os << "  \"spanDays\": " << m.spanDays << ",\n";
+    os << "  \"totalRealized\": " << m.totalRealized << ",\n";
+    os << "  \"maxDD\": " << m.maxDD << ",\n";
+    os << "  \"sharpe\": " << m.sharpe << ",\n";
+    os << "  \"riskScore\": " << r.overall << ",\n";
+    os << "  \"lastDayFills\": " << c.lastDayFills << ",\n";
+    os << "  \"lastWeekFills\": " << c.lastWeekFills << ",\n";
+    os << "  \"lastMonthFills\": " << c.lastMonthFills << ",\n";
+    os << "  \"lastFillAgeHours\": " << c.lastFillAgeHours << "\n";
+    os << "}\n";
+    return os.str();
+}
+
 } // namespace btquant

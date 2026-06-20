@@ -2014,6 +2014,149 @@ uint64_t TradeJournal::avgTimeBetweenTrades_usByTag(
     return total / (sub.size() - 1);
 }
 
+double TradeJournal::kellyFraction(
+    size_t wins, size_t losses,
+    double avgWinner, double avgLoser) {
+    // Kelly % = W - (1 - W) / R
+    //   where W = wins / (wins + losses)
+    //         R = avg winner / |avg loser|
+    //
+    // Return 0 if either side has 0 round-trips (can't
+    // compute payoff without both sides) or if avgLoser is
+    // near zero (degenerate).
+    constexpr double kEps = 1e-9;
+    size_t total = wins + losses;
+    if (total == 0) return 0.0;
+    if (wins == 0 || losses == 0) return 0.0;
+    if (std::fabs(avgLoser) < kEps) return 0.0;
+    double W = static_cast<double>(wins) /
+               static_cast<double>(total);
+    double R = avgWinner / std::fabs(avgLoser);
+    double K = W - (1.0 - W) / R;
+    // Clamp to [-1, 1] — anything outside is degenerate.
+    if (K < -1.0) K = -1.0;
+    if (K >  1.0) K =  1.0;
+    return K;
+}
+
+double TradeJournal::kellyFraction() const {
+    auto stats = perSymbolStats();
+    if (stats.empty()) return 0.0;
+    // Journal-wide W = sum(wins) / sum(rt), not weighted by
+    // symbol. Recompute from raw fills.
+    auto fills = loadAll();
+    size_t wins = 0, losses = 0;
+    double sumWin = 0.0, sumLoss = 0.0;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) < 1e-9) continue;
+        if (f.realizedDelta > 0) {
+            ++wins;
+            sumWin += f.realizedDelta;
+        } else {
+            ++losses;
+            sumLoss += f.realizedDelta;
+        }
+    }
+    double avgW = wins > 0 ? sumWin / wins : 0.0;
+    double avgL = losses > 0 ? sumLoss / losses : 0.0;
+    return kellyFraction(wins, losses, avgW, avgL);
+}
+
+double TradeJournal::perSymbolKellyFraction(
+    const std::string& symbol) const {
+    auto fills = loadAll();
+    size_t wins = 0, losses = 0;
+    double sumWin = 0.0, sumLoss = 0.0;
+    for (const auto& f : fills) {
+        if (f.symbol != symbol) continue;
+        if (std::fabs(f.realizedDelta) < 1e-9) continue;
+        if (f.realizedDelta > 0) {
+            ++wins;
+            sumWin += f.realizedDelta;
+        } else {
+            ++losses;
+            sumLoss += f.realizedDelta;
+        }
+    }
+    double avgW = wins > 0 ? sumWin / wins : 0.0;
+    double avgL = losses > 0 ? sumLoss / losses : 0.0;
+    return kellyFraction(wins, losses, avgW, avgL);
+}
+
+double TradeJournal::perTagKellyFraction(
+    const std::string& tag,
+    bool includeUntagged) const {
+    auto fills = loadAll();
+    size_t wins = 0, losses = 0;
+    double sumWin = 0.0, sumLoss = 0.0;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (!f.tag.empty()) continue;
+        } else {
+            if (includeUntagged && f.tag.empty()) continue;
+            if (f.tag != tag) continue;
+        }
+        if (std::fabs(f.realizedDelta) < 1e-9) continue;
+        if (f.realizedDelta > 0) {
+            ++wins;
+            sumWin += f.realizedDelta;
+        } else {
+            ++losses;
+            sumLoss += f.realizedDelta;
+        }
+    }
+    double avgW = wins > 0 ? sumWin / wins : 0.0;
+    double avgL = losses > 0 ? sumLoss / losses : 0.0;
+    return kellyFraction(wins, losses, avgW, avgL);
+}
+
+double TradeJournal::riskOfRuin(
+    size_t wins, size_t losses,
+    double ruinFraction) {
+    // PoR = ((1-W)/W)^(capital_units)
+    //   W = wins / (wins+losses)
+    //   capital_units = ruinFraction (in units of "1 loss")
+    //
+    // (Simpler than the full gambler's ruin with payoff
+    // ratio, but a useful first-order estimate.)
+    constexpr double kEps = 1e-9;
+    size_t total = wins + losses;
+    if (total == 0) return 1.0;   // no data → assume worst
+    if (losses == 0) return 0.0;  // never loses → no ruin
+    if (wins == 0) return 1.0;    // never wins → certain ruin
+    double W = static_cast<double>(wins) /
+               static_cast<double>(total);
+    double q_over_p = (1.0 - W) / W;
+    // If W < 0.5, q_over_p > 1 → PoR explodes for any
+    // positive capital_units. Clamp to 1.0.
+    if (q_over_p <= 1.0 + kEps) {
+        // Long-run positive edge: PoR = (q/p)^(units).
+        // units = ruinFraction / unit_loss (we use 1 as the
+        // unit loss; ruinFraction is the dollar-amount fraction
+        // of capital at risk).
+        double units = ruinFraction;  // simplified
+        double por = std::pow(q_over_p, units);
+        if (por < 0.0) por = 0.0;
+        if (por > 1.0) por = 1.0;
+        return por;
+    } else {
+        // Negative or zero edge → ruin is at least as likely
+        // as no-ruin. Conservative: report 1.0.
+        return 1.0;
+    }
+}
+
+double TradeJournal::riskOfRuin(double ruinFraction) const {
+    auto fills = loadAll();
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) < 1e-9) continue;
+        if (f.realizedDelta > 0) ++wins;
+        else ++losses;
+    }
+    return riskOfRuin(wins, losses, ruinFraction);
+}
+
 namespace {
 // Sprint #115 — shared monthly bucket builder. The three
 // monthlyReturns*() methods differ only in the filter predicate.

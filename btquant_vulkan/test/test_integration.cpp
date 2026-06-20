@@ -14480,5 +14480,228 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 109: kellyFraction() / perSymbolKellyFraction() /
+    //   perTagKellyFraction() / riskOfRuin()
+    //   (Sprint #121).
+    //
+    // Position-sizing diagnostics. Tests:
+    //   - Pure math: 60% wins, R=2 → K = 0.6 - 0.4/2 = 0.4.
+    //   - Pure math: 50% wins, R=1 → K = 0.5 - 0.5 = 0.
+    //   - Pure math: 40% wins, R=2 → K = 0.4 - 0.6/2 = 0.1.
+    //   - Pure math: no wins → 0; no losses → 0.
+    //   - Per-symbol: BTC with 2W 1L → correct K.
+    //   - Risk of ruin: pure math + per-journal.
+    std::cout << "\nTest 109: Kelly + Risk of Ruin..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        // ---- Pure math: 60% W, R=2 → K=0.4 ----
+        {
+            // 3 wins @ avg 200, 2 losses @ avg 100.
+            // W=0.6, R=200/100=2.
+            // K = 0.6 - 0.4/2 = 0.6 - 0.2 = 0.4.
+            double k = TradeJournal::kellyFraction(
+                3, 2, 200.0, -100.0);
+            if (std::fabs(k - 0.4) < 1e-9) {
+                std::cout << "✓ Kelly 60%/R=2: K=0.4"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ K 60/2 wrong: " << k
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 50% W, R=1 → K=0 ----
+        {
+            double k = TradeJournal::kellyFraction(
+                1, 1, 100.0, -100.0);
+            if (std::fabs(k) < 1e-9) {
+                std::cout << "✓ Kelly 50%/R=1: K=0 "
+                          << "(no edge)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ K 50/1 wrong: " << k
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 40% W, R=2 → K=0.1 ----
+        {
+            double k = TradeJournal::kellyFraction(
+                2, 3, 200.0, -100.0);
+            // W=0.4, R=2.
+            // K = 0.4 - 0.6/2 = 0.4 - 0.3 = 0.1.
+            if (std::fabs(k - 0.1) < 1e-9) {
+                std::cout << "✓ Kelly 40%/R=2: K=0.1"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ K 40/2 wrong: " << k
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 100% W → 0 (no losses to compute payoff) ----
+        {
+            double k = TradeJournal::kellyFraction(
+                5, 0, 100.0, -100.0);
+            if (k == 0.0) {
+                std::cout << "✓ no losses: K=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ no-loss wrong: " << k
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 100% L → 0 ----
+        {
+            double k = TradeJournal::kellyFraction(
+                0, 5, 100.0, -100.0);
+            if (k == 0.0) {
+                std::cout << "✓ no wins: K=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ no-win wrong: " << k
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol ----
+        // BTC: +100, +200, -150 → 2W 1L. avgW=150, avgL=-150.
+        //   W=2/3=0.667, R=150/150=1.
+        //   K = 0.667 - 0.333/1 = 0.333.
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test109_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        {
+            TradeJournal j((tmpDir / "k.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  200.0, "",
+                             t0 + 1ULL * 3600 * 1000000ULL));
+            j.append(mkFill("BTC", -150.0, "",
+                             t0 + 2ULL * 3600 * 1000000ULL));
+            // ETH: -100 only (no edge — 0).
+            j.append(mkFill("ETH", -100.0, "",
+                             t0 + 3ULL * 3600 * 1000000ULL));
+            double btcK = j.perSymbolKellyFraction("BTC");
+            double ethK = j.perSymbolKellyFraction("ETH");
+            double jK   = j.kellyFraction();
+            // Journal: 2W (+300) + 1L (-150) + 1L (-100).
+            //   2 wins, 2 losses. W=0.5, R=150/125=1.2.
+            //   K = 0.5 - 0.5/1.2 = 0.5 - 0.4167 = 0.0833.
+            if (std::fabs(btcK - 1.0/3.0) < 1e-9 &&
+                ethK == 0.0 &&
+                std::fabs(jK - (0.5 - 0.5/1.2)) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC K=0.333, "
+                          << "ETH K=0, journal K=0.0833"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: btc=" << btcK
+                          << " eth=" << ethK << " j=" << jK
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Risk of ruin: pure math ----
+        // 60% wins, ruinFraction=0.5:
+        //   q/p = 0.4/0.6 = 0.667. PoR = 0.667^0.5 ≈ 0.816.
+        {
+            double por = TradeJournal::riskOfRuin(60, 40, 0.5);
+            // pow(2/3, 0.5) = sqrt(2/3) ≈ 0.8165
+            double expected = std::sqrt(2.0/3.0);
+            if (std::fabs(por - expected) < 1e-3) {
+                std::cout << "✓ PoR 60/40 r=0.5: "
+                          << "≈0.8165"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ PoR wrong: " << por
+                          << " expected=" << expected
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Risk of ruin: 100% losses → 1.0 (certain) ----
+        {
+            double por = TradeJournal::riskOfRuin(0, 10, 0.5);
+            if (por == 1.0) {
+                std::cout << "✓ PoR all-lose: 1.0 (certain)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ PoR all-lose wrong: " << por
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Risk of ruin: 100% wins → 0.0 (impossible) ----
+        {
+            double por = TradeJournal::riskOfRuin(10, 0, 0.5);
+            if (por == 0.0) {
+                std::cout << "✓ PoR all-win: 0.0 (impossible)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ PoR all-win wrong: " << por
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Risk of ruin: W<0.5 → 1.0 (no edge) ----
+        {
+            double por = TradeJournal::riskOfRuin(40, 60, 0.5);
+            if (por == 1.0) {
+                std::cout << "✓ PoR W<0.5: 1.0 (no edge)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ PoR W<0.5 wrong: " << por
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " kelly/risk tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

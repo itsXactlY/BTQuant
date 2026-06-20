@@ -764,6 +764,51 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Kelly criterion (Sprint #121). Optimal fraction of
+    // capital to risk per trade given the trader's edge.
+    //   K = W - (1 - W) / R
+    // where W = win rate and R = payoff ratio
+    // (avg winner / avg loser).
+    //
+    // K > 0 means positive edge; K < 0 means no edge.
+    // Most traders use "half-Kelly" (K/2) for safety.
+    //
+    // Returns 0 when there are no winners or no losers
+    // (can't compute without both sides of the payoff).
+    //
+    // Per-symbol / per-tag variants compute W and R from that
+    // segment's fills only.
+    static double kellyFraction(
+        size_t wins, size_t losses,
+        double avgWinner, double avgLoser);
+    double kellyFraction() const;
+    double perSymbolKellyFraction(const std::string& symbol) const;
+    double perTagKellyFraction(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
+    // Risk of ruin (Sprint #121). Probability of losing
+    // `ruinFraction` of capital (default 50%) over N trades
+    // given the trader's W/L stats. Uses the gambler's-ruin
+    // approximation:
+    //   q = 1 - W (loss probability per trade)
+    //   p = W     (win probability per trade)
+    //   R = payoff ratio (avg winner / avg loser)
+    //   b = R
+    //   PoR = ((q/p)^(capital_units)) when p != q
+    //   capital_units = ruinFraction / (1 + b) * unit_loss
+    //
+    // For simplicity we use the canonical form:
+    //   PoR = ((1-W)/W)^(capital_units)
+    // where capital_units = ruinFraction / avg_loss_relative.
+    //
+    // Returns 0..1; returns 1.0 when ruin is certain (no
+    // edge); returns 0.0 when no ruin possible (always wins).
+    static double riskOfRuin(
+        size_t wins, size_t losses,
+        double ruinFraction = 0.5);
+    double riskOfRuin(double ruinFraction = 0.5) const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

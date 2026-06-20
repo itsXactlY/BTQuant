@@ -315,6 +315,93 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- Risk-Adjusted mini-section (Sprint #85) ----
+    //
+    // Sharpe ratio on the daily series, sourced from
+    // TradeJournal::sharpe() (#84). Three columns: mean daily
+    // return, daily Sharpe, annualized Sharpe. The annualized
+    // column is the "headline" — comparable across strategies of
+    // different frequencies.
+    //
+    // Color rules:
+    //   - Mean daily: green when > 0, red when < 0 (matches the
+    //     row convention; dim at 0).
+    //   - Daily / annualized Sharpe: green when >= 1.0, red when
+    //     < 0, dim otherwise. Threshold at 1.0 because the
+    //     classic interpretation is "Sharpe > 1 = good, > 2 = very
+    //     good, > 3 = excellent". A negative Sharpe is a losing
+    //     strategy — colored red so it stands out.
+    auto sh = m_journal->sharpe();
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Risk-Adjusted",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("JournalStatsSharpe",
+                              3,
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Mean / day");
+            ImGui::TableSetupColumn("Daily Sharpe");
+            ImGui::TableSetupColumn("Annualized");
+            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+
+            // Mean daily return: green/red/dim.
+            ImGui::TableSetColumnIndex(0);
+            colorizeRow(sh.meanDailyReturn);
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "%+.2f", sh.meanDailyReturn);
+            ImGui::TextUnformatted(buf);
+            ImGui::SameLine();
+            ImGui::TextDisabled("(N=%zu)", sh.sampleSize);
+            ImGui::PopStyleColor();
+
+            // Daily Sharpe: green >= 1, red < 0, dim otherwise.
+            ImGui::TableSetColumnIndex(1);
+            if (sh.dailySharpe >= 1.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.dailySharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else if (sh.dailySharpe < 0.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.dailySharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.dailySharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            }
+
+            // Annualized Sharpe: same threshold rules as daily.
+            ImGui::TableSetColumnIndex(2);
+            if (sh.annualizedSharpe >= 1.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.annualizedSharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else if (sh.annualizedSharpe < 0.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.annualizedSharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                std::snprintf(buf, sizeof(buf), "%.2f", sh.annualizedSharpe);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            }
+            ImGui::EndTable();
+        }
+    }
+
     ImGui::Separator();
 
     // ---- By-symbol table (Sprint #72) ----

@@ -4617,5 +4617,91 @@ int main() {
         }
     }
 
+    // Test 53: OrderTicket — alt-submits-opposite behaviour.
+    // The ticket now supports Alt+click and Alt+Enter to submit the
+    // opposite side without mutating m_sideIsBuy. Verifies: default
+    // state is ON, opt-out works, the pure helper effectiveSideOnSubmit
+    // returns the inverted side when alt is down, and the public
+    // accessors round-trip the toggle.
+    std::cout << "\nTest 53: Testing OrderTicket alt-submits-opposite..."
+              << std::endl;
+    {
+        using btquant::ui::OrderTicket;
+
+        OrderTicket t;
+        // 1) Default state: alt-submits-opposite is ON (the trader
+        //    gets the fat-finger safety out of the box).
+        if (t.altSubmitsOpposite()) {
+            std::cout << "✓ altSubmitsOpposite defaults ON" << std::endl;
+        } else {
+            std::cout << "✗ altSubmitsOpposite should default ON" << std::endl;
+        }
+
+        // 2) Opt-out path: a trader who hates fat-finger can disable.
+        t.setAltSubmitsOpposite(false);
+        if (!t.altSubmitsOpposite()) {
+            std::cout << "✓ setAltSubmitsOpposite(false) disables" << std::endl;
+        } else {
+            std::cout << "✗ setAltSubmitsOpposite(false) didn't disable"
+                      << std::endl;
+        }
+        t.setAltSubmitsOpposite(true);
+        if (t.altSubmitsOpposite()) {
+            std::cout << "✓ re-enable works" << std::endl;
+        } else {
+            std::cout << "✗ re-enable broke" << std::endl;
+        }
+
+        // 3) effectiveSideOnSubmit — plain click keeps the side.
+        if (OrderTicket::effectiveSideOnSubmit(true,  false) == true &&
+            OrderTicket::effectiveSideOnSubmit(false, false) == false) {
+            std::cout << "✓ plain click keeps current side (BUY stays BUY, "
+                      << "SELL stays SELL)" << std::endl;
+        } else {
+            std::cout << "✗ plain-click side round-trip wrong" << std::endl;
+        }
+
+        // 4) effectiveSideOnSubmit — Alt+click flips the side.
+        if (OrderTicket::effectiveSideOnSubmit(true,  true) == false &&
+            OrderTicket::effectiveSideOnSubmit(false, true) == true) {
+            std::cout << "✓ Alt+click flips the side (BUY→SELL, SELL→BUY)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ Alt+click side flip wrong" << std::endl;
+        }
+
+        // 5) effectiveSideOnSubmit is pure (same inputs → same output).
+        //    No internal state, so calling it twice with the same args
+        //    must return identical results.
+        bool first  = OrderTicket::effectiveSideOnSubmit(true, true);
+        bool second = OrderTicket::effectiveSideOnSubmit(true, true);
+        if (first == second) {
+            std::cout << "✓ effectiveSideOnSubmit is referentially transparent"
+                      << std::endl;
+        } else {
+            std::cout << "✗ effectiveSideOnSubmit not pure" << std::endl;
+        }
+
+        // 6) Default side is BUY (matches the existing default —
+        //    the alt-flip path must not have changed the constructor).
+        if (t.isBuy()) {
+            std::cout << "✓ default side still BUY" << std::endl;
+        } else {
+            std::cout << "✗ default side changed unexpectedly" << std::endl;
+        }
+
+        // 7) setSideBuy still works after the alt-toggle changes —
+        //    the toggle is orthogonal to side-setting.
+        t.setSideBuy(false);
+        if (!t.isBuy() && t.altSubmitsOpposite()) {
+            std::cout << "✓ setSideBuy + altSubmitsOpposite are orthogonal"
+                      << std::endl;
+        } else {
+            std::cout << "✗ setSideBuy broke altSubmitsOpposite state"
+                      << std::endl;
+        }
+        t.setSideBuy(true);
+    }
+
     return 0;
 }

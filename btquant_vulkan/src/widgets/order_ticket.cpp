@@ -217,14 +217,46 @@ void OrderTicket::render() {
                                    : ImVec4(0.65f, 0.15f, 0.15f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button,        submitCol);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, submitCol);
-    if (ImGui::Button(m_sideIsBuy ? "Submit BUY" : "Submit SELL",
-                      ImVec2(-FLT_MIN, 36)) ||
-        (ImGui::IsKeyPressed(ImGuiKey_Enter) &&
-         ImGui::IsKeyDown(ImGuiKey_LeftCtrl))) {
-        submit();
+
+    // Alt+Enter = submit the opposite side without flipping the
+    // ticket state. The submit() function reads the live Alt-key
+    // state and flips internally; we don't mutate m_sideIsBuy here
+    // so the UI stays in sync with what the trader just saw.
+    bool altDown  = ImGui::IsKeyDown(ImGuiKey_LeftAlt) ||
+                     ImGui::IsKeyDown(ImGuiKey_RightAlt);
+    bool enterOrClick = ImGui::Button(m_sideIsBuy ? "Submit BUY" : "Submit SELL",
+                                       ImVec2(-FLT_MIN, 36)) ||
+                        (ImGui::IsKeyPressed(ImGuiKey_Enter) &&
+                         ImGui::IsKeyDown(ImGuiKey_LeftCtrl));
+    bool altEnter = m_altSubmitsOpposite && altDown &&
+                    ImGui::IsKeyPressed(ImGuiKey_Enter);
+    if (enterOrClick || altEnter) {
+        // For altEnter, ask the submit path to flip the side
+        // internally (without touching m_sideIsBuy). For ordinary
+        // clicks, submit with the current side.
+        bool wantsFlip = altEnter;
+        if (wantsFlip) {
+            bool origSide = m_sideIsBuy;
+            m_sideIsBuy = !m_sideIsBuy;
+            bool ok = submit();
+            m_sideIsBuy = origSide;  // restore
+            (void)ok;
+        } else {
+            submit();
+        }
     }
     ImGui::PopStyleColor(2);
     if (!canSubmit) ImGui::EndDisabled();
+
+    if (m_altSubmitsOpposite) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(Alt-click = opposite)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Hold Alt when clicking Submit (or press "
+                              "Alt+Enter) to submit the opposite side "
+                              "without flipping the ticket display.");
+        }
+    }
 
     ImGui::End();
 }

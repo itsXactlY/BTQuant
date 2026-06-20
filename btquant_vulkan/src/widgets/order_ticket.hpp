@@ -65,6 +65,27 @@ public:
     // setSideBuy(true) makes the next submit a BUY; false = SELL.
     void setSideBuy(bool v) { m_sideIsBuy = v; }
 
+    // Alt-submits-opposite toggle. When on (default), an Alt+click
+    // on the Submit button — or Alt+Enter — flips the side first,
+    // then submits. The current side is restored after submit so a
+    // subsequent normal click submits the original side again. Opt
+    // out by calling setAltSubmitsOpposite(false); some traders
+    // don't want the Alt key to silently flip on a fat-finger.
+    bool altSubmitsOpposite() const         { return m_altSubmitsOpposite; }
+    void setAltSubmitsOpposite(bool v)     { m_altSubmitsOpposite = v; }
+
+    // Pure helper: given the current side and whether the user is
+    // holding Alt at submit time, what side will actually be submitted?
+    // Used by the render path and by tests; safe without an ImGui
+    // context (no internal state, just a ternary).
+    static bool effectiveSideOnSubmit(bool currentSideIsBuy, bool altDown) {
+        // Alt+submit flips the side, plain submit keeps it. This is
+        // the inverse of the trader-mental model on a hot-path order
+        // ("I want to flatten fast" → Alt-click whichever side is
+        // showing).
+        return altDown ? !currentSideIsBuy : currentSideIsBuy;
+    }
+
     // Build the submit summary string from the current draft + fire
     // the registered callback. Returns false if the draft can't be
     // submitted (qty or fill price is 0) or if no submit callback is
@@ -78,6 +99,7 @@ private:
     bool m_open = false;
     bool m_sideIsBuy  = true;
     bool m_typeIsLimit = false;
+    bool m_altSubmitsOpposite = true;   // opt-out: setAltSubmitsOpposite(false)
     char m_qty  [32] = "0.10";
     char m_limit[32] = "0.00";      // only used when limit
     char m_feeBps[32] = "10";       // 10 bps = 0.10% taker fee

@@ -877,6 +877,36 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Rolling profit factor (Sprint #124). For each
+    // round-trip at index i ≥ N-1, compute PF over the
+    // window [i-N+1, i] (the most recent N trades
+    // including this one). One point per eligible fill,
+    // sorted by timestamp ASC.
+    //
+    // Each point: (timestamp_us, profitFactor, count,
+    // grossWin, grossLoss, winRate). profitFactor is the
+    // gross-win / |gross-loss| ratio over the window.
+    // Returns +inf when grossLoss == 0 (no losing trade in
+    // window — strong edge); returns 0 when grossWin == 0
+    // (all losses in window).
+    struct RollingPFPoint {
+        uint64_t timestamp_us = 0;
+        double   profitFactor = 0.0;
+        size_t   count        = 0;
+        double   grossWin     = 0.0;
+        double   grossLoss    = 0.0;   // negative
+        double   winRate      = 0.0;
+    };
+    std::vector<RollingPFPoint> rollingProfitFactor(
+        size_t window = 20) const;
+    std::vector<RollingPFPoint> rollingProfitFactorBySymbol(
+        const std::string& symbol,
+        size_t window = 20) const;
+    std::vector<RollingPFPoint> rollingProfitFactorByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 20) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -15098,5 +15098,227 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 112: rollingProfitFactor() /
+    //   rollingProfitFactorBySymbol() /
+    //   rollingProfitFactorByTag() (Sprint #124).
+    //
+    // Rolling PF over a sliding window. Tests:
+    //   - Window > fills: empty vector.
+    //   - Exactly N fills (window=N): 1 point with all
+    //     round-trips included.
+    //   - 5 fills, window=3: 3 points (windows ending at
+    //     indices 2, 3, 4).
+    //   - All wins in window → +inf.
+    //   - All losses in window → 0.
+    //   - Per-symbol: only that symbol's fills.
+    std::cout << "\nTest 112: rolling profit factor..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test112_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Window > fills: empty ----
+        {
+            TradeJournal j((tmpDir / "few.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 100.0, "",
+                                1774000000000000ULL + i));
+            }
+            auto v = j.rollingProfitFactor(20);
+            if (v.empty()) {
+                std::cout << "✓ window>fills: empty"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ window>fills wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Exactly N fills, window=N: 1 point ----
+        {
+            TradeJournal j((tmpDir / "exact.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC", -50.0, "",
+                             t0 + 1*3600ULL*1000000ULL));
+            j.append(mkFill("BTC",  75.0, "",
+                             t0 + 2*3600ULL*1000000ULL));
+            auto v = j.rollingProfitFactor(3);
+            if (v.size() == 1 &&
+                std::fabs(v[0].profitFactor - 175.0/50.0) < 1e-9) {
+                std::cout << "✓ window=N=3: 1 point PF=3.5 "
+                          << "(175/50)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ window=N wrong: n="
+                          << v.size()
+                          << " pf=" << (v.empty() ? 0.0
+                                          : v[0].profitFactor)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills, window=3: 3 points ----
+        // Sequence: +100, -50, +75, +30, -20.
+        // Window ending at i=2 (W W L): grossW=175,
+        //   grossL=50, PF=3.5.
+        // Window ending at i=3 (W L W): grossW=175,
+        //   grossL=50, PF=3.5.
+        //   Wait: rt sorted by ts, so:
+        //     rt[0]=+100, rt[1]=-50, rt[2]=+75, rt[3]=+30,
+        //     rt[4]=-20.
+        //   Window [0..2] = +100,-50,+75 → w=175, l=50.
+        //   PF=3.5.
+        //   Window [1..3] = -50,+75,+30 → w=105, l=50.
+        //   PF=2.1.
+        //   Window [2..4] = +75,+30,-20 → w=105, l=20.
+        //   PF=5.25.
+        {
+            TradeJournal j((tmpDir / "roll.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",   75.0, "",
+                             t0 + 2*hour));
+            j.append(mkFill("BTC",   30.0, "",
+                             t0 + 3*hour));
+            j.append(mkFill("BTC",  -20.0, "",
+                             t0 + 4*hour));
+            auto v = j.rollingProfitFactor(3);
+            if (v.size() == 3 &&
+                std::fabs(v[0].profitFactor - 175.0/50.0) < 1e-9 &&
+                std::fabs(v[1].profitFactor - 105.0/50.0) < 1e-9 &&
+                std::fabs(v[2].profitFactor - 105.0/20.0) < 1e-9) {
+                std::cout << "✓ 5 fills window=3: 3 points "
+                          << "PF 3.5, 2.1, 5.25"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rolling wrong: n=" << v.size()
+                          << " pfs="
+                          << (v.size() > 0 ? v[0].profitFactor : 0.0)
+                          << ","
+                          << (v.size() > 1 ? v[1].profitFactor : 0.0)
+                          << ","
+                          << (v.size() > 2 ? v[2].profitFactor : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All wins in window → +inf ----
+        {
+            TradeJournal j((tmpDir / "allw.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 100.0 + i,
+                                "", t0 + i));
+            }
+            auto v = j.rollingProfitFactor(3);
+            if (v.size() == 3 &&
+                std::isinf(v[0].profitFactor) &&
+                v[0].profitFactor > 0) {
+                std::cout << "✓ all wins: +inf"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-w wrong: n=" << v.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All losses in window → 0 ----
+        {
+            TradeJournal j((tmpDir / "alll.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", -(10.0 + i),
+                                "", t0 + i));
+            }
+            auto v = j.rollingProfitFactor(3);
+            if (v.size() == 3 &&
+                v[0].profitFactor == 0.0) {
+                std::cout << "✓ all losses: 0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-l wrong: n=" << v.size()
+                          << " pf=" << (v.empty() ? -1.0
+                                         : v[0].profitFactor)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: BTC and ETH separate ----
+        // BTC: 100, -50, 75 (window=3, 1 point PF=3.5)
+        // ETH: 200, -100 (window=3, 0 points)
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH",  200.0, "",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 2*hour));
+            j.append(mkFill("ETH", -100.0, "",
+                             t0 + 3*hour));
+            j.append(mkFill("BTC",   75.0, "",
+                             t0 + 4*hour));
+            auto btcV = j.rollingProfitFactorBySymbol(
+                "BTC", 3);
+            auto ethV = j.rollingProfitFactorBySymbol(
+                "ETH", 3);
+            if (btcV.size() == 1 &&
+                std::fabs(btcV[0].profitFactor - 175.0/50.0)
+                    < 1e-9 &&
+                ethV.empty()) {
+                std::cout << "✓ per-symbol: BTC=1 point "
+                          << "PF=3.5, ETH=0 (only 2 fills)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: btc="
+                          << btcV.size() << " eth="
+                          << ethV.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " rolling-PF tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

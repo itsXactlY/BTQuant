@@ -2428,6 +2428,125 @@ TradeJournal::cumulativeWinRateByTag(
 }
 
 namespace {
+// Sprint #124 — shared rolling-PF builder.
+template <typename Pred>
+std::vector<TradeJournal::RollingPFPoint>
+buildRollingProfitFactor(
+    const std::vector<JournalFill>& fills,
+    size_t window, Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    std::sort(filtered.begin(), filtered.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    // Keep only round-trips (skip ties) — same definition
+    // as perSymbolStats: |realizedDelta| > 0.
+    std::vector<JournalFill> rt;
+    rt.reserve(filtered.size());
+    for (const auto& f : filtered) {
+        if (std::fabs(f.realizedDelta) > 1e-9) rt.push_back(f);
+    }
+    if (rt.size() < window) return {};
+    std::vector<TradeJournal::RollingPFPoint> out;
+    out.reserve(rt.size() - window + 1);
+    double ringWins = 0.0, ringLosses = 0.0;
+    size_t ringWinCount = 0, ringLossCount = 0;
+    // Seed ring buffer with the first `window` round-trips.
+    for (size_t i = 0; i < window; ++i) {
+        if (rt[i].realizedDelta > 0) {
+            ringWins += rt[i].realizedDelta;
+            ++ringWinCount;
+        } else {
+            ringLosses += rt[i].realizedDelta;
+            ++ringLossCount;
+        }
+    }
+    // Emit the first point.
+    {
+        TradeJournal::RollingPFPoint p;
+        p.timestamp_us = rt[window - 1].timestamp_us;
+        p.count        = window;
+        p.grossWin     = ringWins;
+        p.grossLoss    = ringLosses;
+        p.winRate      = static_cast<double>(ringWinCount) /
+                         static_cast<double>(window);
+        p.profitFactor = std::fabs(ringLosses) < 1e-9
+            ? (ringWins > 1e-9
+                 ? std::numeric_limits<double>::infinity()
+                 : 0.0)
+            : ringWins / std::fabs(ringLosses);
+        out.push_back(p);
+    }
+    // Slide window: drop rt[i-window], add rt[i].
+    for (size_t i = window; i < rt.size(); ++i) {
+        const auto& dropped = rt[i - window];
+        const auto& added   = rt[i];
+        if (dropped.realizedDelta > 0) {
+            ringWins -= dropped.realizedDelta;
+            --ringWinCount;
+        } else {
+            ringLosses -= dropped.realizedDelta;
+            --ringLossCount;
+        }
+        if (added.realizedDelta > 0) {
+            ringWins += added.realizedDelta;
+            ++ringWinCount;
+        } else {
+            ringLosses += added.realizedDelta;
+            ++ringLossCount;
+        }
+        TradeJournal::RollingPFPoint p;
+        p.timestamp_us = added.timestamp_us;
+        p.count        = window;
+        p.grossWin     = ringWins;
+        p.grossLoss    = ringLosses;
+        p.winRate      = static_cast<double>(ringWinCount) /
+                         static_cast<double>(window);
+        p.profitFactor = std::fabs(ringLosses) < 1e-9
+            ? (ringWins > 1e-9
+                 ? std::numeric_limits<double>::infinity()
+                 : 0.0)
+            : ringWins / std::fabs(ringLosses);
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::RollingPFPoint>
+TradeJournal::rollingProfitFactor(size_t window) const {
+    return buildRollingProfitFactor(loadAll(), window,
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::RollingPFPoint>
+TradeJournal::rollingProfitFactorBySymbol(
+    const std::string& symbol,
+    size_t window) const {
+    return buildRollingProfitFactor(loadAll(), window,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::RollingPFPoint>
+TradeJournal::rollingProfitFactorByTag(
+    const std::string& tag,
+    bool includeUntagged,
+    size_t window) const {
+    return buildRollingProfitFactor(loadAll(), window,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

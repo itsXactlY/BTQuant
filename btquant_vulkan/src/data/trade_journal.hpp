@@ -1254,6 +1254,28 @@ public:
     double concentrationHHI() const;
     double concentrationHHIByTag(bool includeUntagged = false) const;
 
+    // Trade-size analysis (Sprint #138). For a given
+    // segment (symbol or tag), summarize the distribution
+    // of round-trip sizes — useful for "am I sizing BTC
+    // differently from ETH?"
+    struct TradeSizeStats {
+        size_t   roundTripCount = 0;
+        double   meanAbs        = 0.0;   // mean |realized|
+        double   medianAbs      = 0.0;   // p50 of |realized|
+        double   p90Abs         = 0.0;   // p90 of |realized|
+        double   maxAbs         = 0.0;   // max |realized|
+        double   meanWin        = 0.0;   // mean winner
+        double   meanLoss       = 0.0;   // mean |loser|
+        double   totalWinSize   = 0.0;   // sum of winners
+        double   totalLossSize  = 0.0;   // sum of |losers|
+    };
+    TradeSizeStats tradeSizeStats() const;
+    TradeSizeStats tradeSizeStatsBySymbol(
+        const std::string& symbol) const;
+    TradeSizeStats tradeSizeStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

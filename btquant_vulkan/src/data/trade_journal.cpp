@@ -3606,6 +3606,97 @@ double TradeJournal::concentrationHHIByTag(
 }
 
 namespace {
+// Sprint #138 — shared trade-size stats builder.
+// Templated on filter predicate.
+template <typename Pred>
+TradeJournal::TradeSizeStats
+buildTradeSizeStats(const std::vector<JournalFill>& fills,
+                    Pred pred) {
+    TradeJournal::TradeSizeStats out;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    if (sub.empty()) return out;
+    std::vector<double> absVals;
+    absVals.reserve(sub.size());
+    double totalWin = 0.0, totalLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : sub) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        out.roundTripCount++;
+        double a = std::fabs(f.realizedDelta);
+        absVals.push_back(a);
+        if (f.realizedDelta > 0) {
+            totalWin += f.realizedDelta;
+            ++wins;
+        } else {
+            totalLoss += a;
+            ++losses;
+        }
+    }
+    if (out.roundTripCount == 0) return out;
+    double sumAbs = 0.0, maxAbs = 0.0;
+    for (double a : absVals) {
+        sumAbs += a;
+        if (a > maxAbs) maxAbs = a;
+    }
+    out.meanAbs = sumAbs /
+        static_cast<double>(out.roundTripCount);
+    out.maxAbs  = maxAbs;
+    out.totalWinSize  = totalWin;
+    out.totalLossSize = totalLoss;
+    if (wins   > 0) out.meanWin  = totalWin  /
+        static_cast<double>(wins);
+    if (losses > 0) out.meanLoss = totalLoss /
+        static_cast<double>(losses);
+    // Sort for percentiles.
+    std::sort(absVals.begin(), absVals.end());
+    auto pctile = [&](double p) {
+        double rank = (p / 100.0) *
+            static_cast<double>(absVals.size() - 1);
+        size_t lo = static_cast<size_t>(std::floor(rank));
+        size_t hi = static_cast<size_t>(std::ceil(rank));
+        if (lo == hi) return absVals[lo];
+        double frac = rank - static_cast<double>(lo);
+        return absVals[lo] * (1.0 - frac) +
+               absVals[hi] * frac;
+    };
+    out.medianAbs = pctile(50);
+    out.p90Abs    = pctile(90);
+    return out;
+}
+}  // namespace
+
+TradeJournal::TradeSizeStats
+TradeJournal::tradeSizeStats() const {
+    return buildTradeSizeStats(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::TradeSizeStats
+TradeJournal::tradeSizeStatsBySymbol(
+    const std::string& symbol) const {
+    return buildTradeSizeStats(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::TradeSizeStats
+TradeJournal::tradeSizeStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildTradeSizeStats(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

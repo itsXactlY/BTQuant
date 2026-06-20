@@ -17095,5 +17095,130 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 125: tradeSizeStats() / BySymbol / ByTag
+    //   (Sprint #138).
+    //
+    // Distribution of |realized|. Tests:
+    //   - Empty: zeros.
+    //   - 5 fills: mean/median/p90/max correct.
+    //   - Per-symbol filtering.
+    std::cout << "\nTest 125: trade size stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test125_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.tradeSizeStats();
+            if (s.roundTripCount == 0 &&
+                s.meanAbs == 0.0 &&
+                s.maxAbs == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: rt="
+                          << s.roundTripCount << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills [50, 100, 150, 200, 250] ----
+        // mean = 150, median = 150, p90 = ?
+        //   rank = 0.9 * 4 = 3.6 → 200*0.4 + 250*0.6 = 230.
+        // max = 250.
+        // 5 wins: meanWin = 150, totalWin = 750.
+        // 0 losses: meanLoss = 0.
+        {
+            TradeJournal j((tmpDir / "size.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            double vals[] = {50.0, 100.0, 150.0, 200.0, 250.0};
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", vals[i], "", t0 + i));
+            }
+            auto s = j.tradeSizeStats();
+            if (s.roundTripCount == 5 &&
+                std::fabs(s.meanAbs - 150.0) < 1e-9 &&
+                std::fabs(s.medianAbs - 150.0) < 1e-9 &&
+                std::fabs(s.p90Abs - 230.0) < 1e-9 &&
+                std::fabs(s.maxAbs - 250.0) < 1e-9 &&
+                std::fabs(s.meanWin - 150.0) < 1e-9 &&
+                std::fabs(s.totalWinSize - 750.0) < 1e-9 &&
+                std::fabs(s.meanLoss) < 1e-9) {
+                std::cout << "✓ 5 wins [50,100,150,200,250]: "
+                          << "mean=150, med=150, p90=230, "
+                          << "max=250"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ size wrong: mean=" << s.meanAbs
+                          << " med=" << s.medianAbs
+                          << " p90=" << s.p90Abs
+                          << " max=" << s.maxAbs
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // BTC: 3 fills of 100, 200, 300 → mean=200.
+            // ETH: 2 fills of 50, 150 → mean=100.
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("ETH",  50.0, "", t0 + 1));
+            j.append(mkFill("BTC", 200.0, "", t0 + 2));
+            j.append(mkFill("ETH", 150.0, "", t0 + 3));
+            j.append(mkFill("BTC", 300.0, "", t0 + 4));
+            auto btcS = j.tradeSizeStatsBySymbol("BTC");
+            auto ethS = j.tradeSizeStatsBySymbol("ETH");
+            if (btcS.roundTripCount == 3 &&
+                std::fabs(btcS.meanAbs - 200.0) < 1e-9 &&
+                std::fabs(btcS.maxAbs - 300.0) < 1e-9 &&
+                ethS.roundTripCount == 2 &&
+                std::fabs(ethS.meanAbs - 100.0) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC mean=200 "
+                          << "(max=300), ETH mean=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: BTC mean="
+                          << btcS.meanAbs
+                          << " ETH mean=" << ethS.meanAbs
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " trade-size tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

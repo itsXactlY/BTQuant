@@ -70,6 +70,7 @@ set(SOURCES
     src/widgets/theme_editor.cpp
     src/util/settings.cpp
     src/util/theme_io.cpp
+    src/util/hotkey_config.cpp
     src/widgets/position_calculator.cpp
     src/widgets/order_ticket.cpp
     src/widgets/position_panel.cpp
@@ -114,6 +115,7 @@ set(HEADERS
     src/widgets/theme_editor.hpp
     src/util/settings.hpp
     src/util/theme_io.hpp
+    src/util/hotkey_config.hpp
     src/widgets/position_calculator.hpp
     src/widgets/order_ticket.hpp
     src/widgets/position_panel.hpp

@@ -34,6 +34,7 @@
 #include "../data/risk_guard.hpp"
 #include "../data/trade_journal.hpp"
 #include "../data/market_data.hpp"
+#include "../util/hotkey_config.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -63,20 +64,25 @@ bool kBoolTrue = true;
 bool kBoolFalse = false;
 
 #ifdef BTQUANT_USE_GLFW
-// Toggle widget given its F-key hotkey (F2-F9) — looks up in a static table.
-struct HotkeyBinding { int glfwKey; bool WindowManager::*flag; const char* name; };
-constexpr HotkeyBinding kHotkeys[] = {
-    { GLFW_KEY_F2,  &WindowManager::showOrderBook,      "Order Book"        },
-    { GLFW_KEY_F3,  &WindowManager::showOrderBookDepth, "Order Book Depth"  },
-    { GLFW_KEY_F4,  &WindowManager::showDOM,            "DOM"               },
-    { GLFW_KEY_F5,  &WindowManager::showTrades,         "Trades"            },
-    { GLFW_KEY_F6,  &WindowManager::showTPO,            "TPO"               },
-    { GLFW_KEY_F7,  &WindowManager::showFootprint,      "Footprint"         },
-    { GLFW_KEY_F8,  &WindowManager::showVPVR,           "VPVR"              },
-    { GLFW_KEY_F9,  &WindowManager::showAlerts,         "Alerts"            },
-    { GLFW_KEY_F10, &WindowManager::showMultiVWAP,      "Multi VWAP"        },
-    { GLFW_KEY_F11, &WindowManager::showRiskPanel,      "Risk Panel"        },
-    { GLFW_KEY_F12, &WindowManager::showSettings,       "Settings"          },
+// Toggle widget given its F-key hotkey (F2-F12) — looks up the action in
+// the runtime HotkeyMap so user remappings take effect, then dispatches
+// via member pointer.
+struct HotkeySlot {
+    ::btquant::util::HotkeyAction action;
+    bool WindowManager::*flag;
+};
+constexpr HotkeySlot kHotkeys[] = {
+    { ::btquant::util::HotkeyAction::ToggleOrderBook,      &WindowManager::showOrderBook      },
+    { ::btquant::util::HotkeyAction::ToggleOrderBookDepth, &WindowManager::showOrderBookDepth },
+    { ::btquant::util::HotkeyAction::ToggleDOM,            &WindowManager::showDOM            },
+    { ::btquant::util::HotkeyAction::ToggleTrades,         &WindowManager::showTrades         },
+    { ::btquant::util::HotkeyAction::ToggleTPO,            &WindowManager::showTPO            },
+    { ::btquant::util::HotkeyAction::ToggleFootprint,      &WindowManager::showFootprint      },
+    { ::btquant::util::HotkeyAction::ToggleVPVR,           &WindowManager::showVPVR           },
+    { ::btquant::util::HotkeyAction::ToggleAlerts,         &WindowManager::showAlerts         },
+    { ::btquant::util::HotkeyAction::ToggleMultiVWAP,      &WindowManager::showMultiVWAP      },
+    { ::btquant::util::HotkeyAction::ToggleRiskPanel,      &WindowManager::showRiskPanel      },
+    { ::btquant::util::HotkeyAction::ToggleSettings,       &WindowManager::showSettings       },
 };
 #endif // BTQUANT_USE_GLFW
 
@@ -141,8 +147,9 @@ WindowManager::WindowManager() {
     m_miniPriceChart->setMarketData(m_marketData);
     // Trade journal lives in the user's config dir alongside settings.ini.
     const char* home = std::getenv("HOME");
-    std::string journalPath = std::string(home ? home : "/tmp") +
-                              "/.config/btquant_vulkan/journal.jsonl";
+    std::string configDir = std::string(home ? home : "/tmp") +
+                            "/.config/btquant_vulkan/";
+    std::string journalPath = configDir + "journal.jsonl";
     m_tradeJournal  = new ::btquant::TradeJournal(journalPath);
     {
         int skipped = 0;
@@ -151,6 +158,25 @@ WindowManager::WindowManager() {
         BTQ_LOG_INFO("TradeJournal: %zu fills on disk at %s (skipped %d)",
                      onDisk, journalPath.c_str(), skipped);
     }
+
+    // HotkeyMap — load user customizations from hotkeys.ini; fall back
+    // to the built-in defaults (which mirror the previous hardcoded
+    // bindings) if no file exists or it's malformed.
+    std::string hotkeyPath = configDir + "hotkeys.ini";
+    auto loadedMap = ::btquant::util::HotkeyMap::loadFromFile(hotkeyPath);
+    if (loadedMap.has_value()) {
+        m_hotkeyMap = new ::btquant::util::HotkeyMap(*loadedMap);
+        BTQ_LOG_INFO("HotkeyMap: loaded %d bindings from %s",
+                     static_cast<int>(m_hotkeyMap->enumerate().size()),
+                     hotkeyPath.c_str());
+    } else {
+        m_hotkeyMap = new ::btquant::util::HotkeyMap(
+            ::btquant::util::HotkeyMap::defaults());
+        BTQ_LOG_INFO("HotkeyMap: using built-in defaults (no %s)",
+                     hotkeyPath.c_str());
+    }
+    // Save back so the user has a template to edit.
+    if (m_hotkeyMap) m_hotkeyMap->saveToFile(hotkeyPath);
 
     // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
     // size (positive for buy, negative for sell) is what feeds the book;
@@ -249,6 +275,7 @@ WindowManager::~WindowManager() {
     delete m_positionBook;
     delete m_riskLimitsPanel;
     delete m_miniPriceChart;
+    delete m_hotkeyMap;
     delete m_riskGuard;
     delete m_tradeJournal;
     // m_logPanel is a singleton — do not delete.
@@ -392,15 +419,33 @@ void WindowManager::processHotkeys(void* glfwWindow) {
     ImGuiIO& io = ImGui::GetIO();
     bool textFieldFocus = io.WantCaptureKeyboard && io.WantTextInput;
 
-    // F2..F12 toggle widgets. Edge-triggered: fire only on the rising edge
-    // (key was up last frame, is down now) so holding the key down doesn't
-    // rapidly retoggle the widget.
+    // F2..F12 toggle widgets (key defaults; user can remap via
+    // ~/.config/btquant_vulkan/hotkeys.ini). Edge-triggered: fire only on
+    // the rising edge (key was up last frame, is down now) so holding the
+    // key down doesn't rapidly retoggle the widget.
     constexpr size_t kNumHotkeys = sizeof(kHotkeys) / sizeof(kHotkeys[0]);
     static bool prevPressed[kNumHotkeys] = {};
     bool currPressed[kNumHotkeys];
+    bool ctrlDown  = glfwGetKey(win, GLFW_KEY_LEFT_CONTROL)  == GLFW_PRESS ||
+                     glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
+    bool shiftDown = glfwGetKey(win, GLFW_KEY_LEFT_SHIFT)    == GLFW_PRESS ||
+                     glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT)   == GLFW_PRESS;
     for (size_t i = 0; i < kNumHotkeys; ++i) {
-        currPressed[i] = !textFieldFocus &&
-                         glfwGetKey(win, kHotkeys[i].glfwKey) == GLFW_PRESS;
+        int boundKey = GLFW_KEY_UNKNOWN;
+        if (m_hotkeyMap) {
+            int k = m_hotkeyMap->get(kHotkeys[i].action).glfwKey;
+            if (k >= 0) boundKey = k;
+        }
+        // Skip Ctrl/Shift-required actions when only F-keys are checked —
+        // the table only contains toggle widgets which default to no
+        // modifier, so this branch only fires when the user has bound a
+        // Ctrl/Shift combination to a toggle.
+        bool ctrlReq  = m_hotkeyMap && m_hotkeyMap->get(kHotkeys[i].action).ctrl;
+        bool shiftReq = m_hotkeyMap && m_hotkeyMap->get(kHotkeys[i].action).shift;
+        currPressed[i] = !textFieldFocus && boundKey != GLFW_KEY_UNKNOWN &&
+                         glfwGetKey(win, boundKey) == GLFW_PRESS &&
+                         (ctrlReq  ? ctrlDown  : true) &&
+                         (shiftReq ? shiftDown : true);
         if (currPressed[i] && !prevPressed[i]) {
             this->*(kHotkeys[i].flag) = !(this->*(kHotkeys[i].flag));
             markSettingsDirty();

@@ -89,6 +89,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/profile_manager.cpp
     ../src/widgets/symbol_picker.cpp
     ../src/util/theme_io.cpp
+    ../src/util/hotkey_config.cpp
     ../src/widgets/theme_editor.cpp
     ../src/widgets/position_calculator.cpp
     ../src/widgets/order_ticket.cpp

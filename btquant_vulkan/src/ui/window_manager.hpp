@@ -14,6 +14,7 @@ namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
 namespace btquant { class RiskGuard; }
 namespace btquant { class TradeJournal; }
+namespace btquant::util { class HotkeyMap; }
 
 namespace btquant::ui {
 
@@ -202,6 +203,8 @@ private:
     ::btquant::RiskGuard*          m_riskGuard      = nullptr;
     // TradeJournal — append-only JSONL file at ~/.config/btquant_vulkan/journal.jsonl
     ::btquant::TradeJournal*       m_tradeJournal   = nullptr;
+    // HotkeyMap — user-mappable hotkeys loaded from hotkeys.ini at startup.
+    ::btquant::util::HotkeyMap*    m_hotkeyMap      = nullptr;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

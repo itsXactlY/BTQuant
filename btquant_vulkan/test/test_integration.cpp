@@ -1,10 +1,12 @@
 #include "../src/core/vulkan_context.hpp"
+#include <GLFW/glfw3.h>
 #include "../src/data/data_spine.hpp"
 #include "../src/data/ring_buffer.hpp"
 #include "../src/ui/ui_context.hpp"
 #include "../src/ui/window_manager.hpp"
 #include "../src/data/market_data.hpp"
 #include "../src/util/settings.hpp"
+#include "../src/util/hotkey_config.hpp"
 #include "../src/ui/stats_overlay.hpp"
 #include "../src/data/mock_producer.hpp"
 #include "../src/widgets/alerts_panel.hpp"
@@ -1987,6 +1989,114 @@ int main() {
             std::cout << "✓ validateSeries(empty) → -1" << std::endl;
         } else {
             std::cout << "✗ validateSeries(empty) wrong" << std::endl;
+        }
+    }
+
+    // Test 28: HotkeyMap — defaults, parsing, serialization round-trip, match().
+    std::cout << "\nTest 28: Testing HotkeyMap..." << std::endl;
+    {
+        using btquant::util::HotkeyAction;
+        using btquant::util::HotkeyBinding;
+        using btquant::util::HotkeyMap;
+
+        // 1) Defaults are populated.
+        HotkeyMap defaults = HotkeyMap::defaults();
+        if (defaults.has(HotkeyAction::ToggleOrderBook) &&
+            defaults.get(HotkeyAction::ToggleOrderBook).glfwKey == 291 /*F2*/) {
+            std::cout << "✓ defaults populated (ToggleOrderBook=F2)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ defaults wrong" << std::endl;
+        }
+
+        // 2) Remap an action, save, reload — round-trip preserves user changes.
+        defaults.set(HotkeyAction::ToggleOrderBook, {GLFW_KEY_F3, false, false});
+        namespace fs = std::filesystem;
+        fs::path tmpHotkey = fs::temp_directory_path() /
+                            "btquant_test_hotkey" / "hotkeys.ini";
+        fs::create_directories(tmpHotkey.parent_path());
+        if (defaults.saveToFile(tmpHotkey.string())) {
+            std::cout << "✓ saveToFile wrote " << tmpHotkey << std::endl;
+        } else {
+            std::cout << "✗ saveToFile failed" << std::endl;
+        }
+        auto reloaded = HotkeyMap::loadFromFile(tmpHotkey.string());
+        if (reloaded.has_value() &&
+            reloaded->get(HotkeyAction::ToggleOrderBook).glfwKey == GLFW_KEY_F3) {
+            std::cout << "✓ loadFromFile preserves remap (F3)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ loadFromFile lost remap" << std::endl;
+        }
+
+        // 3) Comments + blank lines are ignored.
+        std::ofstream(tmpHotkey) << "# comment\n\n"
+                                    "KillSwitch=Ctrl+K\n"
+                                    "OpenSymbolPicker=Ctrl+Shift+P\n";
+        auto reloaded2 = HotkeyMap::loadFromFile(tmpHotkey.string());
+        if (reloaded2.has_value() &&
+            reloaded2->get(HotkeyAction::KillSwitch) ==
+                HotkeyBinding{GLFW_KEY_K, true, false} &&
+            reloaded2->get(HotkeyAction::OpenSymbolPicker) ==
+                HotkeyBinding{GLFW_KEY_P, true, true}) {
+            std::cout << "✓ comments + Ctrl+Shift parsing" << std::endl;
+        } else {
+            std::cout << "✗ comments/Ctrl+Shift parsing wrong" << std::endl;
+        }
+
+        // 4) Malformed / missing file → defaults returned.
+        fs::path missing = fs::temp_directory_path() /
+                           "btquant_test_hotkey_missing" / "nope.ini";
+        if (!HotkeyMap::loadFromFile(missing.string()).has_value()) {
+            std::cout << "✓ loadFromFile(null) → nullopt" << std::endl;
+        } else {
+            std::cout << "✗ loadFromFile(null) leaked a map" << std::endl;
+        }
+
+        // 5) Match — find action by live key + modifier snapshot.
+        HotkeyMap m;
+        m.set(HotkeyAction::KillSwitch, {GLFW_KEY_K, true, false});
+        m.set(HotkeyAction::ToggleStats, {GLFW_KEY_F1, false, true});
+        if (m.match(GLFW_KEY_K, true, false) == HotkeyAction::KillSwitch &&
+            m.match(GLFW_KEY_F1, false, true) == HotkeyAction::ToggleStats &&
+            m.match(GLFW_KEY_K, false, false) == HotkeyAction::COUNT /*no ctrl*/ &&
+            m.match(GLFW_KEY_Z, false, false) == HotkeyAction::COUNT /*unbound*/) {
+            std::cout << "✓ match() respects key + modifiers" << std::endl;
+        } else {
+            std::cout << "✗ match() wrong" << std::endl;
+        }
+
+        // 6) actionName/keyName round-trip for the obvious cases.
+        if (HotkeyMap::actionName(HotkeyAction::ToggleOrderBook) == "ToggleOrderBook" &&
+            HotkeyMap::keyName(GLFW_KEY_F2) == "F2" &&
+            HotkeyMap::keyName(GLFW_KEY_ENTER) == "Enter" &&
+            HotkeyMap::keyName(GLFW_KEY_SPACE) == "Space" &&
+            HotkeyMap::keyName('A') == "A") {
+            std::cout << "✓ actionName/keyName labels" << std::endl;
+        } else {
+            std::cout << "✗ actionName/keyName wrong" << std::endl;
+        }
+
+        // 7) parseBinding round-trip via label().
+        HotkeyBinding orig{GLFW_KEY_K, true, false};
+        HotkeyBinding reparsed =
+            HotkeyMap::parseBinding(orig.label());
+        if (orig == reparsed) {
+            std::cout << "✓ parseBinding round-trip via label()"
+                      << std::endl;
+        } else {
+            std::cout << "✗ parseBinding round-trip wrong" << std::endl;
+        }
+
+        // 8) enumerate returns every action in enum order.
+        auto rows = m.enumerate();
+        if (rows.size() == static_cast<size_t>(HotkeyAction::COUNT)) {
+            std::cout << "✓ enumerate() covers all "
+                      << static_cast<int>(HotkeyAction::COUNT)
+                      << " actions" << std::endl;
+        } else {
+            std::cout << "✗ enumerate() returned "
+                      << rows.size() << " rows" << std::endl;
         }
     }
 

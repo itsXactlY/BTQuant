@@ -9402,4 +9402,47 @@ TradeJournal::dayStreakByTag(
     return d;
 }
 
+std::vector<TradeJournal::DayStreakSeg>
+TradeJournal::allSegmentDayStreak() const {
+    // Sprint #218. Bulk per-symbol day streak
+    // sorted DESC by longestWinDays.
+    std::vector<DayStreakSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(dayStreakBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DayStreakSeg& a, const DayStreakSeg& b) {
+            return a.longestWinDays > b.longestWinDays;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::DayStreakSeg>
+TradeJournal::allSegmentDayStreakByTag(
+    bool includeUntagged) const {
+    std::vector<DayStreakSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(dayStreakByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DayStreakSeg& a, const DayStreakSeg& b) {
+            return a.longestWinDays > b.longestWinDays;
+        });
+    return out;
+}
+
 } // namespace btquant

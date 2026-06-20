@@ -2342,6 +2342,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment day streak bulk (Sprint #218).
+    // Returns DayStreakSeg for every segment, sorted
+    // DESC by longestWinDays.
+    std::vector<DayStreakSeg>
+    allSegmentDayStreak() const;
+    std::vector<DayStreakSeg>
+    allSegmentDayStreakByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -1295,6 +1295,18 @@ public:
     std::vector<EquityVolPoint> equityVolatility(
         size_t window = 30) const;
 
+    // Per-symbol/per-tag equity volatility (Sprint #140).
+    // Same shape as equityVolatility() (#139) but applied
+    // to the segment's equity curve. Answers "is BTC's
+    // equity curve smoother or choppier than ETH's?".
+    std::vector<EquityVolPoint> equityVolatilityBySymbol(
+        const std::string& symbol,
+        size_t window = 30) const;
+    std::vector<EquityVolPoint> equityVolatilityByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

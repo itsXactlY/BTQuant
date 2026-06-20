@@ -3743,6 +3743,95 @@ TradeJournal::equityVolatility(size_t window) const {
 }
 
 namespace {
+// Sprint #140 — equity-volatility builder. Builds a
+// filtered equity curve (cumulative sum of realizedDelta
+// for matching fills), then runs the same rolling-stddev
+// loop as equityVolatility() (#139).
+template <typename Pred>
+std::vector<TradeJournal::EquityVolPoint>
+buildEquityVolatility(const std::vector<JournalFill>& fills,
+                       size_t window, Pred pred) {
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<TradeJournal::EquityVolPoint> out;
+    if (sub.size() < window) return out;
+    out.reserve(sub.size() - window + 1);
+    double sum = 0.0, sumSq = 0.0;
+    double cum = 0.0;
+    std::vector<double> cums;
+    cums.reserve(sub.size());
+    for (const auto& f : sub) {
+        cum += f.realizedDelta;
+        cums.push_back(cum);
+    }
+    for (size_t k = 0; k < window; ++k) {
+        double v = cums[k];
+        sum   += v;
+        sumSq += v * v;
+    }
+    {
+        double mean = sum / static_cast<double>(window);
+        double var = (sumSq / static_cast<double>(window)) -
+                     mean * mean;
+        if (var < 0.0) var = 0.0;
+        TradeJournal::EquityVolPoint p;
+        p.timestamp_us   = sub[window - 1].timestamp_us;
+        p.equityValue    = cums[window - 1];
+        p.rollingStddev  = std::sqrt(var);
+        p.count          = window;
+        out.push_back(p);
+    }
+    for (size_t i = window; i < sub.size(); ++i) {
+        double dropped = cums[i - window];
+        double added   = cums[i];
+        sum   = sum - dropped + added;
+        sumSq = sumSq - dropped * dropped + added * added;
+        double mean = sum / static_cast<double>(window);
+        double var  = (sumSq / static_cast<double>(window)) -
+                      mean * mean;
+        if (var < 0.0) var = 0.0;
+        TradeJournal::EquityVolPoint p;
+        p.timestamp_us   = sub[i].timestamp_us;
+        p.equityValue    = cums[i];
+        p.rollingStddev  = std::sqrt(var);
+        p.count          = window;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::EquityVolPoint>
+TradeJournal::equityVolatilityBySymbol(
+    const std::string& symbol,
+    size_t window) const {
+    return buildEquityVolatility(loadAll(), window,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::EquityVolPoint>
+TradeJournal::equityVolatilityByTag(
+    const std::string& tag,
+    bool includeUntagged,
+    size_t window) const {
+    return buildEquityVolatility(loadAll(), window,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

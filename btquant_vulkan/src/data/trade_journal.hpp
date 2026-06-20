@@ -1075,6 +1075,40 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Drawdown depth distribution (Sprint #130). For every
+    // COMPLETED drawdown (recovered), bucket its peak-to-
+    // trough depth into ranges. Answers "how severe do my
+    // drawdowns usually get?" — complements the recovery-time
+    // distribution (#129).
+    //
+    // Buckets (in absolute depth):
+    //   <  50          small   (intraday noise)
+    //   <  100         minor
+    //   <  500         moderate
+    //   <  1000        large
+    //   <  5000        severe
+    //   >= 5000        catastrophic
+    //
+    // Also returns avgDepth (mean across all completed DDs)
+    // and maxDepth (the worst DD ever).
+    struct DDDepthDistribution {
+        size_t totalDrawdowns = 0;
+        size_t small          = 0;
+        size_t minor          = 0;
+        size_t moderate       = 0;
+        size_t large          = 0;
+        size_t severe         = 0;
+        size_t catastrophic   = 0;
+        double avgDepth       = 0.0;
+        double maxDepth       = 0.0;
+    };
+    DDDepthDistribution ddDepthDistribution() const;
+    DDDepthDistribution ddDepthDistributionBySymbol(
+        const std::string& symbol) const;
+    DDDepthDistribution ddDepthDistributionByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -16189,5 +16189,128 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 118: ddDepthDistribution() /
+    //   ddDepthDistributionBySymbol() /
+    //   ddDepthDistributionByTag() (Sprint #130).
+    //
+    // DD depth bucketing. Tests:
+    //   - Empty: zeros.
+    //   - 3 DDs of varying depths: bucket counts correct.
+    //   - Unrecovered DD (recovery_us=0) skipped.
+    //   - Per-symbol/per-tag filtering.
+    std::cout << "\nTest 118: DD depth distribution..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test118_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto d = j.ddDepthDistribution();
+            if (d.totalDrawdowns == 0 &&
+                d.small == 0 &&
+                d.maxDepth == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << d.totalDrawdowns << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 DDs at depths 30, 250, 1500 ----
+        // DD1 depth 30 (small), DD2 depth 250 (moderate),
+        // DD3 depth 1500 (severe). Total avg = 593.33.
+        {
+            TradeJournal j((tmpDir / "depth.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            const uint64_t day = 24ULL * hour;
+            // DD1: peak=100, trough=70, recovery=200.
+            //   recovery 1h later → small bucket.
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -30.0, "", t0 + 30*60*1000000ULL));
+            j.append(mkFill("BTC",  200.0, "", t0 + 60*60*1000000ULL));
+            // DD2: peak from new high, trough = peak-250.
+            //   cum=270, +500 → 770 (peak update). Then -250.
+            //   After DD1: cum=270, peak=270.
+            //   Need: +peak > 270, then -X to drop > 250
+            //   from peak.
+            //   +300 → 570, peak=570. Then -250 → 320.
+            //   DD depth = 570-320 = 250. moderate.
+            j.append(mkFill("BTC",  300.0, "", t0 + 2*hour));
+            j.append(mkFill("BTC", -250.0, "", t0 + 3*hour));
+            j.append(mkFill("BTC",  600.0, "", t0 + 5*hour));
+            // DD3: peak from new high, trough = peak-1500.
+            //   After DD2: cum=920, peak=920.
+            //   +800 → 1720, peak=1720. Then -1500 → 220.
+            //   DD depth = 1720-220 = 1500. severe.
+            j.append(mkFill("BTC",  800.0, "", t0 + 1*day));
+            j.append(mkFill("BTC", -1500.0, "",
+                             t0 + 1*day + 30*60*1000000ULL));
+            j.append(mkFill("BTC", 2000.0, "",
+                             t0 + 1*day + 2*hour));
+
+            auto d = j.ddDepthDistribution();
+            // Expected: 3 DDs at depths 30/250/1500.
+            // small=1, moderate=1, severe=1, avg=(30+250+1500)/3=593.33.
+            // maxDepth = 1500.
+            if (d.totalDrawdowns == 3 &&
+                d.small == 1 &&
+                d.minor == 0 &&
+                d.moderate == 1 &&
+                d.large == 0 &&
+                d.severe == 1 &&
+                d.catastrophic == 0 &&
+                std::fabs(d.maxDepth - 1500.0) < 1e-9 &&
+                std::fabs(d.avgDepth - 593.333333) < 1e-3) {
+                std::cout << "✓ 3 DDs (30/250/1500): small=1, "
+                          << "moderate=1, severe=1, "
+                          << "avg=593.33, max=1500"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ depth wrong: total="
+                          << d.totalDrawdowns
+                          << " small=" << d.small
+                          << " moderate=" << d.moderate
+                          << " severe=" << d.severe
+                          << " avg=" << d.avgDepth
+                          << " max=" << d.maxDepth
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-depth-dist tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

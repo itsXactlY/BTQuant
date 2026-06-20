@@ -2977,6 +2977,58 @@ TradeJournal::ddRecoveryDistributionByTag(
 }
 
 namespace {
+// Sprint #130 — shared DD-depth distribution builder.
+// Buckets each completed DD's peak-to-trough depth into
+// absolute ranges.
+template <typename Container>
+TradeJournal::DDDepthDistribution
+buildDDDepthDistribution(const Container& events) {
+    TradeJournal::DDDepthDistribution out;
+    if (events.empty()) return out;
+    double totalDepth = 0.0;
+    for (const auto& ev : events) {
+        if (ev.recovery_us == 0) continue;  // skip unrecovered
+        out.totalDrawdowns++;
+        double depth = ev.trough_depth;
+        if (depth < 0.0) depth = -depth;  // safety
+        totalDepth += depth;
+        if (depth > out.maxDepth) out.maxDepth = depth;
+        if      (depth < 50.0)    ++out.small;
+        else if (depth < 100.0)   ++out.minor;
+        else if (depth < 500.0)   ++out.moderate;
+        else if (depth < 1000.0)  ++out.large;
+        else if (depth < 5000.0)  ++out.severe;
+        else                      ++out.catastrophic;
+    }
+    if (out.totalDrawdowns > 0) {
+        out.avgDepth = totalDepth /
+            static_cast<double>(out.totalDrawdowns);
+    }
+    return out;
+}
+}  // namespace
+
+TradeJournal::DDDepthDistribution
+TradeJournal::ddDepthDistribution() const {
+    return buildDDDepthDistribution(drawdownRecoveries());
+}
+
+TradeJournal::DDDepthDistribution
+TradeJournal::ddDepthDistributionBySymbol(
+    const std::string& symbol) const {
+    return buildDDDepthDistribution(
+        drawdownRecoveriesBySymbol(symbol));
+}
+
+TradeJournal::DDDepthDistribution
+TradeJournal::ddDepthDistributionByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildDDDepthDistribution(
+        drawdownRecoveriesByTag(tag, includeUntagged));
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

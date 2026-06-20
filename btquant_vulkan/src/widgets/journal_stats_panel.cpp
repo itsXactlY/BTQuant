@@ -225,6 +225,96 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- Streaks mini-section (Sprint #83) ----
+    //
+    // Current + longest W/L streaks sourced from
+    // TradeJournal::streaks() (#82). Two columns: current (the run
+    // we're inside right now — green when winning, red when losing,
+    // dim at 0) and longest (the all-time best run).
+    //
+    // Format: "3 wins" / "2 losses" / "—" — verbal so the trader
+    // doesn't have to mentally decode a number. Combined with the
+    // Risk section above, this answers "am I currently on a streak
+    // and how does it compare to my best?".
+    auto sk = m_journal->streaks();
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Streaks",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("JournalStatsStreaks",
+                              4,
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Current win");
+            ImGui::TableSetupColumn("Current loss");
+            ImGui::TableSetupColumn("Longest win");
+            ImGui::TableSetupColumn("Longest loss");
+            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+
+            // Current win: green when > 0, dim when 0.
+            ImGui::TableSetColumnIndex(0);
+            if (sk.currentWinStreak > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%zu wins",
+                              sk.currentWinStreak);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                ImGui::TextUnformatted("—");
+                ImGui::PopStyleColor();
+            }
+
+            // Current loss: red when > 0, dim when 0.
+            ImGui::TableSetColumnIndex(1);
+            if (sk.currentLossStreak > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%zu losses",
+                              sk.currentLossStreak);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                ImGui::TextUnformatted("—");
+                ImGui::PopStyleColor();
+            }
+
+            // Longest win: dim (informational).
+            ImGui::TableSetColumnIndex(2);
+            char buf[32];
+            if (sk.longestWinStreak > 0) {
+                std::snprintf(buf, sizeof(buf), "%zu wins",
+                              sk.longestWinStreak);
+                ImGui::TextUnformatted(buf);
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                ImGui::TextUnformatted("—");
+                ImGui::PopStyleColor();
+            }
+
+            // Longest loss: dim (informational).
+            ImGui::TableSetColumnIndex(3);
+            if (sk.longestLossStreak > 0) {
+                std::snprintf(buf, sizeof(buf), "%zu losses",
+                              sk.longestLossStreak);
+                ImGui::TextUnformatted(buf);
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                ImGui::TextUnformatted("—");
+                ImGui::PopStyleColor();
+            }
+            ImGui::EndTable();
+        }
+    }
+
     ImGui::Separator();
 
     // ---- By-symbol table (Sprint #72) ----

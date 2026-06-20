@@ -17886,5 +17886,93 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 133: topWinners() / topLosers() (Sprint #146).
+    //
+    // All-time top N winning/losing round-trips. Tests:
+    //   - Empty: 0 winners, 0 losers.
+    //   - 5 fills [+300, -50, +200, -100, +400]:
+    //       topWinners(2) = [+400, +300]
+    //       topLosers(2)  = [-100, -50]
+    std::cout << "\nTest 133: top winners/losers..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test133_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto w = j.topWinners(3);
+            auto l = j.topLosers(3);
+            if (w.empty() && l.empty()) {
+                std::cout << "✓ empty: 0 winners, 0 losers"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: w=" << w.size()
+                          << " l=" << l.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills ----
+        {
+            TradeJournal j((tmpDir / "top.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            double vals[] = {300.0, -50.0, 200.0,
+                             -100.0, 400.0};
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", vals[i],
+                                "", t0 + i));
+            }
+            auto w = j.topWinners(2);
+            auto l = j.topLosers(2);
+            if (w.size() == 2 &&
+                std::fabs(w[0].realized - 400.0) < 1e-9 &&
+                std::fabs(w[1].realized - 300.0) < 1e-9 &&
+                l.size() == 2 &&
+                std::fabs(l[0].realized + 100.0) < 1e-9 &&
+                std::fabs(l[1].realized +  50.0) < 1e-9) {
+                std::cout << "✓ 5 fills: topW[+400,+300], "
+                          << "topL[-100,-50]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ top wrong: W[0]="
+                          << (w.size() > 0 ? w[0].realized : 0.0)
+                          << " L[0]="
+                          << (l.size() > 0 ? l[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " top-trades tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

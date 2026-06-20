@@ -1403,6 +1403,13 @@ public:
     std::vector<TagSummary> allTagSummaries(
         bool includeUntagged = true) const;
 
+    // All-time top trades (Sprint #146). Returns the top N
+    // winning round-trips and top N losing round-trips
+    // across the entire journal. Useful for "what's my
+    // single biggest win/loss?"
+    std::vector<BestTrade> topWinners(size_t n = 5) const;
+    std::vector<BestTrade> topLosers(size_t n = 5) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

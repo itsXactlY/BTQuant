@@ -4156,6 +4156,63 @@ TradeJournal::allTagSummaries(bool includeUntagged) const {
     return out;
 }
 
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topWinners(size_t n) const {
+    // Sprint #146. Top N winning round-trips across the
+    // entire journal. Sorted DESC by realized.
+    auto fills = loadAll();
+    std::vector<JournalFill> wins;
+    wins.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (f.realizedDelta > 0) wins.push_back(f);
+    }
+    std::sort(wins.begin(), wins.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.realizedDelta > b.realizedDelta;
+        });
+    std::vector<BestTrade> out;
+    size_t take = std::min(n, wins.size());
+    out.reserve(take);
+    for (size_t i = 0; i < take; ++i) {
+        BestTrade bt;
+        bt.symbol = wins[i].symbol;
+        bt.realized = wins[i].realizedDelta;
+        bt.tag = wins[i].tag;
+        bt.timestamp_us = wins[i].timestamp_us;
+        out.push_back(bt);
+    }
+    return out;
+}
+
+std::vector<TradeJournal::BestTrade>
+TradeJournal::topLosers(size_t n) const {
+    // Sprint #146. Top N losing round-trips across the
+    // entire journal. Sorted ASC by realized (most
+    // negative first).
+    auto fills = loadAll();
+    std::vector<JournalFill> losses;
+    losses.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (f.realizedDelta < 0) losses.push_back(f);
+    }
+    std::sort(losses.begin(), losses.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.realizedDelta < b.realizedDelta;
+        });
+    std::vector<BestTrade> out;
+    size_t take = std::min(n, losses.size());
+    out.reserve(take);
+    for (size_t i = 0; i < take; ++i) {
+        BestTrade bt;
+        bt.symbol = losses[i].symbol;
+        bt.realized = losses[i].realizedDelta;
+        bt.tag = losses[i].tag;
+        bt.timestamp_us = losses[i].timestamp_us;
+        out.push_back(bt);
+    }
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

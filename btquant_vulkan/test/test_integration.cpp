@@ -18635,5 +18635,91 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 141: recentPerformance() (Sprint #154).
+    //
+    // Last N fills or days. Tests:
+    //   - Empty: all zeros.
+    //   - 5 fills [+100, -50, +200, +50, -25], take
+    //     last 3 → wins=2, losses=1, realized=225.
+    std::cout << "\nTest 141: recent performance..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test141_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.recentPerformance(30);
+            if (s.totalFills == 0 &&
+                s.realized == 0.0 &&
+                s.winRate == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << s.totalFills << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills, last 3 ----
+        {
+            TradeJournal j((tmpDir / "snap.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            double vals[] = {100.0, -50.0, 200.0, 50.0, -25.0};
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", vals[i], "",
+                                t0 + i));
+            }
+            auto s = j.recentPerformance(30, true, 3);
+            // Last 3: +200, +50, -25 → 2W, 1L,
+            // realized=225, winRate=2/3.
+            if (s.totalFills == 3 &&
+                s.wins == 2 && s.losses == 1 &&
+                std::fabs(s.realized - 225.0) < 1e-9 &&
+                std::fabs(s.winRate - 2.0/3.0) < 1e-9) {
+                std::cout << "✓ last 3 of 5: 2W/1L "
+                          << "(wr=0.667), realized=+225"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ snap wrong: fills="
+                          << s.totalFills
+                          << " wins=" << s.wins
+                          << " realized=" << s.realized
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " recent-perf tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

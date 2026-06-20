@@ -5638,4 +5638,95 @@ TradeJournal::weeklyWinRateByTag(
         });
 }
 
+TradeJournal::PerformanceSnapshot
+TradeJournal::recentPerformance(
+    size_t lastDays,
+    bool byFillCount,
+    size_t fillCount) const {
+    // Sprint #154. Window the journal to the last N
+    // calendar days OR last N fills, then compute the
+    // key metrics on that window.
+    PerformanceSnapshot s;
+    auto fills = loadAll();
+    if (fills.empty()) return s;
+    // Sort ascending by timestamp.
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<JournalFill> window;
+    if (byFillCount) {
+        size_t start = fills.size() > fillCount
+            ? fills.size() - fillCount : 0;
+        window.assign(fills.begin() + start, fills.end());
+    } else {
+        uint64_t cutoff = fills.back().timestamp_us -
+            lastDays * 86400ULL * 1000000ULL;
+        for (const auto& f : fills) {
+            if (f.timestamp_us >= cutoff) window.push_back(f);
+        }
+    }
+    if (window.empty()) return s;
+    s.totalFills = window.size();
+    s.startUs = window.front().timestamp_us;
+    s.endUs   = window.back().timestamp_us;
+    double grossWin = 0.0, grossLoss = 0.0;
+    std::set<std::string> days;
+    double cum = 0.0;
+    double peak = std::numeric_limits<double>::lowest();
+    double maxDD = 0.0;
+    std::vector<double> rets;
+    rets.reserve(window.size());
+    for (const auto& f : window) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (f.realizedDelta > 0) {
+            s.wins++;
+            grossWin += f.realizedDelta;
+        } else {
+            s.losses++;
+            grossLoss += f.realizedDelta;
+        }
+        s.realized += f.realizedDelta;
+        cum += f.realizedDelta;
+        if (cum > peak) peak = cum;
+        double dd = peak - cum;
+        if (dd > maxDD) maxDD = dd;
+        rets.push_back(f.realizedDelta);
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        days.insert(buf);
+    }
+    s.activeDays = static_cast<double>(days.size());
+    s.maxDD = maxDD;
+    if (s.wins + s.losses > 0) {
+        s.winRate = static_cast<double>(s.wins) /
+            static_cast<double>(s.wins + s.losses);
+    }
+    if (std::fabs(grossLoss) > 1e-9) {
+        s.profitFactor = grossWin / std::fabs(grossLoss);
+    } else if (grossWin > 0) {
+        s.profitFactor = std::numeric_limits<double>::infinity();
+    }
+    // Sharpe on window returns.
+    if (rets.size() >= 2) {
+        double mean = 0.0;
+        for (double r : rets) mean += r;
+        mean /= static_cast<double>(rets.size());
+        double var = 0.0;
+        for (double r : rets) {
+            var += (r - mean) * (r - mean);
+        }
+        var /= static_cast<double>(rets.size() - 1);
+        double sd = std::sqrt(var);
+        if (sd > 1e-12) {
+            s.sharpe = mean / sd;
+        }
+    }
+    return s;
+}
+
 } // namespace btquant

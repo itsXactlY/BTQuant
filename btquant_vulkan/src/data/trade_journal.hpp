@@ -1508,6 +1508,29 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Performance snapshot (Sprint #154). All key metrics
+    // for the last N calendar days of trading (or last N
+    // fills if byFillCount=true). Useful for "what's my
+    // recent edge like?" without needing to call 20+
+    // individual methods.
+    struct PerformanceSnapshot {
+        size_t   totalFills  = 0;
+        size_t   wins        = 0;
+        size_t   losses      = 0;
+        double   realized    = 0.0;
+        double   winRate     = 0.0;
+        double   profitFactor = 0.0;
+        double   sharpe      = 0.0;   // sample stddev Sharpe
+        double   maxDD       = 0.0;   // max peak-trough within window
+        double   activeDays  = 0.0;  // distinct days in window
+        uint64_t startUs     = 0;
+        uint64_t endUs       = 0;
+    };
+    PerformanceSnapshot recentPerformance(
+        size_t lastDays = 30,
+        bool byFillCount = false,
+        size_t fillCount = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

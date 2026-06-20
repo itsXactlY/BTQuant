@@ -23,6 +23,7 @@
 #include "../src/widgets/position_panel.hpp"
 #include "../src/widgets/risk_limits_panel.hpp"
 #include "../src/widgets/mini_price_chart.hpp"
+#include "../src/widgets/hotkey_editor.hpp"
 #include "../src/data/position_book.hpp"
 #include "../src/data/risk_guard.hpp"
 #include "../src/data/trade_journal.hpp"
@@ -2097,6 +2098,126 @@ int main() {
         } else {
             std::cout << "✗ enumerate() returned "
                       << rows.size() << " rows" << std::endl;
+        }
+    }
+
+    // Test 29: HotkeyEditor — widget lifecycle + injectCapture flow.
+    std::cout << "\nTest 29: Testing HotkeyEditor..." << std::endl;
+    {
+        using btquant::widgets::HotkeyEditor;
+        using btquant::util::HotkeyMap;
+        using btquant::util::HotkeyAction;
+
+        HotkeyMap   map = HotkeyMap::defaults();
+        HotkeyEditor editor;
+
+        // 1) Default closed, no map attached.
+        if (!editor.isOpen() && !editor.isDirty()) {
+            std::cout << "✓ default closed + clean" << std::endl;
+        } else {
+            std::cout << "✗ default state wrong" << std::endl;
+        }
+
+        editor.setHotkeyMap(&map);
+        editor.setOpen(true);
+        if (editor.isOpen()) {
+            std::cout << "✓ setOpen(true) → isOpen" << std::endl;
+        } else {
+            std::cout << "✗ setOpen(true) didn't take" << std::endl;
+        }
+
+        // 2) toggleOpen flips both ways.
+        editor.toggleOpen();
+        if (!editor.isOpen()) {
+            std::cout << "✓ toggleOpen closes" << std::endl;
+        } else {
+            std::cout << "✗ toggleOpen didn't close" << std::endl;
+        }
+        editor.toggleOpen();
+        if (editor.isOpen()) {
+            std::cout << "✓ toggleOpen re-opens" << std::endl;
+        } else {
+            std::cout << "✗ toggleOpen didn't re-open" << std::endl;
+        }
+
+        // 3) injectCapture without map → no-op, no crash.
+        editor.setHotkeyMap(nullptr);
+        editor.injectCapture(GLFW_KEY_A, false, false);  // should be no-op
+        std::cout << "✓ injectCapture safe with null map" << std::endl;
+
+        // 4) injectCapture with map + Esc → no change, no dirty.
+        editor.setHotkeyMap(&map);
+        editor.beginCapture(static_cast<int>(HotkeyAction::KillSwitch));
+        auto killBefore = map.get(HotkeyAction::KillSwitch);
+        editor.injectCapture(GLFW_KEY_ESCAPE, false, false);
+        if (map.get(HotkeyAction::KillSwitch) == killBefore &&
+            !editor.isDirty() && !editor.isCapturing()) {
+            std::cout << "✓ Esc cancels without changes" << std::endl;
+        } else {
+            std::cout << "✗ Esc changed state" << std::endl;
+        }
+
+        // 5) injectCapture with map + Ctrl+Shift+P → updates binding,
+        //    sets dirty, exits capture.
+        editor.beginCapture(static_cast<int>(HotkeyAction::OpenSymbolPicker));
+        editor.injectCapture(GLFW_KEY_P, true, true);
+        auto pickerAfter = map.get(HotkeyAction::OpenSymbolPicker);
+        if (pickerAfter.glfwKey == GLFW_KEY_P &&
+            pickerAfter.ctrl && pickerAfter.shift &&
+            editor.isDirty() && !editor.isCapturing()) {
+            std::cout << "✓ Ctrl+Shift+P remap applied + dirty set"
+                      << std::endl;
+        } else {
+            std::cout << "✗ remap didn't apply (key="
+                      << pickerAfter.glfwKey
+                      << " ctrl=" << pickerAfter.ctrl
+                      << " shift=" << pickerAfter.shift
+                      << " dirty=" << editor.isDirty()
+                      << " cap=" << editor.isCapturing()
+                      << ")" << std::endl;
+        }
+
+        // 6) Pure modifier key during capture → ignored, capture stays
+        //    open (user is still holding Shift while pressing letters).
+        editor.clearDirty();
+        auto before2 = map.get(HotkeyAction::ToggleOrderBook);
+        editor.beginCapture(static_cast<int>(HotkeyAction::ToggleOrderBook));
+        editor.injectCapture(GLFW_KEY_LEFT_SHIFT, false, true);
+        if (map.get(HotkeyAction::ToggleOrderBook) == before2 &&
+            !editor.isDirty() && editor.isCapturing()) {
+            std::cout << "✓ modifier-only key rejected, capture stays open"
+                      << std::endl;
+        } else {
+            std::cout << "✗ modifier bound or capture closed"
+                      << std::endl;
+        }
+
+        // 7) Now press a real key — capture completes.
+        editor.injectCapture(GLFW_KEY_F4, false, false);
+        if (map.get(HotkeyAction::ToggleOrderBook).glfwKey == GLFW_KEY_F4 &&
+            !editor.isCapturing()) {
+            std::cout << "✓ F4 completes capture and binds" << std::endl;
+        } else {
+            std::cout << "✗ F4 didn't complete capture" << std::endl;
+        }
+
+        // 8) clearDirty resets the flag without touching the map.
+        editor.clearDirty();
+        if (!editor.isDirty()) {
+            std::cout << "✓ clearDirty resets" << std::endl;
+        } else {
+            std::cout << "✗ clearDirty didn't reset" << std::endl;
+        }
+
+        // 9) Sentinel -1 cancels capture without applying.
+        editor.beginCapture(static_cast<int>(HotkeyAction::OpenSymbolPicker));
+        auto beforePicker = map.get(HotkeyAction::OpenSymbolPicker);
+        editor.injectCapture(-1, false, false);
+        if (map.get(HotkeyAction::OpenSymbolPicker) == beforePicker &&
+            !editor.isCapturing()) {
+            std::cout << "✓ sentinel -1 cancels" << std::endl;
+        } else {
+            std::cout << "✗ sentinel -1 didn't cancel" << std::endl;
         }
     }
 

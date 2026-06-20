@@ -35,6 +35,7 @@
 #include "../data/trade_journal.hpp"
 #include "../data/market_data.hpp"
 #include "../util/hotkey_config.hpp"
+#include "../widgets/hotkey_editor.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -145,6 +146,8 @@ WindowManager::WindowManager() {
     m_riskLimitsPanel->setPositionBook(m_positionBook);
     m_miniPriceChart = new MiniPriceChart();
     m_miniPriceChart->setMarketData(m_marketData);
+    m_hotkeyEditor = new ::btquant::widgets::HotkeyEditor();
+    // HotkeyEditor is wired after m_hotkeyMap is constructed (below).
     // Trade journal lives in the user's config dir alongside settings.ini.
     const char* home = std::getenv("HOME");
     std::string configDir = std::string(home ? home : "/tmp") +
@@ -163,6 +166,7 @@ WindowManager::WindowManager() {
     // to the built-in defaults (which mirror the previous hardcoded
     // bindings) if no file exists or it's malformed.
     std::string hotkeyPath = configDir + "hotkeys.ini";
+    m_hotkeyPath = hotkeyPath;
     auto loadedMap = ::btquant::util::HotkeyMap::loadFromFile(hotkeyPath);
     if (loadedMap.has_value()) {
         m_hotkeyMap = new ::btquant::util::HotkeyMap(*loadedMap);
@@ -177,6 +181,7 @@ WindowManager::WindowManager() {
     }
     // Save back so the user has a template to edit.
     if (m_hotkeyMap) m_hotkeyMap->saveToFile(hotkeyPath);
+    if (m_hotkeyEditor) m_hotkeyEditor->setHotkeyMap(m_hotkeyMap);
 
     // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
     // size (positive for buy, negative for sell) is what feeds the book;
@@ -274,6 +279,7 @@ WindowManager::~WindowManager() {
     delete m_positionPanel;
     delete m_positionBook;
     delete m_riskLimitsPanel;
+    delete m_hotkeyEditor;
     delete m_miniPriceChart;
     delete m_hotkeyMap;
     delete m_riskGuard;
@@ -464,6 +470,50 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         markSettingsDirty();
     }
     prevCtrlL = currCtrlL;
+
+    // Ctrl+H opens the HotkeyEditor. When the editor is in capture mode,
+    // route the next non-modifier keypress to it instead of the regular
+    // hotkey dispatch.
+    static bool prevCtrlH = false;
+    bool currCtrlH = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_H) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlH && !prevCtrlH) {
+        if (m_hotkeyEditor) m_hotkeyEditor->toggleOpen();
+        if (m_hotkeyEditor) m_hotkeyEditorOpen = m_hotkeyEditor->isOpen();
+        markSettingsDirty();
+    }
+    prevCtrlH = currCtrlH;
+
+    // If the editor is capturing, scan every GLFW key for a rising edge
+    // and inject the first one into the editor. We iterate all 348
+    // GLFW_KEY_LAST slots so letter, digit, function, arrow and
+    // punctuation keys all flow through the same path.
+    if (m_hotkeyEditor && m_hotkeyEditor->isOpen()) {
+        // Capture is signalled by isOpen() returning true AND the
+        // editor's internal state. Since we already wired setHotkeyMap,
+        // we can rely on its public API.
+        static bool prevCapturedKeys[512] = {};
+        for (int key = 32; key < 512; ++key) {
+            bool down = glfwGetKey(win, key) == GLFW_PRESS;
+            if (down && !prevCapturedKeys[key]) {
+                // While the editor's window has keyboard focus, only
+                // inject if ImGui isn't claiming the keystroke for a
+                // text field.
+                if (!textFieldFocus) {
+                    m_hotkeyEditor->injectCapture(
+                        key, ctrlDown, shiftDown);
+                    // Mark this key as "consumed" for one frame so we
+                    // don't also dispatch it via the regular path.
+                    prevCapturedKeys[key] = true;
+                    if (m_hotkeyMap) m_hotkeyMap->saveToFile(m_hotkeyPath);
+                    break;
+                }
+            }
+            prevCapturedKeys[key] = down;
+        }
+    }
 
     // Shift+F1 toggles stats overlay.
     static bool prevShiftF1 = false;
@@ -762,11 +812,23 @@ void WindowManager::showRiskLimitsWindow() {
 
 void WindowManager::showMiniPriceChartWindow() {
     if (!showMiniPriceChart) return;
-    // Re-bind in case m_marketData arrived after construction.
-    if (m_miniPriceChart && m_marketData) {
+    if (m_marketData) {
         m_miniPriceChart->setMarketData(m_marketData);
     }
     if (m_miniPriceChart) m_miniPriceChart->render();
+}
+
+void WindowManager::showHotkeyEditorWindow() {
+    if (!m_hotkeyEditor) return;
+    m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
+    m_hotkeyEditor->render();
+    // Sync back in case the user closed the window via the [X] button.
+    m_hotkeyEditorOpen = m_hotkeyEditor->isOpen();
+    // Persist on close with pending changes.
+    if (!m_hotkeyEditorOpen && m_hotkeyEditor->isDirty()) {
+        m_hotkeyEditor->clearDirty();
+        if (m_hotkeyMap) m_hotkeyMap->saveToFile(m_hotkeyPath);
+    }
 }
 
 void WindowManager::showMainMenu() {
@@ -793,6 +855,10 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Position Panel (Ctrl+B)",     nullptr, &showPositionPanel))markSettingsDirty();
             if (ImGui::MenuItem("Risk Dashboard (Ctrl+R)",      nullptr, &showRiskLimits))   markSettingsDirty();
             if (ImGui::MenuItem("Mini Price Chart (Ctrl+M)",    nullptr, &showMiniPriceChart))markSettingsDirty();
+            if (ImGui::MenuItem("Hotkey Editor (Ctrl+H)",       nullptr, &m_hotkeyEditorOpen)) {
+                if (m_hotkeyEditor) m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
+                markSettingsDirty();
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

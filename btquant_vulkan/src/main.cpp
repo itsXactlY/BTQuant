@@ -300,6 +300,7 @@ private:
       windowManager.showPositionPanelWindow();
       windowManager.showRiskLimitsWindow();
       windowManager.showMiniPriceChartWindow();
+      windowManager.showHotkeyEditorWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

@@ -96,6 +96,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/position_panel.cpp
     ../src/widgets/risk_limits_panel.cpp
     ../src/widgets/mini_price_chart.cpp
+    ../src/widgets/hotkey_editor.cpp
     ../src/data/position_book.cpp
     ../src/data/risk_guard.cpp
     ../src/data/trade_journal.cpp

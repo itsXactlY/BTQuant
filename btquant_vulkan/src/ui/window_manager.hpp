@@ -15,6 +15,7 @@ namespace btquant { class PositionBook; }
 namespace btquant { class RiskGuard; }
 namespace btquant { class TradeJournal; }
 namespace btquant::util { class HotkeyMap; }
+namespace btquant::widgets { class HotkeyEditor; }
 
 namespace btquant::ui {
 
@@ -149,6 +150,7 @@ public:
     void showPositionPanelWindow();
     void showRiskLimitsWindow();
     void showMiniPriceChartWindow();
+    void showHotkeyEditorWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -205,9 +207,14 @@ private:
     ::btquant::TradeJournal*       m_tradeJournal   = nullptr;
     // HotkeyMap — user-mappable hotkeys loaded from hotkeys.ini at startup.
     ::btquant::util::HotkeyMap*    m_hotkeyMap      = nullptr;
+    // HotkeyEditor — Ctrl+H panel that lets the user remap bindings at runtime.
+    ::btquant::widgets::HotkeyEditor* m_hotkeyEditor = nullptr;
+    // Hotkey file path — saved to on each remap so user changes survive restart.
+    std::string                    m_hotkeyPath;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;
+    bool m_hotkeyEditorOpen = false;
     bool m_settingsDirty = false;
 };
 

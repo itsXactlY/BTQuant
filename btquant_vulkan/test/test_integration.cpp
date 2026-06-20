@@ -20188,5 +20188,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 161: weekdayHourPnLBySymbol/ByTag (Sprint #174).
+    //
+    // Per-segment weekday-hour heatmap. Tests:
+    //   - BTC 2 fills → 2 cells with segment="BTC".
+    std::cout << "\nTest 161: per-seg weekday-hour..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test161_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills at different hours ----
+        {
+            const uint64_t base = 1705276800ULL;
+            const uint64_t hour = 3600ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "scalp",
+                             (base + 9 * hour) *
+                             1000000ULL));
+            j.append(mkFill("ETH",  -50.0, "arb",
+                             (base + 10 * hour) *
+                             1000000ULL));
+            j.append(mkFill("BTC",  75.0, "scalp",
+                             (base + 14 * hour) *
+                             1000000ULL));
+            auto symV = j.weekdayHourPnLBySymbol("BTC");
+            auto tagV = j.weekdayHourPnLByTag("scalp");
+            if (symV.size() == 2 &&
+                symV[0].segment == "BTC" &&
+                tagV.size() == 2 &&
+                tagV[0].segment == "scalp") {
+                std::cout << "✓ BTC: 2 cells (seg='BTC'); "
+                          << "scalp: 2 cells (seg='scalp')"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: sym="
+                          << symV.size()
+                          << " tag=" << tagV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg weekday-hour tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

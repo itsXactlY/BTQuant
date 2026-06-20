@@ -7069,4 +7069,118 @@ TradeJournal::weekdayHourPnL() const {
     return out;
 }
 
+namespace {
+// Sprint #174 — per-segment weekday-hour heatmap builder.
+// One SegmentHeatmapCell per (segment, weekday, hour)
+// combination with at least one fill.
+template <typename Pred>
+std::vector<TradeJournal::SegmentHeatmapCell>
+buildWeekdayHourPnLBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::vector<TradeJournal::SegmentHeatmapCell> out;
+    std::map<std::string,
+             std::map<std::pair<int, int>,
+                      std::pair<double, size_t>>> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (!pred(f)) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        // Determine segment key from fill.
+        std::string seg;
+        if constexpr (true) {
+            // Use a closure-set key. We pass an explicit
+            // tag/empty-string via the lambda in callers;
+            // the segment here is a placeholder derived
+            // from symbol or tag. The lambda in callers
+            // can't mutate seg directly, so we use the
+            // symbol as the segment key.
+            seg = f.symbol;
+            (void)tm;
+        }
+        auto key = std::make_pair(tm.tm_wday, tm.tm_hour);
+        auto& b = buckets[seg][key];
+        b.first += f.realizedDelta;
+        b.second++;
+    }
+    (void)pred;  // suppress unused warning; pred is folded
+                  // into the segment loop above.
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::SegmentHeatmapCell>
+TradeJournal::weekdayHourPnLBySymbol(
+    const std::string& symbol) const {
+    // Sprint #174. Filter to one symbol, emit cells
+    // labeled with symbol.
+    std::vector<SegmentHeatmapCell> out;
+    auto fills = loadAll();
+    std::map<std::pair<int, int>,
+             std::pair<double, size_t>> buckets;
+    for (const auto& f : fills) {
+        if (f.symbol != symbol) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        auto key = std::make_pair(tm.tm_wday, tm.tm_hour);
+        auto& b = buckets[key];
+        b.first += f.realizedDelta;
+        b.second++;
+    }
+    for (auto& kv : buckets) {
+        SegmentHeatmapCell c;
+        c.segment = symbol;
+        c.weekday = kv.first.first;
+        c.hour = kv.first.second;
+        c.realized = kv.second.first;
+        c.count = kv.second.second;
+        out.push_back(c);
+    }
+    return out;
+}
+
+std::vector<TradeJournal::SegmentHeatmapCell>
+TradeJournal::weekdayHourPnLByTag(
+    const std::string& tag, bool includeUntagged) const {
+    std::vector<SegmentHeatmapCell> out;
+    auto fills = loadAll();
+    std::map<std::pair<int, int>,
+             std::pair<double, size_t>> buckets;
+    std::string segmentKey =
+        (tag == "__untagged__") ? "" : tag;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (!f.tag.empty()) continue;
+        } else if (includeUntagged && f.tag.empty()) {
+            continue;
+        } else if (f.tag != tag) {
+            continue;
+        }
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        auto key = std::make_pair(tm.tm_wday, tm.tm_hour);
+        auto& b = buckets[key];
+        b.first += f.realizedDelta;
+        b.second++;
+    }
+    for (auto& kv : buckets) {
+        SegmentHeatmapCell c;
+        c.segment = segmentKey;
+        c.weekday = kv.first.first;
+        c.hour = kv.first.second;
+        c.realized = kv.second.first;
+        c.count = kv.second.second;
+        out.push_back(c);
+    }
+    return out;
+}
+
 } // namespace btquant

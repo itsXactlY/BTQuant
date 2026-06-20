@@ -1781,6 +1781,22 @@ public:
     };
     std::vector<HeatmapCell> weekdayHourPnL() const;
 
+    // Per-segment weekday-hour heatmap (Sprint #174).
+    // Same shape as weekdayHourPnL (#173) but filtered
+    // to a single symbol or tag.
+    struct SegmentHeatmapCell {
+        std::string segment;
+        int         weekday = 0;
+        int         hour    = 0;
+        double      realized = 0.0;
+        size_t      count   = 0;
+    };
+    std::vector<SegmentHeatmapCell>
+    weekdayHourPnLBySymbol(const std::string& symbol) const;
+    std::vector<SegmentHeatmapCell>
+    weekdayHourPnLByTag(const std::string& tag,
+                         bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

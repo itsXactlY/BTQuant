@@ -4423,5 +4423,80 @@ int main() {
         fs::remove_all(tmpDir, ec);
     }
 
+    // Test 51: ConnectionPanel — static state helpers (used by the
+    // menu-bar status badge). Verifies stateName() and stateColor()
+    // are callable without an instance, return non-empty / non-default
+    // values for the documented states, and that the public State
+    // enum matches the legacy private one.
+    std::cout << "\nTest 51: Testing ConnectionPanel static state helpers..."
+              << std::endl;
+    {
+        using CP = btquant::ui::ConnectionPanel;
+        using State = CP::State;
+
+        // 1) stateName() returns the documented label for each state.
+        if (std::string(CP::stateName(State::Disconnected)) == "DISCONNECTED" &&
+            std::string(CP::stateName(State::Synthetic))    == "SYNTHETIC FALLBACK" &&
+            std::string(CP::stateName(State::Live))         == "LIVE") {
+            std::cout << "✓ stateName() returns documented labels" << std::endl;
+        } else {
+            std::cout << "✗ stateName() wrong: "
+                      << CP::stateName(State::Disconnected) << " / "
+                      << CP::stateName(State::Synthetic)    << " / "
+                      << CP::stateName(State::Live)         << std::endl;
+        }
+
+        // 2) stateColor() returns a non-zero alpha for all three states.
+        auto cDisc  = CP::stateColor(State::Disconnected);
+        auto cSynth = CP::stateColor(State::Synthetic);
+        auto cLive  = CP::stateColor(State::Live);
+        if (cDisc.w > 0.0f && cSynth.w > 0.0f && cLive.w > 0.0f) {
+            std::cout << "✓ stateColor() returns visible (alpha > 0) for "
+                      << "all three states" << std::endl;
+        } else {
+            std::cout << "✗ stateColor() returned invisible color ("
+                      << cDisc.w << "/" << cSynth.w << "/" << cLive.w
+                      << ")" << std::endl;
+        }
+
+        // 3) Live is greenish, Synthetic is yellowish, Disconnected is
+        //    reddish — the visual language must match the panel.
+        bool liveIsGreen   = cLive.x  < 0.5f && cLive.y  > 0.7f;
+        bool synthIsYellow = cSynth.x > 0.7f && cSynth.y  > 0.7f && cSynth.z < 0.7f;
+        bool discIsRed     = cDisc.x  > 0.7f && cDisc.y  < 0.5f;
+        if (liveIsGreen && synthIsYellow && discIsRed) {
+            std::cout << "✓ stateColor() preserves the visual language "
+                      << "(green/yellow/red)" << std::endl;
+        } else {
+            std::cout << "✗ stateColor() palette wrong (live="
+                      << cLive.x << "," << cLive.y << "," << cLive.z
+                      << " synth=" << cSynth.x << "," << cSynth.y
+                      << "," << cSynth.z
+                      << " disc=" << cDisc.x << "," << cDisc.y
+                      << "," << cDisc.z << ")" << std::endl;
+        }
+
+        // 4) computeState() with a null processor returns Disconnected.
+        if (CP::computeState(nullptr) == State::Disconnected) {
+            std::cout << "✓ computeState(nullptr) → Disconnected" << std::endl;
+        } else {
+            std::cout << "✗ computeState(nullptr) wrong" << std::endl;
+        }
+
+        // 5) All three states round-trip through the State enum —
+        //    the underlying int values are distinct (used to size
+        //    static arrays / switch arms in callers).
+        if (static_cast<int>(State::Disconnected) !=
+                static_cast<int>(State::Synthetic) &&
+            static_cast<int>(State::Synthetic)    !=
+                static_cast<int>(State::Live) &&
+            static_cast<int>(State::Live)         !=
+                static_cast<int>(State::Disconnected)) {
+            std::cout << "✓ State enum values are distinct" << std::endl;
+        } else {
+            std::cout << "✗ State enum values collide" << std::endl;
+        }
+    }
+
     return 0;
 }

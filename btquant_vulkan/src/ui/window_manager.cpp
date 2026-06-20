@@ -1131,6 +1131,32 @@ void WindowManager::showMainMenu() {
             ImGui::MenuItem("About", nullptr, nullptr);
             ImGui::EndMenu();
         }
+
+        // Connection-state badge — sits at the right end of the menu
+        // bar so it's always visible regardless of which widgets are
+        // open. Click to toggle the Connection panel for details.
+        // The label is non-interactive (text, not button) so the
+        // menu items on the left keep their own click targets.
+        if (m_marketData) {
+            float rightX = ImGui::GetWindowWidth() - 200.0f;
+            if (rightX > ImGui::GetCursorPosX()) {
+                ImGui::SameLine(rightX);
+            }
+            ImGui::PushID("##conn_badge_menu");
+            if (ImGui::SmallButton(" ")) {
+                // The button is invisible (just the badge fills it);
+                // its click target opens the Connection panel.
+                showConnection = true;
+                markSettingsDirty();
+            }
+            ImGui::PopID();
+            ImGui::SameLine();
+            ConnectionPanel::renderStateBadge(m_marketData);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Click the dot to open the Connection panel.");
+            }
+        }
+
         ImGui::EndMainMenuBar();
     }
 

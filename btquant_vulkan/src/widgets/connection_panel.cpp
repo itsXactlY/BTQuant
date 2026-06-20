@@ -10,6 +10,44 @@
 
 namespace btquant::ui {
 
+ConnectionPanel::State ConnectionPanel::computeState(
+        const ::btquant::MarketDataProcessor* data) {
+    if (!data || !data->isRunning()) return State::Disconnected;
+    // The market-data processor's source path tells us which mode
+    // it's in: live spine uses the canonical /dev/shm path; synthetic
+    // fallback uses anything else (file replay, generated ticks).
+    const std::string path = data->sourcePath();
+    if (path == "/dev/shm/btquant_hotspine") return State::Live;
+    return State::Synthetic;
+}
+
+const char* ConnectionPanel::stateName(State s) {
+    switch (s) {
+        case State::Disconnected: return "DISCONNECTED";
+        case State::Synthetic:    return "SYNTHETIC FALLBACK";
+        case State::Live:         return "LIVE";
+    }
+    return "?";
+}
+
+ImVec4 ConnectionPanel::stateColor(State s) {
+    switch (s) {
+        case State::Live:         return ImVec4(0.30f, 0.95f, 0.40f, 1.0f);
+        case State::Synthetic:    return ImVec4(1.00f, 0.85f, 0.30f, 1.0f);
+        case State::Disconnected: return ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+    }
+    return ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+}
+
+ConnectionPanel::State ConnectionPanel::renderStateBadge(
+        const ::btquant::MarketDataProcessor* data) {
+    State s = computeState(data);
+    ImGui::PushStyleColor(ImGuiCol_Text, stateColor(s));
+    ImGui::Text("● %s", stateName(s));
+    ImGui::PopStyleColor();
+    return s;
+}
+
 void ConnectionPanel::render() {
     if (!ImGui::Begin("Connection", nullptr, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
@@ -75,9 +113,7 @@ void ConnectionPanel::render() {
     m_lastT         = nowSec;
 
     // State badge.
-    ImVec4 stateCol = state == State::Live       ? ImVec4(0.30f, 0.95f, 0.40f, 1.0f)
-                    : state == State::Synthetic  ? ImVec4(1.00f, 0.85f, 0.30f, 1.0f)
-                                                 : ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+    ImVec4 stateCol = stateColor(state);
     ImGui::PushStyleColor(ImGuiCol_Text, stateCol);
     ImGui::Text("● %s", stateName(state));
     ImGui::PopStyleColor();
@@ -125,13 +161,8 @@ void ConnectionPanel::render() {
     ImGui::End();
 }
 
-const char* ConnectionPanel::stateName(State s) const {
-    switch (s) {
-        case State::Disconnected: return "DISCONNECTED";
-        case State::Synthetic:    return "SYNTHETIC FALLBACK";
-        case State::Live:         return "LIVE";
-    }
-    return "?";
-}
+// (stateName() is defined as a static member above; the instance-form
+// overload was removed to keep the API surface clean — the call sites
+// inside render() resolve to the static via implicit scope lookup.)
 
 } // namespace btquant::ui

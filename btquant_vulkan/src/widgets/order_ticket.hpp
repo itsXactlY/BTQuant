@@ -81,6 +81,48 @@ public:
         std::snprintf(m_lastTag, sizeof(m_lastTag), "%s", tag ? tag : "");
     }
 
+    // ---- Last-submitted draft memory (Sprint #57) ----
+    //
+    // After every successful submit, the current qty + side + type +
+    // fee + slippage are copied into the m_last* buffers (the limit
+    // price is intentionally NOT copied — limits depend on live
+    // market state, not trader preference, so we always pull the
+    // fresh ref price instead).
+    //
+    // On the first render frame after a fresh open AND when ALL the
+    // corresponding current buffers are empty AND last* are non-empty,
+    // the draft is restored from m_last*. The static latch ensures
+    // the restore fires at most once per open cycle. Opt out via
+    // setRememberLastDraft(false).
+    //
+    // resetDraft() preserves m_last* (so the trader can clear the
+    // current draft and still get the saved values back on the next
+    // open — same contract as m_lastTag).
+    double lastQty() const;
+    double lastFeeBps() const;
+    double lastSlipBps() const;
+    bool   lastSideIsBuy() const;
+    bool   lastTypeIsLimit() const;
+    bool   rememberLastDraft() const;
+    void   setRememberLastDraft(bool v);
+
+    // Test helpers — prime the m_last* buffers and the side/type
+    // state directly so tests can exercise the auto-restore path
+    // without driving the render loop.
+    void setLastDraftForTest(double qty, double feeBps, double slipBps,
+                             bool isBuy, bool isLimit) {
+        std::snprintf(m_lastQty,    sizeof(m_lastQty),    "%.4f", qty);
+        std::snprintf(m_lastFeeBps, sizeof(m_lastFeeBps), "%.2f", feeBps);
+        std::snprintf(m_lastSlipBps,sizeof(m_lastSlipBps),"%.2f", slipBps);
+        m_lastSideIsBuy   = isBuy;
+        m_lastTypeIsLimit = isLimit;
+    }
+    void clearLastDraftForTest() {
+        m_lastQty[0] = m_lastFeeBps[0] = m_lastSlipBps[0] = '\0';
+        m_lastSideIsBuy   = true;
+        m_lastTypeIsLimit = false;
+    }
+
     // Side setter — used by hotkeys (Alt+B / Alt+S) to flip the
     // ticket's side without going through the render path. Calling
     // setSideBuy(true) makes the next submit a BUY; false = SELL.
@@ -148,6 +190,7 @@ private:
     bool m_altSubmitsOpposite = true;   // opt-out: setAltSubmitsOpposite(false)
     bool m_clearAfterSubmit  = false;   // opt-in: setClearAfterSubmit(true)
     bool m_rememberLastTag   = true;    // opt-out: setRememberLastTag(false)
+    bool m_rememberLastDraft = true;    // opt-out: setRememberLastDraft(false)
     int  m_submitCount = 0;             // monotonic counter since construction
     char m_qty  [32] = "0.10";
     char m_limit[32] = "0.00";      // only used when limit
@@ -155,6 +198,19 @@ private:
     char m_slipBps[32] = "5";       // 5 bps market slippage estimate
     char m_tag[32] = "";            // strategy label (Sprint #49)
     char m_lastTag[32] = "";        // most recent submitted tag (Sprint #52)
+
+    // Last-submitted draft memory (Sprint #57). Mirrors the fields
+    // the trader picks deliberately (qty / side / type / fee / slip);
+    // the limit price is intentionally NOT mirrored because it
+    // depends on live market state. m_last* are seeded by submit()
+    // AFTER the optional resetDraft() clears the current buffers,
+    // so a clear-after-submit user still gets the next open
+    // pre-filled from what they just submitted.
+    char m_lastQty[32]    = "";
+    char m_lastFeeBps[32] = "";
+    char m_lastSlipBps[32]= "";
+    bool m_lastSideIsBuy   = true;
+    bool m_lastTypeIsLimit = false;
 
     // Cached latest trade price from the data spine. Updated each
     // frame by refreshRefPrice(). For limit orders the live price is

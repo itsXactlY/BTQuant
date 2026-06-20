@@ -99,6 +99,28 @@ void OrderTicket::render() {
         // Begin() call's return? Simpler: reset on every close.
         if (!m_open) s_restored = false;
     }
+    // Last-draft auto-restore (Sprint #57). Same first-frame-only
+    // latch as the tag, but covers qty + side + type + fee + slip.
+    // The limit price is intentionally NOT restored (live market
+    // state wins). All five fields must be empty/default for the
+    // restore to fire — if the trader has typed anything, their
+    // input wins. Latch is independent of s_restored so a tag-only
+    // restore and a draft-only restore can co-exist (different
+    // opt-out flags too).
+    if (m_rememberLastDraft &&
+        m_qty[0] == '\0' && m_feeBps[0] == '\0' && m_slipBps[0] == '\0' &&
+        m_lastQty[0] != '\0') {
+        static bool s_draftRestored = false;
+        if (!s_draftRestored) {
+            std::snprintf(m_qty,    sizeof(m_qty),    "%s", m_lastQty);
+            std::snprintf(m_feeBps, sizeof(m_feeBps), "%s", m_lastFeeBps);
+            std::snprintf(m_slipBps,sizeof(m_slipBps),"%s", m_lastSlipBps);
+            m_sideIsBuy   = m_lastSideIsBuy;
+            m_typeIsLimit = m_lastTypeIsLimit;
+            s_draftRestored = true;
+        }
+        if (!m_open) s_draftRestored = false;
+    }
 
     // Pull live ref price from the data source when available.
     refreshRefPrice();
@@ -336,6 +358,17 @@ bool OrderTicket::submit() {
         if (m_tag[0] != '\0') {
             std::snprintf(m_lastTag, sizeof(m_lastTag), "%s", m_tag);
         }
+        // Remember the full submitted draft (Sprint #57) — qty /
+        // side / type / fee / slip. The limit price is NOT mirrored
+        // (it depends on live market state, not trader preference),
+        // so the next open pulls a fresh ref price. Done BEFORE
+        // resetDraft() so a clear-after-submit user still gets the
+        // saved draft on the next open.
+        std::snprintf(m_lastQty,    sizeof(m_lastQty),    "%s", m_qty);
+        std::snprintf(m_lastFeeBps, sizeof(m_lastFeeBps), "%s", m_feeBps);
+        std::snprintf(m_lastSlipBps,sizeof(m_lastSlipBps),"%s", m_slipBps);
+        m_lastSideIsBuy   = m_sideIsBuy;
+        m_lastTypeIsLimit = m_typeIsLimit;
         if (m_clearAfterSubmit) resetDraft();
     }
     return fired;
@@ -359,5 +392,20 @@ bool OrderTicket::isDraftAtDefaults() const {
     // 0.00 — that's the market-mode default, not a draft diff.
     return quantity() == 0.10 && isBuy() && !isLimit();
 }
+
+// ---- Last-submitted draft accessors (Sprint #57) ----
+//
+// Out-of-line because the inline form referenced m_lastQty /
+// m_lastFeeBps / etc. which are declared later in the class —
+// moving the inline body below the fields would have changed the
+// header layout for no real win. parseOrZero() is reused from the
+// anonymous namespace at the top of this file.
+double OrderTicket::lastQty()     const { return parseOrZero(m_lastQty); }
+double OrderTicket::lastFeeBps()  const { return parseOrZero(m_lastFeeBps); }
+double OrderTicket::lastSlipBps() const { return parseOrZero(m_lastSlipBps); }
+bool   OrderTicket::lastSideIsBuy()   const { return m_lastSideIsBuy; }
+bool   OrderTicket::lastTypeIsLimit() const { return m_lastTypeIsLimit; }
+bool   OrderTicket::rememberLastDraft()    const { return m_rememberLastDraft; }
+void   OrderTicket::setRememberLastDraft(bool v) { m_rememberLastDraft = v; }
 
 } // namespace btquant::ui

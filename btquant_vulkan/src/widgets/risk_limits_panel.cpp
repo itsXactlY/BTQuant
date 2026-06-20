@@ -50,10 +50,23 @@ void RiskLimitsPanel::applyToGuard() {
     c.killOnDailyLossUSD = editedKillOnDailyLossUSD();
     c.equityUSD          = editedEquityUSD();
     m_guard->setConfig(c);
+    m_lastAppliedKillUSD = c.killOnDailyLossUSD;
     BTQ_LOG_INFO("RiskLimits: applied caps $%.0f / %.2fx / kill $%.0f / eq $%.0f",
                  c.maxPositionSizeUSD, c.maxLeverage,
                  c.killOnDailyLossUSD, c.equityUSD);
     if (m_persistFn) m_persistFn(*m_guard);
+}
+
+void RiskLimitsPanel::applyBufferToGuardField() {
+    if (!m_guard) return;
+    // Push only the kill-threshold field for snappy live updates; the
+    // other caps are usually set once and rarely tweaked mid-session,
+    // so per-keystroke syncing them is overkill. The next Apply will
+    // flush all four.
+    ::btquant::RiskConfig c = m_guard->config();
+    c.killOnDailyLossUSD = editedKillOnDailyLossUSD();
+    m_guard->setConfig(c);
+    m_lastAppliedKillUSD = c.killOnDailyLossUSD;
 }
 
 void RiskLimitsPanel::render() {
@@ -157,13 +170,36 @@ void RiskLimitsPanel::render() {
     ImGui::Separator();
 
     // ---- Edit limits ----
-    ImGui::Text("Limits (apply with the button):");
+    ImGui::Text("Limits:");
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Live update", &m_liveUpdate)) {
+        if (m_liveUpdate) {
+            // First time the user flips this on, push the current
+            // buffers into the guard so the progress bar snaps to
+            // what the edit fields show — otherwise there's a moment
+            // where the buffer says X but the guard says Y.
+            applyBufferToGuardField();
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Stream kill-threshold edits to the RiskPanel "
+                          "progress bar in real time (no Apply click).");
+    }
     ImGui::PushItemWidth(180);
-    ImGui::InputText("Max position (USD)",   m_maxPos,  sizeof(m_maxPos));
-    ImGui::InputText("Max leverage (x)",     m_maxLev,  sizeof(m_maxLev));
-    ImGui::InputText("Kill on loss (USD)",   m_killUSD, sizeof(m_killUSD));
-    ImGui::InputText("Account equity (USD)", m_equity,  sizeof(m_equity));
+    if (ImGui::InputText("Max position (USD)",   m_maxPos,  sizeof(m_maxPos)) ||
+        ImGui::InputText("Max leverage (x)",     m_maxLev,  sizeof(m_maxLev)) ||
+        ImGui::InputText("Kill on loss (USD)",   m_killUSD, sizeof(m_killUSD)) ||
+        ImGui::InputText("Account equity (USD)", m_equity,  sizeof(m_equity))) {
+        if (m_liveUpdate) applyBufferToGuardField();
+    }
     ImGui::PopItemWidth();
+    if (isKillDirty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "* unsaved");
+    } else if (m_liveUpdate) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(live)");
+    }
     ImGui::SameLine();
     if (ImGui::Button("Apply")) {
         applyToGuard();

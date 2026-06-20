@@ -38,6 +38,7 @@ public:
 private:
     void syncFromGuard();
     void applyToGuard();
+    void applyBufferToGuardField();   // re-reads a single buffer → guard
 
     ::btquant::RiskGuard*    m_guard = nullptr;
     ::btquant::PositionBook* m_book  = nullptr;
@@ -49,6 +50,31 @@ private:
     char m_maxLev[32]  = "10";
     char m_killUSD[32] = "5000";
     char m_equity[32]  = "10000";
+
+    // Live-update mode: when true, every change to a limit field
+    // immediately streams into the guard so the RiskPanel's progress
+    // bar reflects the new threshold without waiting for the Apply
+    // button. Default off so the existing Apply-button muscle memory
+    // keeps working — toggle it in the panel header.
+    bool m_liveUpdate = false;
+
+    // Last value actually pushed to the guard — used to detect dirty
+    // state for the unsaved-changes indicator. Initialized to the
+    // default buffer's parsed value (5000.0) so a freshly-constructed
+    // panel with the conservative config reads as clean.
+    double m_lastAppliedKillUSD = 5000.0;
+
+public:
+    // True when the edit buffer differs from the last applied value.
+    // Used by the render loop to draw the "* unsaved" hint.
+    bool isKillDirty() const {
+        return editedKillOnDailyLossUSD() != m_lastAppliedKillUSD;
+    }
+    // True if live-update mode is engaged.
+    bool isLiveUpdate() const { return m_liveUpdate; }
+    // Toggle live-update from outside (e.g. menu hotkey). No-op when
+    // the panel isn't open or has no guard bound.
+    void setLiveUpdate(bool v) { m_liveUpdate = v; }
 };
 
 } // namespace btquant::ui

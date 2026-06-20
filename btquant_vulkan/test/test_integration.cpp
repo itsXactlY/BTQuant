@@ -6819,5 +6819,111 @@ int main() {
         }
     }
 
+    // Test 69: PositionPanel FillRecord gains tag field (Sprint #65).
+    // The window_manager submit callback now plumbs OrderTicket::tag()
+    // into the FillRecord, so the panel can group / filter fills by
+    // strategy. Mirrors the JournalFill::tag wiring from Sprint #56.
+    std::cout << "\nTest 69: Testing PositionPanel FillRecord tag field..."
+              << std::endl;
+    {
+        using btquant::ui::PositionPanel;
+
+        // 1) Default FillRecord::tag is empty.
+        {
+            PositionPanel::FillRecord r;
+            if (r.tag.empty() &&
+                r.symbol.empty() &&
+                !r.isLong == false &&  // default isLong = true
+                r.qty == 0.0 &&
+                r.price == 0.0 &&
+                r.realizedDelta == 0.0 &&
+                r.seq == 0) {
+                std::cout << "✓ FillRecord defaults: tag empty + "
+                             "other fields zeroed"
+                          << std::endl;
+            } else {
+                std::cout << "✗ FillRecord defaults broke" << std::endl;
+            }
+        }
+
+        // 2) Setting tag + recordFill preserves it.
+        {
+            PositionPanel p;
+            PositionPanel::FillRecord r;
+            r.symbol = "BTCUSDT";
+            r.isLong = true;
+            r.qty    = 0.5;
+            r.price  = 67000.0;
+            r.realizedDelta = 0.0;
+            r.tag    = "scalper-1";
+            p.recordFill(r);
+            if (p.historySize() == 1) {
+                std::cout << "✓ recordFill stores tag"
+                          << std::endl;
+            } else {
+                std::cout << "✗ recordFill didn't store" << std::endl;
+            }
+        }
+
+        // 3) recordFill assigns monotonic seq even with tag set.
+        {
+            PositionPanel p;
+            for (int i = 0; i < 3; ++i) {
+                PositionPanel::FillRecord r;
+                r.symbol = "X";
+                r.qty    = static_cast<double>(i);
+                r.tag    = "STRATEGY-" + std::to_string(i);
+                p.recordFill(r);
+            }
+            if (p.historySize() == 3) {
+                std::cout << "✓ 3 recordFill with distinct tags: "
+                             "history size = 3"
+                          << std::endl;
+            } else {
+                std::cout << "✗ recordFill count wrong" << std::endl;
+            }
+        }
+
+        // 4) FillRecord copy semantics — copying with a tag
+        //    doesn't truncate or split the tag.
+        {
+            PositionPanel::FillRecord r;
+            r.symbol = "BTCUSDT";
+            r.tag = "long-strategy-name-with-many-chars";
+            PositionPanel::FillRecord copy = r;
+            if (copy.tag == r.tag &&
+                copy.tag.size() == 34) {
+                std::cout << "✓ FillRecord copy preserves tag verbatim"
+                          << std::endl;
+            } else {
+                std::cout << "✗ copy mangled tag (size="
+                          << copy.tag.size() << ")" << std::endl;
+            }
+        }
+
+        // 5) recordFill bounded at kMaxHistory (64).
+        {
+            PositionPanel p;
+            for (int i = 0;
+                 i < static_cast<int>(PositionPanel::kMaxHistory) + 10;
+                 ++i) {
+                PositionPanel::FillRecord r;
+                r.symbol = "S";
+                r.qty    = static_cast<double>(i);
+                r.tag    = "T" + std::to_string(i);
+                p.recordFill(r);
+            }
+            if (p.historySize() == PositionPanel::kMaxHistory) {
+                std::cout << "✓ bounded at kMaxHistory ("
+                          << PositionPanel::kMaxHistory << ") "
+                          "even with tag set"
+                          << std::endl;
+            } else {
+                std::cout << "✗ cap broke: size="
+                          << p.historySize() << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

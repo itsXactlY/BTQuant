@@ -21,6 +21,10 @@ public:
         double qty     = 0.0;
         double price   = 0.0;
         double realizedDelta = 0.0;
+        // Strategy tag from OrderTicket (Sprint #65). Mirrors the
+        // JournalFill::tag so the panel can group / filter fills by
+        // the same label the trader entered on the ticket.
+        std::string tag;
         int    seq     = 0;       // monotonically increasing
     };
 

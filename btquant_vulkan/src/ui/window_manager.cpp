@@ -302,6 +302,12 @@ WindowManager::WindowManager() {
             r.qty            = qty;
             r.price          = price;
             r.realizedDelta  = realized;
+            // Plumb the strategy tag through to the position panel
+            // (Sprint #65). Same source as the journal append above —
+            // OrderTicket::tag() returns "" when the trader didn't
+            // set one, which the panel renders as "(untagged)".
+            const char* pt = m_orderTicket->tag();
+            if (pt) r.tag = pt;
             m_positionPanel->recordFill(r);
         }
         if (std::fabs(realized) > 0.0) {

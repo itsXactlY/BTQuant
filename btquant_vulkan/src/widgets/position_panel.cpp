@@ -33,12 +33,13 @@ void PositionPanel::render() {
         ImGui::Separator();
         if (!m_history.empty()) {
             ImGui::Text("Recent fills (closed):");
-            ImGui::Columns(5, "fills_flat", false);
+            ImGui::Columns(6, "fills_flat", false);
             ImGui::Text("#");        ImGui::NextColumn();
             ImGui::Text("Symbol");   ImGui::NextColumn();
             ImGui::Text("Side");     ImGui::NextColumn();
             ImGui::Text("Qty");      ImGui::NextColumn();
             ImGui::Text("Price");    ImGui::NextColumn();
+            ImGui::Text("Tag");      ImGui::NextColumn();
             for (const auto& r : m_history) {
                 ImGui::Text("%d",   r.seq);                 ImGui::NextColumn();
                 ImGui::Text("%s",   r.symbol.c_str());      ImGui::NextColumn();
@@ -46,6 +47,9 @@ void PositionPanel::render() {
                 ImGui::NextColumn();
                 ImGui::Text("%.4f", r.qty);                 ImGui::NextColumn();
                 ImGui::Text("$%.2f",r.price);               ImGui::NextColumn();
+                if (r.tag.empty()) ImGui::TextDisabled("(untagged)");
+                else               ImGui::Text("%s", r.tag.c_str());
+                ImGui::NextColumn();
             }
             ImGui::Columns(1);
         }
@@ -110,13 +114,14 @@ void PositionPanel::render() {
 
     ImGui::Separator();
     ImGui::Text("Recent fills:");
-    ImGui::Columns(6, "fills_open", false);
+    ImGui::Columns(7, "fills_open", false);
     ImGui::Text("#");        ImGui::NextColumn();
     ImGui::Text("Symbol");   ImGui::NextColumn();
     ImGui::Text("Side");     ImGui::NextColumn();
     ImGui::Text("Qty");      ImGui::NextColumn();
     ImGui::Text("Price");    ImGui::NextColumn();
     ImGui::Text("ΔRealized");ImGui::NextColumn();
+    ImGui::Text("Tag");      ImGui::NextColumn();
     for (const auto& r : m_history) {
         ImGui::Text("%d",   r.seq);            ImGui::NextColumn();
         ImGui::Text("%s",   r.symbol.c_str()); ImGui::NextColumn();
@@ -129,6 +134,9 @@ void PositionPanel::render() {
                         : ImVec4(0.95f, 0.40f, 0.40f, 1.0f);
         ImGui::TextColored(dcol, "%s$%.2f",
             r.realizedDelta >= 0 ? "+" : "", r.realizedDelta);
+        ImGui::NextColumn();
+        if (r.tag.empty()) ImGui::TextDisabled("(untagged)");
+        else               ImGui::Text("%s", r.tag.c_str());
         ImGui::NextColumn();
     }
     ImGui::Columns(1);

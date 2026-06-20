@@ -16312,5 +16312,115 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 119: ddDurationStats() / BySymbol / ByTag
+    //   (Sprint #131).
+    //
+    // Time-spent-underwater aggregates. Tests:
+    //   - Empty: zeros.
+    //   - 2 completed DDs of 1h and 4h duration: avg=2.5h,
+    //     max=4h, total=5h.
+    std::cout << "\nTest 119: DD duration stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test119_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto d = j.ddDurationStats();
+            if (d.totalDrawdowns == 0 &&
+                d.avgDurationDays == 0.0 &&
+                d.maxDurationDays == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << d.totalDrawdowns << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 DDs of 1h and 4h duration ----
+        // DD1: trough 1h after peak. DD2: trough 4h after
+        // peak.
+        {
+            TradeJournal j((tmpDir / "dur.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            // DD1: peak at t0+1h, trough at t0+2h.
+            //   cum: 100 → 50 → 200 → 300 (peak update).
+            // Actually: we want DD1 to last 1h.
+            //   t0:      +100 (peak)
+            //   t0+1h:   -50 (trough, DD1 starts at peak
+            //                   t0+0, ends at trough t0+1h)
+            //   t0+2h:   +200 (recovery)
+            //   Now peak=200, cum=250.
+            // DD2: trough 4h later.
+            //   t0+3h:   +200 (peak update → 450)
+            //   t0+7h:   -300 (trough, DD2 from peak t0+3h
+            //                    to t0+7h = 4h)
+            //   t0+8h:   +500 (recovery)
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 1*hour));
+            j.append(mkFill("BTC",  200.0, "", t0 + 2*hour));
+            j.append(mkFill("BTC",  200.0, "", t0 + 3*hour));
+            j.append(mkFill("BTC", -300.0, "", t0 + 7*hour));
+            j.append(mkFill("BTC",  500.0, "", t0 + 8*hour));
+            auto d = j.ddDurationStats();
+            // drawdown_us = time from ENTRY (peak) to
+            // RECOVERY (back to new peak). Not just descent.
+            // DD1: peak t0 → trough t0+1h → recovery t0+2h.
+            //   drawdown_us = 2h.
+            // DD2: peak t0+3h → trough t0+7h → recovery t0+8h.
+            //   drawdown_us = 5h.
+            // avg = 3.5h, max = 5h, total = 7h.
+            if (d.totalDrawdowns == 2 &&
+                std::fabs(d.avgDurationDays - 3.5/24.0) < 1e-9 &&
+                std::fabs(d.maxDurationDays - 5.0/24.0) < 1e-9 &&
+                std::fabs(d.totalDurationDays - 7.0/24.0)
+                    < 1e-9) {
+                std::cout << "✓ 2 DDs (2h + 5h entry-to-recovery): "
+                          << "avg=3.5h, max=5h, total=7h"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ dur wrong: total="
+                          << d.totalDrawdowns
+                          << " avg=" << d.avgDurationDays
+                          << " max=" << d.maxDurationDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-duration tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

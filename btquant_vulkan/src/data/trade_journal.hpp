@@ -1109,6 +1109,28 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Drawdown duration stats (Sprint #131). For every
+    // COMPLETED drawdown, compute the time spent UNDERWATER
+    // (from peak → trough). Different from recovery_us
+    // (#129): duration is the descent, recovery is the climb.
+    //
+    // Aggregates over all completed DDs:
+    //   - totalDrawdowns, avgDurationDays, maxDurationDays,
+    //     totalDurationDays.
+    // Per-symbol / per-tag variants.
+    struct DDDurationStats {
+        size_t  totalDrawdowns  = 0;
+        double  avgDurationDays = 0.0;
+        double  maxDurationDays = 0.0;
+        double  totalDurationDays = 0.0;
+    };
+    DDDurationStats ddDurationStats() const;
+    DDDurationStats ddDurationStatsBySymbol(
+        const std::string& symbol) const;
+    DDDurationStats ddDurationStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

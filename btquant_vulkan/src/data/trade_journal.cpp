@@ -3029,6 +3029,55 @@ TradeJournal::ddDepthDistributionByTag(
 }
 
 namespace {
+// Sprint #131 — shared DD-duration stats builder.
+// Sums drawdown_us across all completed DDs.
+template <typename Container>
+TradeJournal::DDDurationStats
+buildDDDurationStats(const Container& events) {
+    TradeJournal::DDDurationStats out;
+    if (events.empty()) return out;
+    constexpr uint64_t kDay = 24ULL * 60ULL * 60ULL * 1000000ULL;
+    double totalDays = 0.0;
+    double maxDays   = 0.0;
+    for (const auto& ev : events) {
+        if (ev.recovery_us == 0) continue;  // skip unrecovered
+        out.totalDrawdowns++;
+        double days = static_cast<double>(ev.drawdown_us) /
+                      static_cast<double>(kDay);
+        totalDays += days;
+        if (days > maxDays) maxDays = days;
+    }
+    if (out.totalDrawdowns > 0) {
+        out.avgDurationDays   = totalDays /
+            static_cast<double>(out.totalDrawdowns);
+        out.maxDurationDays   = maxDays;
+        out.totalDurationDays = totalDays;
+    }
+    return out;
+}
+}  // namespace
+
+TradeJournal::DDDurationStats
+TradeJournal::ddDurationStats() const {
+    return buildDDDurationStats(drawdownRecoveries());
+}
+
+TradeJournal::DDDurationStats
+TradeJournal::ddDurationStatsBySymbol(
+    const std::string& symbol) const {
+    return buildDDDurationStats(
+        drawdownRecoveriesBySymbol(symbol));
+}
+
+TradeJournal::DDDurationStats
+TradeJournal::ddDurationStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildDDDurationStats(
+        drawdownRecoveriesByTag(tag, includeUntagged));
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

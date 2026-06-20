@@ -7,6 +7,7 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
+#include <limits>
 
 namespace btquant::ui {
 
@@ -22,14 +23,88 @@ void RiskPanel::setMarketData(::btquant::MarketDataProcessor* data) {
 //   * Building the position (same-direction or fresh).
 //   * Reducing / flipping the position (opposite direction); the closed
 //     portion realizes P&L at the average-entry price.
-struct PositionState {
-    double netSize = 0;       // signed (positive = long, negative = short)
-    double avgEntry = 0;     // avg entry price of the OPEN position
-    double realized = 0;     // total realized P&L in the window
-    double maxAbsSize = 0;   // peak |position| in the window
-};
+RiskMetrics computeMetrics(const std::vector<data::Trade>& trades) {
+    RiskMetrics m{};
+    if (trades.empty()) return m;
+    m.tradeCount = static_cast<int>(trades.size());
 
-static PositionState computePosition(const std::vector<data::Trade>& trades) {
+    double sumSize = 0.0;
+    for (const auto& t : trades) {
+        if (t.isBuy) ++m.buyCount;
+        else         ++m.sellCount;
+        sumSize += std::fabs(t.size);
+    }
+    m.avgTradeSize = sumSize / static_cast<double>(m.tradeCount);
+
+    // Trade returns — consecutive mid-price pct moves.
+    std::vector<double> returns;
+    returns.reserve(trades.size());
+    // trades.front() is newest (per the data processor). Walk from newest
+    // backwards so returns are in chronological order.
+    for (size_t i = 1; i < trades.size(); ++i) {
+        const double prev = trades[i].price;
+        const double cur  = trades[i - 1].price;
+        if (prev > 0.0) returns.push_back((cur - prev) / prev);
+    }
+    if (returns.size() >= 2) {
+        double sum = 0.0;
+        for (double r : returns) sum += r;
+        double mean = sum / static_cast<double>(returns.size());
+        double var  = 0.0;
+        for (double r : returns) { double d = r - mean; var += d * d; }
+        double stddev = std::sqrt(var / static_cast<double>(returns.size()));
+        if (stddev > 1e-12) {
+            m.sharpePerTrade = mean / stddev;
+            m.sharpeAnnualized = m.sharpePerTrade * std::sqrt(static_cast<double>(returns.size()));
+        }
+    }
+
+    // Round-trip P&L deltas via running position. Each trade contributes:
+    //   dPnl = sign(position_after) * (price_now - price_prev)
+    // where position_after uses the trade's direction (isBuy=true → +1).
+    // We track both gross profit and gross loss for profit factor / win rate.
+    double cumPnl = 0.0;
+    double peak   = 0.0;
+    m.maxDrawdown = 0.0;
+    int    wins    = 0;
+    int    rounds  = 0;
+    double grossProfit = 0.0;
+    double grossLoss   = 0.0;
+    double sumRTpnl    = 0.0;
+
+    // trades[] is newest-first, so iterating i from oldest (back) to newest
+    // (front) gives chronological order.
+    int pos = 0;
+    for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
+        const double p = it->price;
+        if (pos == 0) { /* baseline tick — open the position as +1 */ }
+        // Update cumPnl: change in P&L since last tick = pos * (price - prevPrice).
+        static thread_local double prevPrice = 0.0;
+        if (pos != 0 && prevPrice > 0.0) {
+            double dpnl = static_cast<double>(pos) * (p - prevPrice);
+            cumPnl += dpnl;
+            // Track as a "round-trip candidate" — counted toward win rate.
+            if (dpnl > 0.0) { ++wins; grossProfit += dpnl; }
+            else if (dpnl < 0.0) { grossLoss += dpnl; }
+            ++rounds;
+            sumRTpnl += dpnl;
+        }
+        if (cumPnl > peak) peak = cumPnl;
+        double dd = peak - cumPnl;
+        if (dd > m.maxDrawdown) m.maxDrawdown = dd;
+        // Open position for next tick: 1 for buy, -1 for sell.
+        pos = it->isBuy ? 1 : -1;
+        prevPrice = p;
+    }
+    if (rounds > 0) m.winRate = static_cast<double>(wins) / static_cast<double>(rounds);
+    if (grossLoss < -1e-12) m.profitFactor = grossProfit / (-grossLoss);
+    else if (grossProfit > 0) m.profitFactor = std::numeric_limits<double>::infinity();
+    if (rounds > 0) m.expectancy = sumRTpnl / static_cast<double>(rounds);
+
+    return m;
+}
+
+PositionState computePosition(const std::vector<data::Trade>& trades) {
     PositionState s;
     // Walk oldest → newest.
     for (auto it = trades.rbegin(); it != trades.rend(); ++it) {
@@ -195,13 +270,59 @@ void RiskPanel::render() {
 
     ImGui::Separator();
 
+    // Aggregate risk metrics over the trade window.
+    RiskMetrics m = computeMetrics(trades);
+    ImGui::Text("Risk Metrics — %d trades (%d buy / %d sell, avg size %.3f)",
+                m.tradeCount, m.buyCount, m.sellCount, m.avgTradeSize);
+    ImGui::Columns(2, "RiskMetricsTable", false);
+    ImGui::SetColumnWidth(0, 200);
+
+    ImGui::Text("Sharpe (per-trade)");   ImGui::NextColumn();
+    if (m.sharpePerTrade >= 0) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 220, 120, 255));
+    else                       ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+    ImGui::Text("%+.3f", m.sharpePerTrade);
+    ImGui::PopStyleColor();             ImGui::NextColumn();
+
+    ImGui::Text("Sharpe (sqrt N, heuristic)");  ImGui::NextColumn();
+    if (m.sharpeAnnualized >= 0) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 220, 120, 255));
+    else                         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+    ImGui::Text("%+.3f", m.sharpeAnnualized);
+    ImGui::PopStyleColor();          ImGui::NextColumn();
+
+    ImGui::Text("Max drawdown");           ImGui::NextColumn();
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+    ImGui::Text("-%.4f", m.maxDrawdown);
+    ImGui::PopStyleColor();                 ImGui::NextColumn();
+
+    ImGui::Text("Win rate");               ImGui::NextColumn();
+    ImGui::Text("%.1f%%", m.winRate * 100.0);  ImGui::NextColumn();
+
+    ImGui::Text("Profit factor");          ImGui::NextColumn();
+    if (std::isinf(m.profitFactor)) ImGui::Text("inf");
+    else                            ImGui::Text("%.2f", m.profitFactor);
+    ImGui::NextColumn();
+
+    ImGui::Text("Expectancy / tick");      ImGui::NextColumn();
+    if (m.expectancy >= 0) ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 220, 120, 255));
+    else                   ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+    ImGui::Text("%+.4f", m.expectancy);
+    ImGui::PopStyleColor();
+    ImGui::Columns(1);
+
+    ImGui::Separator();
+
     // Notes:
     // - Position tracker is naive — does not handle partial fills, fees, or
     //   cross-symbol netting. Suitable for a single-symbol demo where every
     //   trade is a clean +/− on the open position.
     // - "Daily P&L" here is window-scoped, not time-of-day filtered. To
     //   get true daily P&L, group trades by date in the data model.
-    ImGui::TextDisabled("Notes: window-scoped; naive avg-entry; no fees/partials.");
+    // - Sharpe "annualized" uses sqrt(N) heuristic, not 252-trading-days
+    //   scaling. For a 60s candle stream at ~10 trades/sec, this gives
+    //   an N-tick Sharpe, not a yearly one. Calibrate the multiplier
+    //   before relying on it for strategy comparison.
+    ImGui::TextDisabled("Notes: window-scoped; naive avg-entry; no fees/partials; "
+                        "Sharpe = sqrt(N) heuristic.");
 
     ImGui::End();
 }

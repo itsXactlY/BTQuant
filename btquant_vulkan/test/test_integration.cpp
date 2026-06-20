@@ -10,6 +10,7 @@
 #include "../src/widgets/alerts_panel.hpp"
 #include "../src/widgets/watchlist_widget.hpp"
 #include "../src/widgets/log_panel.hpp"
+#include "../src/widgets/risk_panel.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -578,6 +579,82 @@ int main() {
             std::cout << "✗ LogPanel singleton broken" << std::endl;
         }
         lp.clear();
+    }
+
+    // Test 14: computeMetrics — Sharpe / max DD / win rate / profit factor.
+    std::cout << "\nTest 14: Testing computeMetrics..." << std::endl;
+    {
+        using btquant::data::Trade;
+        std::vector<Trade> trades;
+
+        // Construct a deterministic series: 10 trades, prices 100→109.
+        // All buys. Newest-first layout matches MarketDataProcessor:
+        // trades.front() = newest (109), trades.back() = oldest (100).
+        // Iterate via rbegin() in computeMetrics → chronological.
+        for (int i = 9; i >= 0; --i) {
+            Trade t{};
+            t.id    = i;
+            t.price = 100.0 + i;
+            t.size  = 1.0;
+            t.isBuy = true;
+            t.timestamp = 1000 + i;
+            trades.push_back(t);  // back = oldest, front = newest
+        }
+
+        auto m = btquant::ui::computeMetrics(trades);
+
+        if (m.tradeCount == 10) {
+            std::cout << "✓ tradeCount == 10" << std::endl;
+        } else {
+            std::cout << "✗ tradeCount: " << m.tradeCount << std::endl;
+        }
+        if (m.buyCount == 10 && m.sellCount == 0) {
+            std::cout << "✓ buyCount/sellCount split (10/0)" << std::endl;
+        } else {
+            std::cout << "✗ buy/sell split: "
+                      << m.buyCount << "/" << m.sellCount << std::endl;
+        }
+        // All-up price series → Sharpe (per-trade) must be > 0 (mean > 0).
+        if (m.sharpePerTrade > 0.0) {
+            std::cout << "✓ positive trend → positive Sharpe: "
+                      << m.sharpePerTrade << std::endl;
+        } else {
+            std::cout << "✗ Sharpe sign wrong: " << m.sharpePerTrade << std::endl;
+        }
+        // Annualized = perTrade * sqrt(N-1) for N=10 returns.
+        double expectedAnn = m.sharpePerTrade * std::sqrt(9.0);
+        if (std::abs(m.sharpeAnnualized - expectedAnn) < 1e-9) {
+            std::cout << "✓ Sharpe sqrt(N) heuristic: "
+                      << m.sharpeAnnualized << std::endl;
+        } else {
+            std::cout << "✗ Sharpe annualized: got " << m.sharpeAnnualized
+                      << " expected " << expectedAnn << std::endl;
+        }
+        // Buy-only monotonic up → max DD should be ≈ 0 (cumPnl only grows).
+        if (m.maxDrawdown < 1e-9) {
+            std::cout << "✓ monotonic-up → max DD ~ 0 ("
+                      << m.maxDrawdown << ")" << std::endl;
+        } else {
+            std::cout << "✗ max DD should be ~0 on monotonic-up: "
+                      << m.maxDrawdown << std::endl;
+        }
+        // All round-trip dpnl > 0 → winRate = 1.0.
+        if (m.winRate > 0.99) {
+            std::cout << "✓ monotonic-up → winRate = "
+                      << (m.winRate * 100.0) << "%" << std::endl;
+        } else {
+            std::cout << "✗ winRate: " << m.winRate << std::endl;
+        }
+
+        // Empty trade list → all zeros.
+        std::vector<Trade> empty;
+        auto em = btquant::ui::computeMetrics(empty);
+        if (em.tradeCount == 0 && em.sharpePerTrade == 0.0 &&
+            em.maxDrawdown == 0.0 && em.winRate == 0.0) {
+            std::cout << "✓ empty input → all-zero metrics" << std::endl;
+        } else {
+            std::cout << "✗ empty-input invariants broken" << std::endl;
+        }
     }
 
     return 0;

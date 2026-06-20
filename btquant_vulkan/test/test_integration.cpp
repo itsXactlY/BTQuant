@@ -14088,5 +14088,207 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 107: recoveryFactor() / perSymbolRecoveryFactor() /
+    //   perTagRecoveryFactor() / journalRecoveryFactor()
+    //   (Sprint #119).
+    //
+    // Recovery factor = net realized / max DD.
+    // Tests:
+    //   - Pure math: net=200, dd=100 → 2.0 (strong edge).
+    //   - Pure math: net=50, dd=100 → 0.5 (grinding).
+    //   - Pure math: net=100, dd=0 → +inf (no DD).
+    //   - Pure math: net=0, dd=0 → 0 (degenerate).
+    //   - Per-symbol: BTC only, computes correctly.
+    //   - Per-tag: scalp only, computes correctly.
+    //   - Journal-wide: uses whole journal.
+    std::cout << "\nTest 107: recovery factor..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        // ---- Pure math: 200/100 = 2.0 ----
+        {
+            double r = TradeJournal::recoveryFactor(200.0, 100.0);
+            if (std::fabs(r - 2.0) < 1e-9) {
+                std::cout << "✓ recoveryFactor(200,100)=2.0 "
+                          << "(strong edge)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ math 200/100 wrong: " << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Pure math: 50/100 = 0.5 (grinding) ----
+        {
+            double r = TradeJournal::recoveryFactor(50.0, 100.0);
+            if (std::fabs(r - 0.5) < 1e-9) {
+                std::cout << "✓ recoveryFactor(50,100)=0.5 "
+                          << "(grinding)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ math 50/100 wrong: " << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Pure math: net>0, dd=0 → +inf ----
+        {
+            double r = TradeJournal::recoveryFactor(100.0, 0.0);
+            if (std::isinf(r) && r > 0) {
+                std::cout << "✓ recoveryFactor(100,0)=+inf "
+                          << "(no DD, net positive)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ +inf wrong: " << r << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Pure math: net=0, dd=0 → 0 (degenerate) ----
+        {
+            double r = TradeJournal::recoveryFactor(0.0, 0.0);
+            if (r == 0.0) {
+                std::cout << "✓ recoveryFactor(0,0)=0 "
+                          << "(degenerate)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ degenerate wrong: " << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol ----
+        // BTC: +100, -50, +200 → net=250. Max DD=50.
+        // ETH: -300 → net=-300. Max DD=300. RF=-1.0.
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test107_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        {
+            // perSymbolDrawdown() buckets by LOCAL DAY first
+            // — so all BTC fills must span at least 2 distinct
+            // calendar days for the function to detect a DD
+            // across days. Place 1 fill per day.
+            //
+            // BTC: Day1 +100, Day2 -50, Day3 +200.
+            //   daily cums: 100, 50, 250.
+            //   peak: 100, 100, 250. DD: 0, 50, 0.
+            //   maxDD = 50. net = 250. RF = 5.0.
+            //
+            // ETH: Day1 -50, Day2 +200, Day3 -100.
+            //   daily cums: -50, 150, 50.
+            //   peak: 0, 150, 150. DD: 50, 0, 100.
+            //   maxDD = 100. net = 50. RF = 0.5.
+            //
+            // Journal: Day1 +50, Day2 +150, Day3 +100.
+            //   daily cums: 50, 200, 300.
+            //   peak: 50, 200, 300. DD: 0, 0, 0.
+            //   maxDD = 0. RF = +inf (no DD, net positive).
+            TradeJournal j((tmpDir / "rf.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            const uint64_t day3 = day2 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", day1));
+            j.append(mkFill("BTC",  -50.0, "", day2));
+            j.append(mkFill("BTC",  200.0, "", day3));
+            j.append(mkFill("ETH",  -50.0, "", day1));
+            j.append(mkFill("ETH",  200.0, "", day2));
+            j.append(mkFill("ETH", -100.0, "", day3));
+            double btcRF = j.perSymbolRecoveryFactor("BTC");
+            double ethRF = j.perSymbolRecoveryFactor("ETH");
+            double jRF   = j.journalRecoveryFactor();
+            if (std::fabs(btcRF - 5.0) < 1e-9 &&
+                std::fabs(ethRF - 0.5) < 1e-9 &&
+                std::isinf(jRF) && jRF > 0) {
+                std::cout << "✓ per-symbol: BTC RF=5.0, "
+                          << "ETH RF=0.5, journal RF=+inf"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-symbol wrong: btc=" << btcRF
+                          << " eth=" << ethRF << " j=" << jRF
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag (Sprint #119) ----
+        // perTagDrawdown also buckets by local day, so the
+        // 2 scalp fills must span 2 distinct days.
+        //
+        // scalp: Day1 +200, Day2 -50.
+        //   daily cums: 200, 150.
+        //   peak: 200, 200. DD: 0, 50.
+        //   maxDD = 50. net = 150. RF = 3.0.
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  200.0, "scalp", day1));
+            j.append(mkFill("BTC",  -50.0, "scalp", day2));
+            double scalpRF = j.perTagRecoveryFactor(
+                "scalp", false);
+            if (std::fabs(scalpRF - 3.0) < 1e-9) {
+                std::cout << "✓ per-tag: scalp RF=3.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: " << scalpRF
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Empty / no DD: net>0, maxDD=0 → +inf ----
+        {
+            TradeJournal j((tmpDir / "nodd.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC",  50.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            double rf = j.journalRecoveryFactor();
+            if (std::isinf(rf) && rf > 0) {
+                std::cout << "✓ no-DD monotonic up: RF=+inf"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ no-DD wrong: " << rf
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " recovery-factor tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

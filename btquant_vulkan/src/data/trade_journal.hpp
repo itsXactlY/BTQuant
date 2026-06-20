@@ -720,6 +720,24 @@ public:
     static double totalRealized(
         const std::vector<TradingSession>& ss);
 
+    // Recovery factor (Sprint #119) — net realized divided
+    // by max drawdown. > 2.0 is a strong edge (you make 2x
+    // your worst DD per cycle), < 1.0 is grinding (DD bigger
+    // than net profit). Returns +inf if maxDD == 0 (no
+    // drawdown ever).
+    //
+    // Per-symbol / per-tag variants compute the factor using
+    // only that segment's fills. Journal-wide variant uses
+    // the whole journal.
+    static double recoveryFactor(
+        double netRealized, double maxDrawdown);
+    double perSymbolRecoveryFactor(
+        const std::string& symbol) const;
+    double perTagRecoveryFactor(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+    double journalRecoveryFactor() const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

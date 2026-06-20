@@ -1850,6 +1850,70 @@ double TradeJournal::totalRealized(
     return sum;
 }
 
+double TradeJournal::recoveryFactor(
+    double netRealized, double maxDrawdown) {
+    if (maxDrawdown <= 1e-9) {
+        // No drawdown — undefined ratio. Use +inf to signal
+        // "perfect" (the trader's P&L grew monotonically).
+        return netRealized > 1e-9
+            ? std::numeric_limits<double>::infinity()
+            : 0.0;   // also no P&L — degenerate.
+    }
+    return netRealized / maxDrawdown;
+}
+
+double TradeJournal::perSymbolRecoveryFactor(
+    const std::string& symbol) const {
+    // Net realized (sum of all this symbol's realizedDeltas)
+    // over max drawdown (looked up from perSymbolDrawdown()).
+    auto fills = loadAll();
+    double net = 0.0;
+    for (const auto& f : fills) {
+        if (f.symbol == symbol) net += f.realizedDelta;
+    }
+    double maxDD = 0.0;
+    for (const auto& psd : perSymbolDrawdown()) {
+        if (psd.symbol == symbol) {
+            maxDD = psd.maxDrawdown;
+            break;
+        }
+    }
+    return recoveryFactor(net, maxDD);
+}
+
+double TradeJournal::perTagRecoveryFactor(
+    const std::string& tag,
+    bool includeUntagged) const {
+    auto fills = loadAll();
+    double net = 0.0;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (!f.tag.empty()) continue;
+        } else {
+            if (includeUntagged && f.tag.empty()) continue;
+            if (f.tag != tag) continue;
+        }
+        net += f.realizedDelta;
+    }
+    // Look up tag's maxDD from perTagDrawdown vector.
+    double maxDD = 0.0;
+    for (const auto& ptd : perTagDrawdown(includeUntagged)) {
+        if (ptd.tag == tag) {
+            maxDD = ptd.maxDrawdown;
+            break;
+        }
+    }
+    return recoveryFactor(net, maxDD);
+}
+
+double TradeJournal::journalRecoveryFactor() const {
+    auto fills = loadAll();
+    double net = 0.0;
+    for (const auto& f : fills) net += f.realizedDelta;
+    auto dd = maxDrawdown();
+    return recoveryFactor(net, dd.maxDrawdown);
+}
+
 namespace {
 // Sprint #115 — shared monthly bucket builder. The three
 // monthlyReturns*() methods differ only in the filter predicate.

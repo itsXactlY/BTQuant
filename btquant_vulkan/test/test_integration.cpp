@@ -6080,5 +6080,145 @@ int main() {
         }
     }
 
+    // Test 64: SymbolPicker — recent-history deque (Sprint #60).
+    // addRecent pushes a symbol to the front of a bounded deque
+    // (max 10), dedupes (re-pushing an existing entry promotes it
+    // to the front), and silently ignores empty strings. Rendered
+    // above the filtered list so the trader can re-pick a
+    // frequently-used symbol with one click.
+    std::cout << "\nTest 64: Testing SymbolPicker recent history..."
+              << std::endl;
+    {
+        using btquant::ui::SymbolPicker;
+
+        // 1) Empty on construction.
+        {
+            SymbolPicker p;
+            if (p.recent().empty()) {
+                std::cout << "✓ fresh picker has empty recent"
+                          << std::endl;
+            } else {
+                std::cout << "✗ fresh picker has non-empty recent"
+                          << std::endl;
+            }
+        }
+
+        // 2) addRecent pushes to front.
+        {
+            SymbolPicker p;
+            p.addRecent("BTC/USDT");
+            p.addRecent("ETH/USDT");
+            p.addRecent("SOL/USDT");
+            const auto& r = p.recent();
+            if (r.size() == 3 && r.front() == "SOL/USDT" &&
+                r.back() == "BTC/USDT") {
+                std::cout << "✓ 3 adds: most-recent first"
+                          << std::endl;
+            } else {
+                std::cout << "✗ order wrong" << std::endl;
+            }
+        }
+
+        // 3) Dedupe — re-pushing promotes to front.
+        {
+            SymbolPicker p;
+            p.addRecent("BTC/USDT");
+            p.addRecent("ETH/USDT");
+            p.addRecent("BTC/USDT");  // promote BTC
+            const auto& r = p.recent();
+            if (r.size() == 2 && r.front() == "BTC/USDT" &&
+                r.back() == "ETH/USDT") {
+                std::cout << "✓ dedupe: re-push promotes to front"
+                          << std::endl;
+            } else {
+                std::cout << "✗ dedupe broke: front=" << r.front()
+                          << " back=" << r.back() << std::endl;
+            }
+        }
+
+        // 4) Capped at kMaxRecent (10).
+        {
+            SymbolPicker p;
+            for (int i = 0; i < 25; ++i) {
+                p.addRecent("SYM" + std::to_string(i));
+            }
+            if (p.recent().size() == SymbolPicker::kMaxRecent) {
+                std::cout << "✓ capped at kMaxRecent ("
+                          << SymbolPicker::kMaxRecent << ")"
+                          << std::endl;
+            } else {
+                std::cout << "✗ cap wrong: size="
+                          << p.recent().size() << std::endl;
+            }
+        }
+
+        // 5) Capped + dedupe interact correctly.
+        {
+            SymbolPicker p;
+            // 11 unique symbols → cap to 10.
+            for (int i = 0; i < 11; ++i) {
+                p.addRecent("SYM" + std::to_string(i));
+            }
+            // Re-push the oldest (SYM0) — should promote to front,
+            // push SYM10 (oldest) off the back. Net: still 10,
+            // front is now SYM0.
+            p.addRecent("SYM0");
+            const auto& r = p.recent();
+            if (r.size() == 10 && r.front() == "SYM0") {
+                std::cout << "✓ cap + dedupe: SYM0 promoted to "
+                             "front, oldest evicted"
+                          << std::endl;
+            } else {
+                std::cout << "✗ cap+dedupe wrong" << std::endl;
+            }
+        }
+
+        // 6) Empty symbol silently ignored.
+        {
+            SymbolPicker p;
+            p.addRecent("");
+            p.addRecent("BTC/USDT");
+            if (p.recent().size() == 1 &&
+                p.recent().front() == "BTC/USDT") {
+                std::cout << "✓ empty symbol silently ignored"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty symbol polluted recent"
+                          << std::endl;
+            }
+        }
+
+        // 7) clearRecent resets to empty.
+        {
+            SymbolPicker p;
+            p.addRecent("BTC/USDT");
+            p.addRecent("ETH/USDT");
+            p.clearRecent();
+            if (p.recent().empty()) {
+                std::cout << "✓ clearRecent() resets to empty"
+                          << std::endl;
+            } else {
+                std::cout << "✗ clearRecent didn't reset"
+                          << std::endl;
+            }
+        }
+
+        // 8) setRecent restores a snapshot (state.ini path).
+        {
+            SymbolPicker p;
+            std::deque<std::string> snap = {"A", "B", "C"};
+            p.setRecent(snap);
+            const auto& r = p.recent();
+            if (r.size() == 3 && r.front() == "A" &&
+                r.back() == "C") {
+                std::cout << "✓ setRecent restores snapshot "
+                             "(persistence path)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setRecent failed" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

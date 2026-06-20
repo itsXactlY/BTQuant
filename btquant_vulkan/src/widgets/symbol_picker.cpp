@@ -28,6 +28,20 @@ void SymbolPicker::refresh() {
     if (m_selected >= static_cast<int>(m_filtered.size())) m_selected = 0;
 }
 
+void SymbolPicker::addRecent(const std::string& symbol) {
+    if (symbol.empty()) return;  // silent ignore — don't pollute history
+    // Dedupe — if the symbol is already in the deque, remove it so
+    // the new push puts it at the front (most-recent-first order).
+    for (auto it = m_recent.begin(); it != m_recent.end(); ++it) {
+        if (*it == symbol) {
+            m_recent.erase(it);
+            break;
+        }
+    }
+    m_recent.push_front(symbol);
+    while (m_recent.size() > kMaxRecent) m_recent.pop_back();
+}
+
 void SymbolPicker::render() {
     if (!m_open) return;
 
@@ -50,6 +64,7 @@ void SymbolPicker::render() {
         if (m_select && !m_filtered.empty() &&
             m_selected >= 0 && m_selected < static_cast<int>(m_filtered.size())) {
             m_select(m_filtered[m_selected]);
+            addRecent(m_filtered[m_selected]);
             m_open = false;
         }
     }
@@ -58,13 +73,37 @@ void SymbolPicker::render() {
         refresh();
     }
 
+    // Recent history (Sprint #60). Rendered above the filtered list
+    // when non-empty so the trader's most-used symbols are one click
+    // away. Each row is a Selectable — clicking fires the same
+    // m_select callback as the filtered list, then closes the modal.
+    if (!m_recent.empty()) {
+        ImGui::Text("Recent:");
+        for (const auto& sym : m_recent) {
+            ImGui::SameLine();
+            ImGui::PushID(sym.c_str());
+            if (ImGui::SmallButton(sym.c_str())) {
+                if (m_select) {
+                    m_select(sym);
+                    addRecent(sym);  // promote to front
+                }
+                m_open = false;
+            }
+            ImGui::PopID();
+        }
+        ImGui::Separator();
+    }
+
     ImGui::Separator();
 
     if (ImGui::BeginListBox("##syms", ImVec2(-FLT_MIN, -FLT_MIN))) {
         for (size_t i = 0; i < m_filtered.size(); ++i) {
             const bool isSel = (static_cast<int>(i) == m_selected);
             if (ImGui::Selectable(m_filtered[i].c_str(), isSel)) {
-                if (m_select) m_select(m_filtered[i]);
+                if (m_select) {
+                    m_select(m_filtered[i]);
+                    addRecent(m_filtered[i]);
+                }
                 m_open = false;
             }
             if (isSel) ImGui::SetItemDefaultFocus();

@@ -13664,5 +13664,198 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 105: activeTradingDays*() / firstFillUs*() /
+    //   lastFillUs*() (Sprint #116).
+    //
+    // Activity-window queries. Tests:
+    //   - Empty journal: 0 days, first=0, last=0.
+    //   - Single fill: 1 day, first==last==ts.
+    //   - Two days: 2 distinct days even if same month.
+    //   - Same day, multiple fills: 1 day.
+    //   - Per-symbol: counts only that symbol's days.
+    //   - first/last: chronological extremes across fills.
+    std::cout << "\nTest 105: activeTradingDays / firstFillUs / "
+              << "lastFillUs..." << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test105_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            if (j.activeTradingDays() == 0 &&
+                j.firstFillUs() == 0 &&
+                j.lastFillUs()  == 0) {
+                std::cout << "✓ empty: 0 days, first=0, last=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: days="
+                          << j.activeTradingDays()
+                          << " first=" << j.firstFillUs()
+                          << " last=" << j.lastFillUs()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill ----
+        // 2026-03-15 12:00:00 UTC ≈ 1774000000000000 µs
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            const uint64_t ts = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", ts));
+            if (j.activeTradingDays() == 1 &&
+                j.firstFillUs() == ts &&
+                j.lastFillUs()  == ts) {
+                std::cout << "✓ single fill: 1 day, "
+                          << "first==last==ts"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: days="
+                          << j.activeTradingDays()
+                          << " first=" << j.firstFillUs()
+                          << " last=" << j.lastFillUs()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two distinct days, same month ----
+        // day1 = 2026-03-15, day2 = 2026-03-16 (later).
+        // day2_key = 20260316 vs day1_key = 20260315.
+        {
+            TradeJournal j((tmpDir / "two.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "", day1));
+            j.append(mkFill("BTC", -50.0, "", day2));
+            j.append(mkFill("BTC",  30.0, "", day1));
+            if (j.activeTradingDays() == 2 &&
+                j.firstFillUs() == day1 &&
+                j.lastFillUs()  == day2) {
+                std::cout << "✓ two days, 3 fills: 2 distinct "
+                          << "days, first=day1 last=day2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two-days wrong: days="
+                          << j.activeTradingDays()
+                          << " first=" << j.firstFillUs()
+                          << " last=" << j.lastFillUs()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Same day, multiple fills: 1 day ----
+        {
+            TradeJournal j((tmpDir / "same.jsonl").string());
+            const uint64_t base = 1774000000000000ULL;
+            for (uint64_t off = 0; off < 5; ++off) {
+                j.append(mkFill("BTC", 50.0, "",
+                                base + off * 3600ULL * 1000000ULL));
+            }
+            if (j.activeTradingDays() == 1) {
+                std::cout << "✓ 5 fills same day: 1 distinct day"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ same-day wrong: days="
+                          << j.activeTradingDays() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: only that symbol's days count ----
+        // BTC: 2 days; ETH: 1 day.
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            const uint64_t day3 = day2 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "", day1));
+            j.append(mkFill("ETH",  50.0, "", day2));
+            j.append(mkFill("BTC", -30.0, "", day2));
+            j.append(mkFill("BTC",  20.0, "", day3));
+            auto btcDays = j.activeTradingDaysBySymbol("BTC");
+            auto ethDays = j.activeTradingDaysBySymbol("ETH");
+            auto btcFirst = j.firstFillUsBySymbol("BTC");
+            auto btcLast  = j.lastFillUsBySymbol("BTC");
+            if (btcDays == 3 && ethDays == 1 &&
+                btcFirst == day1 && btcLast == day3) {
+                std::cout << "✓ per-symbol: BTC=3 days "
+                          << "(day1-day3), ETH=1 day"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-symbol wrong: btcDays="
+                          << btcDays << " ethDays=" << ethDays
+                          << " btcFirst=" << btcFirst
+                          << " btcLast=" << btcLast << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag with includeUntagged ----
+        // scalp: day1; untagged: day2.
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", day1));
+            j.append(mkFill("BTC", -50.0, "",       day2));
+            auto scalpDays = j.activeTradingDaysByTag(
+                "scalp", true);
+            auto untagDays = j.activeTradingDaysByTag(
+                "__untagged__", true);
+            auto scalpFirst = j.firstFillUsByTag(
+                "scalp", true);
+            auto untagLast = j.lastFillUsByTag(
+                "__untagged__", true);
+            if (scalpDays == 1 && untagDays == 1 &&
+                scalpFirst == day1 && untagLast == day2) {
+                std::cout << "✓ per-tag: scalp=1 day, "
+                          << "__untagged__=1 day"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << scalpDays << " untag=" << untagDays
+                          << " scalpFirst=" << scalpFirst
+                          << " untagLast=" << untagLast
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " active-window tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

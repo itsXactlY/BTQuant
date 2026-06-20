@@ -1536,6 +1536,138 @@ double TradeJournal::avgRecoveryRatio(
 }
 
 namespace {
+// Sprint #116 — shared activity helpers. The three flavors
+// (journal-wide, by-symbol, by-tag) all reduce to "iterate
+// filtered fills and compute min(ts), max(ts), set of
+// distinct YYYY-MM-DD". yearMonthKey() is reused from
+// Sprint #115 but we need a finer-grained daily key:
+//   key = year * 10000 + month * 100 + day
+// (year-month-day as sortable int).
+int dayKeyFromTimestamp(uint64_t ts_us) {
+    std::time_t secs =
+        static_cast<std::time_t>(ts_us / 1000000ULL);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &secs);
+#else
+    localtime_r(&secs, &tm);
+#endif
+    return (tm.tm_year + 1900) * 10000
+         + (tm.tm_mon + 1) * 100
+         + tm.tm_mday;
+}
+
+template <typename Pred>
+size_t countDistinctDays(const std::vector<JournalFill>& fills,
+                         Pred pred) {
+    std::set<int> seen;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        seen.insert(dayKeyFromTimestamp(f.timestamp_us));
+    }
+    return seen.size();
+}
+}  // namespace
+
+size_t TradeJournal::activeTradingDays() const {
+    return countDistinctDays(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+size_t TradeJournal::activeTradingDaysBySymbol(
+    const std::string& symbol) const {
+    return countDistinctDays(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+size_t TradeJournal::activeTradingDaysByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return countDistinctDays(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
+// Sprint #116 — first/last fill by predicate. Returns 0 for
+// empty match. Single pass.
+template <typename Pred>
+uint64_t firstLastFill(const std::vector<JournalFill>& fills,
+                       Pred pred,
+                       bool wantFirst) {
+    uint64_t result = 0;
+    bool seen = false;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (!seen) {
+            result = f.timestamp_us;
+            seen = true;
+        } else if (wantFirst) {
+            if (f.timestamp_us < result)
+                result = f.timestamp_us;
+        } else {
+            if (f.timestamp_us > result)
+                result = f.timestamp_us;
+        }
+    }
+    return result;
+}
+}  // namespace
+
+uint64_t TradeJournal::firstFillUs() const {
+    return firstLastFill(loadAll(),
+        [](const JournalFill&) { return true; }, true);
+}
+
+uint64_t TradeJournal::lastFillUs() const {
+    return firstLastFill(loadAll(),
+        [](const JournalFill&) { return true; }, false);
+}
+
+uint64_t TradeJournal::firstFillUsBySymbol(
+    const std::string& symbol) const {
+    return firstLastFill(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        }, true);
+}
+
+uint64_t TradeJournal::lastFillUsBySymbol(
+    const std::string& symbol) const {
+    return firstLastFill(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        }, false);
+}
+
+uint64_t TradeJournal::firstFillUsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return firstLastFill(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        }, true);
+}
+
+uint64_t TradeJournal::lastFillUsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return firstLastFill(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        }, false);
+}
+
+namespace {
 // Sprint #115 — shared monthly bucket builder. The three
 // monthlyReturns*() methods differ only in the filter predicate.
 struct MonthAcc {

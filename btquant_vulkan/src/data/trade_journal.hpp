@@ -640,6 +640,33 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Activity window (Sprint #116). First/last fill timestamp
+    // + distinct trading day count for the journal-wide view
+    // (or filtered to a symbol/tag).
+    //
+    // activeTradingDays() — number of distinct YYYY-MM-DD
+    //   dates that contain at least one fill. Answers
+    //   "how many days have I traded?".
+    // firstFillUs() / lastFillUs() — microsecond timestamps
+    //   of the chronologically-first / last fill. Returns 0
+    //   when the journal is empty.
+    // Per-symbol / per-tag variants filter before computing.
+    size_t activeTradingDays() const;
+    size_t activeTradingDaysBySymbol(
+        const std::string& symbol) const;
+    size_t activeTradingDaysByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
+    uint64_t firstFillUs() const;
+    uint64_t lastFillUs() const;
+    uint64_t firstFillUsBySymbol(const std::string& symbol) const;
+    uint64_t lastFillUsBySymbol(const std::string& symbol) const;
+    uint64_t firstFillUsByTag(const std::string& tag,
+                              bool includeUntagged = false) const;
+    uint64_t lastFillUsByTag(const std::string& tag,
+                             bool includeUntagged = false) const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

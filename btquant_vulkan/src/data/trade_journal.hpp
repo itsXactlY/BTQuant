@@ -2299,6 +2299,22 @@ public:
     allSegmentExpectancyByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment HHI of trade sizes (Sprint #215).
+    // Herfindahl-Hirschman Index over |realizedDelta|
+    // values. Higher = more concentrated in big trades.
+    //   HHI = sum((size_i / total)²) * 10000
+    // Values: 0 (perfectly equal) to 10000 (1 trade).
+    struct TradeSizeHHI {
+        std::string segment;
+        double      hhi        = 0.0;
+        size_t      totalFills = 0;
+    };
+    TradeSizeHHI tradeSizeHHIBySymbol(
+        const std::string& symbol) const;
+    TradeSizeHHI tradeSizeHHIByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

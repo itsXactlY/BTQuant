@@ -9239,4 +9239,56 @@ TradeJournal::allSegmentExpectancyByTag(
     return out;
 }
 
+namespace {
+// Sprint #215 — per-segment HHI of trade sizes builder.
+template <typename Pred>
+TradeJournal::TradeSizeHHI
+buildTradeSizeHHIBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::TradeSizeHHI h;
+    std::vector<double> sizes;
+    double total = 0.0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        double sz = std::fabs(f.realizedDelta);
+        sizes.push_back(sz);
+        total += sz;
+    }
+    if (sizes.empty() || total < 1e-9) return h;
+    h.totalFills = sizes.size();
+    double sum = 0.0;
+    for (double sz : sizes) {
+        double share = sz / total;
+        sum += share * share;
+    }
+    h.hhi = sum * 10000.0;
+    return h;
+}
+}  // namespace
+
+TradeJournal::TradeSizeHHI
+TradeJournal::tradeSizeHHIBySymbol(
+    const std::string& symbol) const {
+    auto h = buildTradeSizeHHIBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    h.segment = symbol;
+    return h;
+}
+
+TradeJournal::TradeSizeHHI
+TradeJournal::tradeSizeHHIByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto h = buildTradeSizeHHIBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    h.segment = tag;
+    return h;
+}
+
 } // namespace btquant

@@ -22797,5 +22797,63 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 201: tradeSizeHHIBySymbol/ByTag (Sprint #215).
+    //
+    // HHI of trade sizes. Tests:
+    //   - BTC 2 fills [50, 50] → HHI = 0.5² + 0.5² * 10000
+    //     = 5000.
+    std::cout << "\nTest 201: trade size HHI..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test201_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 equal trades → HHI = 5000 ----
+        {
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + 1));
+            auto btcH = j.tradeSizeHHIBySymbol("BTC");
+            if (btcH.totalFills == 2 &&
+                std::fabs(btcH.hhi - 5000.0) < 1e-9) {
+                std::cout << "✓ BTC: 2 equal trades, "
+                          << "HHI=5000"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: HHI="
+                          << btcH.hhi
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " trade-size-HHI tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

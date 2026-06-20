@@ -1,5 +1,7 @@
 #include "window_manager.hpp"
 
+#include <cctype>
+#include <cstring>
 #include <imgui.h>
 #include <imgui_internal.h>   // DockBuilder*
 #include <algorithm>          // std::find / std::rotate (symbol-picker callback)
@@ -1288,6 +1290,33 @@ void WindowManager::showHotkeyHelpWindow() {
                        "— open the Hotkey Editor (Ctrl+H) to remap.");
     ImGui::Separator();
 
+    // Filter box — the action list is 30+ rows; lets the trader
+    // jump to a specific binding when they can't remember which
+    // key it's on. Substring match, case-insensitive. Empty filter
+    // shows everything.
+    static char filterBuf[64] = "";
+    ImGui::PushItemWidth(220.0f);
+    if (ImGui::InputTextWithHint("##hkfilter", "Filter by action…",
+                                 filterBuf, sizeof(filterBuf))) {
+        // Trim trailing whitespace so a stray space doesn't kill
+        // the match. Lowercase the filter once per change.
+        for (int i = (int)std::strlen(filterBuf) - 1; i >= 0; --i) {
+            if (filterBuf[i] == ' ' || filterBuf[i] == '\t') filterBuf[i] = '\0';
+            else break;
+        }
+    }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Clear")) filterBuf[0] = '\0';
+    ImGui::Separator();
+
+    auto matchesFilter = [&](const char* desc) -> bool {
+        if (filterBuf[0] == '\0') return true;
+        std::string d = desc; for (auto& c : d) c = std::tolower(c);
+        std::string f = filterBuf; for (auto& c : f) c = std::tolower(c);
+        return d.find(f) != std::string::npos;
+    };
+
     if (ImGui::BeginTable("hotkeys", 2, ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Key",  ImGuiTableColumnFlags_WidthFixed, 110.0f);
         ImGui::TableSetupColumn("Action");
@@ -1295,17 +1324,42 @@ void WindowManager::showHotkeyHelpWindow() {
 
         // Reflect the user's current binding map, not the hardcoded
         // defaults — if they've remapped F2 → F3, the help window
-        // shows F3.
-        auto display = [&](::btquant::util::HotkeyAction a, const char* desc) {
+        // shows F3. The "(default: F2)" suffix surfaces the diff
+        // so the trader knows what they gave up.
+        using HA = ::btquant::util::HotkeyAction;
+        auto defaults = ::btquant::util::HotkeyMap::defaults();
+
+        auto display = [&](HA a, const char* desc) {
+            if (!matchesFilter(desc)) return;
             std::string keyStr = "(unbound)";
+            bool remapped = false;
+            std::string defaultStr;
             if (m_hotkeyMap && m_hotkeyMap->has(a)) {
                 keyStr = m_hotkeyMap->get(a).label();
+                if (defaults.has(a)) {
+                    defaultStr = defaults.get(a).label();
+                    if (m_hotkeyMap->get(a) != defaults.get(a)) {
+                        remapped = true;
+                    }
+                }
             }
             ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(keyStr.c_str());
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(desc);
+            ImGui::TableNextColumn();
+            // Coloured key text: gold for any modifier chord, white
+            // for plain keys — makes a Ctrl+ / Alt+ row pop visually.
+            ImVec4 keyCol = (keyStr.find('+') != std::string::npos)
+                ? ImVec4(1.00f, 0.85f, 0.30f, 1.0f)
+                : ImVec4(0.92f, 0.92f, 0.92f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text, keyCol);
+            ImGui::TextUnformatted(keyStr.c_str());
+            ImGui::PopStyleColor();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(desc);
+            if (remapped) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(was: %s)", defaultStr.c_str());
+            }
         };
-        using HA = ::btquant::util::HotkeyAction;
         display(HA::ToggleOrderBook,        "Toggle Order Book");
         display(HA::ToggleOrderBookDepth,   "Toggle Order Book Depth");
         display(HA::ToggleDOM,              "Toggle DOM");

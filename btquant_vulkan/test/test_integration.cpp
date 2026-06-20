@@ -11082,5 +11082,284 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 92: TradeJournal.perSymbolCalmar() (Sprint #97).
+    //
+    // Per-symbol Calmar = (mean daily × 252) / maxDD for each
+    // symbol's daily series. Tests:
+    //   - Empty journal → empty result.
+    //   - Single-symbol known fixture: verify exact ratio.
+    //   - Multi-symbol sort: best Calmar first.
+    //   - Negative Calmar (losing year) preserved as-is (sort
+    //     descending still puts least-negative last).
+    std::cout << "\nTest 92: Testing TradeJournal.perSymbolCalmar()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test92_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto ps = j.perSymbolCalmar();
+            if (ps.empty()) {
+                std::cout << "✓ empty journal: no symbols"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty returned " << ps.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single-symbol known fixture ----
+        // Day -3: +100 (peak 100)
+        // Day -2: -40  (DD = 40)
+        // Day -1: +60  (recovered)
+        // mean daily = 120/3 = 40, annRet = 10080.
+        // maxDD = 40. Calmar = 252.
+        {
+            fs::path p = tmpDir / "known.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 100.0, 3, 10));
+            j.append(mkFill("BTCUSDT", -40.0, 2, 10));
+            j.append(mkFill("BTCUSDT",  60.0, 1, 10));
+            auto ps = j.perSymbolCalmar();
+            if (ps.size() == 1 && ps[0].symbol == "BTCUSDT" &&
+                std::fabs(ps[0].maxDrawdown - 40.0) < 1e-9 &&
+                std::fabs(ps[0].annualizedReturn - 10080.0) < 1e-6 &&
+                std::fabs(ps[0].calmarRatio - 252.0) < 1e-6) {
+                std::cout << "✓ single-symbol known fixture: "
+                          << "Calmar=252" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ known fixture wrong: calmar="
+                          << ps[0].calmarRatio << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-symbol sort: best Calmar first ----
+        // A: +100, -40, +60 → Calmar=252 (peak 100, DD 40)
+        // B: +50, +50     → maxDD=0 → calmar=0 (sentinel)
+        // C: +10, -20     → peak 10, trough -10, DD=20,
+        //                   mean=(-10)/2=-5, annRet=-1260,
+        //                   Calmar=-63.
+        // Expected: A(252), B(0), C(-63).
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("A", 100.0, 3, 10));
+            j.append(mkFill("A", -40.0, 2, 10));
+            j.append(mkFill("A",  60.0, 1, 10));
+            j.append(mkFill("B",  50.0, 2, 10));
+            j.append(mkFill("B",  50.0, 1, 10));
+            j.append(mkFill("C",  10.0, 2, 10));
+            j.append(mkFill("C", -20.0, 1, 10));
+            auto ps = j.perSymbolCalmar();
+            if (ps.size() == 3 &&
+                ps[0].symbol == "A" &&
+                ps[1].symbol == "B" &&
+                ps[2].symbol == "C" &&
+                ps[0].calmarRatio > ps[1].calmarRatio &&
+                ps[1].calmarRatio > ps[2].calmarRatio &&
+                std::fabs(ps[1].calmarRatio) < 1e-9 &&
+                std::fabs(ps[2].calmarRatio - (-63.0)) < 1e-6) {
+                std::cout << "✓ multi-symbol sort: "
+                          << "A(" << ps[0].calmarRatio
+                          << ") > B(0) > C(" << ps[2].calmarRatio
+                          << ")" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: "
+                          << ps[0].symbol << "(" << ps[0].calmarRatio
+                          << ") " << ps[1].symbol << "("
+                          << ps[1].calmarRatio << ") "
+                          << ps[2].symbol << "("
+                          << ps[2].calmarRatio << ")"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perSymbolCalmar tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
+    // Test 93: TradeJournal.perTagCalmar() (Sprint #97).
+    //
+    // Per-tag Calmar mirror. Tests:
+    //   - Empty journal → empty.
+    //   - Default skip-untagged → 0 entries when all untagged.
+    //   - Two-tag sort: best first.
+    //   - includeUntagged rolls untagged under "__untagged__".
+    std::cout << "\nTest 93: Testing TradeJournal.perTagCalmar()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test93_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto pt = j.perTagCalmar();
+            if (pt.empty()) {
+                std::cout << "✓ empty journal: no tags"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty returned " << pt.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Default skip-untagged ----
+        {
+            fs::path p = tmpDir / "skipuntag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "", 3, 10));
+            j.append(mkFill("BTC", -40.0, "", 2, 10));
+            j.append(mkFill("BTC",  60.0, "", 1, 10));
+            auto pt = j.perTagCalmar();
+            if (pt.empty()) {
+                std::cout << "✓ default skip-untagged: 0 buckets"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ default returned " << pt.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two-tag sort: best first ----
+        // "scalp": +100, -40, +60 → Calmar=252.
+        // "manual": +10, +10 → maxDD=0 → Calmar=0.
+        // Expected: scalp (252) > manual (0).
+        {
+            fs::path p = tmpDir / "twotag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "scalp",  3, 10));
+            j.append(mkFill("BTC", -40.0, "scalp",  2, 10));
+            j.append(mkFill("BTC",  60.0, "scalp",  1, 10));
+            j.append(mkFill("ETH",  10.0, "manual", 2, 10));
+            j.append(mkFill("ETH",  10.0, "manual", 1, 10));
+            auto pt = j.perTagCalmar();
+            if (pt.size() == 2 &&
+                pt[0].tag == "scalp" &&
+                pt[1].tag == "manual" &&
+                std::fabs(pt[0].calmarRatio - 252.0) < 1e-6 &&
+                std::fabs(pt[1].calmarRatio) < 1e-9) {
+                std::cout << "✓ two-tag sort: scalp(252) > "
+                          << "manual(0)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two-tag wrong: "
+                          << pt[0].tag << "(" << pt[0].calmarRatio
+                          << ") " << pt[1].tag << "("
+                          << pt[1].calmarRatio << ")"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- includeUntagged rollup ----
+        {
+            fs::path p = tmpDir / "rollup.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "",       3, 10));
+            j.append(mkFill("BTC", -40.0, "",       2, 10));
+            j.append(mkFill("BTC",  60.0, "",       1, 10));
+            j.append(mkFill("ETH",  10.0, "manual", 2, 10));
+            j.append(mkFill("ETH",  10.0, "manual", 1, 10));
+            auto pt = j.perTagCalmar(true);  // include
+            if (pt.size() == 2 &&
+                pt[0].tag == "__untagged__" &&
+                pt[1].tag == "manual" &&
+                std::fabs(pt[0].calmarRatio - 252.0) < 1e-6 &&
+                std::fabs(pt[1].calmarRatio) < 1e-9) {
+                std::cout << "✓ includeUntagged: __untagged__(252) "
+                          << "+ manual(0)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rollup wrong: "
+                          << pt[0].tag << "(" << pt[0].calmarRatio
+                          << ") " << pt[1].tag << "("
+                          << pt[1].calmarRatio << ")"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perTagCalmar tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

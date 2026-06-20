@@ -347,6 +347,38 @@ public:
     };
     Calmar calmar() const;
 
+    // Per-symbol Calmar (Sprint #97). For each symbol with at
+    // least one persisted fill, computes Calmar ratio on the
+    // symbol's own daily series — same algorithm as calmar()
+    // (#95) but applied to the symbol's per-day equity curve
+    // and daily return series.
+    //
+    // Sorted by calmarRatio DESCENDING so the symbol with the
+    // best return-per-unit-DD tops the list.
+    //
+    // A symbol with maxDrawdown == 0 gets calmarRatio = 0
+    // (sentinel; metric undefined). A symbol with negative
+    // annualized return gets calmarRatio < 0 (stay-away signal).
+    struct PerSymbolCalmar {
+        std::string symbol;
+        double annualizedReturn = 0.0;
+        double maxDrawdown      = 0.0;
+        double calmarRatio      = 0.0;
+    };
+    std::vector<PerSymbolCalmar> perSymbolCalmar() const;
+
+    // Per-tag Calmar (Sprint #97). Per-tag mirror of
+    // perSymbolCalmar(). `includeUntagged` matches perTagStats()
+    // (#88).
+    struct PerTagCalmar {
+        std::string tag;
+        double annualizedReturn = 0.0;
+        double maxDrawdown      = 0.0;
+        double calmarRatio      = 0.0;
+    };
+    std::vector<PerTagCalmar> perTagCalmar(
+        bool includeUntagged = false) const;
+
     // Per-symbol risk-adjusted return (Sprint #91). For each
     // symbol, Sharpe on the daily series — same algorithm as
     // sharpe() (#84) but applied to the symbol's own daily series.

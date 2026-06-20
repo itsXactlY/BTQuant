@@ -899,6 +899,103 @@ TradeJournal::Calmar TradeJournal::calmar() const {
     return out;
 }
 
+std::vector<TradeJournal::PerSymbolCalmar>
+TradeJournal::perSymbolCalmar() const {
+    // Per-symbol mirror of calmar() (#95). For each symbol:
+    //   1) bucket the symbol's fills by local day
+    //   2) feed the daily series into computeSharpeFromSeries()
+    //      for meanDailyReturn (annualized × 252 = annRet)
+    //   3) feed the same series into computeDrawdownFromSeries()
+    //      for maxDrawdown
+    //   4) calmarRatio = annRet / maxDD, with 0 sentinel when
+    //      maxDD == 0
+    // Sorted by calmarRatio DESC.
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> bySymbol;
+    bySymbol.reserve(8);
+    for (const auto& f : fills) bySymbol[f.symbol].push_back(f);
+
+    std::vector<PerSymbolCalmar> out;
+    out.reserve(bySymbol.size());
+    for (auto& kv : bySymbol) {
+        PerSymbolCalmar e;
+        e.symbol = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto sh = computeSharpeFromSeries(series);
+        auto dd = computeDrawdownFromSeries(series);
+        e.annualizedReturn = sh.meanDailyReturn * 252.0;
+        e.maxDrawdown      = dd.maxDrawdown;
+        if (dd.maxDrawdown > 1e-9) {
+            e.calmarRatio = e.annualizedReturn / e.maxDrawdown;
+        } else {
+            e.calmarRatio = 0.0;
+        }
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerSymbolCalmar& a, const PerSymbolCalmar& b) {
+                  if (a.calmarRatio != b.calmarRatio)
+                      return a.calmarRatio > b.calmarRatio;
+                  if (a.annualizedReturn != b.annualizedReturn)
+                      return a.annualizedReturn > b.annualizedReturn;
+                  return a.symbol < b.symbol;
+              });
+    return out;
+}
+
+std::vector<TradeJournal::PerTagCalmar>
+TradeJournal::perTagCalmar(bool includeUntagged) const {
+    // Per-tag mirror of perSymbolCalmar() (#97). Same shape +
+    // includeUntagged handling as perTagDrawdown() / perTagSharpe().
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> byTag;
+    byTag.reserve(8);
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        byTag[key].push_back(f);
+    }
+
+    std::vector<PerTagCalmar> out;
+    out.reserve(byTag.size());
+    for (auto& kv : byTag) {
+        PerTagCalmar e;
+        e.tag = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto sh = computeSharpeFromSeries(series);
+        auto dd = computeDrawdownFromSeries(series);
+        e.annualizedReturn = sh.meanDailyReturn * 252.0;
+        e.maxDrawdown      = dd.maxDrawdown;
+        if (dd.maxDrawdown > 1e-9) {
+            e.calmarRatio = e.annualizedReturn / e.maxDrawdown;
+        } else {
+            e.calmarRatio = 0.0;
+        }
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerTagCalmar& a, const PerTagCalmar& b) {
+                  if (a.calmarRatio != b.calmarRatio)
+                      return a.calmarRatio > b.calmarRatio;
+                  if (a.annualizedReturn != b.annualizedReturn)
+                      return a.annualizedReturn > b.annualizedReturn;
+                  return a.tag < b.tag;
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

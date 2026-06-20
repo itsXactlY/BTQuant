@@ -731,6 +731,95 @@ TradeJournal::perSymbolSharpe() const {
     return out;
 }
 
+std::vector<TradeJournal::PerTagDrawdown>
+TradeJournal::perTagDrawdown(bool includeUntagged) const {
+    // Per-tag mirror of perSymbolDrawdown() (#91). Same algorithm,
+    // same sort + tie-break. `includeUntagged` matches perTagStats()
+    // (#88): empty-tag fills are skipped when false (default),
+    // aggregated under "__untagged__" when true.
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> byTag;
+    byTag.reserve(8);
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        byTag[key].push_back(f);
+    }
+
+    std::vector<PerTagDrawdown> out;
+    out.reserve(byTag.size());
+    for (auto& kv : byTag) {
+        PerTagDrawdown e;
+        e.tag = kv.first;
+        e.fillCount = kv.second.size();
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto dd = computeDrawdownFromSeries(series);
+        e.maxDrawdown = dd.maxDrawdown;
+        e.peakDate   = dd.peakDate;
+        e.troughDate = dd.troughDate;
+        e.currentDD  = dd.currentDD;
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerTagDrawdown& a, const PerTagDrawdown& b) {
+                  if (a.maxDrawdown != b.maxDrawdown)
+                      return a.maxDrawdown > b.maxDrawdown;
+                  return a.tag < b.tag;
+              });
+    return out;
+}
+
+std::vector<TradeJournal::PerTagSharpe>
+TradeJournal::perTagSharpe(bool includeUntagged) const {
+    // Per-tag mirror of perSymbolSharpe() (#91). Same algorithm,
+    // same sort + tie-break. includeUntagged matches perTagStats()
+    // (#88).
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> byTag;
+    byTag.reserve(8);
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        byTag[key].push_back(f);
+    }
+
+    std::vector<PerTagSharpe> out;
+    out.reserve(byTag.size());
+    for (auto& kv : byTag) {
+        PerTagSharpe e;
+        e.tag = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto sh = computeSharpeFromSeries(series);
+        e.dailySharpe       = sh.dailySharpe;
+        e.annualizedSharpe  = sh.annualizedSharpe;
+        e.meanDailyReturn   = sh.meanDailyReturn;
+        e.stddevDailyReturn = sh.stddevDailyReturn;
+        e.sampleSize        = sh.sampleSize;
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerTagSharpe& a, const PerTagSharpe& b) {
+                  if (a.annualizedSharpe != b.annualizedSharpe)
+                      return a.annualizedSharpe > b.annualizedSharpe;
+                  if (a.meanDailyReturn != b.meanDailyReturn)
+                      return a.meanDailyReturn > b.meanDailyReturn;
+                  return a.tag < b.tag;
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

@@ -10469,5 +10469,313 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 88: TradeJournal.perTagDrawdown() (Sprint #93).
+    //
+    // Per-tag worst peak-to-trough. Same algorithm as
+    // perSymbolDrawdown() (#91) but grouped by tag. Tests:
+    //   - Empty journal → empty result.
+    //   - Default skip-untagged: 0 entries (no fills have tags
+    //     when all are untagged, so no buckets).
+    //   - includeUntagged=true rolls untagged under __untagged__.
+    //   - Two-tag fixture with one always-winning + one always-
+    //     losing → sort order loser-first.
+    //   - fillCount sum across tags == count of tagged fills (or
+    //     total fills when includeUntagged=true).
+    std::cout << "\nTest 88: Testing TradeJournal.perTagDrawdown()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test88_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto pt = j.perTagDrawdown();
+            if (pt.empty()) {
+                std::cout << "✓ empty journal: no tags" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal returned "
+                          << pt.size() << " entries" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All-untagged, default skip → empty ----
+        {
+            fs::path p = tmpDir / "alluntag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  50.0, "", 2, 10));
+            j.append(mkFill("ETH", -30.0, "", 1, 10));
+            auto pt = j.perTagDrawdown();   // default: skip untagged
+            if (pt.empty()) {
+                std::cout << "✓ default skip-untagged: 0 buckets"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ default skip-untagged returned "
+                          << pt.size() << " entries (expected 0)"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All-untagged, includeUntagged → 1 bucket under __untagged__ ----
+        {
+            fs::path p = tmpDir / "untagrollup.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  50.0, "", 2, 10));
+            j.append(mkFill("ETH", -30.0, "", 1, 10));
+            auto pt = j.perTagDrawdown(true);   // include __untagged__
+            if (pt.size() == 1 && pt[0].tag == "__untagged__" &&
+                pt[0].fillCount == 2 &&
+                std::fabs(pt[0].maxDrawdown - 30.0) < 1e-9) {
+                std::cout << "✓ includeUntagged rolls under "
+                          << "'__untagged__' with maxDD=$30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ includeUntagged wrong: tag='"
+                          << pt[0].tag << "' maxDD="
+                          << pt[0].maxDrawdown << " fillCount="
+                          << pt[0].fillCount << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two tags, sort worst-first ----
+        // "scalp" tag: +50, +50 → maxDD = 0.
+        // "arb" tag: +100, -100 → maxDD = 100.
+        // Expected order: arb ($100), scalp ($0).
+        {
+            fs::path p = tmpDir / "twotag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  50.0, "scalp", 2, 10));
+            j.append(mkFill("BTC",  50.0, "scalp", 1, 10));
+            j.append(mkFill("ETH", 100.0, "arb",   2, 10));
+            j.append(mkFill("ETH",-100.0, "arb",   1, 10));
+            auto pt = j.perTagDrawdown();
+            if (pt.size() == 2 &&
+                pt[0].tag == "arb" &&
+                pt[1].tag == "scalp" &&
+                std::fabs(pt[0].maxDrawdown - 100.0) < 1e-9 &&
+                std::fabs(pt[1].maxDrawdown -   0.0) < 1e-9) {
+                std::cout << "✓ two-tag sorted worst-first: "
+                          << "arb($100) > scalp($0)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two-tag wrong: "
+                          << pt[0].tag << "($" << pt[0].maxDrawdown
+                          << "), " << pt[1].tag << "($" << pt[1].maxDrawdown
+                          << ")" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- fillCount sum invariant (default = tagged only) ----
+        // 3 fills tagged + 2 fills untagged = 5 total fills. Default
+        // (skip untagged) → sum-of-fillCount = 3.
+        {
+            fs::path p = tmpDir / "fillcnt.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 10.0, "scalp", 1, 10));
+            j.append(mkFill("ETH", -5.0, "scalp", 1, 11));
+            j.append(mkFill("SOL", 20.0, "arb",   1, 10));
+            j.append(mkFill("BTC", 30.0, "",      1, 10));
+            j.append(mkFill("ETH",-15.0, "",      1, 11));
+            auto pt = j.perTagDrawdown();
+            size_t total = 0;
+            for (const auto& e : pt) total += e.fillCount;
+            if (pt.size() == 2 && total == 3) {
+                std::cout << "✓ fillCount sum (default, "
+                          << "skip untagged) = 3 (tagged fills only)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ fillCount default wrong: sum="
+                          << total << " (expected 3), entries="
+                          << pt.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perTagDrawdown tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
+    // Test 89: TradeJournal.perTagSharpe() (Sprint #93).
+    //
+    // Per-tag Sharpe. Same shape as perSymbolSharpe() (#91) but
+    // grouped by tag. Tests:
+    //   - Empty journal → empty result.
+    //   - Default skip-untagged: 0 entries when no fills are
+    //     tagged.
+    //   - Two-tag Sharpe comparison: [100, -50] vs [10, 10] → best
+    //     tag first.
+    //   - includeUntagged rolls under __untagged__.
+    std::cout << "\nTest 89: Testing TradeJournal.perTagSharpe()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test89_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto pt = j.perTagSharpe();
+            if (pt.empty()) {
+                std::cout << "✓ empty journal: no tags" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal returned "
+                          << pt.size() << " entries" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Default skip-untagged ----
+        {
+            fs::path p = tmpDir / "skipuntag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, "", 2, 10));
+            j.append(mkFill("ETH", -50.0, "", 1, 10));
+            auto pt = j.perTagSharpe();
+            if (pt.empty()) {
+                std::cout << "✓ default skip-untagged: 0 buckets"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ default skip-untagged returned "
+                          << pt.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two-tag Sharpe comparison ----
+        // "scalp": [100, -50]  → daily ≈ 0.236, annual ≈ 3.74.
+        // "manual": [10, 10]   → stddev = 0, Sharpe = 0.
+        // Expected: scalp first (3.74 > 0).
+        {
+            fs::path p = tmpDir / "twotag.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  100.0, "scalp",  2, 10));
+            j.append(mkFill("BTC",  -50.0, "scalp",  1, 10));
+            j.append(mkFill("ETH",   10.0, "manual", 2, 10));
+            j.append(mkFill("ETH",   10.0, "manual", 1, 10));
+            auto pt = j.perTagSharpe();
+            if (pt.size() == 2 &&
+                pt[0].tag == "scalp" &&
+                pt[1].tag == "manual" &&
+                pt[0].annualizedSharpe > pt[1].annualizedSharpe &&
+                std::fabs(pt[1].annualizedSharpe) < 1e-9) {
+                std::cout << "✓ two-tag sorted best-first: "
+                          << "scalp(" << pt[0].annualizedSharpe
+                          << ") > manual(0)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two-tag wrong: "
+                          << pt[0].tag << "(" << pt[0].annualizedSharpe
+                          << ") " << pt[1].tag << "("
+                          << pt[1].annualizedSharpe << ")" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- includeUntagged rolls under __untagged__ ----
+        {
+            fs::path p = tmpDir / "rollup.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  100.0, "", 2, 10));
+            j.append(mkFill("BTC",  -50.0, "", 1, 10));
+            j.append(mkFill("ETH",   10.0, "scalp", 2, 10));
+            j.append(mkFill("ETH",   10.0, "scalp", 1, 10));
+            auto pt = j.perTagSharpe(true);  // include __untagged__
+            if (pt.size() == 2 &&
+                pt[0].tag == "__untagged__" &&
+                pt[1].tag == "scalp" &&
+                std::fabs(pt[1].annualizedSharpe) < 1e-9) {
+                std::cout << "✓ includeUntagged: __untagged__ "
+                          << "(" << pt[0].annualizedSharpe
+                          << ") + scalp(0)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ includeUntagged wrong: "
+                          << pt[0].tag << "(" << pt[0].annualizedSharpe
+                          << ") " << pt[1].tag << "("
+                          << pt[1].annualizedSharpe << ")" << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perTagSharpe tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

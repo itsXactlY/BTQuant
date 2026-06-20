@@ -274,6 +274,46 @@ public:
     };
     std::vector<PerSymbolDrawdown> perSymbolDrawdown() const;
 
+    // Per-tag risk metrics (Sprint #93). For each tag with at
+    // least one persisted fill, computes the worst peak-to-
+    // trough decline seen in that tag's per-day equity curve.
+    // Sorted by maxDrawdown DESCENDING so the worst tag surfaces
+    // first — matches "which strategy caused my worst drop?".
+    //
+    // Same algorithm as maxDrawdown() (#80) / perSymbolDrawdown()
+    // (#91) — applies to per-tag daily series instead.
+    //
+    // `includeUntagged` mirrors perTagStats() (#88): when true,
+    // fills with empty tag aggregate under "__untagged__"; when
+    // false (default), they're skipped entirely.
+    struct PerTagDrawdown {
+        std::string tag;
+        size_t      fillCount   = 0;
+        double      maxDrawdown = 0.0;
+        std::string peakDate;     // YYYY-MM-DD or ""
+        std::string troughDate;   // YYYY-MM-DD or ""
+        double      currentDD   = 0.0;
+    };
+    std::vector<PerTagDrawdown> perTagDrawdown(
+        bool includeUntagged = false) const;
+
+    // Per-tag risk-adjusted return (Sprint #93). For each tag,
+    // Sharpe on the daily series — same algorithm as sharpe()
+    // (#84) but applied to the tag's own daily series. Sorted by
+    // annualized Sharpe DESCENDING.
+    //
+    // `includeUntagged` mirrors perTagStats() (#88).
+    struct PerTagSharpe {
+        std::string tag;
+        double dailySharpe       = 0.0;
+        double annualizedSharpe  = 0.0;
+        double meanDailyReturn   = 0.0;
+        double stddevDailyReturn = 0.0;
+        size_t sampleSize        = 0;
+    };
+    std::vector<PerTagSharpe> perTagSharpe(
+        bool includeUntagged = false) const;
+
     // Per-symbol risk-adjusted return (Sprint #91). For each
     // symbol, Sharpe on the daily series — same algorithm as
     // sharpe() (#84) but applied to the symbol's own daily series.

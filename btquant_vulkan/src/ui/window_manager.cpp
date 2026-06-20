@@ -22,6 +22,7 @@
 #include "../widgets/connection_panel.hpp"
 #include "../widgets/profile_manager.hpp"
 #include "../widgets/symbol_picker.hpp"
+#include "../widgets/theme_editor.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -102,6 +103,8 @@ WindowManager::WindowManager() {
         // MarketDataProcessor's symbol field here and switch the watchlist
         // active row.
     });
+
+    m_themeEditor = new ThemeEditor();
 }
 
 WindowManager::~WindowManager() {
@@ -119,6 +122,7 @@ WindowManager::~WindowManager() {
     delete m_connectionPanel;
     delete m_profileManager;
     delete m_symbolPicker;
+    delete m_themeEditor;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -300,6 +304,18 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);
     }
     prevCtrlP = currCtrlP;
+
+    // Ctrl+T opens the theme editor modal. Edge-triggered.
+    static bool prevCtrlT = false;
+    bool currCtrlT = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_T) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlT && !prevCtrlT) {
+        showThemeEditorOpen = !showThemeEditorOpen;
+        if (m_themeEditor) m_themeEditor->setOpen(showThemeEditorOpen);
+    }
+    prevCtrlT = currCtrlT;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -405,6 +421,11 @@ void WindowManager::showSymbolPickerWindow() {
     if (m_symbolPicker) m_symbolPicker->render();
 }
 
+void WindowManager::showThemeEditorWindow() {
+    if (!showThemeEditorOpen) return;
+    if (m_themeEditor) m_themeEditor->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -423,6 +444,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Connection",        nullptr, &showConnection))      markSettingsDirty();
             if (ImGui::MenuItem("Profile Manager…",  nullptr, &showProfileManager))  markSettingsDirty();
             if (ImGui::MenuItem("Symbol Picker… (Ctrl+P)", nullptr, &showSymbolPickerOpen)) markSettingsDirty();
+            if (ImGui::MenuItem("Theme Editor… (Ctrl+T)",   nullptr, &showThemeEditorOpen))  markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

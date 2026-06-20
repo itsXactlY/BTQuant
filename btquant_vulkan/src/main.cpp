@@ -294,6 +294,7 @@ private:
       windowManager.showConnectionWindow();
       windowManager.showProfileManagerWindow();
       windowManager.showSymbolPickerWindow();
+      windowManager.showThemeEditorWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

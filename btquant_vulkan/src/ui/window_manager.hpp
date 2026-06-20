@@ -64,6 +64,9 @@ public:
     // Symbol Picker toggle (modal — flips showSymbolPickerOpen).
     bool showSymbolPickerOpen = false;
 
+    // Theme Editor toggle (modal).
+    bool showThemeEditorOpen = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -119,6 +122,7 @@ public:
     void showConnectionWindow();
     void showProfileManagerWindow();
     void showSymbolPickerWindow();
+    void showThemeEditorWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -155,6 +159,7 @@ private:
     class ConnectionPanel* m_connectionPanel = nullptr;
     class ProfileManager*  m_profileManager  = nullptr;
     class SymbolPicker*    m_symbolPicker    = nullptr;
+    class ThemeEditor*     m_themeEditor     = nullptr;
     StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;

@@ -14,6 +14,7 @@
 #include "../src/widgets/connection_panel.hpp"
 #include "../src/widgets/profile_manager.hpp"
 #include "../src/widgets/symbol_picker.hpp"
+#include "../src/widgets/theme_editor.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -873,6 +874,93 @@ int main() {
             std::cout << "✓ selectFn not invoked without UI (callback wiring only)" << std::endl;
         } else {
             std::cout << "✗ selectFn leaked without UI" << std::endl;
+        }
+    }
+
+    // Test 18: ThemeEditor — Snapshot POD invariants + apply round-trip.
+    std::cout << "\nTest 18: Testing ThemeEditor..." << std::endl;
+    {
+        using btquant::ui::ThemeEditor;
+
+        // Open/close without ImGui context.
+        ThemeEditor te;
+        if (!te.isOpen()) {
+            std::cout << "✓ ThemeEditor: starts closed" << std::endl;
+        } else {
+            std::cout << "✗ ThemeEditor: should start closed" << std::endl;
+        }
+        te.setOpen(true);
+        if (te.isOpen()) {
+            std::cout << "✓ ThemeEditor.setOpen(true) → isOpen" << std::endl;
+        } else {
+            std::cout << "✗ ThemeEditor.setOpen failed" << std::endl;
+        }
+        te.setOpen(false);
+        if (!te.isOpen()) {
+            std::cout << "✓ ThemeEditor.setOpen(false) closes" << std::endl;
+        } else {
+            std::cout << "✗ ThemeEditor.setOpen(false) failed" << std::endl;
+        }
+
+        // Snapshot POD invariants.
+        ThemeEditor::Snapshot s;
+        if (s.windowPadding == 8.0f && s.framePadding == 4.0f &&
+            s.rounding == 0.0f && s.alpha == 1.0f && s.dark) {
+            std::cout << "✓ Snapshot defaults: pad=8/4 round=0 alpha=1 dark" << std::endl;
+        } else {
+            std::cout << "✗ Snapshot defaults broken" << std::endl;
+        }
+        if (ThemeEditor::kColorCount == 48) {
+            std::cout << "✓ kColorCount == 48 (ImGui 1.90+ ImGuiCol_COUNT)" << std::endl;
+        } else {
+            std::cout << "✗ kColorCount: " << ThemeEditor::kColorCount << std::endl;
+        }
+        // All 48 colors default-constructed to zero alpha.
+        bool allZero = true;
+        for (int i = 0; i < ThemeEditor::kColorCount; ++i) {
+            for (int k = 0; k < 4; ++k) {
+                if (s.colors[i][k] != 0.0f) { allZero = false; break; }
+            }
+            if (!allZero) break;
+        }
+        if (allZero) {
+            std::cout << "✓ all " << ThemeEditor::kColorCount
+                      << " color slots default to {0,0,0,0}" << std::endl;
+        } else {
+            std::cout << "✗ default colors not zero" << std::endl;
+        }
+
+        // Mutate a slot and verify equality check catches it.
+        ThemeEditor::Snapshot s2 = s;
+        if (ThemeEditor::equals(s, s2)) {
+            std::cout << "✓ equals(a, b) → true for identical snapshots" << std::endl;
+        } else {
+            std::cout << "✗ equals on identical snapshots returned false" << std::endl;
+        }
+        s2.colors[5][0] = 0.5f;
+        if (!ThemeEditor::equals(s, s2)) {
+            std::cout << "✓ equals(a, b) detects 1-channel color drift" << std::endl;
+        } else {
+            std::cout << "✗ equals missed color drift" << std::endl;
+        }
+        s2 = s;
+        s2.rounding = 3.5f;
+        if (!ThemeEditor::equals(s, s2)) {
+            std::cout << "✓ equals detects rounding change" << std::endl;
+        } else {
+            std::cout << "✗ equals missed rounding change" << std::endl;
+        }
+
+        // colorName returns non-empty for each slot.
+        bool allNamed = true;
+        for (int i = 0; i <= 47 /*ImGuiCol_COUNT in stock ImGui*/; ++i) {
+            const char* n = ThemeEditor::colorName(i);
+            if (!n || n[0] == '?') { allNamed = false; break; }
+        }
+        if (allNamed) {
+            std::cout << "✓ colorName() returns a label for ImGui's full color range" << std::endl;
+        } else {
+            std::cout << "✗ some colorName() returned '?'" << std::endl;
         }
     }
 

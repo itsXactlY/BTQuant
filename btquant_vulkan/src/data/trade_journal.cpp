@@ -9136,4 +9136,64 @@ TradeJournal::allSegmentRiskRewardRatioByTag(
     return out;
 }
 
+namespace {
+// Sprint #213 — per-segment expectancy builder.
+template <typename Pred>
+TradeJournal::Expectancy
+buildExpectancyBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::Expectancy e;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            grossWin += f.realizedDelta;
+            wins++;
+        } else if (f.realizedDelta < 0) {
+            grossLoss += f.realizedDelta;
+            losses++;
+        }
+    }
+    size_t total = wins + losses;
+    if (total == 0) return e;
+    e.totalTrades = total;
+    double W = static_cast<double>(wins) /
+               static_cast<double>(total);
+    e.winRate = W;
+    if (wins > 0) e.avgWin = grossWin / static_cast<double>(wins);
+    if (losses > 0) {
+        e.avgLoss = std::fabs(
+            grossLoss / static_cast<double>(losses));
+    }
+    // E = W*avgW - (1-W)*avgL
+    e.expectancy = W * e.avgWin - (1.0 - W) * e.avgLoss;
+    return e;
+}
+}  // namespace
+
+TradeJournal::Expectancy
+TradeJournal::expectancyBySymbol(
+    const std::string& symbol) const {
+    auto e = buildExpectancyBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    e.segment = symbol;
+    return e;
+}
+
+TradeJournal::Expectancy
+TradeJournal::expectancyByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto e = buildExpectancyBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    e.segment = tag;
+    return e;
+}
+
 } // namespace btquant

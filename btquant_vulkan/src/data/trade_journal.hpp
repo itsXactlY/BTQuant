@@ -2273,6 +2273,23 @@ public:
     allSegmentRiskRewardRatioByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment expectancy per trade (Sprint #213).
+    // E = winRate * avgWin - (1 - winRate) * |avgL|.
+    // Single metric combining win rate + R.
+    struct Expectancy {
+        std::string segment;
+        double      winRate     = 0.0;
+        double      avgWin      = 0.0;
+        double      avgLoss     = 0.0;  // |avgL|
+        double      expectancy  = 0.0;  // per-trade EV
+        size_t      totalTrades = 0;
+    };
+    Expectancy expectancyBySymbol(
+        const std::string& symbol) const;
+    Expectancy expectancyByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

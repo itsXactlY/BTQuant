@@ -22670,5 +22670,73 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 199: expectancyBySymbol/ByTag (Sprint #213).
+    //
+    // Per-segment expectancy. Tests:
+    //   - BTC 6W @ +50, 4L @ -25 → E = 0.6*50 - 0.4*25
+    //     = 30 - 10 = 20.
+    std::cout << "\nTest 199: expectancy..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test199_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 6W +50, 4L -25 → E = 20 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "e.jsonl").string());
+            for (int i = 0; i < 6; ++i) {
+                j.append(mkFill("BTC", 50.0,
+                                t0 + i * hour));
+            }
+            for (int i = 6; i < 10; ++i) {
+                j.append(mkFill("BTC", -25.0,
+                                t0 + i * hour));
+            }
+            auto btcE = j.expectancyBySymbol("BTC");
+            if (btcE.totalTrades == 10 &&
+                std::fabs(btcE.winRate - 0.6) < 1e-9 &&
+                std::fabs(btcE.expectancy - 20.0) < 1e-9) {
+                std::cout << "✓ BTC: E="
+                          << btcE.expectancy
+                          << " (W=0.6, R=2)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: E="
+                          << btcE.expectancy
+                          << " W=" << btcE.winRate
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " expectancy tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

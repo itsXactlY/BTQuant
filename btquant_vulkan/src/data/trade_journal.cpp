@@ -156,15 +156,18 @@ bool TradeJournal::append(const JournalFill& r) {
 }
 
 std::string TradeJournal::toJsonLine(const JournalFill& r) {
-    char buf[512];
+    char buf[1024];
     // Booleans serialize as true/false barewords; numbers as JSON numbers.
+    // The tag is included as a quoted JSON string (empty when untagged) —
+    // empty string is preserved on round-trip via fromJsonLine's parse.
     std::snprintf(buf, sizeof(buf),
         "{\"ts\":%llu,\"sym\":\"%s\",\"side\":\"%s\","
-        "\"qty\":%.10g,\"px\":%.10g,\"realized\":%.10g}",
+        "\"qty\":%.10g,\"px\":%.10g,\"realized\":%.10g,\"tag\":\"%s\"}",
         static_cast<unsigned long long>(r.timestamp_us),
         jsonEscape(r.symbol).c_str(),
         r.isLong ? "buy" : "sell",
-        r.qty, r.price, r.realizedDelta);
+        r.qty, r.price, r.realizedDelta,
+        jsonEscape(r.tag).c_str());
     return std::string(buf);
 }
 
@@ -177,6 +180,7 @@ std::optional<JournalFill> TradeJournal::fromJsonLine(const std::string& line) {
     const KV* pxRaw  = findKV(kvs, "px");
     const KV* tsRaw  = findKV(kvs, "ts");
     const KV* reRaw  = findKV(kvs, "realized");
+    const KV* tagRaw = findKV(kvs, "tag");  // absent on legacy rows
     if (!sym || !side || !qtyRaw || !pxRaw) return std::nullopt;
 
     JournalFill r;
@@ -190,6 +194,10 @@ std::optional<JournalFill> TradeJournal::fromJsonLine(const std::string& line) {
     } catch (...) {
         return std::nullopt;
     }
+    // Tag is optional — fills written before this field existed
+    // (and rows that the trader didn't tag) parse back with an
+    // empty string, which is the documented "untagged" sentinel.
+    if (tagRaw) r.tag = jsonUnescape(tagRaw->raw);
     return r;
 }
 
@@ -294,9 +302,9 @@ std::string TradeJournal::formatFillsCSV(
     std::ostringstream os;
     // Column order chosen for spreadsheet import — chronological
     // metadata first (timestamp, symbol, side), then trade size
-    // (qty, price), then P&L attribution (realized). Header uses
-    // snake_case to match BTQuant's other CSV exports.
-    os << "timestamp_iso,symbol,side,qty,price,realized_delta\n";
+    // (qty, price), then P&L attribution (realized), then the
+    // strategy tag at the end (so it groups neatly in pivot tables).
+    os << "timestamp_iso,symbol,side,qty,price,realized_delta,tag\n";
     for (const auto& f : fills) {
         char qtyBuf[32], priceBuf[32], realizedBuf[32];
         std::snprintf(qtyBuf,     sizeof(qtyBuf),     "%.10g", f.qty);
@@ -307,7 +315,8 @@ std::string TradeJournal::formatFillsCSV(
            << csvQuoteIfNeeded(f.isLong ? "BUY" : "SELL") << ","
            << csvQuoteIfNeeded(qtyBuf) << ","
            << csvQuoteIfNeeded(priceBuf) << ","
-           << csvQuoteIfNeeded(realizedBuf) << "\n";
+           << csvQuoteIfNeeded(realizedBuf) << ","
+           << csvQuoteIfNeeded(f.tag) << "\n";
     }
     return os.str();
 }

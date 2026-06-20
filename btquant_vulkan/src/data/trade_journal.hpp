@@ -17,6 +17,9 @@ struct JournalFill {
     double      qty    = 0.0;       // base units
     double      price  = 0.0;       // fill price
     double      realizedDelta = 0.0;  // P&L realized on this fill (0 on open)
+    std::string tag;                // free-form strategy/strategy-id label
+                                    // (e.g. "manual", "scalper-1", "arb")
+                                    // — empty when the fill wasn't tagged
 };
 
 // Append-only JSON-lines journal at a fixed path. Each line is a single

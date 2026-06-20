@@ -1379,6 +1379,18 @@ public:
     std::vector<EquitySlopePoint> equityRateOfChange(
         size_t window = 30) const;
 
+    // Per-segment equity rate of change (Sprint #144).
+    // Same shape as equityRateOfChange (#143) but applied
+    // to the segment's filtered equity curve. Answers
+    // "is BTC's edge accelerating or decelerating?"
+    std::vector<EquitySlopePoint> equityRateOfChangeBySymbol(
+        const std::string& symbol,
+        size_t window = 30) const;
+    std::vector<EquitySlopePoint> equityRateOfChangeByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

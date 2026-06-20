@@ -4019,6 +4019,101 @@ TradeJournal::equityRateOfChange(size_t window) const {
 }
 
 namespace {
+// Sprint #144 — equity-rate-of-change builder on a
+// filtered equity curve. Same slope formula as #143 but
+// applied to the per-segment cum.
+template <typename Pred>
+std::vector<TradeJournal::EquitySlopePoint>
+buildEquityRateOfChange(const std::vector<JournalFill>& fills,
+                         size_t window, Pred pred) {
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<TradeJournal::EquitySlopePoint> out;
+    if (sub.size() < window) return out;
+    out.reserve(sub.size() - window + 1);
+    // Build cums.
+    std::vector<double> cums;
+    cums.reserve(sub.size());
+    {
+        double cum = 0.0;
+        for (const auto& f : sub) {
+            cum += f.realizedDelta;
+            cums.push_back(cum);
+        }
+    }
+    auto computeSlope = [&](size_t start, size_t end) {
+        size_t N = end - start;
+        double xCenter = -static_cast<double>(N - 1) / 2.0;
+        double sumX = 0.0, sumY = 0.0, sumXY = 0.0;
+        double sumX2 = 0.0;
+        for (size_t k = 0; k < N; ++k) {
+            double x = xCenter + static_cast<double>(k);
+            double y = cums[start + k];
+            sumX  += x;
+            sumY  += y;
+            sumXY += x * y;
+            sumX2 += x * x;
+        }
+        double denom = static_cast<double>(N) * sumX2 -
+                       sumX * sumX;
+        if (std::fabs(denom) < 1e-12) return 0.0;
+        double numer = static_cast<double>(N) * sumXY -
+                       sumX * sumY;
+        return numer / denom;
+    };
+    {
+        double s = computeSlope(0, window);
+        TradeJournal::EquitySlopePoint p;
+        p.timestamp_us = sub[window - 1].timestamp_us;
+        p.equityValue  = cums[window - 1];
+        p.slope        = s;
+        p.count        = window;
+        out.push_back(p);
+    }
+    for (size_t i = window; i < sub.size(); ++i) {
+        double s = computeSlope(i - window, i);
+        TradeJournal::EquitySlopePoint p;
+        p.timestamp_us = sub[i].timestamp_us;
+        p.equityValue  = cums[i];
+        p.slope        = s;
+        p.count        = window;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::EquitySlopePoint>
+TradeJournal::equityRateOfChangeBySymbol(
+    const std::string& symbol,
+    size_t window) const {
+    return buildEquityRateOfChange(loadAll(), window,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::EquitySlopePoint>
+TradeJournal::equityRateOfChangeByTag(
+    const std::string& tag,
+    bool includeUntagged,
+    size_t window) const {
+    return buildEquityRateOfChange(loadAll(), window,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

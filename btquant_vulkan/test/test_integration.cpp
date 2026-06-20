@@ -17706,5 +17706,72 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 131: equityRateOfChangeBySymbol() /
+    //   equityRateOfChangeByTag() (Sprint #144).
+    //
+    // Per-segment equity rate of change. Tests:
+    //   - BTC has 5 monotonic +10 fills → 3 slope points
+    //     each slope=10.
+    //   - ETH has only 2 fills → empty.
+    std::cout << "\nTest 131: per-segment equity rate..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test131_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 5 fills +10 → 3 slope=10 points ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "", t0 + i));
+            }
+            j.append(mkFill("ETH", 50.0, "", t0 + 5));
+            j.append(mkFill("ETH", 30.0, "", t0 + 6));
+            auto btcV = j.equityRateOfChangeBySymbol("BTC", 3);
+            auto ethV = j.equityRateOfChangeBySymbol("ETH", 3);
+            if (btcV.size() == 3 &&
+                std::fabs(btcV[0].slope - 10.0) < 1e-9 &&
+                ethV.empty()) {
+                std::cout << "✓ per-symbol: BTC=3 slope points "
+                          << "(each slope=10), ETH=empty"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-seg wrong: BTC count="
+                          << btcV.size()
+                          << " ETH count=" << ethV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg rate tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -8492,4 +8492,48 @@ TradeJournal::allSegmentRecoveryTimeByTag(
     return out;
 }
 
+std::vector<TradeJournal::RiskOfRuin>
+TradeJournal::allSegmentRiskOfRuin(double ruinFraction) const {
+    // Sprint #200. Bulk per-symbol risk of ruin
+    // sorted ASC by ruinProb (lowest risk first).
+    std::vector<RiskOfRuin> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(riskOfRuinBySymbol(s, ruinFraction));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskOfRuin& a, const RiskOfRuin& b) {
+            return a.ruinProb < b.ruinProb;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::RiskOfRuin>
+TradeJournal::allSegmentRiskOfRuinByTag(
+    bool includeUntagged, double ruinFraction) const {
+    std::vector<RiskOfRuin> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(riskOfRuinByTag(t, includeUntagged,
+            ruinFraction));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskOfRuin& a, const RiskOfRuin& b) {
+            return a.ruinProb < b.ruinProb;
+        });
+    return out;
+}
+
 } // namespace btquant

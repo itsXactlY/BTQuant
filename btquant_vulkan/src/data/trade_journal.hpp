@@ -2106,6 +2106,16 @@ public:
     allSegmentRecoveryTimeByTag(
         bool includeUntagged = true) const;
 
+    // All-segment risk of ruin bulk (Sprint #200).
+    // Returns RiskOfRuin for every segment, sorted
+    // ASC by ruinProb (lowest risk first).
+    std::vector<RiskOfRuin>
+    allSegmentRiskOfRuin(double ruinFraction = 0.5) const;
+    std::vector<RiskOfRuin>
+    allSegmentRiskOfRuinByTag(
+        bool includeUntagged = true,
+        double ruinFraction = 0.5) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

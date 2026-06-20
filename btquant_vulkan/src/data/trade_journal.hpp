@@ -585,6 +585,37 @@ public:
     // when no drawdown is in progress.
     DrawdownEvent currentDrawdown() const;
 
+    // Derived drawdown metrics (Sprint #114). All take a
+    // DrawdownEvent by value/const-ref and return a scalar.
+    // Pure functions — no journal access needed. Use these
+    // for "V-shape vs L-shape" interpretation.
+    //
+    // recoveryRatio(ev)  — recovery_us / drawdown_us.
+    //                      < 1.0 → V-shape (recovered faster
+    //                      than we fell). = 1.0 → symmetric.
+    //                      > 1.0 → L-shape (took longer to
+    //                      recover than to fall). Returns
+    //                      +inf if drawdown_us == 0.
+    // recoverySpeed(ev)  — trough_depth / recovery_us.
+    //                      P&L units recovered per microsec.
+    //                      Higher = sharper recovery.
+    //                      Returns 0 if recovery_us == 0.
+    // maxDepth(events)   — max trough_depth across events
+    //                      (handy for "what's my worst DD?").
+    // avgDepth(events)   — mean trough_depth.
+    // avgRecoveryRatio(events) — geometric mean of recoveryRatio
+    //                      across events (ratio of ratios,
+    //                      not arithmetic mean — avoids skew
+    //                      from extreme values).
+    static double recoveryRatio(const DrawdownEvent& ev);
+    static double recoverySpeed(const DrawdownEvent& ev);
+    static double maxDepth(
+        const std::vector<DrawdownEvent>& events);
+    static double avgDepth(
+        const std::vector<DrawdownEvent>& events);
+    static double avgRecoveryRatio(
+        const std::vector<DrawdownEvent>& events);
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

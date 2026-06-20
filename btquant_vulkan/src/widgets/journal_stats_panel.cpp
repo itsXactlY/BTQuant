@@ -392,6 +392,117 @@ void JournalStatsPanel::render() {
             ImGui::PopStyleColor();
             ImGui::EndTable();
         }
+
+        // ---- Sprint #114 — Worst Drawdowns table ----
+        // Lists the top N (currently 5) drawdown recovery events
+        // sorted by trough_depth DESC. Columns: depth,
+        // peak_before, trough_value, drawdown_us (in human-
+        // readable units), recovery_us, recoveryRatio (V/L
+        // shape).
+        //
+        // Empty when no recovered DD events exist (e.g. the
+        // trader has been net-positive the whole time).
+        if (ImGui::CollapsingHeader(
+                "Worst drawdowns (Sprint #114)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto events =
+                m_journal->drawdownRecoveries();
+            // Top 5 (already sorted DESC by depth).
+            size_t showN = std::min<size_t>(5, events.size());
+            if (showN == 0) {
+                ImGui::TextDisabled(
+                    "(no recovered drawdowns yet — "
+                    "trader has been net-positive)");
+            } else if (ImGui::BeginTable(
+                           "##WorstDD", 6,
+                           ImGuiTableFlags_Borders |
+                           ImGuiTableFlags_RowBg |
+                           ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("Depth");
+                ImGui::TableSetupColumn("Peak");
+                ImGui::TableSetupColumn("Trough");
+                ImGui::TableSetupColumn("DD time");
+                ImGui::TableSetupColumn("Rec time");
+                ImGui::TableSetupColumn("Ratio (V/L)");
+                ImGui::TableHeadersRow();
+                for (size_t i = 0; i < showN; ++i) {
+                    const auto& e = events[i];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%.2f", e.trough_depth);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.2f", e.peak_before);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%.2f", e.trough_value);
+                    ImGui::TableSetColumnIndex(3);
+                    // drawdown_us → human-readable.
+                    // > 1d: "Nd"; > 1h: "Nh"; else "µs".
+                    {
+                        double s = static_cast<double>(
+                                       e.drawdown_us) / 1e6;
+                        if (s >= 86400.0)
+                            ImGui::Text("%.1fd", s / 86400.0);
+                        else if (s >= 3600.0)
+                            ImGui::Text("%.1fh", s / 3600.0);
+                        else if (s >= 60.0)
+                            ImGui::Text("%.1fm", s / 60.0);
+                        else
+                            ImGui::Text("%.0fs", s);
+                    }
+                    ImGui::TableSetColumnIndex(4);
+                    {
+                        double s = static_cast<double>(
+                                       e.recovery_us) / 1e6;
+                        if (s >= 86400.0)
+                            ImGui::Text("%.1fd", s / 86400.0);
+                        else if (s >= 3600.0)
+                            ImGui::Text("%.1fh", s / 3600.0);
+                        else if (s >= 60.0)
+                            ImGui::Text("%.1fm", s / 60.0);
+                        else
+                            ImGui::Text("%.0fs", s);
+                    }
+                    ImGui::TableSetColumnIndex(5);
+                    double r = TradeJournal::recoveryRatio(e);
+                    if (std::isinf(r)) {
+                        ImGui::TextDisabled("∞");
+                    } else if (r < 1.0) {
+                        // V-shape: green.
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotLines]);
+                        ImGui::Text("%.2f V", r);
+                        ImGui::PopStyleColor();
+                    } else if (r > 1.0) {
+                        // L-shape: orange/red.
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotHistogram]);
+                        ImGui::Text("%.2f L", r);
+                        ImGui::PopStyleColor();
+                    } else {
+                        ImGui::Text("%.2f =", r);
+                    }
+                }
+                ImGui::EndTable();
+                // Aggregate summary line below the table.
+                if (events.size() > 1) {
+                    ImGui::TextDisabled(
+                        "Avg ratio: %.2f (%s), "
+                        "max depth: %.2f",
+                        TradeJournal::avgRecoveryRatio(events),
+                        TradeJournal::avgRecoveryRatio(events) < 1.0
+                            ? "V-shape"
+                            : (TradeJournal::avgRecoveryRatio(
+                                   events) > 1.0
+                                   ? "L-shape"
+                                   : "symmetric"),
+                        TradeJournal::maxDepth(events));
+                }
+            }
+        }
     }
 
     // ---- Streaks mini-section (Sprint #83 + Sprint #105) ----

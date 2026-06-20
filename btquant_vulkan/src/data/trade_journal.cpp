@@ -1476,6 +1476,65 @@ TradeJournal::currentDrawdown() const {
     return current;
 }
 
+// ---- Sprint #114: DrawdownEvent derived metrics ----
+//
+// All pure functions. No journal access. Encoded as static
+// methods so the call site reads `TradeJournal::recoveryRatio(ev)`
+// — explicit namespace avoids accidental namespace pollution.
+
+double TradeJournal::recoveryRatio(const DrawdownEvent& ev) {
+    if (ev.drawdown_us == 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    return static_cast<double>(ev.recovery_us) /
+           static_cast<double>(ev.drawdown_us);
+}
+
+double TradeJournal::recoverySpeed(const DrawdownEvent& ev) {
+    if (ev.recovery_us == 0) return 0.0;
+    return ev.trough_depth /
+           static_cast<double>(ev.recovery_us);
+}
+
+double TradeJournal::maxDepth(
+    const std::vector<DrawdownEvent>& events) {
+    if (events.empty()) return 0.0;
+    double m = 0.0;
+    for (const auto& e : events) {
+        if (e.trough_depth > m) m = e.trough_depth;
+    }
+    return m;
+}
+
+double TradeJournal::avgDepth(
+    const std::vector<DrawdownEvent>& events) {
+    if (events.empty()) return 0.0;
+    double sum = 0.0;
+    for (const auto& e : events) sum += e.trough_depth;
+    return sum / static_cast<double>(events.size());
+}
+
+double TradeJournal::avgRecoveryRatio(
+    const std::vector<DrawdownEvent>& events) {
+    // Geometric mean of recoveryRatio across events.
+    // Symmetric in log-space: avg of ratios == exp(avg of
+    // log(ratio)). Guards against zero drawdown_us by
+    // skipping those events.
+    if (events.empty()) return 0.0;
+    double sum_log = 0.0;
+    size_t n = 0;
+    for (const auto& e : events) {
+        if (e.drawdown_us == 0) continue;
+        double r = static_cast<double>(e.recovery_us) /
+                   static_cast<double>(e.drawdown_us);
+        if (r <= 0.0) continue;  // skip non-positive
+        sum_log += std::log(r);
+        ++n;
+    }
+    if (n == 0) return 0.0;
+    return std::exp(sum_log / static_cast<double>(n));
+}
+
 TradeJournal::StreakStats
 TradeJournal::streakStats() const {
     // Sprint #105. Walk round-trips in chronological order,

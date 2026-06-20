@@ -13283,5 +13283,209 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 103: recoveryRatio / recoverySpeed / maxDepth /
+    //   avgDepth / avgRecoveryRatio (Sprint #114).
+    //
+    // Pure derived metrics on DrawdownEvent vectors. Tests:
+    //   - recoveryRatio: V-shape (<1), symmetric (=1),
+    //     L-shape (>1), zero-drawdown_us → +inf.
+    //   - recoverySpeed: depth / recovery_us.
+    //   - maxDepth / avgDepth: simple aggregates.
+    //   - avgRecoveryRatio: geometric mean over multiple
+    //     events; empty + zero-drawdown_us guarded.
+    std::cout << "\nTest 103: drawdown derived metrics..." << std::endl;
+    {
+        using btquant::TradeJournal;
+        using DE = TradeJournal::DrawdownEvent;
+
+        int pass = 0;
+        int fail = 0;
+
+        auto mkDE = [](uint64_t start, uint64_t trough,
+                       uint64_t end, double peak,
+                       double trough_v, double depth) {
+            DE e;
+            e.start_ts = start; e.trough_ts = trough;
+            e.end_ts = end;
+            e.peak_before = peak; e.trough_value = trough_v;
+            e.trough_depth = depth;
+            e.drawdown_us = end - start;
+            e.recovery_us = end - trough;
+            return e;
+        };
+
+        // ---- V-shape: recovery faster than fall ----
+        // dd_us = 10, rec_us = 5 → ratio = 0.5
+        {
+            auto e = mkDE(0, 5, 10, 100.0, 40.0, 60.0);
+            double r = TradeJournal::recoveryRatio(e);
+            if (std::fabs(r - 0.5) < 1e-9) {
+                std::cout << "✓ recoveryRatio V-shape: 0.5"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ V-shape wrong: r=" << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Symmetric: dd_us == rec_us → 1.0 ----
+        {
+            auto e = mkDE(0, 5, 10, 100.0, 40.0, 60.0);
+            e.drawdown_us = 5;   // override
+            e.recovery_us = 5;
+            double r = TradeJournal::recoveryRatio(e);
+            if (std::fabs(r - 1.0) < 1e-9) {
+                std::cout << "✓ recoveryRatio symmetric: 1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ symmetric wrong: r=" << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- L-shape: recovery slower than fall ----
+        // dd_us = 5, rec_us = 20 → ratio = 4.0
+        {
+            auto e = mkDE(0, 5, 25, 100.0, 40.0, 60.0);
+            // dd_us = 25-0=25, rec_us = 25-5=20
+            // Adjust: mkDE gives dd_us=25-0=25, rec_us=25-5=20
+            // ratio = 20/25 = 0.8 — not L-shape. Rebuild.
+            e.drawdown_us = 5;
+            e.recovery_us = 20;
+            double r = TradeJournal::recoveryRatio(e);
+            if (std::fabs(r - 4.0) < 1e-9) {
+                std::cout << "✓ recoveryRatio L-shape: 4.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ L-shape wrong: r=" << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Zero drawdown_us → +inf ----
+        {
+            DE e;
+            e.drawdown_us = 0;
+            e.recovery_us = 100;
+            double r = TradeJournal::recoveryRatio(e);
+            if (std::isinf(r) && r > 0) {
+                std::cout << "✓ recoveryRatio dd=0: +inf"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ zero-dd wrong: r=" << r
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- recoverySpeed: depth / recovery_us ----
+        {
+            DE e;
+            e.trough_depth = 60.0;
+            e.recovery_us  = 5;
+            double s = TradeJournal::recoverySpeed(e);
+            if (std::fabs(s - 12.0) < 1e-9) {
+                std::cout << "✓ recoverySpeed: depth=60 / "
+                          << "rec=5us = 12" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ speed wrong: s=" << s
+                          << std::endl;
+                ++fail;
+            }
+        }
+        // ---- recoverySpeed: rec_us=0 → 0 (guard) ----
+        {
+            DE e;
+            e.trough_depth = 60.0;
+            e.recovery_us  = 0;
+            double s = TradeJournal::recoverySpeed(e);
+            if (s == 0.0) {
+                std::cout << "✓ recoverySpeed rec=0: 0 (guarded)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ speed-guard wrong: s=" << s
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- maxDepth + avgDepth ----
+        {
+            std::vector<DE> evs;
+            auto a = mkDE(0, 5, 10, 100.0, 70.0, 30.0);
+            auto b = mkDE(0, 5, 10, 100.0, 50.0, 50.0);
+            auto c = mkDE(0, 5, 10, 100.0, 90.0, 10.0);
+            evs.push_back(a); evs.push_back(b); evs.push_back(c);
+            double m = TradeJournal::maxDepth(evs);
+            double av = TradeJournal::avgDepth(evs);
+            if (std::fabs(m - 50.0) < 1e-9 &&
+                std::fabs(av - 30.0) < 1e-9) {
+                std::cout << "✓ maxDepth=50, avgDepth=30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ aggregates wrong: max=" << m
+                          << " avg=" << av << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- avgRecoveryRatio: geometric mean ----
+        // Two events: r=0.5 and r=2.0 → geo mean = sqrt(1.0) = 1.0
+        {
+            std::vector<DE> evs;
+            DE e1;
+            e1.drawdown_us = 10;
+            e1.recovery_us = 5;   // r=0.5
+            DE e2;
+            e2.drawdown_us = 5;
+            e2.recovery_us = 10;  // r=2.0
+            evs.push_back(e1);
+            evs.push_back(e2);
+            double ar = TradeJournal::avgRecoveryRatio(evs);
+            if (std::fabs(ar - 1.0) < 1e-9) {
+                std::cout << "✓ avgRecoveryRatio (geo mean): "
+                          << "1.0 (symmetric V+L)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ geo-mean wrong: ar=" << ar
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Empty vector guards ----
+        {
+            std::vector<DE> empty;
+            double m = TradeJournal::maxDepth(empty);
+            double av = TradeJournal::avgDepth(empty);
+            double ar = TradeJournal::avgRecoveryRatio(empty);
+            if (m == 0.0 && av == 0.0 && ar == 0.0) {
+                std::cout << "✓ empty vector: all 0 (guarded)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty guards wrong: m=" << m
+                          << " av=" << av << " ar=" << ar
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " drawdown-metric tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

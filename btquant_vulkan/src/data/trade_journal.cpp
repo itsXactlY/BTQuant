@@ -431,6 +431,52 @@ TradeJournal::Streaks TradeJournal::streaks() const {
     return s;
 }
 
+TradeJournal::Sharpe TradeJournal::sharpe() const {
+    // Annualization factor for trading days. 252 is the
+    // industry-standard convention (US equity markets). For
+    // crypto, 365 might be more accurate — but the trader is
+    // asking for the classic Sharpe so we match expectations.
+    constexpr double kTradingDays = 252.0;
+
+    Sharpe out;
+    auto daily = realizedByDay();
+    out.sampleSize = daily.size();
+    if (daily.empty()) return out;
+
+    // 1) Mean.
+    double sum = 0.0;
+    for (const auto& kv : daily) sum += kv.second;
+    out.meanDailyReturn = sum / static_cast<double>(daily.size());
+
+    // 2) Sample stddev (Bessel-corrected, n-1). Single day → 0.
+    if (daily.size() < 2) {
+        out.stddevDailyReturn = 0.0;
+        out.dailySharpe       = 0.0;
+        out.annualizedSharpe  = 0.0;
+        return out;
+    }
+    double sqSum = 0.0;
+    for (const auto& kv : daily) {
+        double d = kv.second - out.meanDailyReturn;
+        sqSum += d * d;
+    }
+    out.stddevDailyReturn = std::sqrt(sqSum /
+                                      static_cast<double>(daily.size() - 1));
+
+    // 3) Sharpe = mean / stddev. Annualized by sqrt(252).
+    if (out.stddevDailyReturn > 1e-9) {
+        out.dailySharpe = out.meanDailyReturn / out.stddevDailyReturn;
+        out.annualizedSharpe = out.dailySharpe * std::sqrt(kTradingDays);
+    } else {
+        // All days have the same return → stddev 0, ratio
+        // undefined. Sentinel: 0 (not inf, not NaN) — caller can
+        // format as "—" without special-casing.
+        out.dailySharpe      = 0.0;
+        out.annualizedSharpe = 0.0;
+    }
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

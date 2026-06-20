@@ -8920,5 +8920,229 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 82: TradeJournal.sharpe() (Sprint #84).
+    // Risk-adjusted return on the daily series. Sharpe = mean /
+    // stddev, annualized by sqrt(252). Sample stddev (Bessel-
+    // corrected, n-1).
+    std::cout << "\nTest 82: Testing TradeJournal.sharpe()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test82_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t base = std::mktime(&tm_now);
+
+        auto mkFill = [](const std::string& sym, double realized,
+                         std::time_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false; f.realizedDelta = realized;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+        // Append a sequence of daily returns — one fill per day,
+        // each at a different local midnight.
+        auto appendDays = [&](TradeJournal& j,
+                             const std::vector<double>& dailyReturns) {
+            for (size_t i = 0; i < dailyReturns.size(); ++i) {
+                std::time_t dayMidnight = base - static_cast<std::time_t>(
+                    (dailyReturns.size() - 1 - i) * 86400);
+                j.append(mkFill("X", dailyReturns[i], dayMidnight + 12*3600));
+            }
+        };
+
+        // ---- Scenario 1: empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto sh = j.sharpe();
+            if (sh.sampleSize == 0 && sh.meanDailyReturn == 0.0 &&
+                sh.stddevDailyReturn == 0.0 && sh.dailySharpe == 0.0 &&
+                sh.annualizedSharpe == 0.0) {
+                std::cout << "✓ empty journal: all-zero Sharpe"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty wrong: size=" << sh.sampleSize
+                          << " mean=" << sh.meanDailyReturn << std::endl;
+            }
+        }
+
+        // ---- Scenario 2: single day → stddev 0, Sharpe 0 ----
+        // mean=$100, stddev=0 (single observation), Sharpe=0.
+        {
+            fs::path p = tmpDir / "single.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 100.0 });
+            auto sh = j.sharpe();
+            bool ok = sh.sampleSize == 1 &&
+                      std::fabs(sh.meanDailyReturn - 100.0) < 1e-9 &&
+                      sh.stddevDailyReturn == 0.0 &&
+                      sh.dailySharpe == 0.0 &&
+                      sh.annualizedSharpe == 0.0;
+            if (ok) {
+                std::cout << "✓ single day: mean=$100, stddev=0, Sharpe=0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single wrong: size=" << sh.sampleSize
+                          << " mean=" << sh.meanDailyReturn
+                          << " stddev=" << sh.stddevDailyReturn
+                          << " sharpe=" << sh.dailySharpe << std::endl;
+            }
+        }
+
+        // ---- Scenario 3: constant return → stddev 0, Sharpe 0 ----
+        // [+10, +10, +10, +10, +10]. mean=$10, stddev=0.
+        {
+            fs::path p = tmpDir / "constant.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 10, 10, 10, 10, 10 });
+            auto sh = j.sharpe();
+            bool ok = sh.sampleSize == 5 &&
+                      std::fabs(sh.meanDailyReturn - 10.0) < 1e-9 &&
+                      sh.stddevDailyReturn == 0.0 &&
+                      sh.dailySharpe == 0.0 &&
+                      sh.annualizedSharpe == 0.0;
+            if (ok) {
+                std::cout << "✓ constant return: stddev=0, Sharpe=0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ constant wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 4: known series [10, 20, 30] ----
+        // mean = 20
+        // variance (n-1=2) = ((10-20)^2 + 0 + (30-20)^2) / 2 = 200/2 = 100
+        // stddev = sqrt(100) = 10
+        // dailySharpe = 20/10 = 2.0
+        // annualized = 2.0 * sqrt(252)
+        {
+            fs::path p = tmpDir / "series4.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 10, 20, 30 });
+            auto sh = j.sharpe();
+            double expectedAnnualized = 2.0 * std::sqrt(252.0);
+            bool ok = sh.sampleSize == 3 &&
+                      std::fabs(sh.meanDailyReturn - 20.0) < 1e-9 &&
+                      std::fabs(sh.stddevDailyReturn - 10.0) < 1e-9 &&
+                      std::fabs(sh.dailySharpe - 2.0) < 1e-9 &&
+                      std::fabs(sh.annualizedSharpe - expectedAnnualized) < 1e-6;
+            if (ok) {
+                std::cout << "✓ series [10,20,30]: mean=$20 stddev=$10 "
+                          << "Sharpe=2.00 annualized="
+                          << sh.annualizedSharpe << std::endl;
+            } else {
+                std::cout << "✗ series4 wrong: mean=" << sh.meanDailyReturn
+                          << " stddev=" << sh.stddevDailyReturn
+                          << " daily=" << sh.dailySharpe
+                          << " ann=" << sh.annualizedSharpe << std::endl;
+            }
+        }
+
+        // ---- Scenario 5: negative bias [-30, -20, -10] ----
+        // mean = -20, stddev = 10, Sharpe = -2.0 (negative — losing
+        // strategy). Annualized is negative too.
+        {
+            fs::path p = tmpDir / "negseries.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { -30, -20, -10 });
+            auto sh = j.sharpe();
+            double expectedAnnualized = -2.0 * std::sqrt(252.0);
+            bool ok = sh.sampleSize == 3 &&
+                      std::fabs(sh.meanDailyReturn - (-20.0)) < 1e-9 &&
+                      std::fabs(sh.stddevDailyReturn - 10.0) < 1e-9 &&
+                      std::fabs(sh.dailySharpe - (-2.0)) < 1e-9 &&
+                      std::fabs(sh.annualizedSharpe - expectedAnnualized) < 1e-6;
+            if (ok) {
+                std::cout << "✓ negative series: mean=-$20 Sharpe=-2.00 "
+                          << "annualized=" << sh.annualizedSharpe
+                          << std::endl;
+            } else {
+                std::cout << "✗ negseries wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 6: zero-mean series [10, -10] ----
+        // mean=0, stddev=sqrt((100+100)/1)=sqrt(200), Sharpe=0
+        // (numerator is 0 regardless of stddev).
+        {
+            fs::path p = tmpDir / "zeromean.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 10, -10 });
+            auto sh = j.sharpe();
+            bool ok = sh.sampleSize == 2 &&
+                      std::fabs(sh.meanDailyReturn) < 1e-9 &&
+                      std::fabs(sh.dailySharpe) < 1e-9 &&
+                      std::fabs(sh.annualizedSharpe) < 1e-9 &&
+                      sh.stddevDailyReturn > 1e-9;  // stddev is non-zero
+            if (ok) {
+                std::cout << "✓ zero-mean series: Sharpe=0 (mean=0)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ zeromean wrong: mean=" << sh.meanDailyReturn
+                          << " stddev=" << sh.stddevDailyReturn
+                          << " sharpe=" << sh.dailySharpe << std::endl;
+            }
+        }
+
+        // ---- Scenario 7: annualized = daily * sqrt(252) ----
+        // Use [5, 10, 15, 20, 25] for variety.
+        // mean=15, var=(100+25+0+25+100)/4=62.5, stddev=sqrt(62.5),
+        // daily=15/stddev, annualized=daily*sqrt(252).
+        {
+            fs::path p = tmpDir / "annualized.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 5, 10, 15, 20, 25 });
+            auto sh = j.sharpe();
+            // Verify the relationship: annualized / daily = sqrt(252).
+            double ratio = sh.annualizedSharpe / sh.dailySharpe;
+            bool ok = sh.sampleSize == 5 &&
+                      std::fabs(ratio - std::sqrt(252.0)) < 1e-9;
+            if (ok) {
+                std::cout << "✓ annualized = daily × √252 "
+                          << "(ratio=" << ratio << ")" << std::endl;
+            } else {
+                std::cout << "✗ annualized ratio wrong: " << ratio
+                          << " (want " << std::sqrt(252.0) << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 8: stability across reload ----
+        {
+            fs::path p = tmpDir / "stable.jsonl";
+            TradeJournal j(p.string());
+            appendDays(j, { 10, 20, 30 });
+            auto sh1 = j.sharpe();
+            TradeJournal j2(p.string());
+            auto sh2 = j2.sharpe();
+            bool ok = sh1.sampleSize == sh2.sampleSize &&
+                      std::fabs(sh1.meanDailyReturn - sh2.meanDailyReturn) < 1e-9 &&
+                      std::fabs(sh1.stddevDailyReturn - sh2.stddevDailyReturn) < 1e-9 &&
+                      std::fabs(sh1.dailySharpe - sh2.dailySharpe) < 1e-9 &&
+                      std::fabs(sh1.annualizedSharpe - sh2.annualizedSharpe) < 1e-9;
+            if (ok) {
+                std::cout << "✓ Sharpe stable across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ drifted" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

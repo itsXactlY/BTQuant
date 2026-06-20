@@ -153,6 +153,36 @@ public:
     };
     Streaks streaks() const;
 
+    // Risk-adjusted return on the daily series (Sprint #84).
+    // Sharpe ratio — mean daily return / stddev of daily returns,
+    // annualized by sqrt(252) (trading-days-per-year convention).
+    // Sample stddev (Bessel-corrected, n-1) so a single day
+    // produces zero stddev and Sharpe = 0 (no signal, not inf).
+    //
+    // Fields:
+    //   dailySharpe       — mean / stddev of the daily return series.
+    //   annualizedSharpe  — dailySharpe * sqrt(252). The "headline"
+    //                       number — comparable across strategies
+    //                       of different frequencies.
+    //   meanDailyReturn   — sum(dailyReturns) / N. Dollars/day.
+    //   stddevDailyReturn — sample stddev of daily returns. 0 when
+    //                       fewer than 2 distinct days.
+    //   sampleSize        — number of distinct trading days in the
+    //                       series (== size of realizedByDay()).
+    //
+    // When sampleSize < 2, dailySharpe and annualizedSharpe stay
+    // 0 (no division by zero, no NaN). meanDailyReturn is still
+    // meaningful (single-day average) and stddevDailyReturn is 0
+    // (single observation can't have a meaningful stddev).
+    struct Sharpe {
+        double dailySharpe       = 0.0;
+        double annualizedSharpe  = 0.0;
+        double meanDailyReturn   = 0.0;
+        double stddevDailyReturn = 0.0;
+        size_t sampleSize        = 0;
+    };
+    Sharpe sharpe() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

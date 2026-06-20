@@ -365,6 +365,72 @@ void JournalStatsPanel::render() {
         if (hiddenCount > 0) {
             ImGui::TextDisabled("(%zu more not shown)", hiddenCount);
         }
+
+        // ---- Daily equity curve (Sprint #79) ----
+        //
+        // Cumulative P&L across the displayed days — same idea as
+        // RiskPanel's session sparkline (#61) but sourced from the
+        // persisted journal rather than the in-memory session.
+        // Survives restarts and accumulates across days.
+        //
+        // The series is rebuilt from displayRows (newest-first
+        // view → cumulative from oldest → newest = reverse the
+        // accumulation order). Color: green if final equity >
+        // 0, red if < 0, dim at zero — same convention as
+        // RiskPanel.
+        if (displayRows.size() >= 2) {
+            // Build cumulative series in chronological order.
+            // displayRows is newest-first when lookback>0, oldest-
+            // first otherwise. The "all-time" branch keeps the
+            // original order; the lookback branch reverses.
+            std::vector<std::pair<std::string, double>> chrono;
+            if (m_dayLookback > 0 && byDay.size() > m_dayLookback) {
+                size_t start = byDay.size() - m_dayLookback;
+                for (size_t i = start; i < byDay.size(); ++i) {
+                    chrono.push_back(byDay[i]);
+                }
+            } else {
+                chrono = byDay;
+            }
+            std::vector<float> scratch;
+            scratch.reserve(chrono.size());
+            double cum = 0.0;
+            for (const auto& kv : chrono) {
+                cum += kv.second;
+                scratch.push_back(static_cast<float>(cum));
+            }
+            double mn = scratch.front();
+            double mx = scratch.front();
+            for (float v : scratch) {
+                if (v < mn) mn = v;
+                if (v > mx) mx = v;
+            }
+            double pad = (mx - mn) > 1e-9 ? (mx - mn) * 0.05 : 1.0;
+            mn -= pad; mx += pad;
+            char overlay[64];
+            std::snprintf(overlay, sizeof(overlay),
+                          "%zu days | %+.0f -> %+.0f",
+                          scratch.size(),
+                          static_cast<double>(scratch.front()),
+                          static_cast<double>(scratch.back()));
+            ImGui::PushStyleColor(ImGuiCol_PlotLines,
+                scratch.back() >= 0
+                    ? ImVec4(0.30f, 0.85f, 0.40f, 1.0f)
+                    : ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            ImGui::PlotLines("##daily_equity_curve",
+                             scratch.data(),
+                             static_cast<int>(scratch.size()),
+                             0, overlay,
+                             static_cast<float>(mn),
+                             static_cast<float>(mx),
+                             ImVec2(-1, 60));
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::TextDisabled("(equity curve: %zu day%s - "
+                                "need >= 2 to plot)",
+                                displayRows.size(),
+                                displayRows.size() == 1 ? "" : "s");
+        }
     }
 
     ImGui::End();

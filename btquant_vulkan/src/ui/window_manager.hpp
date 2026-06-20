@@ -245,6 +245,7 @@ private:
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;
     class AlertsPanel* m_alertsPanel = nullptr;
+    class RecentFillsPanel* m_recentFillsPanel = nullptr;
     class WatchlistWidget* m_watchlistWidget = nullptr;
     class LogPanel* m_logPanel = nullptr;
     class ConnectionPanel* m_connectionPanel = nullptr;

@@ -26,6 +26,7 @@
 #include "../widgets/profile_manager.hpp"
 #include "../widgets/symbol_picker.hpp"
 #include "../widgets/theme_editor.hpp"
+#include "../widgets/recent_fills_panel.hpp"
 #include "../util/theme_io.hpp"
 #include "../widgets/position_calculator.hpp"
 #include "../widgets/order_ticket.hpp"
@@ -120,6 +121,7 @@ WindowManager::WindowManager() {
     m_watchlistWidget = new WatchlistWidget();
     m_watchlistWidget->setSymbols({"BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"});
     m_logPanel = &LogPanel::instance();
+    m_recentFillsPanel = new RecentFillsPanel();
     m_connectionPanel = new ConnectionPanel();
     m_profileManager  = new ProfileManager();
     m_profileManager->setCaptureFn([this]() { return captureCurrentSettings(); });
@@ -275,10 +277,20 @@ WindowManager::WindowManager() {
             jf.qty           = qty;
             jf.price         = price;
             jf.realizedDelta = realized;
+            // Plumb the strategy tag through to the journal (and the
+            // RecentFillsPanel below). OrderTicket::tag() returns ""
+            // when the trader didn't set one — that's fine, the
+            // journal handles empty tags as "(untagged)".
+            const char* t = m_orderTicket->tag();
+            if (t) jf.tag = t;
             if (!m_tradeJournal->append(jf)) {
                 BTQ_LOG_WARN("TradeJournal.append failed at %s",
                              m_tradeJournal->path().c_str());
             }
+            // Push to the visual ring buffer so the trader can see
+            // their own fills in execution order, distinct from
+            // TradesWidget (which mirrors the live market tape).
+            if (m_recentFillsPanel) m_recentFillsPanel->addFill(jf);
         }
         if (m_positionPanel) {
             PositionPanel::FillRecord r;
@@ -308,6 +320,7 @@ WindowManager::~WindowManager() {
     delete m_tradesWidget;
     delete m_tpoWidget;
     delete m_alertsPanel;
+    delete m_recentFillsPanel;
     delete m_watchlistWidget;
     delete m_connectionPanel;
     delete m_profileManager;
@@ -832,7 +845,16 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
                         jf.qty           = m_positionBook->position().size;
                         jf.price         = px;
                         jf.realizedDelta = realized;
+                        // Kill-flatten tag: synthetic so the trader
+                        // can filter for kill-flattened fills in the
+                        // journal CSV export. Distinct from regular
+                        // trade tags so reporting tools can split
+                        // them out cleanly.
+                        jf.tag           = "kill-flatten";
                         m_tradeJournal->append(jf);
+                        // Mirror to the visual ring buffer so the
+                        // trader sees the flatten immediately.
+                        if (m_recentFillsPanel) m_recentFillsPanel->addFill(jf);
                     }
                     BTQ_LOG_WARN("KILL SWITCH: flattened %s at $%.2f, "
                                  "realized %s$%.2f, session P&L %s$%.2f",
@@ -930,6 +952,7 @@ void WindowManager::showTPOWindow() {
 void WindowManager::showAlertsWindow() {
     if (!showAlerts) return;
     m_alertsPanel->render();
+    if (m_recentFillsPanel) m_recentFillsPanel->render();
 }
 
 void WindowManager::showWatchlistWindow() {

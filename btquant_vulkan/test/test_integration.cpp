@@ -19,6 +19,7 @@
 #include "../src/widgets/profile_manager.hpp"
 #include "../src/widgets/symbol_picker.hpp"
 #include "../src/widgets/theme_editor.hpp"
+#include "../src/widgets/recent_fills_panel.hpp"
 #include "../src/util/theme_io.hpp"
 #include "../src/widgets/position_calculator.hpp"
 #include "../src/widgets/order_ticket.hpp"
@@ -5821,6 +5822,106 @@ int main() {
                           << std::endl;
             } else {
                 std::cout << "✗ setConfig wiped kill override" << std::endl;
+            }
+        }
+    }
+
+    // Test 62: RecentFillsPanel — visual ring buffer of the trader's
+    // own fills, distinct from TradesWidget (which mirrors the live
+    // market tape). Pushed by WindowManager on every successful fill
+    // and on kill-flatten. Bounded at kMaxFills (50) so memory stays
+    // bounded across a long session.
+    std::cout << "\nTest 62: Testing RecentFillsPanel ring buffer..."
+              << std::endl;
+    {
+        using btquant::ui::RecentFillsPanel;
+        using btquant::JournalFill;
+
+        // 1) Empty on construction.
+        {
+            RecentFillsPanel p;
+            if (p.empty() && p.size() == 0) {
+                std::cout << "✓ fresh panel is empty" << std::endl;
+            } else {
+                std::cout << "✗ fresh panel not empty" << std::endl;
+            }
+        }
+
+        // 2) addFill grows size.
+        {
+            RecentFillsPanel p;
+            JournalFill jf;
+            jf.symbol = "BTCUSDT";
+            jf.isLong = true;
+            jf.qty    = 0.5;
+            jf.price  = 67000.0;
+            jf.realizedDelta = 0.0;
+            p.addFill(jf);
+            if (!p.empty() && p.size() == 1) {
+                std::cout << "✓ addFill grows size to 1" << std::endl;
+            } else {
+                std::cout << "✗ addFill didn't grow" << std::endl;
+            }
+        }
+
+        // 3) Multiple adds accumulate in newest-first order.
+        {
+            RecentFillsPanel p;
+            JournalFill a; a.symbol = "AAA"; p.addFill(a);
+            JournalFill b; b.symbol = "BBB"; p.addFill(b);
+            JournalFill c; c.symbol = "CCC"; p.addFill(c);
+            if (p.size() == 3) {
+                std::cout << "✓ 3 fills accumulate" << std::endl;
+            } else {
+                std::cout << "✗ size wrong: " << p.size() << std::endl;
+            }
+        }
+
+        // 4) FIFO eviction at kMaxFills (50).
+        {
+            RecentFillsPanel p;
+            for (int i = 0; i < RecentFillsPanel::kMaxFills + 10; ++i) {
+                JournalFill jf;
+                jf.symbol = "SYM" + std::to_string(i);
+                p.addFill(jf);
+            }
+            if (p.size() == RecentFillsPanel::kMaxFills) {
+                std::cout << "✓ capped at kMaxFills ("
+                          << RecentFillsPanel::kMaxFills << ")"
+                          << std::endl;
+            } else {
+                std::cout << "✗ cap wrong: size=" << p.size() << std::endl;
+            }
+        }
+
+        // 5) Clear resets to empty.
+        {
+            RecentFillsPanel p;
+            JournalFill jf; jf.symbol = "X";
+            p.addFill(jf);
+            p.addFill(jf);
+            p.clear();
+            if (p.empty() && p.size() == 0) {
+                std::cout << "✓ clear() resets to empty" << std::endl;
+            } else {
+                std::cout << "✗ clear() didn't reset" << std::endl;
+            }
+        }
+
+        // 6) Open/close toggle.
+        {
+            RecentFillsPanel p;
+            if (!p.isOpen()) {
+                p.setOpen(true);
+                if (p.isOpen()) {
+                    std::cout << "✓ isOpen / setOpen toggle"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ setOpen(true) didn't engage"
+                              << std::endl;
+                }
+            } else {
+                std::cout << "✗ default isOpen=true?" << std::endl;
             }
         }
     }

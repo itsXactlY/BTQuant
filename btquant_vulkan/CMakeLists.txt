@@ -68,6 +68,7 @@ set(SOURCES
     src/widgets/profile_manager.cpp
     src/widgets/symbol_picker.cpp
     src/widgets/theme_editor.cpp
+    src/widgets/recent_fills_panel.cpp
     src/util/settings.cpp
     src/util/theme_io.cpp
     src/util/hotkey_config.cpp

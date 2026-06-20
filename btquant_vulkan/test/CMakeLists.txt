@@ -92,6 +92,7 @@ target_sources(test_integration PRIVATE
     ../src/util/hotkey_config.cpp
     ../src/util/layout_io.cpp
     ../src/widgets/theme_editor.cpp
+    ../src/widgets/recent_fills_panel.cpp
     ../src/widgets/position_calculator.cpp
     ../src/widgets/order_ticket.cpp
     ../src/widgets/position_panel.cpp

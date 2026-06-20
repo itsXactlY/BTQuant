@@ -204,23 +204,45 @@ void OrderTicket::render() {
                       ImVec2(-FLT_MIN, 36)) ||
         (ImGui::IsKeyPressed(ImGuiKey_Enter) &&
          ImGui::IsKeyDown(ImGuiKey_LeftCtrl))) {
-        char summary[256];
-        std::snprintf(summary, sizeof(summary),
-            "%s %.4f %s @ %s $%.2f  (fee $%.4f, total %s$%.2f)",
-            m_sideIsBuy ? "BUY" : "SELL",
-            qty,
-            m_data ? m_data->symbol().c_str() : "?",
-            m_typeIsLimit ? "limit" : "market",
-            fillPx,
-            fee,
-            m_sideIsBuy ? "-" : "+", std::fabs(totalCost));
-        BTQ_LOG_INFO("OrderTicket: %s", summary);
-        if (m_submit) m_submit(summary);
+        submit();
     }
     ImGui::PopStyleColor(2);
     if (!canSubmit) ImGui::EndDisabled();
 
     ImGui::End();
+}
+
+bool OrderTicket::submit() {
+    double qty        = quantity();
+    double limitPx    = limitPrice();
+    double feeBps     = parseOrZero(m_feeBps);
+    double slipBps    = parseOrZero(m_slipBps);
+    double refPx      = limitPx;  // m_limit doubles as ref when market
+    double fillPx     = estimateFillPrice(m_sideIsBuy, m_typeIsLimit,
+                                          limitPx, refPx, slipBps);
+    if (qty <= 0.0 || fillPx <= 0.0) {
+        BTQ_LOG_WARN("OrderTicket::submit: refused (qty=%.4f fillPx=%.2f)",
+                    qty, fillPx);
+        return false;
+    }
+    double fee        = computeFee(qty, fillPx, feeBps);
+    double totalCost  = computeTotalCost(qty, fillPx, feeBps);
+    char summary[256];
+    std::snprintf(summary, sizeof(summary),
+        "%s %.4f %s @ %s $%.2f  (fee $%.4f, total %s$%.2f)",
+        m_sideIsBuy ? "BUY" : "SELL",
+        qty,
+        m_data ? m_data->symbol().c_str() : "?",
+        m_typeIsLimit ? "limit" : "market",
+        fillPx,
+        fee,
+        m_sideIsBuy ? "-" : "+", std::fabs(totalCost));
+    BTQ_LOG_INFO("OrderTicket: %s", summary);
+    if (m_submit) {
+        m_submit(summary);
+        return true;
+    }
+    return false;
 }
 
 } // namespace btquant::ui

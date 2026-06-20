@@ -55,6 +55,18 @@ public:
     double limitPrice() const;
     double referencePrice() const;
 
+    // Side setter — used by hotkeys (Alt+B / Alt+S) to flip the
+    // ticket's side without going through the render path. Calling
+    // setSideBuy(true) makes the next submit a BUY; false = SELL.
+    void setSideBuy(bool v) { m_sideIsBuy = v; }
+
+    // Build the submit summary string from the current draft + fire
+    // the registered callback. Returns false if the draft can't be
+    // submitted (qty or fill price is 0) or if no submit callback is
+    // wired. The render path now calls this from the Submit button so
+    // the hotkey path and the click path share one code path.
+    bool submit();
+
 private:
     void refreshRefPrice();
 

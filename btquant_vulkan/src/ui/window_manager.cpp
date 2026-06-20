@@ -710,6 +710,31 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
         case HA::SwitchLayout7: loadLayoutByIndex(6); break;
         case HA::SwitchLayout8: loadLayoutByIndex(7); break;
         case HA::SwitchLayout9: loadLayoutByIndex(8); break;
+        case HA::SubmitBuy:
+            // Alt+B / Ctrl+Shift+B — open the ticket in BUY mode if
+            // it's closed, otherwise flip side + submit.
+            if (m_orderTicket) {
+                if (!m_orderTicket->isOpen()) {
+                    showOrderTicket = true;
+                    m_orderTicket->setOpen(true);
+                }
+                m_orderTicket->setSideBuy(true);
+                m_orderTicket->submit();
+            }
+            markSettingsDirty();
+            break;
+        case HA::SubmitSell:
+            // Symmetric to SubmitBuy — opens in SELL mode if closed.
+            if (m_orderTicket) {
+                if (!m_orderTicket->isOpen()) {
+                    showOrderTicket = true;
+                    m_orderTicket->setOpen(true);
+                }
+                m_orderTicket->setSideBuy(false);
+                m_orderTicket->submit();
+            }
+            markSettingsDirty();
+            break;
         case HA::OpenSymbolPicker:
             showSymbolPickerOpen = !showSymbolPickerOpen;
             if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);

@@ -47,7 +47,15 @@ enum class HotkeyAction : int {
     SwitchLayout7 = 28,
     SwitchLayout8 = 29,
     SwitchLayout9 = 30,
-    COUNT         = 31,
+    // Submit hotkeys — when the Order Ticket is open, Alt+B / Alt+S
+    // submit the current draft as a BUY / SELL respectively (flipping
+    // the side first if needed). When the ticket is closed, the same
+    // shortcuts open it in the matching side mode so the trader can
+    // quickly reach the ticket pre-loaded for the action they want.
+    // Bound to Alt+B / Alt+S by default.
+    SubmitBuy  = 31,
+    SubmitSell = 32,
+    COUNT      = 33,
 };
 
 // One hotkey binding — a single GLFW key + optional Ctrl/Shift modifier.

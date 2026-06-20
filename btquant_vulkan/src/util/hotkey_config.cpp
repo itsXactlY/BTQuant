@@ -56,6 +56,14 @@ HotkeyMap HotkeyMap::defaults() {
     m.set(HotkeyAction::SwitchLayout7,        { GLFW_KEY_7,        true, false });
     m.set(HotkeyAction::SwitchLayout8,        { GLFW_KEY_8,        true, false });
     m.set(HotkeyAction::SwitchLayout9,        { GLFW_KEY_9,        true, false });
+    // Submit hotkeys — Ctrl+Shift+B / Ctrl+Shift+S. Using the chord
+    // form keeps these from firing while the user is typing in an
+    // input field (most input fields only react to plain key presses).
+    // The HotkeyBinding struct currently has ctrl+shift but no alt —
+    // see the no-Alt note in hotkey_config.hpp. The chord doubles as
+    // a "muscle memory" cue: same chord as a browser bookmark / save.
+    m.set(HotkeyAction::SubmitBuy,           { GLFW_KEY_B,        true, true  });
+    m.set(HotkeyAction::SubmitSell,          { GLFW_KEY_S,        true, true  });
     return m;
 }
 
@@ -113,6 +121,8 @@ std::string HotkeyMap::actionName(HotkeyAction a) {
         case HotkeyAction::SwitchLayout7:        return "SwitchLayout7";
         case HotkeyAction::SwitchLayout8:        return "SwitchLayout8";
         case HotkeyAction::SwitchLayout9:        return "SwitchLayout9";
+        case HotkeyAction::SubmitBuy:           return "SubmitBuy";
+        case HotkeyAction::SubmitSell:          return "SubmitSell";
         default: return "Unknown";
     }
 }

@@ -273,5 +273,28 @@ int main() {
         }
     }
 
+    // Test 8: settingsDirty flag toggles correctly.
+    std::cout << "\nTest 8: Testing settingsDirty flag..." << std::endl;
+    {
+        btquant::ui::WindowManager wm;
+        if (!wm.settingsDirty()) {
+            std::cout << "✓ Fresh WindowManager is clean" << std::endl;
+        } else {
+            std::cout << "✗ Fresh WindowManager reported dirty" << std::endl;
+        }
+        wm.markSettingsDirty();
+        if (wm.settingsDirty()) {
+            std::cout << "✓ markSettingsDirty() flips the flag" << std::endl;
+        } else {
+            std::cout << "✗ markSettingsDirty() didn't flip" << std::endl;
+        }
+        wm.clearSettingsDirty();
+        if (!wm.settingsDirty()) {
+            std::cout << "✓ clearSettingsDirty() resets the flag" << std::endl;
+        } else {
+            std::cout << "✗ clearSettingsDirty() didn't reset" << std::endl;
+        }
+    }
+
     return 0;
 }

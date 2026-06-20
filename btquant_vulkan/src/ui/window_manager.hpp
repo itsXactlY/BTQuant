@@ -42,6 +42,17 @@ public:
     bool showStatsOverlay = true;
     StatsOverlay& statsOverlay() { return m_statsOverlay; }
 
+    // Last heatmap density we successfully applied (tracked here so the
+    // render loop can detect changes from the slider).
+    long lastAppliedHeatmapDensity = -1;
+
+    // Set to true whenever a toggle/state mutation happens (View menu item,
+    // F-key hotkey, slider change). Main loop saves state.ini periodically
+    // while dirty and clears the flag. Cheap to test — just a bool compare.
+    bool settingsDirty() const { return m_settingsDirty; }
+    void markSettingsDirty() { m_settingsDirty = true; }
+    void clearSettingsDirty() { m_settingsDirty = false; }
+
     // Render-target fps limit (0 = uncapped). Read by main loop via
     // glfwSwapInterval; 60 → swap interval 1, anything > 0 → interval 1,
     // 0 → interval 0.
@@ -106,6 +117,7 @@ private:
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;
+    bool m_settingsDirty = false;
 };
 
 } // namespace btquant::ui

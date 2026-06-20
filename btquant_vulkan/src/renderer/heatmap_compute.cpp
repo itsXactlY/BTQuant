@@ -433,11 +433,7 @@ void HeatmapCompute::dispatch(VkCommandBuffer cmd) {
 
 void HeatmapCompute::shutdown() {
     if (m_device == VK_NULL_HANDLE) return;
-    if (m_imguiTextureId) {
-        ImGui_ImplVulkan_RemoveTexture(
-            reinterpret_cast<VkDescriptorSet>(m_imguiTextureId));
-        m_imguiTextureId = 0;
-    }
+    destroySizeDependentResources();
     if (m_pipeline) vkDestroyPipeline(m_device, m_pipeline, nullptr);
     if (m_pipelineLayout) vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     if (m_shaderModule) vkDestroyShaderModule(m_device, m_shaderModule, nullptr);
@@ -447,10 +443,6 @@ void HeatmapCompute::shutdown() {
     if (m_configMemory) vkFreeMemory(m_device, m_configMemory, nullptr);
     if (m_inputBuffer) vkDestroyBuffer(m_device, m_inputBuffer, nullptr);
     if (m_inputMemory) vkFreeMemory(m_device, m_inputMemory, nullptr);
-    if (m_outputSampler) vkDestroySampler(m_device, m_outputSampler, nullptr);
-    if (m_outputView) vkDestroyImageView(m_device, m_outputView, nullptr);
-    if (m_outputImage) vkDestroyImage(m_device, m_outputImage, nullptr);
-    if (m_outputMemory) vkFreeMemory(m_device, m_outputMemory, nullptr);
     m_pipeline = VK_NULL_HANDLE;
     m_pipelineLayout = VK_NULL_HANDLE;
     m_shaderModule = VK_NULL_HANDLE;
@@ -466,6 +458,70 @@ void HeatmapCompute::shutdown() {
     m_outputImage = VK_NULL_HANDLE;
     m_outputMemory = VK_NULL_HANDLE;
     m_device = VK_NULL_HANDLE;
+}
+
+void HeatmapCompute::destroySizeDependentResources() {
+    if (m_device == VK_NULL_HANDLE) {
+        // Nothing to free — initialize() never ran or already cleaned up.
+        m_imguiTextureId = 0;
+        return;
+    }
+    if (m_imguiTextureId) {
+        ImGui_ImplVulkan_RemoveTexture(
+            reinterpret_cast<VkDescriptorSet>(m_imguiTextureId));
+        m_imguiTextureId = 0;
+    }
+    if (m_outputSampler) vkDestroySampler(m_device, m_outputSampler, nullptr);
+    if (m_outputView) vkDestroyImageView(m_device, m_outputView, nullptr);
+    if (m_outputImage) vkDestroyImage(m_device, m_outputImage, nullptr);
+    if (m_outputMemory) vkFreeMemory(m_device, m_outputMemory, nullptr);
+    m_outputSampler = VK_NULL_HANDLE;
+    m_outputView = VK_NULL_HANDLE;
+    m_outputImage = VK_NULL_HANDLE;
+    m_outputMemory = VK_NULL_HANDLE;
+
+    // Free the descriptor set (it references the destroyed view). Reset the
+    // pool so subsequent buildDescriptorSet() can allocate a fresh set that
+    // points at the new view.
+    if (m_descriptorSet != VK_NULL_HANDLE && m_descriptorPool != VK_NULL_HANDLE) {
+        vkFreeDescriptorSets(m_device, m_descriptorPool, 1, &m_descriptorSet);
+        m_descriptorSet = VK_NULL_HANDLE;
+    }
+}
+
+void HeatmapCompute::setSize(uint32_t newSize) {
+    if (newSize == 0) newSize = 1;  // floor
+    if (newSize == m_cfg.image_width) return;  // no-op fast path
+    if (m_device == VK_NULL_HANDLE) {
+        // Not initialized yet — defer until initialize() is called.
+        m_cfg.image_width = newSize;
+        m_cfg.image_height = newSize;
+        return;
+    }
+
+    // Tear down size-dependent Vulkan resources (image, view, memory, sampler,
+    // ImGui texture registration, descriptor set).
+    destroySizeDependentResources();
+
+    // Update config and rebuild.
+    m_cfg.image_width = newSize;
+    m_cfg.image_height = newSize;
+
+    if (auto err = createOutputImage()) {
+        std::fprintf(stderr, "[HeatmapCompute] setSize(%u) failed at createOutputImage: %s\n",
+                     newSize, err->c_str());
+        return;
+    }
+    m_imguiTextureId = reinterpret_cast<ImTextureID>(
+        ImGui_ImplVulkan_AddTexture(
+            m_outputSampler, m_outputView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+    if (auto err = buildDescriptorSet()) {
+        std::fprintf(stderr, "[HeatmapCompute] setSize(%u) failed at buildDescriptorSet: %s\n",
+                     newSize, err->c_str());
+        return;
+    }
+    std::fprintf(stderr, "[HeatmapCompute] resized to %ux%u\n", newSize, newSize);
 }
 
 }  // namespace btquant::renderer

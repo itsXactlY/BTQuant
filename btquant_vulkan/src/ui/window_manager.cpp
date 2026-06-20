@@ -179,6 +179,7 @@ void WindowManager::processHotkeys(void* glfwWindow) {
                          glfwGetKey(win, kHotkeys[i].glfwKey) == GLFW_PRESS;
         if (currPressed[i] && !prevPressed[i]) {
             this->*(kHotkeys[i].flag) = !(this->*(kHotkeys[i].flag));
+            markSettingsDirty();
         }
         prevPressed[i] = currPressed[i];
     }
@@ -189,7 +190,10 @@ void WindowManager::processHotkeys(void* glfwWindow) {
                      glfwGetKey(win, GLFW_KEY_L) == GLFW_PRESS &&
                      (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
                       glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlL && !prevCtrlL) requestDockLayoutReset();
+    if (currCtrlL && !prevCtrlL) {
+        requestDockLayoutReset();
+        markSettingsDirty();
+    }
     prevCtrlL = currCtrlL;
 
     // Shift+F1 toggles stats overlay.
@@ -201,6 +205,7 @@ void WindowManager::processHotkeys(void* glfwWindow) {
     if (currShiftF1 && !prevShiftF1) {
         showStatsOverlay = !showStatsOverlay;
         m_statsOverlay.setEnabled(showStatsOverlay);
+        markSettingsDirty();
     }
     prevShiftF1 = currShiftF1;
 #endif // BTQUANT_USE_GLFW
@@ -272,20 +277,21 @@ void WindowManager::showTPOWindow() {
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Order Book",        nullptr, &showOrderBook);
-            ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth);
-            ImGui::MenuItem("DOM",               nullptr, &showDOM);
-            ImGui::MenuItem("Trades",            nullptr, &showTrades);
-            ImGui::MenuItem("TPO",               nullptr, &showTPO);
-            ImGui::MenuItem("Footprint",         nullptr, &showFootprint);
-            ImGui::MenuItem("VPVR",              nullptr, &showVPVR);
-            ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP);
-            ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel);
+            if (ImGui::MenuItem("Order Book",        nullptr, &showOrderBook))       markSettingsDirty();
+            if (ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth))  markSettingsDirty();
+            if (ImGui::MenuItem("DOM",               nullptr, &showDOM))             markSettingsDirty();
+            if (ImGui::MenuItem("Trades",            nullptr, &showTrades))          markSettingsDirty();
+            if (ImGui::MenuItem("TPO",               nullptr, &showTPO))             markSettingsDirty();
+            if (ImGui::MenuItem("Footprint",         nullptr, &showFootprint))       markSettingsDirty();
+            if (ImGui::MenuItem("VPVR",              nullptr, &showVPVR))            markSettingsDirty();
+            if (ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP))       markSettingsDirty();
+            if (ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel))       markSettingsDirty();
             ImGui::Separator();
-            ImGui::MenuItem("Settings…",         nullptr, &showSettings);
+            if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) {
                 requestDockLayoutReset();
+                markSettingsDirty();
             }
             ImGui::EndMenu();
         }
@@ -306,30 +312,37 @@ void WindowManager::showSettingsWindow() {
     }
 
     ImGui::Text("Rendering");
-    ImGui::SliderScalar("FPS limit (0 = uncapped)", ImGuiDataType_S64,
-                        &fpsLimit, &kZero, &kFps240, "%ld");
-    ImGui::SliderScalar("Heatmap density", ImGuiDataType_S64,
-                        &heatmapDensity, &kHeatmapMin, &kHeatmapMax, "%ld");
+    if (ImGui::SliderScalar("FPS limit (0 = uncapped)", ImGuiDataType_S64,
+                            &fpsLimit, &kZero, &kFps240, "%ld")) {
+        markSettingsDirty();
+    }
+    if (ImGui::SliderScalar("Heatmap density", ImGuiDataType_S64,
+                            &heatmapDensity, &kHeatmapMin, &kHeatmapMax, "%ld")) {
+        markSettingsDirty();
+    }
 
     ImGui::Separator();
     ImGui::Text("Visible widgets");
-    ImGui::MenuItem("Order Book",        nullptr, &showOrderBook);
-    ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth);
-    ImGui::MenuItem("DOM",               nullptr, &showDOM);
-    ImGui::MenuItem("Trades",            nullptr, &showTrades);
-    ImGui::MenuItem("TPO",               nullptr, &showTPO);
-    ImGui::MenuItem("Footprint",         nullptr, &showFootprint);
-    ImGui::MenuItem("VPVR",              nullptr, &showVPVR);
-    ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP);
-    ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel);
+    if (ImGui::MenuItem("Order Book",        nullptr, &showOrderBook))       markSettingsDirty();
+    if (ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth))  markSettingsDirty();
+    if (ImGui::MenuItem("DOM",               nullptr, &showDOM))             markSettingsDirty();
+    if (ImGui::MenuItem("Trades",            nullptr, &showTrades))          markSettingsDirty();
+    if (ImGui::MenuItem("TPO",               nullptr, &showTPO))             markSettingsDirty();
+    if (ImGui::MenuItem("Footprint",         nullptr, &showFootprint))       markSettingsDirty();
+    if (ImGui::MenuItem("VPVR",              nullptr, &showVPVR))            markSettingsDirty();
+    if (ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP))       markSettingsDirty();
+    if (ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel))       markSettingsDirty();
+    if (ImGui::MenuItem("Stats overlay",     nullptr, &showStatsOverlay))    markSettingsDirty();
 
     ImGui::Separator();
     if (ImGui::Button("Reset Layout")) {
         requestDockLayoutReset();
+        markSettingsDirty();
     }
     ImGui::SameLine();
     if (ImGui::Button("Close")) {
         showSettings = false;
+        markSettingsDirty();
     }
 
     ImGui::End();

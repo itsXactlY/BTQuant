@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <iostream>
+#include <filesystem>
 #include <stdexcept>
 
 #ifdef BTQUANT_USE_GLFW
@@ -19,6 +20,7 @@
 #include "widgets/heatmap_widget.hpp"
 
 using namespace btquant;
+using btquant::renderer::HeatmapConfig;
 
 class BTQuantApplication {
 public:
@@ -47,6 +49,7 @@ private:
 
   uint32_t width = 1280;
   uint32_t height = 720;
+  uint64_t frameCounter = 0;
 
   void initWindow() {
     if (!glfwInit()) {
@@ -87,8 +90,14 @@ private:
   }
 
   void initUI() {
+    // Ensure ~/.config/btquant_vulkan exists BEFORE resolving ini/state paths,
+    // otherwise ImGui's auto-save will silently fall back to writing "0" in CWD
+    // when the parent dir can't be created.
+    auto settingsPath = util::Settings::defaultPath();
+    std::filesystem::create_directories(settingsPath.parent_path());
+
     // Resolve ImGui ini path alongside Settings (BTQUANT_INI env override).
-    auto iniPath = (util::Settings::defaultPath().parent_path() / "imgui.ini").string();
+    auto iniPath = (settingsPath.parent_path() / "imgui.ini").string();
     if (const char* env = std::getenv("BTQUANT_INI")) iniPath = env;
 
     if (!uiContext.initialize(window, vkContext.instance(),
@@ -102,7 +111,6 @@ private:
 
     // Load persisted settings BEFORE WindowManager initializes so the showXxx
     // booleans reflect the user's last session.
-    auto settingsPath = util::Settings::defaultPath();
     auto settings = util::Settings::load(settingsPath);
     std::fprintf(stderr, "[BTQuant] loaded settings from %s\n",
                  settingsPath.c_str());
@@ -143,14 +151,20 @@ private:
     // VulkanContext found, falling back to graphics queue.
     auto qf = vkContext.queueFamilies();
     uint32_t family = qf.computeFamily.value_or(qf.graphicsFamily.value());
+    HeatmapConfig cfg;
+    // Apply persisted density at startup (long → uint32_t).
+    cfg.image_width = cfg.image_height = static_cast<uint32_t>(windowManager.heatmapDensity);
     if (auto err = heatmapCompute.initialize(
             vkContext.device(), vkContext.physicalDevice(),
             vkContext.commandPool(), vkContext.graphicsQueue(),
-            family)) {
+            family, cfg)) {
       std::fprintf(stderr, "[BTQuant] HeatmapCompute init failed: %s\n",
                    err->c_str());
     } else {
       (void)heatmapWidget.initialize(heatmapCompute);
+      // Record the applied size so the render loop can detect slider changes.
+      windowManager.lastAppliedHeatmapDensity =
+          static_cast<long>(heatmapCompute.currentSize());
     }
   }
 
@@ -199,6 +213,16 @@ private:
       // Pump new trades into the heatmap buffer BEFORE the compute dispatch.
       pushTradesToHeatmap();
 
+      // Apply heatmap density changes from the Settings slider. Cheap when
+      // unchanged (setSize is a no-op fast path).
+      if (windowManager.heatmapDensity != windowManager.lastAppliedHeatmapDensity) {
+        uint32_t target = static_cast<uint32_t>(windowManager.heatmapDensity);
+        if (target < 64) target = 64;
+        if (target > 512) target = 512;
+        heatmapCompute.setSize(target);
+        windowManager.lastAppliedHeatmapDensity = static_cast<long>(target);
+      }
+
       // Record compute dispatch OUTSIDE the render pass. The compute writes
       // to the storage image (GENERAL layout), then transitions back to
       // SHADER_READ_ONLY_OPTIMAL so ImGui can sample it inside the render pass.
@@ -229,6 +253,31 @@ private:
           static_cast<uint64_t>(snap.recent_candles.size()));
 
       heatmapWidget.render();
+
+      // Periodic auto-save of state.ini when any setting is dirty. Save every
+      // ~1 s at 60 fps; the dirty flag is cleared after each save so we don't
+      // spam disk on every frame the user holds a key down. Atomic write means
+      // a crash mid-save can never corrupt the existing file.
+      if (windowManager.settingsDirty() && (frameCounter % 60) == 0) {
+        auto settingsPath = util::Settings::defaultPath();
+        util::Settings s;
+        s.showOrderBook       = windowManager.showOrderBook;
+        s.showOrderBookDepth  = windowManager.showOrderBookDepth;
+        s.showFootprint       = windowManager.showFootprint;
+        s.showVPVR            = windowManager.showVPVR;
+        s.showMultiVWAP       = windowManager.showMultiVWAP;
+        s.showRiskPanel       = windowManager.showRiskPanel;
+        s.showDOM             = windowManager.showDOM;
+        s.showTrades          = windowManager.showTrades;
+        s.showTPO             = windowManager.showTPO;
+        s.showSettings        = windowManager.showSettings;
+        s.showStatsOverlay    = windowManager.showStatsOverlay;
+        s.fpsLimit            = windowManager.fpsLimit;
+        s.heatmapDensity      = windowManager.heatmapDensity;
+        s.save(settingsPath);
+        windowManager.clearSettingsDirty();
+      }
+      ++frameCounter;
 
       VkClearValue clearColor = {{{0.031f, 0.035f, 0.039f, 1.0f}}};  // #08090a
       VkRenderPassBeginInfo rpBegin{};

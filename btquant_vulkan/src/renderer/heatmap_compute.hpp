@@ -73,6 +73,14 @@ public:
     // Cheap accessor — useful for debug overlays.
     uint32_t dispatchedTradeCount() const noexcept { return m_lastDispatchedCount; }
 
+    // Resize the output image to a new square side length (in cells). Re-creates
+    // the image, view, sampler, memory, descriptor set and ImGui registration.
+    // No-op if the size hasn't changed. Cheap accessor (no VK calls) for tracking.
+    void setSize(uint32_t newSize);
+    uint32_t currentSize() const noexcept {
+        return m_cfg.image_width;  // we keep width==height (square)
+    }
+
 private:
     std::optional<std::string>
     createInputBuffer();
@@ -86,6 +94,12 @@ private:
     buildDescriptorSet();
     std::optional<std::string>
     createConfigBuffer();
+
+    // Tear down everything that's size-dependent (image, view, memory, sampler,
+    // ImGui texture registration). Descriptor set is freed too because it
+    // references the destroyed view. Does NOT touch pipeline / descriptor pool
+    // (those are size-independent).
+    void destroySizeDependentResources();
 
     VkDevice m_device = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;

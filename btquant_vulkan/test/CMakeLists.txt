@@ -46,6 +46,12 @@ target_sources(test_integration PRIVATE
     ${_parent_imgui_src}/imgui_tables.cpp
     ${_parent_imgui_src}/imgui_widgets.cpp
 )
+if(EXISTS "${_parent_implot_src}/implot.cpp")
+    target_sources(test_integration PRIVATE
+        ${_parent_implot_src}/implot.cpp
+        ${_parent_implot_src}/implot_items.cpp
+    )
+endif()
 
 # Link libraries
 target_link_libraries(test_integration
@@ -64,6 +70,17 @@ target_sources(test_integration PRIVATE
     ../src/core/vulkan_context.cpp
     ../src/util/settings.cpp
     ../src/ui/stats_overlay.cpp
+    ../src/ui/window_manager.cpp
+    ../src/widgets/order_book_widget.cpp
+    ../src/widgets/order_book_depth_widget.cpp
+    ../src/widgets/footprint_widget.cpp
+    ../src/widgets/vpvr_widget.cpp
+    ../src/widgets/multi_vwap_widget.cpp
+    ../src/widgets/risk_panel.cpp
+    ../src/widgets/dom_widget.cpp
+    ../src/widgets/trades_widget.cpp
+    ../src/widgets/tpo_widget.cpp
+    ../src/data/market_data_processor.cpp
 )
 
 # Set C++ standard

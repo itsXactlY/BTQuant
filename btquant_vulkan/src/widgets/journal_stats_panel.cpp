@@ -404,42 +404,106 @@ void JournalStatsPanel::render() {
 
     ImGui::Separator();
 
-    // ---- By-symbol table (Sprint #72) ----
+    // ---- By-symbol table (Sprint #72 + Sprint #87) ----
     //
-    // TradeJournal::realizedBySymbol() returns abs-DESC-sorted pairs,
-    // so we just take the first `m_maxRows` and render them. We
-    // compute the running total in the same pass to show the "% of
-    // total" column — useful when one symbol dominates.
-    auto bySym = m_journal->realizedBySymbol();
+    // Surfaces per-symbol performance. Sprint #72 used
+    // realizedBySymbol() for just (symbol, realized); Sprint #87
+    // upgrades to perSymbolStats() (#86) so the table also shows
+    // win rate + profit factor + W/L counts. Six columns:
+    //   symbol, realized, win rate, PF, W/L, % total.
+    //
+    // Sourced from perSymbolStats() — sorted by abs-realized
+    // DESC, same as realizedBySymbol(). Sorted with a stable
+    // secondary sort so two symbols with equal abs-realized keep
+    // the same order across renders (UI doesn't flicker).
+    auto bySym = m_journal->perSymbolStats();
     size_t rowsSym = std::min(m_maxRows, bySym.size());
     if (ImGui::CollapsingHeader("By symbol", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (bySym.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsBySymbol",
-                                     3,
+                                     6,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Symbol");
             ImGui::TableSetupColumn("Realized");
+            ImGui::TableSetupColumn("Win rate");
+            ImGui::TableSetupColumn("PF");
+            ImGui::TableSetupColumn("W / L");
             ImGui::TableSetupColumn("% total");
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsSym; ++i) {
-                const auto& kv = bySym[i];
+                const auto& s = bySym[i];
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(kv.first.c_str());
+                ImGui::TextUnformatted(s.symbol.c_str());
+
                 ImGui::TableSetColumnIndex(1);
-                colorizeRow(kv.second);
+                colorizeRow(s.realized);
                 char buf[64];
-                std::snprintf(buf, sizeof(buf), "%+.2f", kv.second);
+                std::snprintf(buf, sizeof(buf), "%+.2f", s.realized);
                 ImGui::TextUnformatted(buf);
                 ImGui::PopStyleColor();
+
+                // Win rate: green >= 50%, red < 50%, dim at 0.
                 ImGui::TableSetColumnIndex(2);
-                if (std::fabs(total) > 1e-9) {
-                    std::snprintf(buf, sizeof(buf),
-                                  "%+.1f%%",
-                                  100.0 * kv.second / total);
+                if (s.winRate >= 0.5) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                } else if (s.winRate > 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                }
+                std::snprintf(buf, sizeof(buf), "%.1f%%",
+                              s.winRate * 100.0);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+
+                // PF: green >= 1.5, red < 1.0, dim otherwise.
+                // "∞" when +inf (all wins, no losses).
+                ImGui::TableSetColumnIndex(3);
+                if (std::isinf(s.profitFactor)) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    ImGui::TextUnformatted("∞");
+                    ImGui::PopStyleColor();
+                } else if (s.profitFactor >= 1.5) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
                     ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (s.profitFactor < 1.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    std::snprintf(buf, sizeof(buf), "%.2f", s.profitFactor);
+                    ImGui::TextUnformatted(buf);
+                }
+
+                // W / L counts (dim).
+                ImGui::TableSetColumnIndex(4);
+                std::snprintf(buf, sizeof(buf), "%zu / %zu",
+                              s.winCount, s.lossCount);
+                ImGui::TextUnformatted(buf);
+
+                // % total (green if contribution is positive, red
+                // if negative — a symbol that lost -50% of all-time
+                // P&L gets a red percentage to match the realized
+                // column coloring).
+                ImGui::TableSetColumnIndex(5);
+                if (std::fabs(total) > 1e-9) {
+                    double pct = 100.0 * s.realized / total;
+                    colorizeRow(pct);
+                    std::snprintf(buf, sizeof(buf), "%+.1f%%", pct);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
                 } else {
                     ImGui::TextUnformatted("-");
                 }

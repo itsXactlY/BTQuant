@@ -7281,4 +7281,52 @@ TradeJournal::journalMetadata() const {
     return m;
 }
 
+namespace {
+// Sprint #177 — per-segment daily P&L builder.
+template <typename Pred>
+std::vector<TradeJournal::DailyPnL>
+buildDailyPnLSeriesBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::vector<TradeJournal::DailyPnL> out;
+    std::map<std::string, TradeJournal::DailyPnL> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (!pred(f)) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        auto& d = buckets[buf];
+        d.date = buf;
+        d.realized += f.realizedDelta;
+        d.roundTrips++;
+    }
+    out.reserve(buckets.size());
+    for (auto& kv : buckets) out.push_back(kv.second);
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::dailyPnLSeriesBySymbol(
+    const std::string& symbol) const {
+    return buildDailyPnLSeriesBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::dailyPnLSeriesByTag(
+    const std::string& tag, bool includeUntagged) const {
+    return buildDailyPnLSeriesBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

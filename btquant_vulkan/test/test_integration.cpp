@@ -20397,5 +20397,71 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 164: dailyPnLSeriesBySymbol/ByTag (Sprint #177).
+    //
+    // Per-segment daily P&L. Tests:
+    //   - BTC 2 fills same day → 1 entry, realized=+50.
+    std::cout << "\nTest 164: per-seg daily P&L..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test164_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills same day, ETH 1 ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + hour));
+            j.append(mkFill("ETH", 30.0, "arb",
+                             t0 + 2 * hour));
+            auto btcV = j.dailyPnLSeriesBySymbol("BTC");
+            auto ethV = j.dailyPnLSeriesBySymbol("ETH");
+            if (btcV.size() == 1 &&
+                std::fabs(btcV[0].realized - 50.0) < 1e-9 &&
+                ethV.size() == 1 &&
+                std::fabs(ethV[0].realized - 30.0) < 1e-9) {
+                std::cout << "✓ BTC: 1 day +50; "
+                          << "ETH: 1 day +30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC size="
+                          << btcV.size()
+                          << " ETH size=" << ethV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg-daily tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

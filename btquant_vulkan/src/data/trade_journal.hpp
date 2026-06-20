@@ -1898,16 +1898,26 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
-    // Per-segment equity curve methods already declared
-    // above (lines ~1887): equityCurveBySymbol,
-    // equityCurveByTag. They return vector<EquityPoint>
-    // filtered to one symbol / tag.
-    //
-    // Sprint #182 was discovered to duplicate existing
-    // declarations — the per-segment rolling-window Sharpe
-    // methods already exist from Sprint #134.
-    // (rollingWindowSharpeBySymbol, rollingWindowSharpeByTag
-    // are at lines ~1188.)
+    // Per-segment rolling Sharpe statistics (Sprint #183).
+    // For each segment, return mean, stddev, min, max of
+    // its rolling Sharpe series over the last N windows.
+    // Useful for "how stable is my segment's risk-adjusted
+    // edge?"
+    struct SharpeStability {
+        std::string segment;
+        double      meanSharpe   = 0.0;
+        double      stddevSharpe = 0.0;
+        double      minSharpe    = 0.0;
+        double      maxSharpe    = 0.0;
+        size_t      sampleCount  = 0;
+    };
+    SharpeStability sharpeStabilityBySymbol(
+        const std::string& symbol,
+        size_t window = 30) const;
+    SharpeStability sharpeStabilityByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 30) const;
 
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols

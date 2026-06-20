@@ -20757,5 +20757,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 169: sharpeStabilityBySymbol/ByTag (Sprint #183).
+    //
+    // Per-segment Sharpe stability stats. Tests:
+    //   - BTC 4 fills: window=2 → 3 series points.
+    //     mean of those = mean of 3 sharpes.
+    std::cout << "\nTest 169: Sharpe stability..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test169_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 4 fills window=2 → 3 Sharpe points ----
+        {
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC", 200.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC", 100.0, "scalp",
+                             t0 + 3));
+            auto btcS = j.sharpeStabilityBySymbol("BTC", 2);
+            if (btcS.sampleCount == 3 &&
+                std::fabs(btcS.minSharpe - 0.2357) < 0.01 &&
+                std::fabs(btcS.maxSharpe - 2.1213) < 0.01 &&
+                btcS.maxSharpe >= btcS.minSharpe) {
+                std::cout << "✓ BTC: 3 samples, "
+                          << "min=" << btcS.minSharpe
+                          << " max=" << btcS.maxSharpe
+                          << " mean=" << btcS.meanSharpe
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: count="
+                          << btcS.sampleCount
+                          << " min=" << btcS.minSharpe
+                          << " max=" << btcS.maxSharpe
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " sharpe-stability tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

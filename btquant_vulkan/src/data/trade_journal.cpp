@@ -7590,4 +7590,60 @@ TradeJournal::rollingWinRateByTag(
 // this patch were detected and removed; the implementations
 // above (rollingWindowSharpeBySymbol/ByTag) are reused.
 
+TradeJournal::SharpeStability
+TradeJournal::sharpeStabilityBySymbol(
+    const std::string& symbol, size_t window) const {
+    // Sprint #183. Statistics over rolling Sharpe series.
+    SharpeStability s;
+    s.segment = symbol;
+    auto series = rollingWindowSharpeBySymbol(symbol, window);
+    if (series.empty()) return s;
+    s.sampleCount = series.size();
+    double sum = 0.0, mn = series[0].sharpe,
+           mx = series[0].sharpe;
+    for (const auto& p : series) {
+        sum += p.sharpe;
+        if (p.sharpe < mn) mn = p.sharpe;
+        if (p.sharpe > mx) mx = p.sharpe;
+    }
+    s.meanSharpe = sum / static_cast<double>(series.size());
+    double var = 0.0;
+    for (const auto& p : series) {
+        var += (p.sharpe - s.meanSharpe) * (p.sharpe - s.meanSharpe);
+    }
+    var /= static_cast<double>(series.size());
+    s.stddevSharpe = std::sqrt(var);
+    s.minSharpe = mn;
+    s.maxSharpe = mx;
+    return s;
+}
+
+TradeJournal::SharpeStability
+TradeJournal::sharpeStabilityByTag(
+    const std::string& tag, bool includeUntagged, size_t window) const {
+    SharpeStability s;
+    s.segment = tag;
+    auto series = rollingWindowSharpeByTag(tag, includeUntagged,
+        window);
+    if (series.empty()) return s;
+    s.sampleCount = series.size();
+    double sum = 0.0, mn = series[0].sharpe,
+           mx = series[0].sharpe;
+    for (const auto& p : series) {
+        sum += p.sharpe;
+        if (p.sharpe < mn) mn = p.sharpe;
+        if (p.sharpe > mx) mx = p.sharpe;
+    }
+    s.meanSharpe = sum / static_cast<double>(series.size());
+    double var = 0.0;
+    for (const auto& p : series) {
+        var += (p.sharpe - s.meanSharpe) * (p.sharpe - s.meanSharpe);
+    }
+    var /= static_cast<double>(series.size());
+    s.stddevSharpe = std::sqrt(var);
+    s.minSharpe = mn;
+    s.maxSharpe = mx;
+    return s;
+}
+
 } // namespace btquant

@@ -3904,5 +3904,78 @@ int main() {
         }
     }
 
+    // Test 47: ThemeEditor — Discard changes / unsaved marker.
+    // Verifies that setOpen(true) defers snapshot capture (m_captured
+    // stays false when no ImGui context is alive), so callers can flip
+    // the open flag without crashing. hasUnsavedChanges() and
+    // discardChanges() must be safe no-ops in that case.
+    std::cout << "\nTest 47: Testing ThemeEditor discard-changes path..."
+              << std::endl;
+    {
+        using btquant::ui::ThemeEditor;
+
+        ThemeEditor te;
+        if (te.isOpen()) {
+            std::cout << "✗ should start closed" << std::endl;
+        } else {
+            std::cout << "✓ starts closed" << std::endl;
+        }
+
+        // setOpen(true) without an ImGui context must not crash.
+        te.setOpen(true);
+        if (te.isOpen()) {
+            std::cout << "✓ setOpen(true) is sticky even without context"
+                      << std::endl;
+        } else {
+            std::cout << "✗ setOpen(true) failed" << std::endl;
+        }
+
+        // hasUnsavedChanges() must be a safe false without context/capture.
+        if (!te.hasUnsavedChanges()) {
+            std::cout << "✓ hasUnsavedChanges() → false pre-capture" << std::endl;
+        } else {
+            std::cout << "✗ hasUnsavedChanges() returned true without capture"
+                      << std::endl;
+        }
+
+        // discardChanges() must be a safe no-op without context/capture.
+        if (!te.discardChanges()) {
+            std::cout << "✓ discardChanges() → false pre-capture (safe)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ discardChanges() returned true without capture"
+                      << std::endl;
+        }
+
+        // Re-opening must re-arm the capture flag (so a future render frame
+        // re-snapshots the current style as the new "before" baseline).
+        te.setOpen(false);
+        te.setOpen(true);
+        if (te.isOpen()) {
+            std::cout << "✓ setOpen cycle re-arms open state" << std::endl;
+        } else {
+            std::cout << "✗ setOpen cycle lost open state" << std::endl;
+        }
+
+        // Snapshot POD: openingSnapshot is a value type — copy ctor works.
+        ThemeEditor::Snapshot snap1;
+        snap1.windowPadding = 12.5f;
+        snap1.alpha = 0.75f;
+        snap1.colors[3][0] = 0.42f;
+        ThemeEditor::Snapshot snap2 = snap1;
+        if (ThemeEditor::equals(snap1, snap2)) {
+            std::cout << "✓ Snapshot copy ctor preserves all fields" << std::endl;
+        } else {
+            std::cout << "✗ Snapshot copy ctor dropped fields" << std::endl;
+        }
+        snap2.colors[3][0] += 0.01f;
+        if (!ThemeEditor::equals(snap1, snap2)) {
+            std::cout << "✓ Snapshot copy is independent (mutating copy)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ Snapshot copy aliases the original" << std::endl;
+        }
+    }
+
     return 0;
 }

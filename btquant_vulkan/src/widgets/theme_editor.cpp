@@ -77,6 +77,14 @@ const char* ThemeEditor::colorName(int i) {
 void ThemeEditor::render() {
     if (!m_open) return;
 
+    // First render frame of an open session — snapshot the live style for
+    // the "Discard changes" / "* unsaved" path. Guarded so a stale open
+    // state from a torn-down context doesn't crash.
+    if (!m_captured && ImGui::GetCurrentContext() != nullptr) {
+        m_openingSnapshot = capture(ImGui::GetStyle());
+        m_captured = true;
+    }
+
     ImGui::OpenPopup("Theme Editor");
     ImGui::SetNextWindowSize(ImVec2(540, 600), ImGuiCond_Appearing);
     if (!ImGui::BeginPopupModal("Theme Editor", &m_open)) {
@@ -122,6 +130,14 @@ void ThemeEditor::render() {
         m_open = false;
     }
     ImGui::SameLine();
+    if (ImGui::Button("Discard changes")) {
+        discardChanges();
+    }
+    if (hasUnsavedChanges()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "* unsaved");
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Reset to Dark")) ImGui::StyleColorsDark(&st);
     ImGui::SameLine();
     if (ImGui::Button("Reset to Light")) ImGui::StyleColorsLight(&st);
@@ -132,6 +148,18 @@ void ThemeEditor::render() {
     }
 
     ImGui::EndPopup();
+}
+
+bool ThemeEditor::hasUnsavedChanges() const {
+    if (!m_open || !m_captured) return false;
+    Snapshot now = capture(ImGui::GetStyle());
+    return !equals(now, m_openingSnapshot);
+}
+
+bool ThemeEditor::discardChanges() {
+    if (!m_captured || ImGui::GetCurrentContext() == nullptr) return false;
+    applySnapshot(ImGui::GetStyle(), m_openingSnapshot);
+    return true;
 }
 
 void ThemeEditor::applySnapshot(ImGuiStyle& dst, const Snapshot& s) {

@@ -319,6 +319,7 @@ private:
       windowManager.showPositionPanelWindow();
       windowManager.showRiskLimitsWindow();
       windowManager.showMiniPriceChartWindow();
+      windowManager.showJournalStatsWindow();
       windowManager.showHotkeyEditorWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();

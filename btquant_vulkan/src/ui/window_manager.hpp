@@ -49,6 +49,8 @@ public:
     // Hotkey help overlay (toggled by `?` key). Shows all shortcuts in a table.
     void showHotkeyHelpWindow();
     bool showHotkeyHelp = false;
+    void showJournalStatsWindow();
+    bool showJournalStats = false;
 
     // Theme — owned by UIContext but the WindowManager menu triggers changes.
     // We store the current theme here so we can detect changes and rebuild.
@@ -274,6 +276,9 @@ private:
     // HotkeyEditor — Ctrl+H panel that lets the user remap bindings at runtime.
     ::btquant::widgets::HotkeyEditor* m_hotkeyEditor = nullptr;
     class HotkeyHelpOverlay* m_hotkeyHelpOverlay = nullptr;
+    // JournalStatsPanel — Sprint #74. All-time P&L by total /
+    // symbol / tag, sourced from the persisted journal.
+    class JournalStatsPanel* m_journalStatsPanel = nullptr;
     // Hotkey file path — saved to on each remap so user changes survive restart.
     std::string                    m_hotkeyPath;
     // Layout profile save/load UI state.

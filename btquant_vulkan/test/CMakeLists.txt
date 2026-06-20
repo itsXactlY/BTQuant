@@ -98,6 +98,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/order_ticket.cpp
     ../src/widgets/position_panel.cpp
     ../src/widgets/risk_limits_panel.cpp
+    ../src/widgets/journal_stats_panel.cpp
     ../src/widgets/mini_price_chart.cpp
     ../src/widgets/hotkey_editor.cpp
     ../src/data/position_book.cpp

@@ -55,7 +55,12 @@ enum class HotkeyAction : int {
     // Bound to Alt+B / Alt+S by default.
     SubmitBuy  = 31,
     SubmitSell = 32,
-    COUNT      = 33,
+    // Sprint #74: toggle the Journal Stats panel (all-time P&L by
+    // total / symbol / tag from the persisted journal). Bound to
+    // Ctrl+J by default — same modifier group as the other Ctrl
+    // toggles (P/T/R/B/M/H).
+    ToggleJournalStats = 33,
+    COUNT             = 34,
 };
 
 // One hotkey binding — a single GLFW key + optional modifier chord

@@ -33,6 +33,7 @@
 #include "../widgets/order_ticket.hpp"
 #include "../widgets/position_panel.hpp"
 #include "../widgets/risk_limits_panel.hpp"
+#include "../widgets/journal_stats_panel.hpp"
 #include "../widgets/mini_price_chart.hpp"
 #include "../data/position_book.hpp"
 #include "../data/risk_guard.hpp"
@@ -180,6 +181,8 @@ WindowManager::WindowManager() {
     m_miniPriceChart->setMarketData(m_marketData);
     m_hotkeyEditor = new ::btquant::widgets::HotkeyEditor();
     m_hotkeyHelpOverlay = new HotkeyHelpOverlay();
+    m_journalStatsPanel = new JournalStatsPanel();
+    if (m_tradeJournal) m_journalStatsPanel->setJournal(m_tradeJournal);
     // HotkeyEditor is wired after m_hotkeyMap is constructed (below).
     // Trade journal lives in the user's config dir alongside settings.ini.
     std::string journalPath = configDir + "journal.jsonl";
@@ -350,6 +353,7 @@ WindowManager::~WindowManager() {
     delete m_riskLimitsPanel;
     delete m_hotkeyEditor;
     delete m_hotkeyHelpOverlay;
+    delete m_journalStatsPanel;
     delete m_miniPriceChart;
     delete m_hotkeyMap;
     delete m_riskGuard;
@@ -823,6 +827,11 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
             if (m_miniPriceChart) m_miniPriceChart->setOpen(showMiniPriceChart);
             markSettingsDirty();
             break;
+        case HA::ToggleJournalStats:
+            showJournalStats = !showJournalStats;
+            if (m_journalStatsPanel) m_journalStatsPanel->showWindow = showJournalStats;
+            markSettingsDirty();
+            break;
         case HA::ToggleStats:
             showStatsOverlay = !showStatsOverlay;
             m_statsOverlay.setEnabled(showStatsOverlay);
@@ -1062,6 +1071,11 @@ void WindowManager::showMiniPriceChartWindow() {
     if (m_miniPriceChart) m_miniPriceChart->render();
 }
 
+void WindowManager::showJournalStatsWindow() {
+    if (!showJournalStats) return;
+    if (m_journalStatsPanel) m_journalStatsPanel->render();
+}
+
 void WindowManager::showHotkeyEditorWindow() {
     if (!m_hotkeyEditor) return;
     m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
@@ -1112,6 +1126,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Position Panel (Ctrl+B)",     nullptr, &showPositionPanel))markSettingsDirty();
             if (ImGui::MenuItem("Risk Dashboard (Ctrl+R)",      nullptr, &showRiskLimits))   markSettingsDirty();
             if (ImGui::MenuItem("Mini Price Chart (Ctrl+M)",    nullptr, &showMiniPriceChart))markSettingsDirty();
+            if (ImGui::MenuItem("Journal Stats (Ctrl+J)",        nullptr, &showJournalStats))  markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Editor (Ctrl+H)",       nullptr, &m_hotkeyEditorOpen)) {
                 if (m_hotkeyEditor) m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
                 markSettingsDirty();
@@ -1450,6 +1465,7 @@ void WindowManager::showHotkeyHelpWindow() {
         display(HA::TogglePositionPanel,    "Toggle Position Panel");
         display(HA::ToggleRiskLimits,       "Toggle Risk Dashboard");
         display(HA::ToggleMiniPriceChart,   "Toggle Mini Price Chart");
+        display(HA::ToggleJournalStats,     "Toggle Journal Stats");
         display(HA::ToggleHotkeyEditor,     "Open Hotkey Editor (remap bindings)");
         display(HA::KillSwitch,             "Kill switch — flatten open position at market");
 

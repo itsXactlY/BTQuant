@@ -15320,5 +15320,158 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 113: symbolSummary(symbol) (Sprint #125).
+    //
+    // Single-call snapshot. Tests:
+    //   - Empty symbol: zeros across the board.
+    //   - 3 fills across 2 days: correct realized, rt count,
+    //     winRate, expectancy, maxDD (0 single-day), Kelly,
+    //     recoveryFactor (+inf since maxDD=0), activeDays=2,
+    //     tradesPerDay=1.5, first/last fill ts.
+    //   - 4 fills (3W 1L): correct Kelly, recovery factor.
+    std::cout << "\nTest 113: per-symbol summary snapshot..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test113_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Unknown symbol: zeros ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.symbolSummary("UNKNOWN");
+            if (s.symbol == "UNKNOWN" &&
+                s.realized == 0.0 &&
+                s.roundTripCount == 0 &&
+                s.activeDays == 0 &&
+                s.firstFillUs == 0) {
+                std::cout << "✓ unknown symbol: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ unknown wrong: rt="
+                          << s.roundTripCount
+                          << " days=" << s.activeDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- BTC: 3 fills (1W 2L) across 2 days ----
+        // Fills: +100 (day1), -50 (day1), +30 (day2).
+        // rt count = 3, wins=2 (100, 30), losses=1 (-50).
+        //   wait, +30 IS a win. so wins=2, losses=1.
+        //   winRate=0.667. avgW = 130/2 = 65, avgL = -50.
+        //   PF = 130/50 = 2.6.
+        //   expectancy = (130 + -50) / 3 = 80/3 = 26.667.
+        //   maxDD = 0 (all on same day for BTC; wait, two
+        //   days here so daily buckets: day1=+50, day2=+30.
+        //   daily cums: 50, 80. peak: 50, 80. DD: 0, 0.
+        //   maxDD = 0. recoveryFactor = +inf).
+        //   activeDays=2, tradesPerDay = 3/2 = 1.5.
+        {
+            TradeJournal j((tmpDir / "btc.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "", day1));
+            j.append(mkFill("BTC", -50.0, "", day1));
+            j.append(mkFill("BTC",  30.0, "", day2));
+            // Add an ETH fill that should NOT appear.
+            j.append(mkFill("ETH", 999.0, "",
+                             day1 + 3600ULL * 1000000ULL));
+            auto s = j.symbolSummary("BTC");
+            if (s.symbol == "BTC" &&
+                s.roundTripCount == 3 &&
+                s.winCount == 2 &&
+                s.lossCount == 1 &&
+                std::fabs(s.winRate - 2.0/3.0) < 1e-9 &&
+                std::fabs(s.avgWinner - 65.0) < 1e-9 &&
+                std::fabs(s.avgLoser + 50.0) < 1e-9 &&
+                std::fabs(s.profitFactor - 2.6) < 1e-9 &&
+                std::fabs(s.realized - 80.0) < 1e-9 &&
+                std::fabs(s.expectancy - 80.0/3.0) < 1e-9 &&
+                std::fabs(s.maxDrawdown) < 1e-9 &&
+                std::isinf(s.recoveryFactor) &&
+                s.recoveryFactor > 0 &&
+                s.activeDays == 2 &&
+                std::fabs(s.tradesPerDay - 1.5) < 1e-9 &&
+                s.firstFillUs == day1 &&
+                s.lastFillUs  == day2) {
+                std::cout << "✓ BTC summary: 3 RT, "
+                          << "WR=0.667, PF=2.6, "
+                          << "RF=+inf, days=2, tpd=1.5"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: rt=" << s.roundTripCount
+                          << " wr=" << s.winRate
+                          << " pf=" << s.profitFactor
+                          << " rf=" << s.recoveryFactor
+                          << " days=" << s.activeDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- ETH: only losses → Kelly=0, recoveryFactor < 0 ----
+        {
+            TradeJournal j((tmpDir / "eth.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("ETH", -50.0, "",
+                             t0));
+            j.append(mkFill("ETH", -30.0, "",
+                             t0 + 1*86400ULL * 1000000ULL));
+            j.append(mkFill("ETH", -20.0, "",
+                             t0 + 2*86400ULL * 1000000ULL));
+            auto s = j.symbolSummary("ETH");
+            if (s.symbol == "ETH" &&
+                s.roundTripCount == 3 &&
+                s.winCount == 0 &&
+                s.lossCount == 3 &&
+                s.winRate == 0.0 &&
+                s.kellyFraction == 0.0 &&  // no wins → 0
+                s.profitFactor == 0.0 &&  // no wins → 0
+                std::fabs(s.realized + 100.0) < 1e-9 &&
+                s.activeDays == 3) {
+                std::cout << "✓ ETH all-loss: K=0, PF=0, "
+                          << "rf=0, realized=-100, days=3"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ ETH wrong: rt=" << s.roundTripCount
+                          << " wins=" << s.winCount
+                          << " kelly=" << s.kellyFraction
+                          << " pf=" << s.profitFactor
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " summary-snapshot tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

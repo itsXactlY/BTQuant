@@ -907,6 +907,46 @@ public:
         bool includeUntagged = false,
         size_t window = 20) const;
 
+    // Per-symbol summary snapshot (Sprint #125). All key
+    // metrics for a single symbol in one struct — saves the
+    // UI from making 10+ separate method calls per symbol.
+    //
+    // Fields: stats + drawdown + recovery factor + Kelly +
+    // frequency. NaN-safe: any field whose computation has
+    // insufficient data is set to a documented sentinel
+    // (0.0 for scalars, empty vector for series).
+    struct SymbolSummary {
+        std::string symbol;
+        // From perSymbolStats.
+        double realized         = 0.0;
+        size_t roundTripCount   = 0;
+        size_t winCount         = 0;
+        size_t lossCount        = 0;
+        double winRate          = 0.0;
+        double avgWinner        = 0.0;
+        double avgLoser         = 0.0;
+        double profitFactor     = 0.0;
+        double expectancy       = 0.0;
+        // From perSymbolDrawdown (single entry, looked up).
+        double maxDrawdown      = 0.0;
+        std::string recoveryDate;
+        size_t      recoveryDays = 0;
+        double currentDD        = 0.0;
+        // From perSymbolRecoveryFactor (Sprint #119).
+        double recoveryFactor   = 0.0;
+        // From perSymbolKellyFraction (Sprint #121).
+        double kellyFraction    = 0.0;
+        // From tradesPerDayBySymbol + activeTradingDaysBySymbol
+        // (Sprint #116 + #120).
+        size_t activeDays       = 0;
+        double tradesPerDay     = 0.0;
+        uint64_t firstFillUs    = 0;
+        uint64_t lastFillUs     = 0;
+        // From perSymbolSharpe (Sprint #91).
+        double annualizedSharpe = 0.0;
+    };
+    SymbolSummary symbolSummary(const std::string& symbol) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

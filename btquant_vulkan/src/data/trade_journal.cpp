@@ -7329,4 +7329,75 @@ TradeJournal::dailyPnLSeriesByTag(
         });
 }
 
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::topTradeDays(size_t n) const {
+    // Sprint #178. Top N days by realized DESC.
+    auto series = dailyPnLSeries();
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized > b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::worstTradeDays(size_t n) const {
+    auto series = dailyPnLSeries();
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized < b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::topTradeDaysBySymbol(
+    const std::string& symbol, size_t n) const {
+    auto series = dailyPnLSeriesBySymbol(symbol);
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized > b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::worstTradeDaysBySymbol(
+    const std::string& symbol, size_t n) const {
+    auto series = dailyPnLSeriesBySymbol(symbol);
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized < b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::topTradeDaysByTag(
+    const std::string& tag, bool includeUntagged, size_t n) const {
+    auto series = dailyPnLSeriesByTag(tag, includeUntagged);
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized > b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::worstTradeDaysByTag(
+    const std::string& tag, bool includeUntagged, size_t n) const {
+    auto series = dailyPnLSeriesByTag(tag, includeUntagged);
+    std::sort(series.begin(), series.end(),
+        [](const DailyPnL& a, const DailyPnL& b) {
+            return a.realized < b.realized;
+        });
+    if (series.size() > n) series.resize(n);
+    return series;
+}
+
 } // namespace btquant

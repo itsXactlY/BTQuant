@@ -1839,6 +1839,28 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Top N trade days (Sprint #178). Sort dailyPnLSeries
+    // by realized DESC. Answers "what's my best day ever?"
+    std::vector<DailyPnL>
+    topTradeDays(size_t n = 10) const;
+    std::vector<DailyPnL>
+    worstTradeDays(size_t n = 10) const;
+    // Per-segment variants.
+    std::vector<DailyPnL>
+    topTradeDaysBySymbol(const std::string& symbol,
+                         size_t n = 10) const;
+    std::vector<DailyPnL>
+    worstTradeDaysBySymbol(const std::string& symbol,
+                           size_t n = 10) const;
+    std::vector<DailyPnL>
+    topTradeDaysByTag(const std::string& tag,
+                      bool includeUntagged = false,
+                      size_t n = 10) const;
+    std::vector<DailyPnL>
+    worstTradeDaysByTag(const std::string& tag,
+                        bool includeUntagged = false,
+                        size_t n = 10) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

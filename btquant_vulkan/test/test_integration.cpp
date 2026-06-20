@@ -20463,5 +20463,82 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 165: topTradeDays() / worstTradeDays() / per-seg
+    //   (Sprint #178).
+    //
+    // Top/worst N days by realized. Tests:
+    //   - 3 days (+100, -50, +200). top=[+200], worst=[-50].
+    std::cout << "\nTest 165: top/worst trade days..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test165_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](double realized, uint64_t ts) {
+            JournalFill f;
+            f.symbol = "BTC"; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 days: +100 (d1), -50 (d2), +200 (d3) ----
+        {
+            const uint64_t base = 1705276800ULL;
+            const uint64_t day = 86400ULL;
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            j.append(mkFill( 100.0, base * 1000000ULL));
+            j.append(mkFill( -50.0, (base + day) * 1000000ULL));
+            j.append(mkFill( 200.0, (base + 2*day) * 1000000ULL));
+            auto top = j.topTradeDays(3);
+            auto worst = j.worstTradeDays(3);
+            if (top.size() == 3 &&
+                std::fabs(top[0].realized - 200.0) < 1e-9 &&
+                std::fabs(top[1].realized - 100.0) < 1e-9 &&
+                std::fabs(top[2].realized + 50.0) < 1e-9 &&
+                worst.size() == 3 &&
+                std::fabs(worst[0].realized + 50.0) < 1e-9 &&
+                std::fabs(worst[2].realized - 200.0) < 1e-9) {
+                std::cout << "✓ 3 days: top=[+200,+100,-50], "
+                          << "worst=[-50,...]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top[0]="
+                          << (top.size() > 0
+                              ? top[0].realized : 0.0)
+                          << " top[1]="
+                          << (top.size() > 1
+                              ? top[1].realized : 0.0)
+                          << " top[2]="
+                          << (top.size() > 2
+                              ? top[2].realized : 0.0)
+                          << " worst[0]="
+                          << (worst.size() > 0
+                              ? worst[0].realized : 0.0)
+                          << " worst[2]="
+                          << (worst.size() > 2
+                              ? worst[2].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " top-days tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -35,6 +35,7 @@
 #include "../widgets/risk_limits_panel.hpp"
 #include "../widgets/journal_stats_panel.hpp"
 #include "../widgets/pnl_heatmap_panel.hpp"
+#include "../widgets/equity_curve_panel.hpp"
 #include "../widgets/mini_price_chart.hpp"
 #include "../data/position_book.hpp"
 #include "../data/risk_guard.hpp"
@@ -184,6 +185,7 @@ WindowManager::WindowManager() {
     m_hotkeyHelpOverlay = new HotkeyHelpOverlay();
     m_journalStatsPanel = new JournalStatsPanel();
     m_pnlHeatmapPanel   = new PnLHeatmapPanel();
+    m_equityCurvePanel  = new EquityCurvePanel();
     // Note: setJournal() happens below, AFTER m_tradeJournal is
     // constructed. Sprint #103 fixed the pre-existing early-wire
     // bug where m_tradeJournal was null at this point.
@@ -193,6 +195,7 @@ WindowManager::WindowManager() {
     m_tradeJournal  = new ::btquant::TradeJournal(journalPath);
     if (m_journalStatsPanel) m_journalStatsPanel->setJournal(m_tradeJournal);
     if (m_pnlHeatmapPanel)   m_pnlHeatmapPanel->setJournal(m_tradeJournal);
+    if (m_equityCurvePanel)  m_equityCurvePanel->setJournal(m_tradeJournal);
     {
         int skipped = 0;
         size_t onDisk = m_tradeJournal->count();
@@ -361,6 +364,7 @@ WindowManager::~WindowManager() {
     delete m_hotkeyHelpOverlay;
     delete m_journalStatsPanel;
     delete m_pnlHeatmapPanel;
+    delete m_equityCurvePanel;
     delete m_miniPriceChart;
     delete m_hotkeyMap;
     delete m_riskGuard;
@@ -844,6 +848,11 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
             if (m_pnlHeatmapPanel) m_pnlHeatmapPanel->showWindow = showPnLHeatmap;
             markSettingsDirty();
             break;
+        case HA::ToggleEquityCurve:
+            showEquityCurve = !showEquityCurve;
+            if (m_equityCurvePanel) m_equityCurvePanel->showWindow = showEquityCurve;
+            markSettingsDirty();
+            break;
         case HA::ToggleStats:
             showStatsOverlay = !showStatsOverlay;
             m_statsOverlay.setEnabled(showStatsOverlay);
@@ -1093,6 +1102,11 @@ void WindowManager::showPnLHeatmapWindow() {
     if (m_pnlHeatmapPanel) m_pnlHeatmapPanel->render();
 }
 
+void WindowManager::showEquityCurveWindow() {
+    if (!showEquityCurve) return;
+    if (m_equityCurvePanel) m_equityCurvePanel->render();
+}
+
 void WindowManager::showHotkeyEditorWindow() {
     if (!m_hotkeyEditor) return;
     m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
@@ -1145,6 +1159,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Mini Price Chart (Ctrl+M)",    nullptr, &showMiniPriceChart))markSettingsDirty();
             if (ImGui::MenuItem("Journal Stats (Ctrl+J)",        nullptr, &showJournalStats))  markSettingsDirty();
             if (ImGui::MenuItem("P&L Heatmap (Ctrl+Shift+H)",     nullptr, &showPnLHeatmap))    markSettingsDirty();
+            if (ImGui::MenuItem("Equity Curve (Ctrl+E)",           nullptr, &showEquityCurve))   markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Editor (Ctrl+H)",       nullptr, &m_hotkeyEditorOpen)) {
                 if (m_hotkeyEditor) m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
                 markSettingsDirty();
@@ -1485,6 +1500,7 @@ void WindowManager::showHotkeyHelpWindow() {
         display(HA::ToggleMiniPriceChart,   "Toggle Mini Price Chart");
         display(HA::ToggleJournalStats,     "Toggle Journal Stats");
         display(HA::TogglePnLHeatmap,       "Toggle P&L Heatmap");
+        display(HA::ToggleEquityCurve,      "Toggle Equity Curve");
         display(HA::ToggleHotkeyEditor,     "Open Hotkey Editor (remap bindings)");
         display(HA::KillSwitch,             "Kill switch — flatten open position at market");
 

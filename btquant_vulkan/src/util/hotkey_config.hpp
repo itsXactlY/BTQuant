@@ -66,7 +66,10 @@ enum class HotkeyAction : int {
     // and Ctrl+Shift+H keeps the same muscle memory as the
     // "history / heatmap" association.
     TogglePnLHeatmap = 34,
-    COUNT             = 35,
+    // Sprint #104: toggle the Equity Curve panel (cumulative P&L
+    // line graph + drawdown overlay). Bound to Ctrl+E.
+    ToggleEquityCurve = 35,
+    COUNT             = 36,
 };
 
 // One hotkey binding — a single GLFW key + optional modifier chord

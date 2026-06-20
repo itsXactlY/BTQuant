@@ -54,6 +54,9 @@ public:
     // Sprint #103 — calendar-style P&L heatmap (Ctrl+Shift+H).
     void showPnLHeatmapWindow();
     bool showPnLHeatmap = false;
+    // Sprint #104 — equity curve + drawdown (Ctrl+E).
+    void showEquityCurveWindow();
+    bool showEquityCurve = false;
 
     // Theme — owned by UIContext but the WindowManager menu triggers changes.
     // We store the current theme here so we can detect changes and rebuild.
@@ -285,6 +288,9 @@ private:
     // PnLHeatmapPanel — Sprint #103. Calendar-style grid of
     // realized P&L per symbol/tag × date.
     class PnLHeatmapPanel* m_pnlHeatmapPanel = nullptr;
+    // EquityCurvePanel — Sprint #104. Cumulative P&L line graph
+    // + drawdown overlay.
+    class EquityCurvePanel* m_equityCurvePanel = nullptr;
     // Hotkey file path — saved to on each remap so user changes survive restart.
     std::string                    m_hotkeyPath;
     // Layout profile save/load UI state.

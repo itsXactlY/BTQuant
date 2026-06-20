@@ -11729,5 +11729,185 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 96: equityCurve() / equityDrawdownSeries() (Sprint #104).
+    //
+    // Verifies the time-series methods that power the EquityCurvePanel.
+    // Cases:
+    //   - Empty journal: empty vectors.
+    //   - Single fill: 1-point curve, cumulative = realized.
+    //   - Multi-fill: cumulative is monotonic running sum, sorted by
+    //     timestamp ASC regardless of insertion order.
+    //   - Drawdown: drawdown == 0 when curve only rises; > 0 after
+    //     a losing fill; clamps to >= 0 always.
+    std::cout << "\nTest 96: equityCurve() / equityDrawdownSeries()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test96_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          uint64_t ts_us) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts_us;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto eq = j.equityCurve();
+            auto dd = j.equityDrawdownSeries();
+            if (eq.empty() && dd.empty()) {
+                std::cout << "✓ empty journal: empty curve + dd"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: eq=" << eq.size()
+                          << " dd=" << dd.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill ----
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 100.0, 1000000ULL));
+            auto eq = j.equityCurve();
+            auto dd = j.equityDrawdownSeries();
+            if (eq.size() == 1 &&
+                std::fabs(eq[0].realized - 100.0) < 1e-9 &&
+                std::fabs(eq[0].cumulative - 100.0) < 1e-9 &&
+                std::fabs(dd[0].running_peak - 100.0) < 1e-9 &&
+                std::fabs(dd[0].drawdown - 0.0) < 1e-9) {
+                std::cout << "✓ single fill: cumulative=$100, "
+                          << "drawdown=$0" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: realized="
+                          << eq[0].realized
+                          << " cum=" << eq[0].cumulative << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-fill, sorted ASC by timestamp ----
+        // Insert in REVERSE chronological order to verify the
+        // method sorts internally (not just insertion order).
+        //   ts=3000  realized=-30  →  cumulative=70   peak=100  dd=30
+        //   ts=2000  realized=+20  →  cumulative=100  peak=100  dd=0
+        //   ts=1000  realized=+80  →  cumulative=80   peak=80   dd=0
+        // Expected after sort:
+        //   [0]: ts=1000, realized=80,  cum=80,   peak=80,  dd=0
+        //   [1]: ts=2000, realized=20,  cum=100,  peak=100, dd=0
+        //   [2]: ts=3000, realized=-30, cum=70,   peak=100, dd=30
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", -30.0, 3000000ULL));
+            j.append(mkFill("ETH", +20.0, 2000000ULL));
+            j.append(mkFill("BTC", +80.0, 1000000ULL));
+            auto eq = j.equityCurve();
+            auto dd = j.equityDrawdownSeries();
+            if (eq.size() == 3 &&
+                eq[0].timestamp_us == 1000000ULL &&
+                std::fabs(eq[0].cumulative - 80.0) < 1e-9 &&
+                eq[1].timestamp_us == 2000000ULL &&
+                std::fabs(eq[1].cumulative - 100.0) < 1e-9 &&
+                eq[2].timestamp_us == 3000000ULL &&
+                std::fabs(eq[2].cumulative - 70.0) < 1e-9 &&
+                dd.size() == 3 &&
+                std::fabs(dd[0].drawdown - 0.0) < 1e-9 &&
+                std::fabs(dd[1].drawdown - 0.0) < 1e-9 &&
+                std::fabs(dd[2].drawdown - 30.0) < 1e-9 &&
+                std::fabs(dd[2].running_peak - 100.0) < 1e-9) {
+                std::cout << "✓ multi-fill sorted ASC: 3 points, "
+                          << "cum=[80,100,70], dd=[0,0,30]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: ts[0]="
+                          << eq[0].timestamp_us
+                          << " cum[2]=" << eq[2].cumulative
+                          << " dd[2]=" << dd[2].drawdown << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Drawdown clamps at 0 (never negative) ----
+        // Even with FP noise, drawdown stays >= 0.
+        // Curve: 100, 200, 150, 250, 200 → peak=250 throughout
+        // second half; dd: 0,0,50,0,50.
+        {
+            fs::path p = tmpDir / "clamp.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("X", 100.0, 1000000ULL));
+            j.append(mkFill("X", 100.0, 2000000ULL));
+            j.append(mkFill("X", -50.0, 3000000ULL));
+            j.append(mkFill("X", 100.0, 4000000ULL));
+            j.append(mkFill("X", -50.0, 5000000ULL));
+            auto dd = j.equityDrawdownSeries();
+            bool allNonNeg = true;
+            for (const auto& p : dd)
+                if (p.drawdown < -1e-9) { allNonNeg = false; break; }
+            if (allNonNeg &&
+                std::fabs(dd[2].drawdown - 50.0) < 1e-9 &&
+                std::fabs(dd[3].drawdown - 0.0) < 1e-9 &&
+                std::fabs(dd[4].drawdown - 50.0) < 1e-9 &&
+                std::fabs(dd[4].running_peak - 250.0) < 1e-9) {
+                std::cout << "✓ dd clamps >=0: dd=[0,0,50,0,50], "
+                          << "peak=250"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ clamp wrong: dd[2]=" << dd[2].drawdown
+                          << " dd[4]=" << dd[4].drawdown << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All losses: peak stays at first fill ----
+        // 100, 50, 25 → cumulative stays positive but decreasing.
+        // peak=100 (set at first), dd: 0, 50, 75.
+        {
+            fs::path p = tmpDir / "losses.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("X", 100.0, 1000000ULL));
+            j.append(mkFill("X", -50.0, 2000000ULL));
+            j.append(mkFill("X", -25.0, 3000000ULL));
+            auto dd = j.equityDrawdownSeries();
+            if (std::fabs(dd[0].drawdown - 0.0) < 1e-9 &&
+                std::fabs(dd[1].drawdown - 50.0) < 1e-9 &&
+                std::fabs(dd[2].drawdown - 75.0) < 1e-9 &&
+                std::fabs(dd[2].running_peak - 100.0) < 1e-9) {
+                std::cout << "✓ all losses: peak stays $100, "
+                          << "dd=[0,50,75]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ losses wrong: dd[2]="
+                          << dd[2].drawdown << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " equityCurve tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

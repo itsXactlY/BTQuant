@@ -1226,8 +1226,6 @@ TradeJournal::perSymbolDayStats() const {
 
 TradeJournal::PerTagDayStats
 TradeJournal::perTagDayStats(bool includeUntagged) const {
-    // Sprint #102. Per-tag mirror. Tag mode honors
-    // includeUntagged.
     auto buckets = bucketByDayPerAxis<JournalFill>(
         loadAll(),
         [includeUntagged](const JournalFill& f) -> std::string {
@@ -1251,6 +1249,55 @@ TradeJournal::perTagDayStats(bool includeUntagged) const {
             if (it != tagBuckets.end())
                 out.grid[ti * out.dates.size() + di] = it->second;
         }
+    }
+    return out;
+}
+
+std::vector<TradeJournal::EquityPoint>
+TradeJournal::equityCurve() const {
+    // Sprint #104. Sort fills by timestamp ASC, accumulate
+    // realizedDelta into a running cumulative series.
+    //
+    // Why per-fill granularity and not per-day: the widget renders
+    // a smooth line; per-fill gives the most detail. The day-level
+    // bucketing (#102) loses intra-day shape.
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::vector<EquityPoint> out;
+    out.reserve(fills.size());
+    double cumulative = 0.0;
+    for (const auto& f : fills) {
+        cumulative += f.realizedDelta;
+        out.push_back(EquityPoint{f.timestamp_us,
+                                  f.realizedDelta,
+                                  cumulative});
+    }
+    return out;
+}
+
+std::vector<TradeJournal::DrawdownPoint>
+TradeJournal::equityDrawdownSeries() const {
+    // Sprint #104. Walk the equity curve, track the running peak
+    // and compute drawdown at each point. Same per-fill
+    // granularity as equityCurve().
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::vector<DrawdownPoint> out;
+    out.reserve(fills.size());
+    double cumulative = 0.0;
+    double peak        = 0.0;
+    for (const auto& f : fills) {
+        cumulative += f.realizedDelta;
+        if (cumulative > peak) peak = cumulative;
+        double dd = peak - cumulative;
+        if (dd < 0.0) dd = 0.0;       // never negative — clamp FP noise
+        out.push_back(DrawdownPoint{f.timestamp_us, peak, dd});
     }
     return out;
 }

@@ -321,6 +321,7 @@ private:
       windowManager.showMiniPriceChartWindow();
       windowManager.showJournalStatsWindow();
       windowManager.showPnLHeatmapWindow();
+      windowManager.showEquityCurveWindow();
       windowManager.showHotkeyEditorWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();

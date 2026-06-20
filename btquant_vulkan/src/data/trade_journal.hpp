@@ -454,6 +454,40 @@ public:
     PerTagDayStats perTagDayStats(
         bool includeUntagged = false) const;
 
+    // Equity curve — Sprint #104. Cumulative realized P&L over
+    // time, one point per fill (sorted by timestamp ASC). Renders
+    // as a sparkline / line chart in EquityCurvePanel — answers
+    // "am I making money, and is my equity curve smooth or
+    // jagged?"
+    //
+    // Each point: (timestamp_us, cumulative_realized). The curve
+    // is monotonic-non-decreasing on per-fill basis but jumps at
+    // each fill. The widget can also overlay a running max line
+    // (for drawdown shading) — see equityDrawdownSeries().
+    struct EquityPoint {
+        uint64_t timestamp_us = 0;     // fill timestamp (microseconds)
+        double   realized     = 0.0;   // delta from THIS fill
+        double   cumulative   = 0.0;   // sum of all realizedDeltas
+                                        // from the start of the journal
+                                        // through THIS fill (inclusive)
+    };
+    std::vector<EquityPoint> equityCurve() const;
+
+    // Drawdown series — Sprint #104. Running peak (high water
+    // mark) of the equity curve, paired with the current
+    // underwater depth. Answers "how deep was my drawdown at
+    // each point in time?" — the widget shades the area between
+    // equityCurve and this peak in red.
+    //
+    // Each point: (timestamp_us, running_peak, drawdown) where
+    // drawdown = peak - cumulative (>=0 always).
+    struct DrawdownPoint {
+        uint64_t timestamp_us = 0;
+        double   running_peak  = 0.0;  // max cumulative up to this point
+        double   drawdown      = 0.0;  // running_peak - cumulative, >=0
+    };
+    std::vector<DrawdownPoint> equityDrawdownSeries() const;
+
     // Per-tag Sortino (Sprint #99). Per-tag mirror.
     struct PerTagSortino {
         std::string tag;

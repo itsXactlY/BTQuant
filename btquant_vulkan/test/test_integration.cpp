@@ -20328,5 +20328,74 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 163: journalMetadata() (Sprint #176).
+    //
+    // High-level journal summary. Tests:
+    //   - 3 fills across 2 days → totalFills=3, spanDays>0.
+    std::cout << "\nTest 163: journal metadata..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test163_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 fills across 2 days ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "m.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH", -50.0, "arb",
+                             t0 + day));
+            j.append(mkFill("BTC", 75.0, "scalp",
+                             t0 + day));
+            auto m = j.journalMetadata();
+            if (m.totalFills == 3 &&
+                m.totalSymbols == 2 &&
+                m.totalTags == 2 &&
+                m.activeDays == 2 &&
+                std::fabs(m.spanDays - 1.0) < 1e-3 &&
+                std::fabs(m.totalRealized - 125.0) < 1e-9) {
+                std::cout << "✓ 3 fills: spanDays="
+                          << m.spanDays
+                          << " totalRealized=+125 "
+                          << "activeDays=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: totalFills="
+                          << m.totalFills
+                          << " spanDays=" << m.spanDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " journal-meta tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

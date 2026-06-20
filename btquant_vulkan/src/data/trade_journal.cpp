@@ -7251,4 +7251,34 @@ TradeJournal::topMostTradedTags(size_t n, bool includeUntagged) const {
     return out;
 }
 
+TradeJournal::JournalMeta
+TradeJournal::journalMetadata() const {
+    // Sprint #176. High-level journal summary.
+    JournalMeta m;
+    auto fills = loadAll();
+    if (fills.empty()) return m;
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    m.firstFillUs = fills.front().timestamp_us;
+    m.lastFillUs  = fills.back().timestamp_us;
+    m.spanDays = static_cast<double>(
+        m.lastFillUs - m.firstFillUs) /
+        (86400.0 * 1000000.0);
+    m.activeDays = activeTradingDays();
+    m.totalFills = fills.size();
+    std::set<std::string> syms, tags;
+    for (const auto& f : fills) {
+        m.totalRealized += f.realizedDelta;
+        syms.insert(f.symbol);
+        if (!f.tag.empty()) tags.insert(f.tag);
+    }
+    m.totalSymbols = syms.size();
+    m.totalTags = tags.size();
+    m.maxDD = maxDrawdown().maxDrawdown;
+    m.sharpe = sharpe().annualizedSharpe;
+    return m;
+}
+
 } // namespace btquant

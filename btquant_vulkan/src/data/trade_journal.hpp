@@ -1812,6 +1812,23 @@ public:
     topMostTradedTags(size_t n = 0,
                        bool includeUntagged = true) const;
 
+    // Journal metadata (Sprint #176). High-level summary
+    // of the journal's existence — first/last fill, span,
+    // active days, totals.
+    struct JournalMeta {
+        uint64_t firstFillUs   = 0;
+        uint64_t lastFillUs    = 0;
+        double   spanDays      = 0.0;
+        size_t   activeDays    = 0;
+        size_t   totalFills    = 0;
+        size_t   totalSymbols  = 0;
+        size_t   totalTags     = 0;
+        double   totalRealized = 0.0;
+        double   maxDD         = 0.0;
+        double   sharpe        = 0.0;
+    };
+    JournalMeta journalMetadata() const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

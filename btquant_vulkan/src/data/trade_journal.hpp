@@ -488,6 +488,37 @@ public:
     };
     std::vector<DrawdownPoint> equityDrawdownSeries() const;
 
+    // Streak stats — Sprint #105. Track consecutive W or L
+    // round-trips. A streak is a maximal run of Ws or Ls; the
+    // "current" streak is the run containing the most recent
+    // round-trip. Streaks are based on round-trips (realizedDelta
+    // != 0), not raw fills.
+    //
+    // Cross-method invariant: every round-trip appears in exactly
+    // one streak, so the sum of all streak lengths equals
+    // stats().roundTrips. (Test 97 verifies this.)
+    struct StreakStats {
+        size_t currentWinStreak   = 0;  // length of the W-run
+                                        // containing the most recent
+                                        // round-trip (0 if currently
+                                        // on a loss or empty)
+        size_t currentLossStreak  = 0;  // mirror, for L
+        size_t maxWinStreak       = 0;  // longest W-run in history
+        size_t maxLossStreak      = 0;  // longest L-run in history
+        size_t totalStreaks       = 0;  // count of distinct W+L runs
+        size_t totalWinStreaks    = 0;  // count of W runs
+        size_t totalLossStreaks   = 0;  // count of L runs
+        // Last 20 streaks (newest first) — used by the UI to
+        // render a streak-history strip. Each entry: length,
+        // isWin.
+        struct RecentStreak {
+            size_t length = 0;
+            bool   isWin  = false;
+        };
+        std::vector<RecentStreak> recentStreaks;
+    };
+    StreakStats streakStats() const;
+
     // Per-tag Sortino (Sprint #99). Per-tag mirror.
     struct PerTagSortino {
         std::string tag;

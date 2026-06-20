@@ -355,29 +355,34 @@ void JournalStatsPanel::render() {
         }
     }
 
-    // ---- Streaks mini-section (Sprint #83) ----
+    // ---- Streaks mini-section (Sprint #83 + Sprint #105) ----
     //
     // Current + longest W/L streaks sourced from
-    // TradeJournal::streaks() (#82). Two columns: current (the run
-    // we're inside right now — green when winning, red when losing,
-    // dim at 0) and longest (the all-time best run).
+    // TradeJournal::streaks() (#82) + total counts and recent
+    // streak history from TradeJournal::streakStats() (#105).
     //
-    // Format: "3 wins" / "2 losses" / "—" — verbal so the trader
-    // doesn't have to mentally decode a number. Combined with the
-    // Risk section above, this answers "am I currently on a streak
-    // and how does it compare to my best?".
-    auto sk = m_journal->streaks();
+    // Two columns: current (the run we're inside right now —
+    // green when winning, red when losing, dim at 0) and longest
+    // (the all-time best run). Sprint #105 added: totalStreaks
+    // counts (informational) and the recentStreaks strip below
+    // the table — a row of colored squares showing the last 20
+    // streaks, newest at the right. The trader can scan the strip
+    // and see "I just went W-W-L-L-L-W-W-W-W-W-W-W-W" at a glance.
+    auto sk     = m_journal->streaks();
+    auto skFull = m_journal->streakStats();
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Streaks",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("JournalStatsStreaks",
-                              4,
+                              6,
                               ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Current win");
             ImGui::TableSetupColumn("Current loss");
             ImGui::TableSetupColumn("Longest win");
             ImGui::TableSetupColumn("Longest loss");
+            ImGui::TableSetupColumn("Total streaks");  // Sprint #105
+            ImGui::TableSetupColumn("W / L runs");      // Sprint #105
             ImGui::TableHeadersRow();
             ImGui::TableNextRow();
 
@@ -441,7 +446,81 @@ void JournalStatsPanel::render() {
                 ImGui::TextUnformatted("—");
                 ImGui::PopStyleColor();
             }
+
+            // Sprint #105: total streak count + W/L split.
+            ImGui::TableSetColumnIndex(4);
+            char cntBuf[32];
+            std::snprintf(cntBuf, sizeof(cntBuf), "%zu",
+                          skFull.totalStreaks);
+            ImGui::TextUnformatted(cntBuf);
+            ImGui::TableSetColumnIndex(5);
+            std::snprintf(cntBuf, sizeof(cntBuf), "%zu / %zu",
+                          skFull.totalWinStreaks,
+                          skFull.totalLossStreaks);
+            ImGui::TextUnformatted(cntBuf);
+
             ImGui::EndTable();
+        }
+
+        // ---- Recent streak history strip (Sprint #105) ----
+        //
+        // Render the recentStreaks vector as a horizontal strip
+        // of colored cells. W = green, L = red. The width of each
+        // cell is proportional to the streak length so the trader
+        // can see "I had a 7-loss streak followed by a 3-win
+        // streak" at a glance.
+        //
+        // Newest at the LEFT (matches chronological order of the
+        // recentStreaks vector — already sorted newest-first by
+        // streakStats()).
+        if (!skFull.recentStreaks.empty()) {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Recent streak history "
+                                "(newest at right):");
+            // Total width: stretch to fill the panel content
+            // width; each streak's cell width = (length /
+            // totalLength) × panelWidth so a 7-loss streak
+            // dominates over a 1-win streak.
+            size_t totalLen = 0;
+            for (const auto& r : skFull.recentStreaks)
+                totalLen += r.length;
+            if (totalLen == 0) totalLen = 1;   // safety
+            float availW = ImGui::GetContentRegionAvail().x;
+            const float stripH = 18.0f;
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            float x = p.x;
+            for (size_t i = 0; i < skFull.recentStreaks.size(); ++i) {
+                const auto& r = skFull.recentStreaks[i];
+                float w = (availW * static_cast<float>(r.length)) /
+                          static_cast<float>(totalLen);
+                if (w < 1.0f) w = 1.0f;
+                ImU32 col = r.isWin
+                    ? IM_COL32(60, 200, 90, 255)
+                    : IM_COL32(210, 60, 60, 255);
+                dl->AddRectFilled(ImVec2(x, p.y),
+                                  ImVec2(x + w - 1.0f, p.y + stripH),
+                                  col);
+                if (ImGui::IsMouseHoveringRect(
+                        ImVec2(x, p.y),
+                        ImVec2(x + w, p.y + stripH)) &&
+                    ImGui::IsWindowHovered()) {
+                    ImGui::SetTooltip("%zu %s%s (streak %zu/%zu)",
+                        r.length,
+                        r.isWin ? "win" : "loss",
+                        r.length == 1 ? "" : "s",
+                        i + 1, skFull.recentStreaks.size());
+                }
+                x += w;
+            }
+            dl->AddRect(ImVec2(p.x, p.y),
+                        ImVec2(p.x + availW, p.y + stripH),
+                        IM_COL32(80, 80, 80, 255));
+            ImGui::Dummy(ImVec2(availW, stripH));
+            // Legend below the strip.
+            ImGui::TextDisabled(
+                "%zu streaks shown (total %zu round-trips)",
+                skFull.recentStreaks.size(), totalLen);
         }
     }
 

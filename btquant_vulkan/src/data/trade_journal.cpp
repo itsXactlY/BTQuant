@@ -1302,6 +1302,92 @@ TradeJournal::equityDrawdownSeries() const {
     return out;
 }
 
+TradeJournal::StreakStats
+TradeJournal::streakStats() const {
+    // Sprint #105. Walk round-trips in chronological order,
+    // group consecutive Ws and Ls into runs. A round-trip is a
+    // fill with realizedDelta != 0; ties (==0, FP noise) are
+    // skipped (no streak assignment).
+    //
+    // Algorithm: single pass, O(N).
+    //   - For each fill: if realizedDelta>0 → win; if <0 → loss;
+    //     ==0 → skip (no fill counted, no streak change).
+    //   - When the win/loss type changes vs the previous run,
+    //     close the previous run and start a new one.
+    //   - Track current, max-W, max-L; record each completed run
+    //     (and the in-flight run) into recentStreaks (cap at 20
+    //     most recent).
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    StreakStats out;
+    constexpr double kEps = 1e-9;
+    bool   inRun         = false;
+    bool   runIsWin      = false;
+    size_t runLen        = 0;
+    // recentStreaks is built most-recent-first. We push the
+    // closing run onto a temp vector at end-of-run time, then
+    // reverse at the end. The in-flight run (if any) goes last.
+    std::vector<StreakStats::RecentStreak> closedRuns;
+    auto closeRun = [&]() {
+        if (!inRun) return;
+        StreakStats::RecentStreak r;
+        r.length = runLen;
+        r.isWin  = runIsWin;
+        closedRuns.push_back(r);
+        out.totalStreaks++;
+        if (runIsWin) {
+            out.totalWinStreaks++;
+            if (runLen > out.maxWinStreak) out.maxWinStreak = runLen;
+        } else {
+            out.totalLossStreaks++;
+            if (runLen > out.maxLossStreak) out.maxLossStreak = runLen;
+        }
+        inRun = false;
+        runLen = 0;
+    };
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        bool fillIsWin = (f.realizedDelta > kEps);
+        if (inRun && fillIsWin != runIsWin) closeRun();
+        if (!inRun) {
+            inRun    = true;
+            runIsWin = fillIsWin;
+            runLen   = 1;
+        } else {
+            runLen++;
+        }
+    }
+    // The most recent run is the in-flight one — its type is the
+    // current streak type, and its length is the current streak.
+    if (inRun) {
+        if (runIsWin) out.currentWinStreak = runLen;
+        else          out.currentLossStreak = runLen;
+        // Add to recentStreaks too (most recent first → front).
+        StreakStats::RecentStreak r;
+        r.length = runLen;
+        r.isWin  = runIsWin;
+        closedRuns.push_back(r);  // in-flight is the last closed one
+        out.totalStreaks++;
+        if (runIsWin) {
+            out.totalWinStreaks++;
+            if (runLen > out.maxWinStreak) out.maxWinStreak = runLen;
+        } else {
+            out.totalLossStreaks++;
+            if (runLen > out.maxLossStreak) out.maxLossStreak = runLen;
+        }
+    }
+    // Reverse to newest-first, cap at 20.
+    std::reverse(closedRuns.begin(), closedRuns.end());
+    if (closedRuns.size() > 20) {
+        closedRuns.resize(20);
+    }
+    out.recentStreaks = std::move(closedRuns);
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

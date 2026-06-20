@@ -11909,5 +11909,229 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 97: streakStats() (Sprint #105).
+    //
+    // Verifies run-tracking for consecutive W/L round-trips.
+    // Cases:
+    //   - Empty journal: all counts 0.
+    //   - Single win: currentWinStreak=1, currentLossStreak=0,
+    //     maxWinStreak=1, maxLossStreak=0.
+    //   - W-W-W-L-L: current=2L, maxW=3, maxL=2, total=2.
+    //   - Interleaved: W-L-W-L-W → 5 streaks (3W + 2L),
+    //     current=1W, maxW=1, maxL=1, recentStreaks has 5 entries.
+    //   - Cross-method invariant: sum of all streak lengths ==
+    //     stats().roundTrips.
+    std::cout << "\nTest 97: streakStats()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test97_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](double realized, uint64_t ts_us) {
+            JournalFill f;
+            f.symbol = "X"; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts_us;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto s = j.streakStats();
+            if (s.currentWinStreak == 0 && s.currentLossStreak == 0 &&
+                s.maxWinStreak == 0 && s.maxLossStreak == 0 &&
+                s.totalStreaks == 0 && s.totalWinStreaks == 0 &&
+                s.totalLossStreaks == 0 &&
+                s.recentStreaks.empty()) {
+                std::cout << "✓ empty: all zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << s.totalStreaks << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single win ----
+        {
+            fs::path p = tmpDir / "onewin.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill(50.0, 1000000ULL));
+            auto s = j.streakStats();
+            if (s.currentWinStreak == 1 &&
+                s.currentLossStreak == 0 &&
+                s.maxWinStreak == 1 &&
+                s.maxLossStreak == 0 &&
+                s.totalStreaks == 1 &&
+                s.totalWinStreaks == 1 &&
+                s.totalLossStreaks == 0 &&
+                s.recentStreaks.size() == 1 &&
+                s.recentStreaks[0].length == 1 &&
+                s.recentStreaks[0].isWin) {
+                std::cout << "✓ single win: currentW=1, maxW=1, "
+                          << "1 streak"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: currentW="
+                          << s.currentWinStreak
+                          << " total=" << s.totalStreaks << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- W-W-W-L-L ----
+        // Inserts: 100, 50, 75 (W), -20, -30 (L)
+        // expected: current=2L (last 2 are losses),
+        // maxW=3, maxL=2, total=2 streaks.
+        {
+            fs::path p = tmpDir / "streak.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 100.0, 1000000ULL));
+            j.append(mkFill(  50.0, 2000000ULL));
+            j.append(mkFill(  75.0, 3000000ULL));
+            j.append(mkFill( -20.0, 4000000ULL));
+            j.append(mkFill( -30.0, 5000000ULL));
+            auto s = j.streakStats();
+            if (s.currentWinStreak == 0 &&
+                s.currentLossStreak == 2 &&
+                s.maxWinStreak == 3 &&
+                s.maxLossStreak == 2 &&
+                s.totalStreaks == 2 &&
+                s.totalWinStreaks == 1 &&
+                s.totalLossStreaks == 1 &&
+                s.recentStreaks.size() == 2 &&
+                s.recentStreaks[0].length == 2 &&
+                !s.recentStreaks[0].isWin &&   // newest first → L streak
+                s.recentStreaks[1].length == 3 &&
+                s.recentStreaks[1].isWin) {
+                std::cout << "✓ WWW-LL: current=2L, maxW=3, maxL=2, "
+                          << "2 streaks (newest=L)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ WWW-LL wrong: currentL="
+                          << s.currentLossStreak
+                          << " maxW=" << s.maxWinStreak
+                          << " maxL=" << s.maxLossStreak << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Interleaved W-L-W-L-W ----
+        // 5 round-trips → 5 streaks (all length 1).
+        // current=1W (last fill is a win), maxW=1, maxL=1.
+        // recentStreaks: [W,L,W,L,W] newest-first → [W,L,W,L,W].
+        {
+            fs::path p = tmpDir / "interleave.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 10.0, 1000000ULL));   // W
+            j.append(mkFill( -5.0, 2000000ULL));   // L
+            j.append(mkFill( 20.0, 3000000ULL));   // W
+            j.append(mkFill( -8.0, 4000000ULL));   // L
+            j.append(mkFill( 15.0, 5000000ULL));   // W
+            auto s = j.streakStats();
+            if (s.currentWinStreak == 1 &&
+                s.currentLossStreak == 0 &&
+                s.maxWinStreak == 1 &&
+                s.maxLossStreak == 1 &&
+                s.totalStreaks == 5 &&
+                s.totalWinStreaks == 3 &&
+                s.totalLossStreaks == 2 &&
+                s.recentStreaks.size() == 5 &&
+                s.recentStreaks[0].isWin &&     // newest first
+                s.recentStreaks[1].length == 1 && !s.recentStreaks[1].isWin &&
+                s.recentStreaks[4].isWin) {
+                std::cout << "✓ interleaved W-L-W-L-W: 5 streaks, "
+                          << "maxW=1, maxL=1, currentW=1"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ interleave wrong: total="
+                          << s.totalStreaks
+                          << " currentW=" << s.currentWinStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Cross-method invariant: sum of streak lengths ==
+        // stats().roundTrips ----
+        // Build a longer fixture (W-W-L-W-L-L-W-L-L-L-W-W) and
+        // verify the sum of recentStreaks.length entries equals
+        // stats().roundTrips. (recentStreaks is capped at 20; if
+        // totalStreaks > 20 we'd need to walk the journal again,
+        // so for this test we keep total <= 20.)
+        {
+            fs::path p = tmpDir / "invariant.jsonl";
+            TradeJournal j(p.string());
+            double reals[] = { 1.0, 2.0, -1.0, 3.0,
+                               -2.0, -3.0, 4.0,
+                               -4.0, -5.0, -6.0,
+                               5.0, 6.0 };
+            for (size_t i = 0; i < sizeof(reals)/sizeof(reals[0]); ++i)
+                j.append(mkFill(reals[i], (i + 1) * 1000000ULL));
+            auto s  = j.streakStats();
+            auto st = j.stats();
+            size_t sumLen = 0;
+            for (const auto& r : s.recentStreaks)
+                sumLen += r.length;
+            if (sumLen == st.roundTripCount) {
+                std::cout << "✓ invariant: Σ recentStreaks.length="
+                          << sumLen << " == stats.roundTripCount="
+                          << st.roundTripCount << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ invariant broken: sum="
+                          << sumLen << " vs roundTripCount="
+                          << st.roundTripCount << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- FP-tie filter: realizedDelta == 0 → not counted ----
+        {
+            fs::path p = tmpDir / "ties.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill(10.0,  1000000ULL));   // W
+            j.append(mkFill( 0.0,  2000000ULL));   // tie — skipped
+            j.append(mkFill(20.0,  3000000ULL));   // W (same streak)
+            auto s = j.streakStats();
+            if (s.currentWinStreak == 2 &&
+                s.totalStreaks == 1 &&
+                s.maxWinStreak == 2 &&
+                s.recentStreaks.size() == 1 &&
+                s.recentStreaks[0].length == 2 &&
+                s.recentStreaks[0].isWin) {
+                std::cout << "✓ ties skipped: W-tie-W → 1 streak "
+                          << "of length 2 (tie not counted)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tie wrong: currentW="
+                          << s.currentWinStreak
+                          << " total=" << s.totalStreaks << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " streakStats tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

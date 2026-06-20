@@ -534,6 +534,57 @@ public:
     };
     std::vector<DrawdownPoint> equityDrawdownSeries() const;
 
+    // Drawdown recovery events — Sprint #113. A "recovery
+    // event" is a maximal excursion below a previous equity
+    // high water mark that has since been recovered (peak →
+    // trough → new peak). The journal-wide series is the
+    // union of every per-segment run, regardless of depth.
+    //
+    // Field semantics:
+    //   start_ts       — first fill that put us under the
+    //                    previous peak (DD entry).
+    //   trough_ts      — fill with the lowest cumulative
+    //                    realized within this DD event.
+    //   trough_depth   — peak - trough_cumulative (>= 0).
+    //   end_ts         — first fill that put us back at or
+    //                    above the previous peak (recovery).
+    //   drawdown_us    — end_ts - start_ts (microseconds).
+    //   recovery_us    — end_ts - trough_ts (microseconds).
+    //
+    // An "unrecovered" drawdown (we're still underwater when
+    // the journal ends) is NOT in this series — see
+    // currentDrawdown() for that. The series is sorted by
+    // trough_depth DESC (worst first) so a quick top-3 shows
+    // the trader's worst historical pain.
+    struct DrawdownEvent {
+        uint64_t start_ts     = 0;
+        uint64_t trough_ts    = 0;
+        uint64_t end_ts       = 0;
+        double   peak_before  = 0.0;   // equity just before DD entry
+        double   trough_value = 0.0;   // equity at trough
+        double   trough_depth = 0.0;   // peak_before - trough_value
+        uint64_t drawdown_us  = 0;     // time from entry to recovery
+        uint64_t recovery_us  = 0;     // time from trough to recovery
+    };
+    std::vector<DrawdownEvent> drawdownRecoveries() const;
+
+    // Per-symbol / per-tag drawdown recovery events. Same
+    // shape as drawdownRecoveries() but each event's equity
+    // curve is built only from fills of that symbol / tag.
+    // Helps answer "which symbol drives my drawdowns?".
+    std::vector<DrawdownEvent> drawdownRecoveriesBySymbol(
+        const std::string& symbol) const;
+    std::vector<DrawdownEvent> drawdownRecoveriesByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
+    // Current drawdown — Sprint #113. If we're underwater at
+    // the journal's last fill, this captures the in-progress
+    // drawdown. The end_ts and recovery_us are zero (not yet
+    // recovered). Returns a sentinel with trough_depth == 0
+    // when no drawdown is in progress.
+    DrawdownEvent currentDrawdown() const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

@@ -13037,5 +13037,251 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 102: drawdownRecoveries() / currentDrawdown() /
+    //   drawdownRecoveriesBySymbol() / drawdownRecoveriesByTag()
+    //   (Sprint #113).
+    //
+    // Drawdown event extraction. Tests:
+    //   - Empty journal: zero events, no current DD.
+    //   - Monotonic up: zero events (no DD ever).
+    //   - One full DD cycle: peak → trough → recovery → 1 event
+    //     with correct depth + duration.
+    //   - Two DD cycles: 2 events, sorted by depth DESC.
+    //   - Unrecovered DD: 0 recovered events + currentDrawdown
+    //     has nonzero trough_depth, zero end_ts.
+    //   - Per-symbol: only counts that symbol's fills.
+    //   - Per-tag (incl. untagged): untagged fills bucket.
+    std::cout << "\nTest 102: drawdownRecoveries()..." << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test102_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto evs = j.drawdownRecoveries();
+            auto cur = j.currentDrawdown();
+            if (evs.empty() && cur.trough_depth == 0.0) {
+                std::cout << "✓ empty journal: 0 events, "
+                          << "no current DD"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: evs=" << evs.size()
+                          << " cur.depth=" << cur.trough_depth
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Monotonic up: no DD ----
+        {
+            TradeJournal j((tmpDir / "up.jsonl").string());
+            for (uint64_t t = 1000000; t <= 5000000; t += 1000000) {
+                j.append(mkFill("BTC", 100.0, "", t));
+            }
+            auto evs = j.drawdownRecoveries();
+            auto cur = j.currentDrawdown();
+            if (evs.empty() && cur.trough_depth == 0.0) {
+                std::cout << "✓ monotonic up: 0 DD events, "
+                          << "no current DD"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ monotonic wrong: evs=" << evs.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- One full DD cycle: +100, -60, +80 ----
+        // Peak=100, trough=40 (depth=60), recovered to 120.
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "", 1000000ULL));
+            j.append(mkFill("BTC", -60.0, "", 2000000ULL));
+            j.append(mkFill("BTC",  80.0, "", 3000000ULL));
+            auto evs = j.drawdownRecoveries();
+            auto cur = j.currentDrawdown();
+            if (evs.size() == 1 &&
+                std::fabs(evs[0].trough_depth - 60.0) < 1e-9 &&
+                std::fabs(evs[0].peak_before  - 100.0) < 1e-9 &&
+                std::fabs(evs[0].trough_value - 40.0) < 1e-9 &&
+                evs[0].start_ts  == 1000000ULL &&
+                evs[0].trough_ts == 2000000ULL &&
+                evs[0].end_ts    == 3000000ULL &&
+                evs[0].drawdown_us == 2000000ULL &&
+                evs[0].recovery_us == 1000000ULL &&
+                cur.trough_depth == 0.0) {
+                std::cout << "✓ 1 DD cycle: peak=100 trough=40 "
+                          << "depth=60 dd=2s rec=1s"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ 1-cycle wrong: n=" << evs.size()
+                          << " depth=" << (evs.empty() ? -1.0
+                                          : evs[0].trough_depth)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two DD cycles, sorted by depth DESC ----
+        // Cycle 1: +100, -90, +100 → depth=90, recovers to 110.
+        // Cycle 2: +0, -50, +60 → peak=110, trough=60 (depth=50),
+        //         recovers to 120.
+        {
+            TradeJournal j((tmpDir / "two.jsonl").string());
+            j.append(mkFill("BTC",  100.0, "", 1000000ULL));
+            j.append(mkFill("BTC",  -90.0, "", 2000000ULL));
+            j.append(mkFill("BTC",  100.0, "", 3000000ULL));
+            j.append(mkFill("BTC",   -50.0, "", 4000000ULL));
+            j.append(mkFill("BTC",    60.0, "", 5000000ULL));
+            auto evs = j.drawdownRecoveries();
+            if (evs.size() == 2 &&
+                evs[0].trough_depth > evs[1].trough_depth &&
+                std::fabs(evs[0].trough_depth - 90.0) < 1e-9 &&
+                std::fabs(evs[1].trough_depth - 50.0) < 1e-9) {
+                std::cout << "✓ 2 cycles: depths=90,50 sorted DESC"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ 2 cycles wrong: n=" << evs.size()
+                          << " depths="
+                          << (evs.empty() ? 0.0 : evs[0].trough_depth)
+                          << ","
+                          << (evs.size() < 2 ? 0.0
+                                             : evs[1].trough_depth)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Unrecovered DD: peak then drop, no recovery ----
+        {
+            TradeJournal j((tmpDir / "ur.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "", 1000000ULL));
+            j.append(mkFill("BTC", -40.0, "", 2000000ULL));
+            auto evs = j.drawdownRecoveries();
+            auto cur = j.currentDrawdown();
+            if (evs.empty() &&
+                std::fabs(cur.trough_depth - 40.0) < 1e-9 &&
+                cur.start_ts  == 1000000ULL &&
+                cur.trough_ts == 2000000ULL &&
+                cur.end_ts    == 0ULL &&
+                cur.recovery_us == 0ULL) {
+                std::cout << "✓ unrecovered DD: 0 recovered events, "
+                          << "current depth=40, end_ts=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ unrecovered wrong: evs="
+                          << evs.size()
+                          << " cur.depth=" << cur.trough_depth
+                          << " cur.end_ts=" << cur.end_ts
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: only that symbol counts ----
+        // BTC: +100, -50 → recovers to 100 → +50 → DD: -30 → recover to 70
+        // ETH: -200 → never positive, but its own curve has no DD.
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            j.append(mkFill("BTC",  100.0, "", 1000000ULL));
+            j.append(mkFill("ETH", -200.0, "", 1500000ULL));
+            j.append(mkFill("BTC",  -50.0, "", 2000000ULL));
+            j.append(mkFill("BTC",  100.0, "", 3000000ULL));
+            j.append(mkFill("BTC",   50.0, "", 4000000ULL));
+            j.append(mkFill("BTC",  -30.0, "", 5000000ULL));
+            j.append(mkFill("BTC",   50.0, "", 6000000ULL));
+            auto btcEvs = j.drawdownRecoveriesBySymbol("BTC");
+            auto ethEvs = j.drawdownRecoveriesBySymbol("ETH");
+            // BTC curve: 100, 50, 150, 200, 170, 220.
+            //   DD #1: peak=100 (t1), trough=50 (t2), recovery
+            //          at t3 (cum=150 > peak=100). depth=50.
+            //   DD #2: peak=200 (t4), trough=170 (t5), recovery
+            //          at t6 (cum=220 > peak=200). depth=30.
+            // ETH curve: -200 → never above 0, no DD emitted.
+            if (btcEvs.size() == 2 &&
+                std::fabs(btcEvs[0].trough_depth - 50.0) < 1e-9 &&
+                std::fabs(btcEvs[1].trough_depth - 30.0) < 1e-9 &&
+                ethEvs.empty()) {
+                std::cout << "✓ per-symbol: BTC=2 DD(depths=50,30), "
+                          << "ETH=0 DD"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-symbol wrong: btc="
+                          << btcEvs.size()
+                          << " eth=" << ethEvs.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag with includeUntagged ----
+        // scalp: +100, -30, +40 → 1 DD (depth=30, trough=70,
+        //   recover to 110).
+        // untagged: -50 → never positive, no DD.
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            j.append(mkFill("BTC",  100.0, "scalp", 1000000ULL));
+            j.append(mkFill("BTC",  -50.0, "",       1500000ULL));
+            j.append(mkFill("BTC",  -30.0, "scalp", 2000000ULL));
+            j.append(mkFill("BTC",   40.0, "scalp", 3000000ULL));
+            j.append(mkFill("BTC",  -10.0, "",       3500000ULL));
+            auto scalpEvs = j.drawdownRecoveriesByTag(
+                "scalp", true /*includeUntagged*/);
+            auto untagEvs = j.drawdownRecoveriesByTag(
+                "__untagged__", true);
+            // scalp: curve 100, 70, 110 → 1 DD depth=30 recover at t3.
+            // __untagged__: -50, -10 → no recovery, but never
+            //   above previous peak (which was 0), so no DD entry.
+            // Actually: curve never above 0, so peak stays 0,
+            // trough goes negative, no DD emission.
+            if (scalpEvs.size() == 1 &&
+                std::fabs(scalpEvs[0].trough_depth - 30.0) < 1e-9 &&
+                untagEvs.empty()) {
+                std::cout << "✓ per-tag: scalp=1 DD(depth=30), "
+                          << "__untagged__=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << scalpEvs.size()
+                          << " untag=" << untagEvs.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " drawdownEvent tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

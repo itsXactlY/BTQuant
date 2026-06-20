@@ -1303,6 +1303,179 @@ TradeJournal::equityDrawdownSeries() const {
     return out;
 }
 
+namespace {
+// Sprint #113 — drawdown event extraction. Walk an equity
+// curve (already sorted by timestamp ASC) and emit one
+// DrawdownEvent for each peak → trough → recovery cycle.
+// An unrecovered drawdown is returned via the `current` out-
+// param (zero defaults otherwise).
+//
+// The implementation mirrors equityDrawdownSeries()'s walk
+// pattern but tracks state machine:
+//   idle       — at or above peak; no DD in progress
+//   in_dd      — under peak; recording start, trough, peak_before
+//   recovered  — hit peak again; emit event, return to idle
+void extractDrawdownEvents(
+    const std::vector<TradeJournal::EquityPoint>& curve,
+    std::vector<TradeJournal::DrawdownEvent>& events,
+    TradeJournal::DrawdownEvent& current) {
+    events.clear();
+    current = TradeJournal::DrawdownEvent{};   // zero
+    if (curve.empty()) return;
+    // Use lowest() so the first point always counts as a new
+    // high water mark — never erroneously enters DD at p[0].
+    double peak = std::numeric_limits<double>::lowest();
+    uint64_t peak_ts = 0;
+    bool in_dd = false;
+    double trough_value = 0.0;
+    uint64_t trough_ts = 0;
+    uint64_t start_ts = 0;
+    double peak_before = 0.0;
+    for (const auto& p : curve) {
+        if (p.cumulative > peak) {
+            // New high water mark.
+            peak = p.cumulative;
+            peak_ts = p.timestamp_us;
+            if (in_dd) {
+                // Recovery: emit the event.
+                TradeJournal::DrawdownEvent ev;
+                ev.start_ts     = start_ts;
+                ev.trough_ts    = trough_ts;
+                ev.end_ts       = p.timestamp_us;
+                ev.peak_before  = peak_before;
+                ev.trough_value = trough_value;
+                ev.trough_depth = peak_before - trough_value;
+                ev.drawdown_us  = p.timestamp_us - start_ts;
+                ev.recovery_us  = p.timestamp_us - trough_ts;
+                events.push_back(ev);
+                in_dd = false;
+            }
+        } else if (!in_dd) {
+            // Entry into drawdown.
+            in_dd = true;
+            start_ts = peak_ts;
+            peak_before = peak;
+            trough_value = p.cumulative;
+            trough_ts = p.timestamp_us;
+        } else {
+            // Still in DD: track trough.
+            if (p.cumulative < trough_value) {
+                trough_value = p.cumulative;
+                trough_ts = p.timestamp_us;
+            }
+        }
+    }
+    if (in_dd) {
+        // Unrecovered — populate current.
+        current.start_ts     = start_ts;
+        current.trough_ts    = trough_ts;
+        current.peak_before  = peak_before;
+        current.trough_value = trough_value;
+        current.trough_depth = peak_before - trough_value;
+        current.drawdown_us  = curve.back().timestamp_us - start_ts;
+        // end_ts / recovery_us stay zero.
+    }
+}
+}  // namespace
+
+std::vector<TradeJournal::DrawdownEvent>
+TradeJournal::drawdownRecoveries() const {
+    // Sprint #113. Walk the journal-wide equity curve, emit one
+    // event per peak → trough → recovery cycle. Sorted by
+    // trough_depth DESC.
+    auto curve = equityCurve();
+    std::vector<DrawdownEvent> events;
+    DrawdownEvent current;
+    extractDrawdownEvents(curve, events, current);
+    // Drop the in-progress drawdown — drawdownRecoveries()
+    // answers "what DD events have I RECOVERED from?".
+    std::sort(events.begin(), events.end(),
+              [](const DrawdownEvent& a, const DrawdownEvent& b) {
+                  return a.trough_depth > b.trough_depth;
+              });
+    return events;
+}
+
+std::vector<TradeJournal::DrawdownEvent>
+TradeJournal::drawdownRecoveriesBySymbol(
+    const std::string& symbol) const {
+    // Sprint #113. Per-symbol: rebuild the equity curve from
+    // only this symbol's fills, then walk it.
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::vector<EquityPoint> curve;
+    curve.reserve(fills.size());
+    double cumulative = 0.0;
+    for (const auto& f : fills) {
+        if (f.symbol != symbol) continue;
+        cumulative += f.realizedDelta;
+        curve.push_back(EquityPoint{f.timestamp_us,
+                                    f.realizedDelta,
+                                    cumulative});
+    }
+    std::vector<DrawdownEvent> events;
+    DrawdownEvent current;
+    extractDrawdownEvents(curve, events, current);
+    std::sort(events.begin(), events.end(),
+              [](const DrawdownEvent& a, const DrawdownEvent& b) {
+                  return a.trough_depth > b.trough_depth;
+              });
+    return events;
+}
+
+std::vector<TradeJournal::DrawdownEvent>
+TradeJournal::drawdownRecoveriesByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    // Sprint #113. Per-tag (mirrors perSymbolDrawdown()). Tag
+    // selection matches perTagStats() — "__untagged__" is the
+    // synthetic key when includeUntagged=true.
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::vector<EquityPoint> curve;
+    curve.reserve(fills.size());
+    double cumulative = 0.0;
+    for (const auto& f : fills) {
+        bool matches;
+        if (tag == "__untagged__") {
+            matches = f.tag.empty();
+        } else {
+            if (includeUntagged && f.tag.empty()) matches = false;
+            else matches = (f.tag == tag);
+        }
+        if (!matches) continue;
+        cumulative += f.realizedDelta;
+        curve.push_back(EquityPoint{f.timestamp_us,
+                                    f.realizedDelta,
+                                    cumulative});
+    }
+    std::vector<DrawdownEvent> events;
+    DrawdownEvent current;
+    extractDrawdownEvents(curve, events, current);
+    std::sort(events.begin(), events.end(),
+              [](const DrawdownEvent& a, const DrawdownEvent& b) {
+                  return a.trough_depth > b.trough_depth;
+              });
+    return events;
+}
+
+TradeJournal::DrawdownEvent
+TradeJournal::currentDrawdown() const {
+    // Sprint #113. Returns the in-progress DD if we're
+    // underwater, or zero-Depth sentinel otherwise.
+    auto curve = equityCurve();
+    std::vector<DrawdownEvent> events;
+    DrawdownEvent current;
+    extractDrawdownEvents(curve, events, current);
+    return current;
+}
+
 TradeJournal::StreakStats
 TradeJournal::streakStats() const {
     // Sprint #105. Walk round-trips in chronological order,

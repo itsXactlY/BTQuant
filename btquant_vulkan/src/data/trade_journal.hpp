@@ -1769,6 +1769,18 @@ public:
                         size_t n = 5,
                         size_t gapMinutes = 30) const;
 
+    // Day-of-week × hour heatmap (Sprint #173). For each
+    // (weekday 0-6, hour 0-23) combination with at least one
+    // round-trip, returns total realized and count. Useful
+    // for "when am I profitable?" — 7×24 grid visualization.
+    struct HeatmapCell {
+        int    weekday = 0;  // 0=Sun, 6=Sat
+        int    hour    = 0;  // 0-23
+        double realized = 0.0;
+        size_t count   = 0;
+    };
+    std::vector<HeatmapCell> weekdayHourPnL() const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

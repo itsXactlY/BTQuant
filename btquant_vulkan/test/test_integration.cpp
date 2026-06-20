@@ -20114,5 +20114,79 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 160: weekdayHourPnL() (Sprint #173).
+    //
+    // Day-of-week × hour P&L heatmap. Tests:
+    //   - 3 fills across different hours → 3 cells.
+    std::cout << "\nTest 160: weekday-hour P&L..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test160_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](double realized, uint64_t ts) {
+            JournalFill f;
+            f.symbol = "BTC"; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 fills at different hours ----
+        {
+            // Use a known date: 2024-01-15 (Mon) at 9am, 10am, 14pm UTC.
+            // localtime_r on most systems will treat UTC ts as
+            // local time, so weekday/hour will be the input values.
+            const uint64_t base = 1705276800ULL; // 2024-01-15 00:00 UTC
+            const uint64_t hour = 3600ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill(100.0, (base + 9 * hour) * 1000000ULL));
+            j.append(mkFill(-50.0, (base + 10 * hour) * 1000000ULL));
+            j.append(mkFill( 75.0, (base + 14 * hour) * 1000000ULL));
+            auto v = j.weekdayHourPnL();
+            // Should have 3 cells (one per hour).
+            if (v.size() == 3) {
+                double sumReal = 0.0;
+                size_t sumCount = 0;
+                for (const auto& c : v) {
+                    sumReal += c.realized;
+                    sumCount += c.count;
+                }
+                if (std::fabs(sumReal - 125.0) < 1e-9 &&
+                    sumCount == 3) {
+                    std::cout << "✓ 3 cells: "
+                              << "sumReal=+125, count=3"
+                              << std::endl;
+                    ++pass;
+                } else {
+                    std::cout << "✗ wrong: sumReal="
+                              << sumReal
+                              << " sumCount=" << sumCount
+                              << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " weekday-hour tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

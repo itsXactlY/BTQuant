@@ -7039,4 +7039,34 @@ TradeJournal::worstSessionsByTag(
     return tagSessions;
 }
 
+std::vector<TradeJournal::HeatmapCell>
+TradeJournal::weekdayHourPnL() const {
+    // Sprint #173. For each (weekday, hour), accumulate
+    // realized P&L and count.
+    std::vector<HeatmapCell> out;
+    auto fills = loadAll();
+    std::map<std::pair<int, int>,
+             std::pair<double, size_t>> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        auto key = std::make_pair(tm.tm_wday, tm.tm_hour);
+        auto& b = buckets[key];
+        b.first += f.realizedDelta;
+        b.second++;
+    }
+    for (auto& kv : buckets) {
+        HeatmapCell c;
+        c.weekday = kv.first.first;
+        c.hour = kv.first.second;
+        c.realized = kv.second.first;
+        c.count = kv.second.second;
+        out.push_back(c);
+    }
+    return out;
+}
+
 } // namespace btquant

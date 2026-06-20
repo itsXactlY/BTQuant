@@ -53,6 +53,7 @@ void RiskLimitsPanel::applyToGuard() {
     BTQ_LOG_INFO("RiskLimits: applied caps $%.0f / %.2fx / kill $%.0f / eq $%.0f",
                  c.maxPositionSizeUSD, c.maxLeverage,
                  c.killOnDailyLossUSD, c.equityUSD);
+    if (m_persistFn) m_persistFn(*m_guard);
 }
 
 void RiskLimitsPanel::render() {
@@ -182,12 +183,13 @@ void RiskLimitsPanel::render() {
         m_guard->setConfig(::btquant::RiskConfig::conservative());
         syncFromGuard();
         BTQ_LOG_INFO("RiskLimits: switched to conservative preset");
+        if (m_persistFn) m_persistFn(*m_guard);
     }
-    ImGui::SameLine();
     if (ImGui::Button("Apply aggressive preset")) {
         m_guard->setConfig(::btquant::RiskConfig::aggressive());
         syncFromGuard();
         BTQ_LOG_INFO("RiskLimits: switched to aggressive preset");
+        if (m_persistFn) m_persistFn(*m_guard);
     }
 
     ImGui::End();

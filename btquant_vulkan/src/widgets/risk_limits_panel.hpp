@@ -1,6 +1,8 @@
 #ifndef BTQUANT_RISK_LIMITS_PANEL_HPP
 #define BTQUANT_RISK_LIMITS_PANEL_HPP
 
+#include <functional>
+
 namespace btquant { class RiskGuard; }
 namespace btquant { class PositionBook; }
 
@@ -14,6 +16,13 @@ class RiskLimitsPanel {
 public:
     void setRiskGuard(::btquant::RiskGuard* g) { m_guard = g; }
     void setPositionBook(::btquant::PositionBook* b) { m_book = b; }
+
+    // Persistence callback — invoked after the user clicks Apply (or a
+    // preset button). WindowManager registers a closure that writes the
+    // current guard config into Settings and saves state.ini, so the
+    // edited values survive restart.
+    using PersistFn = std::function<void(const ::btquant::RiskGuard&)>;
+    void setPersistFn(PersistFn fn) { m_persistFn = std::move(fn); }
 
     void render();
 
@@ -32,6 +41,7 @@ private:
 
     ::btquant::RiskGuard*    m_guard = nullptr;
     ::btquant::PositionBook* m_book  = nullptr;
+    PersistFn                m_persistFn;
     bool m_open = false;
 
     // Edit buffers — kept as char[] for ImGui InputText round-tripping.

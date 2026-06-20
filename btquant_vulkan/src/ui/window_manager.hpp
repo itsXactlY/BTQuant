@@ -146,6 +146,7 @@ public:
     void showSymbolPickerWindow();
     void showThemeEditorWindow();
     void applyPersistedTheme();
+    void applyPersistedRiskConfig();
     bool saveCurrentTheme();
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();

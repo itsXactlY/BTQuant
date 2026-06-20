@@ -46,6 +46,14 @@ struct Settings {
     // String "dark"/"light" also accepted for human readability.
     long theme = 0;
 
+    // Risk limits — persisted so RiskLimitsPanel edits survive restart.
+    // Defaults mirror RiskConfig's built-in defaults so a fresh install
+    // loads the same values either way.
+    double risk_maxPositionSizeUSD = 100000.0;
+    double risk_maxLeverage        = 10.0;
+    double risk_killOnDailyLossUSD = 5000.0;
+    double risk_equityUSD          = 10000.0;
+
     // Resolve the canonical config path (~/.config/btquant_vulkan/state.ini by
     // default, overridable via BTQUANT_CONFIG env var).
     static std::filesystem::path defaultPath();

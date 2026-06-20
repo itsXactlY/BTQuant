@@ -2295,5 +2295,92 @@ int main() {
         }
     }
 
+    // Test 31: RiskConfig persists through Settings state.ini.
+    std::cout << "\nTest 31: Testing RiskConfig persistence..." << std::endl;
+    {
+        using btquant::util::Settings;
+        namespace fs = std::filesystem;
+
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_risk";
+        fs::create_directories(tmpDir);
+        fs::path stateFile = tmpDir / "state.ini";
+
+        // 1) Defaults flow through unchanged.
+        Settings defaults;
+        if (defaults.risk_maxPositionSizeUSD == 100000.0 &&
+            defaults.risk_maxLeverage        == 10.0 &&
+            defaults.risk_killOnDailyLossUSD == 5000.0 &&
+            defaults.risk_equityUSD          == 10000.0) {
+            std::cout << "✓ default risk fields present" << std::endl;
+        } else {
+            std::cout << "✗ default risk fields wrong" << std::endl;
+        }
+
+        // 2) Round-trip: edit, save, reload.
+        Settings edited;
+        edited.risk_maxPositionSizeUSD = 250000.0;
+        edited.risk_maxLeverage        = 25.0;
+        edited.risk_killOnDailyLossUSD = 7500.0;
+        edited.risk_equityUSD          = 15000.0;
+        edited.save(stateFile);
+        auto reloaded = Settings::load(stateFile);
+        if (reloaded.risk_maxPositionSizeUSD == 250000.0 &&
+            reloaded.risk_maxLeverage        == 25.0 &&
+            reloaded.risk_killOnDailyLossUSD == 7500.0 &&
+            reloaded.risk_equityUSD          == 15000.0) {
+            std::cout << "✓ risk fields round-trip through state.ini"
+                      << std::endl;
+        } else {
+            std::cout << "✗ risk round-trip lost values (cap=$"
+                      << reloaded.risk_maxPositionSizeUSD
+                      << " lev=" << reloaded.risk_maxLeverage
+                      << " kill=$" << reloaded.risk_killOnDailyLossUSD
+                      << " eq=$" << reloaded.risk_equityUSD
+                      << ")" << std::endl;
+        }
+
+        // 3) Missing file → defaults.
+        fs::path missing = tmpDir / "nonexistent.ini";
+        auto missingS = Settings::load(missing);
+        if (missingS.risk_maxPositionSizeUSD == 100000.0 &&
+            missingS.risk_maxLeverage        == 10.0) {
+            std::cout << "✓ missing state.ini → risk defaults" << std::endl;
+        } else {
+            std::cout << "✗ missing file didn't default" << std::endl;
+        }
+
+        // 4) Malformed line → silently skipped (existing key intact).
+        std::ofstream(stateFile) << "showOrderBook=0\n"
+                                    "risk_maxPositionSizeUSD=not_a_number\n"
+                                    "risk_maxLeverage=12.5\n";
+        auto partial = Settings::load(stateFile);
+        if (partial.risk_maxPositionSizeUSD == 100000.0 /*default, parse failed*/ &&
+            partial.risk_maxLeverage        == 12.5) {
+            std::cout << "✓ malformed line skipped, valid key parsed"
+                      << std::endl;
+        } else {
+            std::cout << "✗ malformed line handling wrong" << std::endl;
+        }
+
+        // 5) WindowManager persist callback pathway: simulate by
+        //    editing RiskGuard + applying the same save() logic.
+        ::btquant::RiskGuard g(::btquant::RiskConfig::aggressive());
+        Settings s2 = Settings::load(stateFile);
+        const auto& c = g.config();
+        s2.risk_maxPositionSizeUSD = c.maxPositionSizeUSD;
+        s2.risk_maxLeverage        = c.maxLeverage;
+        s2.risk_killOnDailyLossUSD = c.killOnDailyLossUSD;
+        s2.risk_equityUSD          = c.equityUSD;
+        s2.save(stateFile);
+        auto s3 = Settings::load(stateFile);
+        if (s3.risk_maxPositionSizeUSD == 1'000'000.0 &&
+            s3.risk_maxLeverage        == 50.0 &&
+            s3.risk_killOnDailyLossUSD == 25'000.0) {
+            std::cout << "✓ aggressive preset round-trips" << std::endl;
+        } else {
+            std::cout << "✗ aggressive preset lost" << std::endl;
+        }
+    }
+
     return 0;
 }

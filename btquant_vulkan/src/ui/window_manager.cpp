@@ -92,6 +92,12 @@ constexpr HotkeySlot kHotkeys[] = {
 namespace btquant::ui {
 
 WindowManager::WindowManager() {
+    // Compute config dir once — used by TradeJournal, HotkeyMap, and the
+    // RiskLimitsPanel persistence callback below.
+    const char* home = std::getenv("HOME");
+    std::string configDir = std::string(home ? home : "/tmp") +
+                            "/.config/btquant_vulkan/";
+
     m_orderBookWidget = new OrderBookWidget();
     m_orderBookDepthWidget = new OrderBookDepthWidget();
     m_footprintWidget = new FootprintWidget();
@@ -144,14 +150,25 @@ WindowManager::WindowManager() {
     m_riskLimitsPanel = new RiskLimitsPanel();
     m_riskLimitsPanel->setRiskGuard(m_riskGuard);
     m_riskLimitsPanel->setPositionBook(m_positionBook);
+    // Persist edits to ~/.config/btquant_vulkan/state.ini. Capture
+    // state.ini path now so the closure doesn't dereference `this`.
+    std::string settingsPath = configDir + "state.ini";
+    m_riskLimitsPanel->setPersistFn(
+        [this, settingsPath](const ::btquant::RiskGuard& g) {
+            util::Settings s = util::Settings::load(settingsPath);
+            const auto& c = g.config();
+            s.risk_maxPositionSizeUSD = c.maxPositionSizeUSD;
+            s.risk_maxLeverage        = c.maxLeverage;
+            s.risk_killOnDailyLossUSD = c.killOnDailyLossUSD;
+            s.risk_equityUSD          = c.equityUSD;
+            s.save(settingsPath);
+            BTQ_LOG_INFO("RiskLimits: persisted to %s", settingsPath.c_str());
+        });
     m_miniPriceChart = new MiniPriceChart();
     m_miniPriceChart->setMarketData(m_marketData);
     m_hotkeyEditor = new ::btquant::widgets::HotkeyEditor();
     // HotkeyEditor is wired after m_hotkeyMap is constructed (below).
     // Trade journal lives in the user's config dir alongside settings.ini.
-    const char* home = std::getenv("HOME");
-    std::string configDir = std::string(home ? home : "/tmp") +
-                            "/.config/btquant_vulkan/";
     std::string journalPath = configDir + "journal.jsonl";
     m_tradeJournal  = new ::btquant::TradeJournal(journalPath);
     {
@@ -290,6 +307,7 @@ WindowManager::~WindowManager() {
 void WindowManager::initialize() {
     m_initialized = true;
     applyPersistedTheme();
+    applyPersistedRiskConfig();
 }
 
 void WindowManager::applyPersistedTheme() {
@@ -302,6 +320,23 @@ void WindowManager::applyPersistedTheme() {
     ThemeEditor::applySnapshot(ImGui::GetStyle(), *snap);
     BTQ_LOG_INFO("applied persisted theme from %s",
                  ThemeIO::defaultPath().string().c_str());
+}
+
+void WindowManager::applyPersistedRiskConfig() {
+    if (!m_riskGuard) return;
+    const char* home = std::getenv("HOME");
+    std::string path = std::string(home ? home : "/tmp") +
+                       "/.config/btquant_vulkan/state.ini";
+    auto s = util::Settings::load(path);
+    ::btquant::RiskConfig c = m_riskGuard->config();
+    c.maxPositionSizeUSD = s.risk_maxPositionSizeUSD;
+    c.maxLeverage        = s.risk_maxLeverage;
+    c.killOnDailyLossUSD = s.risk_killOnDailyLossUSD;
+    c.equityUSD          = s.risk_equityUSD;
+    m_riskGuard->setConfig(c);
+    BTQ_LOG_INFO("applied persisted risk config (cap=$%.0f lev=%.2fx kill=$%.0f eq=$%.0f)",
+                 c.maxPositionSizeUSD, c.maxLeverage,
+                 c.killOnDailyLossUSD, c.equityUSD);
 }
 
 bool WindowManager::saveCurrentTheme() {

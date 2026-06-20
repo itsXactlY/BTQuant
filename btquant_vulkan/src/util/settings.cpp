@@ -15,6 +15,20 @@ bool parseBool(const std::string& v) {
     return v == "1" || v == "true" || v == "TRUE" || v == "yes" || v == "on";
 }
 
+// True iff every char is a digit / '.' / '-' / '+' / 'e' / 'E' AND the
+// string has at least one digit — used to guard std::stod against
+// throwing on clearly non-numeric values like "not_a_number".
+bool looksLikeDouble(const std::string& v) {
+    if (v.empty()) return false;
+    bool hasDigit = false;
+    for (char c : v) {
+        if (std::isdigit((unsigned char)c)) hasDigit = true;
+        else if (c != '.' && c != '-' && c != '+' && c != 'e' && c != 'E')
+            return false;
+    }
+    return hasDigit;
+}
+
 } // namespace
 
 std::filesystem::path Settings::defaultPath() {
@@ -71,13 +85,21 @@ Settings Settings::load(const std::filesystem::path& path) {
         else if (key == "showStatsOverlay") s.showStatsOverlay = parseBool(val);
         else if (key == "fpsLimit" && isInt)          s.fpsLimit = std::stol(val);
         else if (key == "heatmapDensity" && isInt)    s.heatmapDensity = std::stol(val);
-        else if (key == "tradeWindowSeconds" && isDouble)
+        else if (key == "tradeWindowSeconds" && looksLikeDouble(val))
             s.tradeWindowSeconds = std::stod(val);
         else if (key == "theme") {
             if (val == "dark" || val == "0") s.theme = 0;
             else if (val == "light" || val == "1") s.theme = 1;
             else if (isInt) s.theme = std::stol(val);
         }
+        else if (key == "risk_maxPositionSizeUSD" && looksLikeDouble(val))
+            s.risk_maxPositionSizeUSD = std::stod(val);
+        else if (key == "risk_maxLeverage" && looksLikeDouble(val))
+            s.risk_maxLeverage = std::stod(val);
+        else if (key == "risk_killOnDailyLossUSD" && looksLikeDouble(val))
+            s.risk_killOnDailyLossUSD = std::stod(val);
+        else if (key == "risk_equityUSD" && looksLikeDouble(val))
+            s.risk_equityUSD = std::stod(val);
     }
     return s;
 }
@@ -110,6 +132,15 @@ void Settings::save(const std::filesystem::path& path) const {
     out << "tradeWindowSeconds=" << std::fixed << std::setprecision(6)
         << tradeWindowSeconds << "\n";
     out << "theme=" << (theme == 0 ? "dark" : "light") << "\n";
+    out << "# Risk limits (editable via Risk Dashboard panel)\n";
+    out << "risk_maxPositionSizeUSD=" << std::fixed << std::setprecision(2)
+        << risk_maxPositionSizeUSD << "\n";
+    out << "risk_maxLeverage=" << std::fixed << std::setprecision(4)
+        << risk_maxLeverage << "\n";
+    out << "risk_killOnDailyLossUSD=" << std::fixed << std::setprecision(2)
+        << risk_killOnDailyLossUSD << "\n";
+    out << "risk_equityUSD=" << std::fixed << std::setprecision(2)
+        << risk_equityUSD << "\n";
     out.close();
 
     std::error_code ec;

@@ -2035,6 +2035,22 @@ public:
     std::vector<SymbolWeeklyWR>
     allSymbolWeeklyWinRate() const;
 
+    // Per-segment average daily P&L (Sprint #195). For
+    // each segment: mean daily realized across active
+    // trading days. Answers "how much does this symbol
+    // earn per day?"
+    struct SegmentAvgDayPnL {
+        std::string segment;
+        double      avgDailyPnL    = 0.0;
+        double      medianDailyPnL = 0.0;
+        size_t      activeDays     = 0;
+    };
+    SegmentAvgDayPnL avgDayPnLBySymbol(
+        const std::string& symbol) const;
+    SegmentAvgDayPnL avgDayPnLByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -21545,5 +21545,68 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 181: avgDayPnLBySymbol/ByTag (Sprint #195).
+    //
+    // Per-segment avg daily P&L. Tests:
+    //   - BTC 2 days [+100, -50] → avg=25, median=25.
+    std::cout << "\nTest 181: per-seg avg day PnL..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test181_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 days ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "a.jsonl").string());
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + day));
+            j.append(mkFill("ETH",  10.0, t0));
+            auto btcA = j.avgDayPnLBySymbol("BTC");
+            auto ethA = j.avgDayPnLBySymbol("ETH");
+            if (btcA.activeDays == 2 &&
+                std::fabs(btcA.avgDailyPnL - 25.0) < 1e-9 &&
+                ethA.activeDays == 1 &&
+                std::fabs(ethA.avgDailyPnL - 10.0) < 1e-9) {
+                std::cout << "✓ BTC: 2 days avg=+25; "
+                          << "ETH: 1 day avg=+10"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC active="
+                          << btcA.activeDays
+                          << " avg=" << btcA.avgDailyPnL
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg-avg-day tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

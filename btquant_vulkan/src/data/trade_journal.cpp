@@ -8209,4 +8209,63 @@ TradeJournal::allSymbolWeeklyWinRate() const {
     return out;
 }
 
+namespace {
+// Sprint #195 — per-segment avg-daily-PnL builder.
+template <typename Pred>
+TradeJournal::SegmentAvgDayPnL
+buildAvgDayPnLBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::SegmentAvgDayPnL s;
+    std::map<std::string, double> dailyPnL;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        dailyPnL[buf] += f.realizedDelta;
+    }
+    if (dailyPnL.empty()) return s;
+    s.activeDays = dailyPnL.size();
+    std::vector<double> vals;
+    vals.reserve(dailyPnL.size());
+    double sum = 0.0;
+    for (auto& kv : dailyPnL) {
+        vals.push_back(kv.second);
+        sum += kv.second;
+    }
+    s.avgDailyPnL = sum / static_cast<double>(vals.size());
+    std::sort(vals.begin(), vals.end());
+    s.medianDailyPnL = vals[vals.size() / 2];
+    return s;
+}
+}  // namespace
+
+TradeJournal::SegmentAvgDayPnL
+TradeJournal::avgDayPnLBySymbol(
+    const std::string& symbol) const {
+    auto s = buildAvgDayPnLBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    s.segment = symbol;
+    return s;
+}
+
+TradeJournal::SegmentAvgDayPnL
+TradeJournal::avgDayPnLByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto s = buildAvgDayPnLBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    s.segment = tag;
+    return s;
+}
+
 } // namespace btquant

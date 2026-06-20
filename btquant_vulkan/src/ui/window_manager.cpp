@@ -20,6 +20,7 @@
 #include "../widgets/watchlist_widget.hpp"
 #include "../widgets/log_panel.hpp"
 #include "../widgets/connection_panel.hpp"
+#include "../widgets/profile_manager.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -85,6 +86,13 @@ WindowManager::WindowManager() {
     m_watchlistWidget->setSymbols({"BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"});
     m_logPanel = &LogPanel::instance();
     m_connectionPanel = new ConnectionPanel();
+    m_profileManager  = new ProfileManager();
+    m_profileManager->setCaptureFn([this]() { return captureCurrentSettings(); });
+    m_profileManager->setApplyFn([this](const std::string& name) {
+        util::Settings loaded = util::Settings::load(util::Settings::profilePath(name));
+        applyPreset(loaded);
+        markSettingsDirty();
+    });
 }
 
 WindowManager::~WindowManager() {
@@ -100,6 +108,7 @@ WindowManager::~WindowManager() {
     delete m_alertsPanel;
     delete m_watchlistWidget;
     delete m_connectionPanel;
+    delete m_profileManager;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -190,6 +199,22 @@ void WindowManager::applyPreset(const ::btquant::util::Settings& s) {
     // tree to match the new widget set. We request a reset so the layout
     // re-applies cleanly even if the user just hid a window.
     requestDockLayoutReset();
+}
+
+::btquant::util::Settings WindowManager::captureCurrentSettings() const {
+    ::btquant::util::Settings s;
+    s.showOrderBook      = showOrderBook;
+    s.showOrderBookDepth = showOrderBookDepth;
+    s.showFootprint      = showFootprint;
+    s.showVPVR           = showVPVR;
+    s.showMultiVWAP      = showMultiVWAP;
+    s.showRiskPanel      = showRiskPanel;
+    s.showDOM            = showDOM;
+    s.showTrades         = showTrades;
+    s.showTPO            = showTPO;
+    s.theme              = theme;
+    s.heatmapDensity     = heatmapDensity;
+    return s;
 }
 
 void WindowManager::processHotkeys(void* glfwWindow) {
@@ -348,6 +373,11 @@ void WindowManager::showConnectionWindow() {
     if (m_connectionPanel) m_connectionPanel->render();
 }
 
+void WindowManager::showProfileManagerWindow() {
+    if (!showProfileManager) return;
+    if (m_profileManager) m_profileManager->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -364,6 +394,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Watchlist",         nullptr, &showWatchlist))       markSettingsDirty();
             if (ImGui::MenuItem("Log Panel",         nullptr, &showLog))             markSettingsDirty();
             if (ImGui::MenuItem("Connection",        nullptr, &showConnection))      markSettingsDirty();
+            if (ImGui::MenuItem("Profile Manager…",  nullptr, &showProfileManager))  markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

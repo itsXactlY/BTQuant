@@ -292,6 +292,7 @@ private:
       windowManager.showWatchlistWindow();
       windowManager.showLogWindow();
       windowManager.showConnectionWindow();
+      windowManager.showProfileManagerWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

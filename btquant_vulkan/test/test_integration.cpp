@@ -12,6 +12,7 @@
 #include "../src/widgets/log_panel.hpp"
 #include "../src/widgets/risk_panel.hpp"
 #include "../src/widgets/connection_panel.hpp"
+#include "../src/widgets/profile_manager.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -708,6 +709,107 @@ int main() {
         } else {
             std::cout << "✗ isRunning still true after stop()" << std::endl;
         }
+    }
+
+    // Test 16: ProfileManager — list / save / delete / reload.
+    std::cout << "\nTest 16: Testing ProfileManager..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_profiles";
+        fs::create_directories(tmpDir);
+        // Clean any leftover .ini files.
+        for (auto& e : fs::directory_iterator(tmpDir)) {
+            std::error_code ec;
+            fs::remove(e.path(), ec);
+        }
+
+        btquant::ui::ProfileManager pm;
+        pm.setProfilesDir(tmpDir);
+
+        // Initially empty.
+        if (pm.profiles().empty()) {
+            std::cout << "✓ ProfileManager: empty dir → no profiles" << std::endl;
+        } else {
+            std::cout << "✗ empty dir reported " << pm.profiles().size()
+                      << " profiles" << std::endl;
+        }
+
+        // Set capture fn that returns a fixed Settings.
+        int captureCount = 0;
+        pm.setCaptureFn([&captureCount]() {
+            ++captureCount;
+            auto s = btquant::util::Settings::presetScalper();
+            s.theme = 1;  // Light theme
+            s.heatmapDensity = 256;
+            return s;
+        });
+        // Apply fn that records names.
+        std::vector<std::string> appliedNames;
+        pm.setApplyFn([&appliedNames](const std::string& name) {
+            appliedNames.push_back(name);
+        });
+
+        // Save 2 profiles.
+        if (!pm.saveCurrentAs("morning")) {
+            std::cout << "✗ saveCurrentAs('morning') failed" << std::endl;
+        } else {
+            std::cout << "✓ saveCurrentAs('morning') succeeded (captureCount="
+                      << captureCount << ")" << std::endl;
+        }
+        if (!pm.saveCurrentAs("evening")) {
+            std::cout << "✗ saveCurrentAs('evening') failed" << std::endl;
+        } else {
+            std::cout << "✓ saveCurrentAs('evening') succeeded" << std::endl;
+        }
+
+        // Verify files exist on disk.
+        if (fs::exists(tmpDir / "morning.ini") && fs::exists(tmpDir / "evening.ini")) {
+            std::cout << "✓ both .ini files exist on disk" << std::endl;
+        } else {
+            std::cout << "✗ .ini files missing" << std::endl;
+        }
+
+        // refresh() picks them up.
+        pm.refresh();
+        if (pm.profiles().size() == 2) {
+            std::cout << "✓ refresh() found 2 profiles" << std::endl;
+        } else {
+            std::cout << "✗ refresh() found " << pm.profiles().size() << std::endl;
+        }
+
+        // Path-traversal protection — Settings::profilePath should reject.
+        if (!pm.saveCurrentAs("../escape")) {
+            std::cout << "✓ path traversal ('../escape') rejected" << std::endl;
+        } else {
+            std::cout << "✗ path traversal was accepted" << std::endl;
+        }
+
+        // deleteProfile works.
+        if (pm.deleteProfile(tmpDir / "morning.ini")) {
+            std::cout << "✓ deleteProfile('morning') succeeded" << std::endl;
+        } else {
+            std::cout << "✗ deleteProfile('morning') failed" << std::endl;
+        }
+        pm.refresh();
+        if (pm.profiles().size() == 1 && pm.profiles()[0].stem() == "evening") {
+            std::cout << "✓ after delete: 1 profile ('evening')" << std::endl;
+        } else {
+            std::cout << "✗ post-delete count: " << pm.profiles().size() << std::endl;
+        }
+
+        // Empty name rejected.
+        if (!pm.saveCurrentAs("")) {
+            std::cout << "✓ empty name rejected" << std::endl;
+        } else {
+            std::cout << "✗ empty name accepted" << std::endl;
+        }
+
+        // Cleanup.
+        std::error_code ec;
+        for (auto& e : fs::directory_iterator(tmpDir)) {
+            fs::remove(e.path(), ec);
+        }
+        fs::remove(tmpDir, ec);
     }
 
     return 0;

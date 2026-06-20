@@ -8037,4 +8037,47 @@ TradeJournal::profitPerTradeByTag(
     return s;
 }
 
+std::vector<TradeJournal::ProfitPerTrade>
+TradeJournal::allProfitPerTrade() const {
+    // Sprint #191. Bulk per-symbol profit-per-trade
+    // sorted DESC by avgProfit.
+    std::vector<ProfitPerTrade> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(profitPerTradeBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const ProfitPerTrade& a, const ProfitPerTrade& b) {
+            return a.avgProfit > b.avgProfit;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::ProfitPerTrade>
+TradeJournal::allProfitPerTradeByTag(
+    bool includeUntagged) const {
+    std::vector<ProfitPerTrade> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(profitPerTradeByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const ProfitPerTrade& a, const ProfitPerTrade& b) {
+            return a.avgProfit > b.avgProfit;
+        });
+    return out;
+}
+
 } // namespace btquant

@@ -1995,6 +1995,13 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment profit-per-trade bulk (Sprint #191).
+    // Returns ProfitPerTrade for every segment, sorted
+    // DESC by avgProfit.
+    std::vector<ProfitPerTrade> allProfitPerTrade() const;
+    std::vector<ProfitPerTrade> allProfitPerTradeByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

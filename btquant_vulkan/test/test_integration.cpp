@@ -21293,5 +21293,68 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 177: allProfitPerTrade / allProfitPerTradeByTag
+    //   (Sprint #191).
+    //
+    // Bulk profit-per-trade. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 177: all-seg profit per trade..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test177_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "p.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("ETH",  30.0, "arb",
+                             t0 + 2));
+            auto v = j.allProfitPerTrade();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms: top="
+                          << v[0].segment
+                          << " avg=" << v[0].avgProfit
+                          << " bottom="
+                          << v[1].segment
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-profit-per-trade tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

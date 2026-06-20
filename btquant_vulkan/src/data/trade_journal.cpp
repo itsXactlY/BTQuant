@@ -2361,6 +2361,73 @@ TradeJournal::streakStatsByTag(
 }
 
 namespace {
+// Sprint #123 — shared win-rate-over-time builder.
+template <typename Pred>
+std::vector<TradeJournal::WinRatePoint>
+buildCumulativeWinRate(
+    const std::vector<JournalFill>& fills,
+    Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    std::sort(filtered.begin(), filtered.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    constexpr double kEps = 1e-9;
+    std::vector<TradeJournal::WinRatePoint> out;
+    out.reserve(filtered.size());
+    size_t wins = 0, losses = 0;
+    double cum  = 0.0;
+    for (const auto& f : filtered) {
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        cum += f.realizedDelta;
+        if (f.realizedDelta > kEps) ++wins;
+        else ++losses;
+        TradeJournal::WinRatePoint p;
+        p.timestamp_us       = f.timestamp_us;
+        p.count              = wins + losses;
+        p.wins               = wins;
+        p.losses             = losses;
+        p.winRate            = static_cast<double>(wins) /
+                               static_cast<double>(wins + losses);
+        p.cumulativeRealized = cum;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::WinRatePoint>
+TradeJournal::cumulativeWinRate() const {
+    return buildCumulativeWinRate(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::WinRatePoint>
+TradeJournal::cumulativeWinRateBySymbol(
+    const std::string& symbol) const {
+    return buildCumulativeWinRate(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::WinRatePoint>
+TradeJournal::cumulativeWinRateByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildCumulativeWinRate(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

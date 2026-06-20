@@ -851,6 +851,32 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Cumulative win rate over time (Sprint #123). One
+    // point per round-trip (skip ties), sorted by timestamp
+    // ASC. Each point: (timestamp_us, winRate, count,
+    // cumulativeWins, cumulativeLosses, cumulativeRealized).
+    //
+    // Useful for visualizing "is my edge sharpening or
+    // degrading over time?" — plot winRate as a line and you
+    // can see convergence (or lack thereof) to the asymptotic
+    // win rate.
+    //
+    // Per-symbol / per-tag variants filter then compute.
+    struct WinRatePoint {
+        uint64_t timestamp_us        = 0;
+        double   winRate             = 0.0;
+        size_t   count               = 0;
+        size_t   wins                = 0;
+        size_t   losses              = 0;
+        double   cumulativeRealized  = 0.0;
+    };
+    std::vector<WinRatePoint> cumulativeWinRate() const;
+    std::vector<WinRatePoint> cumulativeWinRateBySymbol(
+        const std::string& symbol) const;
+    std::vector<WinRatePoint> cumulativeWinRateByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

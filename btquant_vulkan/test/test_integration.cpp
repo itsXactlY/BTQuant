@@ -14892,5 +14892,211 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 111: cumulativeWinRate() /
+    //   cumulativeWinRateBySymbol() /
+    //   cumulativeWinRateByTag() (Sprint #123).
+    //
+    // Win-rate-over-time series. Tests:
+    //   - Empty: empty vector.
+    //   - Single win: 1 point, winRate=1.0.
+    //   - 3-round sequence (W, L, W): winRate trajectory
+    //     1.0, 0.5, 0.667.
+    //   - Tie (realizedDelta=0) skipped: only W/L count.
+    //   - Per-symbol filtering.
+    std::cout << "\nTest 111: cumulative win rate..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test111_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.cumulativeWinRate();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 points"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single win ----
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "",
+                            1774000000000000ULL));
+            auto v = j.cumulativeWinRate();
+            if (v.size() == 1 &&
+                v[0].wins == 1 &&
+                v[0].losses == 0 &&
+                std::fabs(v[0].winRate - 1.0) < 1e-9 &&
+                std::fabs(v[0].cumulativeRealized - 100.0)
+                    < 1e-9) {
+                std::cout << "✓ single win: 1 point, "
+                          << "winRate=1.0, cum=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: n="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- W L W trajectory: 1.0, 0.5, 0.667 ----
+        {
+            TradeJournal j((tmpDir / "wlw.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",   75.0, "",
+                             t0 + 2*hour));
+            auto v = j.cumulativeWinRate();
+            if (v.size() == 3 &&
+                std::fabs(v[0].winRate - 1.0)     < 1e-9 &&
+                std::fabs(v[1].winRate - 0.5)     < 1e-9 &&
+                std::fabs(v[2].winRate - 2.0/3.0) < 1e-9 &&
+                std::fabs(v[0].cumulativeRealized - 100.0)
+                    < 1e-9 &&
+                std::fabs(v[1].cumulativeRealized -  50.0)
+                    < 1e-9 &&
+                std::fabs(v[2].cumulativeRealized - 125.0)
+                    < 1e-9) {
+                std::cout << "✓ W L W: 1.0, 0.5, 0.667 "
+                          << "(cum 100, 50, 125)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ WLW wrong: n=" << v.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Ties skipped: realizedDelta=0 → no point ----
+        {
+            TradeJournal j((tmpDir / "ties.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC",   0.0, "",
+                             t0 + 1*3600ULL*1000000ULL));
+            j.append(mkFill("BTC", -50.0, "",
+                             t0 + 2*3600ULL*1000000ULL));
+            auto v = j.cumulativeWinRate();
+            if (v.size() == 2 &&
+                v[0].winRate == 1.0 &&
+                std::fabs(v[1].winRate - 0.5) < 1e-9) {
+                std::cout << "✓ tie-skip: 3 fills, "
+                          << "2 points (W and L only)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ ties wrong: n=" << v.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: BTC=2W 1L, ETH=2L → winRate differs
+        // BTC: 1.0, 0.667 (after W,L,W)
+        // ETH: 0.0 (only losses)
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH",  -50.0, "",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",  -30.0, "",
+                             t0 + 2*hour));
+            j.append(mkFill("ETH", -100.0, "",
+                             t0 + 3*hour));
+            j.append(mkFill("BTC",   40.0, "",
+                             t0 + 4*hour));
+            auto btcV = j.cumulativeWinRateBySymbol("BTC");
+            auto ethV = j.cumulativeWinRateBySymbol("ETH");
+            if (btcV.size() == 3 &&
+                std::fabs(btcV[0].winRate - 1.0)     < 1e-9 &&
+                std::fabs(btcV[1].winRate - 0.5)     < 1e-9 &&
+                std::fabs(btcV[2].winRate - 2.0/3.0) < 1e-9 &&
+                ethV.size() == 2 &&
+                std::fabs(ethV[0].winRate - 0.0) < 1e-9 &&
+                std::fabs(ethV[1].winRate - 0.0) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC=1.0,0.5,0.667, "
+                          << "ETH=0.0,0.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: btc=" << btcV.size()
+                          << " eth=" << ethV.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",  75.0, "",
+                             t0 + 2*hour));
+            auto scalpV = j.cumulativeWinRateByTag(
+                "scalp", false);
+            auto untagV = j.cumulativeWinRateByTag(
+                "__untagged__", false);
+            if (scalpV.size() == 2 &&
+                std::fabs(scalpV[0].winRate - 1.0) < 1e-9 &&
+                std::fabs(scalpV[1].winRate - 0.5) < 1e-9 &&
+                untagV.size() == 1 &&
+                std::fabs(untagV[0].winRate - 1.0) < 1e-9) {
+                std::cout << "✓ per-tag: scalp=1.0,0.5; "
+                          << "__untagged__=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << scalpV.size()
+                          << " untag=" << untagV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " cumulative-win-rate tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

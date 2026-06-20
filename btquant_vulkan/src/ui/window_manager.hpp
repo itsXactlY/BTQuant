@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <cstdint>
+#include <optional>
 
 #include "stats_overlay.hpp"
 #include "../util/settings.hpp"
@@ -12,6 +13,7 @@
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
 #include "../util/hotkey_config.hpp"
 #include "../util/layout_io.hpp"
+#include "../widgets/theme_editor.hpp"
 
 namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
@@ -164,6 +166,12 @@ public:
     // can drive the apply logic without touching the file layer.
     void applyLayoutSnapshot(const ::btquant::util::LayoutSnapshot& snap);
     bool saveCurrentTheme();
+    // Reset the live theme to ImGui's default dark style and persist it
+    // to the theme file so the next launch picks up the reset state.
+    // Uses the snapshot captured at construction (m_defaultStyleSnap) so
+    // the result is deterministic regardless of how many times the user
+    // has mutated the theme since launch.
+    void resetThemeToDefault();
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();
     void showPositionPanelWindow();
@@ -198,6 +206,15 @@ public:
     // context.
     std::string pendingDockLayout;
 
+private:
+    // Snapshot of the live ImGui style at the time WindowManager is
+    // constructed. Used by resetThemeToDefault() to restore ImGui's
+    // original look without depending on a globally-cached default.
+    // Nullopt if the capture failed (e.g. tests run before ImGui is
+    // initialised). Public so tests can assert the plumbing without
+    // needing a live ImGui context.
+public:
+    std::optional<ThemeEditor::Snapshot> m_defaultStyleSnap;
 private:
     void buildDockLayout();
     void applyPreset(const ::btquant::util::Settings& s);
@@ -251,7 +268,8 @@ private:
     bool m_hotkeyEditorOpen = false;
     bool m_settingsDirty = false;
 };
-
-} // namespace btquant::ui
+class PositionBook;
+} // namespace btquant
+namespace btquant::ui { class ThemeEditor; class RiskGuard; }
 
 #endif

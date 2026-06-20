@@ -93,6 +93,12 @@ constexpr HotkeySlot kHotkeys[] = {
 namespace btquant::ui {
 
 WindowManager::WindowManager() {
+    // Capture the live ImGui style as the default-snapshot. Tests and
+    // CLI tools that instantiate WindowManager before ImGui is up get
+    // a nullopt, and resetThemeToDefault() no-ops in that case.
+    if (ImGui::GetCurrentContext() != nullptr) {
+        m_defaultStyleSnap = ThemeEditor::capture(ImGui::GetStyle());
+    }
     // Compute config dir once — used by TradeJournal, HotkeyMap, and the
     // RiskLimitsPanel persistence callback below.
     const char* home = std::getenv("HOME");
@@ -434,6 +440,7 @@ bool WindowManager::loadLayoutByIndex(size_t index) {
 
 bool WindowManager::saveCurrentTheme() {
     if (!m_themeEditor) return false;
+    if (ImGui::GetCurrentContext() == nullptr) return false;
     auto snap = ThemeEditor::capture(ImGui::GetStyle());
     auto path = ThemeIO::defaultPath();
     if (!ThemeIO::save(path, snap)) {
@@ -442,6 +449,26 @@ bool WindowManager::saveCurrentTheme() {
     }
     BTQ_LOG_INFO("saved theme to %s", path.string().c_str());
     return true;
+}
+
+void WindowManager::resetThemeToDefault() {
+    if (!m_defaultStyleSnap.has_value()) {
+        BTQ_LOG_WARN("resetThemeToDefault: no captured default style "
+                     "(WindowManager constructed without a live ImGui ctx)");
+        return;
+    }
+    if (ImGui::GetCurrentContext() == nullptr) return;
+    // Apply the captured default back to the live style.
+    ThemeEditor::applySnapshot(ImGui::GetStyle(), *m_defaultStyleSnap);
+    // Persist so the next launch picks up the reset state.
+    auto path = ThemeIO::defaultPath();
+    if (!ThemeIO::save(path, *m_defaultStyleSnap)) {
+        BTQ_LOG_WARN("resetThemeToDefault: failed to persist to %s",
+                     path.string().c_str());
+        return;
+    }
+    BTQ_LOG_INFO("resetThemeToDefault: applied + saved %s",
+                 path.string().c_str());
 }
 
 void WindowManager::shutdown() {
@@ -975,6 +1002,21 @@ void WindowManager::showMainMenu() {
                 }
                 if (ImGui::MenuItem("Light (off-white)",    nullptr, theme == 1 ? &kBoolTrue : &kBoolFalse)) {
                     theme = 1; markSettingsDirty();
+                }
+                ImGui::Separator();
+                // Save the live style as the new persisted default —
+                // captures every color/padding the user has tweaked in
+                // the Theme Editor without forcing a specific preset.
+                if (ImGui::MenuItem("Save current theme")) {
+                    if (saveCurrentTheme()) {
+                        BTQ_LOG_INFO("menu: saved current theme");
+                    }
+                }
+                // Restore the ImGui default style (captured at WM
+                // construction) and persist so the reset survives a
+                // restart. Safe no-op when the capture is unavailable.
+                if (ImGui::MenuItem("Reset theme to default")) {
+                    resetThemeToDefault();
                 }
                 ImGui::EndMenu();
             }

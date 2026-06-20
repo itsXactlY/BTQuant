@@ -2041,9 +2041,9 @@ int main() {
         auto reloaded2 = HotkeyMap::loadFromFile(tmpHotkey.string());
         if (reloaded2.has_value() &&
             reloaded2->get(HotkeyAction::KillSwitch) ==
-                HotkeyBinding{GLFW_KEY_K, true, false} &&
+                HotkeyBinding{GLFW_KEY_K, true, false, false} &&
             reloaded2->get(HotkeyAction::OpenSymbolPicker) ==
-                HotkeyBinding{GLFW_KEY_P, true, true}) {
+                HotkeyBinding{GLFW_KEY_P, true, false, true}) {
             std::cout << "✓ comments + Ctrl+Shift parsing" << std::endl;
         } else {
             std::cout << "✗ comments/Ctrl+Shift parsing wrong" << std::endl;
@@ -2060,12 +2060,12 @@ int main() {
 
         // 5) Match — find action by live key + modifier snapshot.
         HotkeyMap m;
-        m.set(HotkeyAction::KillSwitch, {GLFW_KEY_K, true, false});
-        m.set(HotkeyAction::ToggleStats, {GLFW_KEY_F1, false, true});
-        if (m.match(GLFW_KEY_K, true, false) == HotkeyAction::KillSwitch &&
-            m.match(GLFW_KEY_F1, false, true) == HotkeyAction::ToggleStats &&
-            m.match(GLFW_KEY_K, false, false) == HotkeyAction::COUNT /*no ctrl*/ &&
-            m.match(GLFW_KEY_Z, false, false) == HotkeyAction::COUNT /*unbound*/) {
+        m.set(HotkeyAction::KillSwitch, {GLFW_KEY_K, true, false, false});
+        m.set(HotkeyAction::ToggleStats, {GLFW_KEY_F1, false, false, true});
+        if (m.match(GLFW_KEY_K, true, false, false) == HotkeyAction::KillSwitch &&
+            m.match(GLFW_KEY_F1, false, false, true) == HotkeyAction::ToggleStats &&
+            m.match(GLFW_KEY_K, false, false, false) == HotkeyAction::COUNT /*no ctrl*/ &&
+            m.match(GLFW_KEY_Z, false, false, false) == HotkeyAction::COUNT /*unbound*/) {
             std::cout << "✓ match() respects key + modifiers" << std::endl;
         } else {
             std::cout << "✗ match() wrong" << std::endl;
@@ -2146,14 +2146,14 @@ int main() {
 
         // 3) injectCapture without map → no-op, no crash.
         editor.setHotkeyMap(nullptr);
-        editor.injectCapture(GLFW_KEY_A, false, false);  // should be no-op
+        editor.injectCapture(GLFW_KEY_A, false, false, false);  // should be no-op
         std::cout << "✓ injectCapture safe with null map" << std::endl;
 
         // 4) injectCapture with map + Esc → no change, no dirty.
         editor.setHotkeyMap(&map);
         editor.beginCapture(static_cast<int>(HotkeyAction::KillSwitch));
         auto killBefore = map.get(HotkeyAction::KillSwitch);
-        editor.injectCapture(GLFW_KEY_ESCAPE, false, false);
+        editor.injectCapture(GLFW_KEY_ESCAPE, false, false, false);
         if (map.get(HotkeyAction::KillSwitch) == killBefore &&
             !editor.isDirty() && !editor.isCapturing()) {
             std::cout << "✓ Esc cancels without changes" << std::endl;
@@ -2164,7 +2164,7 @@ int main() {
         // 5) injectCapture with map + Ctrl+Shift+P → updates binding,
         //    sets dirty, exits capture.
         editor.beginCapture(static_cast<int>(HotkeyAction::OpenSymbolPicker));
-        editor.injectCapture(GLFW_KEY_P, true, true);
+        editor.injectCapture(GLFW_KEY_P, true, false, true);
         auto pickerAfter = map.get(HotkeyAction::OpenSymbolPicker);
         if (pickerAfter.glfwKey == GLFW_KEY_P &&
             pickerAfter.ctrl && pickerAfter.shift &&
@@ -2186,7 +2186,7 @@ int main() {
         editor.clearDirty();
         auto before2 = map.get(HotkeyAction::ToggleOrderBook);
         editor.beginCapture(static_cast<int>(HotkeyAction::ToggleOrderBook));
-        editor.injectCapture(GLFW_KEY_LEFT_SHIFT, false, true);
+        editor.injectCapture(GLFW_KEY_LEFT_SHIFT, false, false, true);
         if (map.get(HotkeyAction::ToggleOrderBook) == before2 &&
             !editor.isDirty() && editor.isCapturing()) {
             std::cout << "✓ modifier-only key rejected, capture stays open"
@@ -2197,7 +2197,7 @@ int main() {
         }
 
         // 7) Now press a real key — capture completes.
-        editor.injectCapture(GLFW_KEY_F4, false, false);
+        editor.injectCapture(GLFW_KEY_F4, false, false, false);
         if (map.get(HotkeyAction::ToggleOrderBook).glfwKey == GLFW_KEY_F4 &&
             !editor.isCapturing()) {
             std::cout << "✓ F4 completes capture and binds" << std::endl;
@@ -2216,7 +2216,7 @@ int main() {
         // 9) Sentinel -1 cancels capture without applying.
         editor.beginCapture(static_cast<int>(HotkeyAction::OpenSymbolPicker));
         auto beforePicker = map.get(HotkeyAction::OpenSymbolPicker);
-        editor.injectCapture(-1, false, false);
+        editor.injectCapture(-1, false, false, false);
         if (map.get(HotkeyAction::OpenSymbolPicker) == beforePicker &&
             !editor.isCapturing()) {
             std::cout << "✓ sentinel -1 cancels" << std::endl;
@@ -2234,7 +2234,7 @@ int main() {
         // 1) Simulate the user opening the editor, remapping
         //    ToggleOrderBook F2 → F3, then saving and reloading.
         HotkeyMap live = HotkeyMap::defaults();
-        live.set(HotkeyAction::ToggleOrderBook, {GLFW_KEY_F3, false, false});
+        live.set(HotkeyAction::ToggleOrderBook, {GLFW_KEY_F3, false, false, false});
 
         namespace fs = std::filesystem;
         fs::path remapPath = fs::temp_directory_path() /
@@ -2256,9 +2256,9 @@ int main() {
         // 2) match() against the reloaded map returns ToggleOrderBook
         //    for F3 (not F2).
         if (reloaded.has_value() &&
-            reloaded->match(GLFW_KEY_F3, false, false) ==
+            reloaded->match(GLFW_KEY_F3, false, false, false) ==
                 HotkeyAction::ToggleOrderBook &&
-            reloaded->match(GLFW_KEY_F2, false, false) ==
+            reloaded->match(GLFW_KEY_F2, false, false, false) ==
                 HotkeyAction::COUNT /*no longer bound*/) {
             std::cout << "✓ match() follows remap" << std::endl;
         } else {
@@ -2267,7 +2267,7 @@ int main() {
 
         // 3) Ctrl+L still works on the reloaded map (unchanged).
         if (reloaded.has_value() &&
-            reloaded->match(GLFW_KEY_L, true, false) ==
+            reloaded->match(GLFW_KEY_L, true, false, false) ==
                 HotkeyAction::ResetLayout) {
             std::cout << "✓ unchanged bindings survive reload"
                       << std::endl;
@@ -2278,7 +2278,7 @@ int main() {
         // 4) Ctrl+K still binds to K+Ctrl even after a different
         //    action was remapped.
         if (reloaded.has_value() &&
-            reloaded->match(GLFW_KEY_K, true, false) ==
+            reloaded->match(GLFW_KEY_K, true, false, false) ==
                 HotkeyAction::KillSwitch) {
             std::cout << "✓ KillSwitch binding intact" << std::endl;
         } else {
@@ -3100,8 +3100,8 @@ int main() {
         }
 
         // 3) match() maps Ctrl+1 → SwitchLayout1, Ctrl+9 → SwitchLayout9.
-        HA m1 = map.match(GLFW_KEY_1, true, false);
-        HA m9 = map.match(GLFW_KEY_9, true, false);
+        HA m1 = map.match(GLFW_KEY_1, true, false, false);
+        HA m9 = map.match(GLFW_KEY_9, true, false, false);
         if (m1 == HA::SwitchLayout1 && m9 == HA::SwitchLayout9) {
             std::cout << "✓ match(Ctrl+1)=SwitchLayout1, match(Ctrl+9)=SwitchLayout9"
                       << std::endl;
@@ -3582,28 +3582,30 @@ int main() {
                       << std::endl;
         }
 
-        // 6) SubmitBuy binds Ctrl+Shift+B; SubmitSell binds Ctrl+Shift+S.
+        // 6) SubmitBuy binds Alt+B; SubmitSell binds Alt+S.
         auto bBuy  = map.get(HA::SubmitBuy);
         auto bSell = map.get(HA::SubmitSell);
-        if (bBuy.ctrl && bBuy.shift && bBuy.glfwKey == GLFW_KEY_B &&
-            bSell.ctrl && bSell.shift && bSell.glfwKey == GLFW_KEY_S) {
-            std::cout << "✓ SubmitBuy=Ctrl+Shift+B, SubmitSell=Ctrl+Shift+S"
+        if (bBuy.alt && !bBuy.ctrl && !bBuy.shift && bBuy.glfwKey == GLFW_KEY_B &&
+            bSell.alt && !bSell.ctrl && !bSell.shift && bSell.glfwKey == GLFW_KEY_S) {
+            std::cout << "✓ SubmitBuy=Alt+B, SubmitSell=Alt+S"
                       << std::endl;
         } else {
             std::cout << "✗ submit bindings wrong (Buy: ctrl=" << bBuy.ctrl
+                      << " alt=" << bBuy.alt
                       << " shift=" << bBuy.shift
                       << " key=" << bBuy.glfwKey
                       << "; Sell: ctrl=" << bSell.ctrl
+                      << " alt=" << bSell.alt
                       << " shift=" << bSell.shift
                       << " key=" << bSell.glfwKey << ")" << std::endl;
         }
 
-        // 7) match() routes Ctrl+Shift+B → SubmitBuy, Ctrl+Shift+S →
-        //    SubmitSell. Without the modifier, plain B/S doesn't match
-        //    (so the user can still type B and S in input fields).
-        HA mBuy  = map.match(GLFW_KEY_B, true,  true);
-        HA mSell = map.match(GLFW_KEY_S, true,  true);
-        HA mPlainB = map.match(GLFW_KEY_B, false, false);
+        // 7) match() routes Alt+B → SubmitBuy, Alt+S → SubmitSell.
+        //    Without the modifier, plain B/S doesn't match (so the user
+        //    can still type B and S in input fields).
+        HA mBuy  = map.match(GLFW_KEY_B, false, true,  false);
+        HA mSell = map.match(GLFW_KEY_S, false, true,  false);
+        HA mPlainB = map.match(GLFW_KEY_B, false, false, false);
         if (mBuy == HA::SubmitBuy && mSell == HA::SubmitSell &&
             mPlainB != HA::SubmitBuy) {
             std::cout << "✓ match(Ctrl+Shift+B/S) routes correctly, "
@@ -3974,6 +3976,131 @@ int main() {
                       << std::endl;
         } else {
             std::cout << "✗ Snapshot copy aliases the original" << std::endl;
+        }
+    }
+
+    // Test 48: HotkeyBinding — Alt modifier round-trip, mixed chords,
+    // and legacy 3-arg save-format compatibility. Verifies the Alt field
+    // flows through parse → label → save → load → match, that
+    // Ctrl+Alt+Shift chords parse correctly, and that a binding
+    // constructed with a 3-arg brace init (pre-Alt world) gets alt=false
+    // by default — keeping the on-disk format for plain "Ctrl+K" entries
+    // bit-for-bit identical to the previous build.
+    std::cout << "\nTest 48: Testing HotkeyBinding Alt field..." << std::endl;
+    {
+        using btquant::util::HotkeyBinding;
+        using btquant::util::HotkeyMap;
+        using btquant::util::HotkeyAction;
+        using HA = btquant::util::HotkeyAction;
+
+        // 1) Default-constructed binding has alt=false (back-compat
+        //    with the pre-Alt world — any 3-arg init that omitted alt
+        //    used to give `{a, b}` which is now `{a, false, b, false}`).
+        HotkeyBinding def;
+        if (def.alt == false && def.ctrl == false && def.shift == false) {
+            std::cout << "✓ default binding: all three modifiers false"
+                      << std::endl;
+        } else {
+            std::cout << "✗ default modifiers wrong (ctrl=" << def.ctrl
+                      << " alt=" << def.alt
+                      << " shift=" << def.shift << ")" << std::endl;
+        }
+
+        // 2) label() emits "Alt+..." between "Ctrl+" and "Shift+".
+        HotkeyBinding altB{GLFW_KEY_B, false, true, false};
+        HotkeyBinding altShiftF2{GLFW_KEY_F2, false, true, true};
+        HotkeyBinding ctrlAltK{GLFW_KEY_K, true, true, false};
+        if (altB.label() == "Alt+B" &&
+            altShiftF2.label() == "Alt+Shift+F2" &&
+            ctrlAltK.label() == "Ctrl+Alt+K") {
+            std::cout << "✓ label() emits Alt+ in canonical position"
+                      << std::endl;
+        } else {
+            std::cout << "✗ label() wrong (Alt+B=\"" << altB.label()
+                      << "\" Alt+Shift+F2=\"" << altShiftF2.label()
+                      << "\" Ctrl+Alt+K=\"" << ctrlAltK.label() << "\")"
+                      << std::endl;
+        }
+
+        // 3) parseBinding round-trips: write "Alt+B", read it back.
+        HotkeyBinding parsedAltB = HotkeyMap::parseBinding("Alt+B");
+        if (parsedAltB.alt && !parsedAltB.ctrl && !parsedAltB.shift &&
+            parsedAltB.glfwKey == GLFW_KEY_B) {
+            std::cout << "✓ parseBinding(\"Alt+B\") → {B, ctrl=false, alt=true, shift=false}"
+                      << std::endl;
+        } else {
+            std::cout << "✗ parseBinding(Alt+B) wrong (key="
+                      << parsedAltB.glfwKey << " ctrl=" << parsedAltB.ctrl
+                      << " alt=" << parsedAltB.alt
+                      << " shift=" << parsedAltB.shift << ")" << std::endl;
+        }
+
+        // 4) parseBinding("Ctrl+Alt+K") — three-modifier chord.
+        HotkeyBinding parsedCAK = HotkeyMap::parseBinding("Ctrl+Alt+K");
+        if (parsedCAK.ctrl && parsedCAK.alt && !parsedCAK.shift &&
+            parsedCAK.glfwKey == GLFW_KEY_K) {
+            std::cout << "✓ parseBinding(\"Ctrl+Alt+K\") → all three modifiers"
+                      << std::endl;
+        } else {
+            std::cout << "✗ parseBinding(Ctrl+Alt+K) wrong" << std::endl;
+        }
+
+        // 5) Save / load round-trip preserves Alt. Write Alt+F2 to a
+        //    temp file, load it back, verify the binding matches.
+        namespace fs = std::filesystem;
+        fs::path altPath = fs::temp_directory_path() /
+                           "btquant_test_alt_hotkey" / "hotkeys.ini";
+        fs::create_directories(altPath.parent_path());
+        std::ofstream(altPath) << "ToggleOrderBook=Alt+F2\n";
+        auto reloaded = HotkeyMap::loadFromFile(altPath.string());
+        if (reloaded.has_value() &&
+            reloaded->get(HotkeyAction::ToggleOrderBook) ==
+                HotkeyBinding{GLFW_KEY_F2, false, true, false}) {
+            std::cout << "✓ save → load preserves Alt+F2 binding"
+                      << std::endl;
+        } else {
+            std::cout << "✗ Alt+F2 round-trip lost (loaded has "
+                      << (reloaded.has_value() ? "value" : "nullopt")
+                      << ")" << std::endl;
+        }
+
+        // 6) Legacy format: a line written without "Alt+" still parses
+        //    with alt=false. This is the on-disk backward-compat
+        //    guarantee — the previous build wrote "Ctrl+K", and that
+        //    string must still load identically.
+        std::ofstream(altPath) << "KillSwitch=Ctrl+K\n";
+        auto reloadedLegacy = HotkeyMap::loadFromFile(altPath.string());
+        if (reloadedLegacy.has_value() &&
+            reloadedLegacy->get(HotkeyAction::KillSwitch) ==
+                HotkeyBinding{GLFW_KEY_K, true, false, false}) {
+            std::cout << "✓ legacy \"Ctrl+K\" still loads with alt=false"
+                      << std::endl;
+        } else {
+            std::cout << "✗ legacy \"Ctrl+K\" parse broke" << std::endl;
+        }
+
+        // 7) match() honors Alt: Alt+B with all-other-modifiers-false
+        //    fires SubmitBuy; plain B does not.
+        auto m = HotkeyMap::defaults();
+        if (m.match(GLFW_KEY_B, false, true,  false) == HA::SubmitBuy &&
+            m.match(GLFW_KEY_B, false, false, false) != HA::SubmitBuy) {
+            std::cout << "✓ match() routes Alt+B → SubmitBuy, plain B → none"
+                      << std::endl;
+        } else {
+            std::cout << "✗ match() Alt routing wrong" << std::endl;
+        }
+
+        // 8) matches() requires the modifier state to match exactly —
+        //    asking Alt+B with Ctrl+Alt pressed does NOT fire SubmitBuy
+        //    (the SubmitBuy binding expects Alt but not Ctrl).
+        HotkeyBinding submit = m.get(HA::SubmitBuy);
+        if (submit.matches(GLFW_KEY_B, false, true,  false) &&
+            !submit.matches(GLFW_KEY_B, true,  true,  false) &&
+            !submit.matches(GLFW_KEY_B, false, false, false)) {
+            std::cout << "✓ matches() requires exact modifier state"
+                      << std::endl;
+        } else {
+            std::cout << "✗ matches() not strict enough" << std::endl;
         }
     }
 

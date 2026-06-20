@@ -628,6 +628,8 @@ void WindowManager::processHotkeys(void* glfwWindow) {
     // check below.
     bool ctrlDown  = glfwGetKey(win, GLFW_KEY_LEFT_CONTROL)  == GLFW_PRESS ||
                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
+    bool altDown   = glfwGetKey(win, GLFW_KEY_LEFT_ALT)      == GLFW_PRESS ||
+                     glfwGetKey(win, GLFW_KEY_RIGHT_ALT)     == GLFW_PRESS;
     bool shiftDown = glfwGetKey(win, GLFW_KEY_LEFT_SHIFT)    == GLFW_PRESS ||
                      glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT)   == GLFW_PRESS;
 
@@ -680,7 +682,7 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         for (int key = 32; key < 512; ++key) {
             bool down = glfwGetKey(win, key) == GLFW_PRESS;
             if (down && !prevCapturedKeys[key] && !textFieldFocus) {
-                m_hotkeyEditor->injectCapture(key, ctrlDown, shiftDown);
+                m_hotkeyEditor->injectCapture(key, ctrlDown, altDown, shiftDown);
                 prevCapturedKeys[key] = true;
                 if (m_hotkeyMap) m_hotkeyMap->saveToFile(m_hotkeyPath);
                 break;

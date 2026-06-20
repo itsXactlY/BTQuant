@@ -114,7 +114,8 @@ void HotkeyEditor::beginCapture(int actionIndex) {
     m_capturing = actionIndex;
 }
 
-void HotkeyEditor::injectCapture(int glfwKey, bool ctrlDown, bool shiftDown) {
+void HotkeyEditor::injectCapture(int glfwKey,
+                                 bool ctrlDown, bool altDown, bool shiftDown) {
     if (!isCapturing() || !m_map) return;
     auto rows = m_map->enumerate();
     if (m_capturing < 0 || m_capturing >= static_cast<int>(rows.size())) {
@@ -136,6 +137,7 @@ void HotkeyEditor::injectCapture(int glfwKey, bool ctrlDown, bool shiftDown) {
     ::btquant::util::HotkeyBinding b;
     b.glfwKey = glfwKey;
     b.ctrl    = ctrlDown;
+    b.alt     = altDown;
     b.shift   = shiftDown;
     m_map->set(rows[m_capturing].first, b);
     m_dirty = true;

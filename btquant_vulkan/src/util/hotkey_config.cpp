@@ -16,6 +16,7 @@ std::string HotkeyBinding::label() const {
     if (glfwKey < 0) return "(unbound)";
     std::string out;
     if (ctrl)  out += "Ctrl+";
+    if (alt)   out += "Alt+";
     if (shift) out += "Shift+";
     out += HotkeyMap::keyName(glfwKey);
     return out;
@@ -24,46 +25,45 @@ std::string HotkeyBinding::label() const {
 HotkeyMap HotkeyMap::defaults() {
     HotkeyMap m;
     // F2..F12 — widget toggles.
-    m.set(HotkeyAction::ToggleOrderBook,      { GLFW_KEY_F2,  false, false });
-    m.set(HotkeyAction::ToggleOrderBookDepth, { GLFW_KEY_F3,  false, false });
-    m.set(HotkeyAction::ToggleDOM,            { GLFW_KEY_F4,  false, false });
-    m.set(HotkeyAction::ToggleTrades,         { GLFW_KEY_F5,  false, false });
-    m.set(HotkeyAction::ToggleTPO,            { GLFW_KEY_F6,  false, false });
-    m.set(HotkeyAction::ToggleFootprint,      { GLFW_KEY_F7,  false, false });
-    m.set(HotkeyAction::ToggleVPVR,           { GLFW_KEY_F8,  false, false });
-    m.set(HotkeyAction::ToggleAlerts,         { GLFW_KEY_F9,  false, false });
-    m.set(HotkeyAction::ToggleMultiVWAP,      { GLFW_KEY_F11, false, false });
-    m.set(HotkeyAction::ToggleRiskPanel,      { GLFW_KEY_F10, false, false });
-    m.set(HotkeyAction::ToggleSettings,       { GLFW_KEY_F12, false, false });
+    m.set(HotkeyAction::ToggleOrderBook,      { GLFW_KEY_F2,  false, false, false });
+    m.set(HotkeyAction::ToggleOrderBookDepth, { GLFW_KEY_F3,  false, false, false });
+    m.set(HotkeyAction::ToggleDOM,            { GLFW_KEY_F4,  false, false, false });
+    m.set(HotkeyAction::ToggleTrades,         { GLFW_KEY_F5,  false, false, false });
+    m.set(HotkeyAction::ToggleTPO,            { GLFW_KEY_F6,  false, false, false });
+    m.set(HotkeyAction::ToggleFootprint,      { GLFW_KEY_F7,  false, false, false });
+    m.set(HotkeyAction::ToggleVPVR,           { GLFW_KEY_F8,  false, false, false });
+    m.set(HotkeyAction::ToggleAlerts,         { GLFW_KEY_F9,  false, false, false });
+    m.set(HotkeyAction::ToggleMultiVWAP,      { GLFW_KEY_F11, false, false, false });
+    m.set(HotkeyAction::ToggleRiskPanel,      { GLFW_KEY_F10, false, false, false });
+    m.set(HotkeyAction::ToggleSettings,       { GLFW_KEY_F12, false, false, false });
     // Ctrl-prefixed actions.
-    m.set(HotkeyAction::ResetLayout,          { GLFW_KEY_L,        true, false });
-    m.set(HotkeyAction::OpenSymbolPicker,     { GLFW_KEY_P,        true, false });
-    m.set(HotkeyAction::OpenThemeEditor,      { GLFW_KEY_T,        true, false });
-    m.set(HotkeyAction::ToggleOrderTicket,    { GLFW_KEY_ENTER,    true, false });
-    m.set(HotkeyAction::TogglePositionPanel,  { GLFW_KEY_B,        true, false });
-    m.set(HotkeyAction::ToggleRiskLimits,     { GLFW_KEY_R,        true, false });
-    m.set(HotkeyAction::ToggleMiniPriceChart, { GLFW_KEY_M,        true, false });
-    m.set(HotkeyAction::KillSwitch,           { GLFW_KEY_K,        true, false });
-    m.set(HotkeyAction::ToggleStats,          { GLFW_KEY_F1,      false, true  });
-    m.set(HotkeyAction::ToggleHotkeyHelp,     { GLFW_KEY_SLASH,   false, true  });
-    m.set(HotkeyAction::ToggleHotkeyEditor,   { GLFW_KEY_H,        true, false });
-    m.set(HotkeyAction::SwitchLayout1,        { GLFW_KEY_1,        true, false });
-    m.set(HotkeyAction::SwitchLayout2,        { GLFW_KEY_2,        true, false });
-    m.set(HotkeyAction::SwitchLayout3,        { GLFW_KEY_3,        true, false });
-    m.set(HotkeyAction::SwitchLayout4,        { GLFW_KEY_4,        true, false });
-    m.set(HotkeyAction::SwitchLayout5,        { GLFW_KEY_5,        true, false });
-    m.set(HotkeyAction::SwitchLayout6,        { GLFW_KEY_6,        true, false });
-    m.set(HotkeyAction::SwitchLayout7,        { GLFW_KEY_7,        true, false });
-    m.set(HotkeyAction::SwitchLayout8,        { GLFW_KEY_8,        true, false });
-    m.set(HotkeyAction::SwitchLayout9,        { GLFW_KEY_9,        true, false });
-    // Submit hotkeys — Ctrl+Shift+B / Ctrl+Shift+S. Using the chord
-    // form keeps these from firing while the user is typing in an
-    // input field (most input fields only react to plain key presses).
-    // The HotkeyBinding struct currently has ctrl+shift but no alt —
-    // see the no-Alt note in hotkey_config.hpp. The chord doubles as
-    // a "muscle memory" cue: same chord as a browser bookmark / save.
-    m.set(HotkeyAction::SubmitBuy,           { GLFW_KEY_B,        true, true  });
-    m.set(HotkeyAction::SubmitSell,          { GLFW_KEY_S,        true, true  });
+    m.set(HotkeyAction::ResetLayout,          { GLFW_KEY_L,        true, false, false });
+    m.set(HotkeyAction::OpenSymbolPicker,     { GLFW_KEY_P,        true, false, false });
+    m.set(HotkeyAction::OpenThemeEditor,      { GLFW_KEY_T,        true, false, false });
+    m.set(HotkeyAction::ToggleOrderTicket,    { GLFW_KEY_ENTER,    true, false, false });
+    m.set(HotkeyAction::TogglePositionPanel,  { GLFW_KEY_B,        true, false, false });
+    m.set(HotkeyAction::ToggleRiskLimits,     { GLFW_KEY_R,        true, false, false });
+    m.set(HotkeyAction::ToggleMiniPriceChart, { GLFW_KEY_M,        true, false, false });
+    m.set(HotkeyAction::KillSwitch,           { GLFW_KEY_K,        true, false, false });
+    m.set(HotkeyAction::ToggleStats,          { GLFW_KEY_F1,      false, false, true  });
+    m.set(HotkeyAction::ToggleHotkeyHelp,     { GLFW_KEY_SLASH,   false, false, true  });
+    m.set(HotkeyAction::ToggleHotkeyEditor,   { GLFW_KEY_H,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout1,        { GLFW_KEY_1,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout2,        { GLFW_KEY_2,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout3,        { GLFW_KEY_3,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout4,        { GLFW_KEY_4,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout5,        { GLFW_KEY_5,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout6,        { GLFW_KEY_6,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout7,        { GLFW_KEY_7,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout8,        { GLFW_KEY_8,        true, false, false });
+    m.set(HotkeyAction::SwitchLayout9,        { GLFW_KEY_9,        true, false, false });
+    // Submit hotkeys — Alt+B / Alt+S. Alt is safe in the order-ticket
+    // context (no WM shortcut conflict), and the single-modifier chord
+    // is fast to type. The previous default was Ctrl+Shift+B / +S
+    // (browser-save muscle memory), but the user-facing code path
+    // assumed Alt in the docs; we now match the docs.
+    m.set(HotkeyAction::SubmitBuy,           { GLFW_KEY_B,       false, true,  false });
+    m.set(HotkeyAction::SubmitSell,          { GLFW_KEY_S,       false, true,  false });
     return m;
 }
 
@@ -170,10 +170,17 @@ HotkeyBinding HotkeyMap::parseBinding(const std::string& token) {
     b.glfwKey = -1;
     if (token.empty()) return b;
     std::string t = token;
-    // Strip modifiers.
+    // Strip modifiers. Order matters only insofar as we want "Ctrl+Alt+K"
+    // to bind as Ctrl+Alt+K and not "Alt then stripped as a key name" —
+    // we check each prefix in sequence and only consume the matching
+    // one, so the order here is canonical and not arbitrary.
     if (t.size() > 5 && t.compare(0, 5, "Ctrl+") == 0) {
         b.ctrl = true;
         t = t.substr(5);
+    }
+    if (t.size() > 4 && t.compare(0, 4, "Alt+") == 0) {
+        b.alt = true;
+        t = t.substr(4);
     }
     if (t.size() > 6 && t.compare(0, 6, "Shift+") == 0) {
         b.shift = true;
@@ -251,10 +258,11 @@ bool HotkeyMap::saveToFile(const std::string& path) const {
     return out.good();
 }
 
-HotkeyAction HotkeyMap::match(int glfwKey, bool ctrlDown, bool shiftDown) const {
+HotkeyAction HotkeyMap::match(int glfwKey,
+                              bool ctrlDown, bool altDown, bool shiftDown) const {
     for (int i = 0; i < static_cast<int>(HotkeyAction::COUNT); ++i) {
         HotkeyAction a = static_cast<HotkeyAction>(i);
-        if (has(a) && get(a).matches(glfwKey, ctrlDown, shiftDown)) {
+        if (has(a) && get(a).matches(glfwKey, ctrlDown, altDown, shiftDown)) {
             return a;
         }
     }

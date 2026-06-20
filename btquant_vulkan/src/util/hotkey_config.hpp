@@ -58,28 +58,37 @@ enum class HotkeyAction : int {
     COUNT      = 33,
 };
 
-// One hotkey binding — a single GLFW key + optional Ctrl/Shift modifier.
-// Modifiers are bit-style: ctrl XOR shift are supported; no Alt (would
-// conflict with WM keys on Linux).
+// One hotkey binding — a single GLFW key + optional modifier chord
+// (Ctrl / Alt / Shift). Modifiers are independent flags, not a bitmask,
+// so we can support any combination (e.g. Ctrl+Alt+K, Shift+Alt+F2).
+// Alt is allowed despite the historical "WM key conflict" caveat —
+// the order-ticket submit actions (Alt+B / Alt+S) use it deliberately
+// because they don't conflict with any window-manager shortcut in
+// the trading app's runtime posture.
 struct HotkeyBinding {
     int  glfwKey = -1;   // GLFW_KEY_*, or -1 for unbound
     bool ctrl    = false;
+    bool alt     = false;
     bool shift   = false;
 
-    // Returns true if (glfwKey + ctrl + shift) matches another binding.
+    // Returns true if (glfwKey + ctrl + alt + shift) matches another binding.
     bool operator==(const HotkeyBinding& o) const {
-        return glfwKey == o.glfwKey && ctrl == o.ctrl && shift == o.shift;
+        return glfwKey == o.glfwKey && ctrl == o.ctrl &&
+               alt == o.alt && shift == o.shift;
     }
     bool operator!=(const HotkeyBinding& o) const { return !(*this == o); }
 
-    // Human-readable label, e.g. "Ctrl+K" or "F2".
+    // Human-readable label, e.g. "Ctrl+Alt+K" or "F2". Modifier order
+    // is fixed (Ctrl → Alt → Shift) for stable diff/sort.
     std::string label() const;
 
-    // Match against a runtime glfwGetKey snapshot. `ctrl`/`shift` here
-    // are the modifier states the caller observed.
-    bool matches(int glfwKeyPressed, bool ctrlDown, bool shiftDown) const {
+    // Match against a runtime glfwGetKey snapshot. `ctrl`/`alt`/`shift`
+    // here are the modifier states the caller observed.
+    bool matches(int glfwKeyPressed,
+                 bool ctrlDown, bool altDown, bool shiftDown) const {
         if (glfwKey != glfwKeyPressed) return false;
-        if (ctrl != ctrlDown)          return false;
+        if (ctrl  != ctrlDown)         return false;
+        if (alt   != altDown)          return false;
         if (shift != shiftDown)        return false;
         return true;
     }
@@ -113,7 +122,8 @@ public:
 
     // Find which action matches a runtime key+modifier snapshot.
     // Returns COUNT if no match (caller ignores).
-    HotkeyAction match(int glfwKey, bool ctrlDown, bool shiftDown) const;
+    HotkeyAction match(int glfwKey,
+                       bool ctrlDown, bool altDown, bool shiftDown) const;
 
     // ---- Pure helpers (test surface) ----
     static std::string actionName(HotkeyAction a);

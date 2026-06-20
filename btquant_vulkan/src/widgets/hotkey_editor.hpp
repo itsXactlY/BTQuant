@@ -34,10 +34,11 @@ public:
     void render();
 
     // For tests — simulate the next keypress arriving while capturing.
-    // glfwKey is a GLFW_KEY_* constant; ctrl/shift reflect live modifier
-    // state at the moment of the press. Pass -1 for "Esc was pressed,
-    // cancel capture".
-    void injectCapture(int glfwKey, bool ctrlDown, bool shiftDown);
+    // glfwKey is a GLFW_KEY_* constant; ctrl/alt/shift reflect live
+    // modifier state at the moment of the press. Pass -1 for "Esc was
+    // pressed, cancel capture".
+    void injectCapture(int glfwKey,
+                       bool ctrlDown, bool altDown, bool shiftDown);
 
     // Enter capture mode for the action at the given enumerate() index.
     // Used by the [Remap] button and by tests. No-op if m_map is null.

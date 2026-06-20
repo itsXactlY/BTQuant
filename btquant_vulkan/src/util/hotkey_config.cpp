@@ -47,6 +47,15 @@ HotkeyMap HotkeyMap::defaults() {
     m.set(HotkeyAction::ToggleStats,          { GLFW_KEY_F1,      false, true  });
     m.set(HotkeyAction::ToggleHotkeyHelp,     { GLFW_KEY_SLASH,   false, true  });
     m.set(HotkeyAction::ToggleHotkeyEditor,   { GLFW_KEY_H,        true, false });
+    m.set(HotkeyAction::SwitchLayout1,        { GLFW_KEY_1,        true, false });
+    m.set(HotkeyAction::SwitchLayout2,        { GLFW_KEY_2,        true, false });
+    m.set(HotkeyAction::SwitchLayout3,        { GLFW_KEY_3,        true, false });
+    m.set(HotkeyAction::SwitchLayout4,        { GLFW_KEY_4,        true, false });
+    m.set(HotkeyAction::SwitchLayout5,        { GLFW_KEY_5,        true, false });
+    m.set(HotkeyAction::SwitchLayout6,        { GLFW_KEY_6,        true, false });
+    m.set(HotkeyAction::SwitchLayout7,        { GLFW_KEY_7,        true, false });
+    m.set(HotkeyAction::SwitchLayout8,        { GLFW_KEY_8,        true, false });
+    m.set(HotkeyAction::SwitchLayout9,        { GLFW_KEY_9,        true, false });
     return m;
 }
 
@@ -95,6 +104,15 @@ std::string HotkeyMap::actionName(HotkeyAction a) {
         case HotkeyAction::ToggleStats:          return "ToggleStats";
         case HotkeyAction::ToggleHotkeyHelp:     return "ToggleHotkeyHelp";
         case HotkeyAction::ToggleHotkeyEditor:   return "ToggleHotkeyEditor";
+        case HotkeyAction::SwitchLayout1:        return "SwitchLayout1";
+        case HotkeyAction::SwitchLayout2:        return "SwitchLayout2";
+        case HotkeyAction::SwitchLayout3:        return "SwitchLayout3";
+        case HotkeyAction::SwitchLayout4:        return "SwitchLayout4";
+        case HotkeyAction::SwitchLayout5:        return "SwitchLayout5";
+        case HotkeyAction::SwitchLayout6:        return "SwitchLayout6";
+        case HotkeyAction::SwitchLayout7:        return "SwitchLayout7";
+        case HotkeyAction::SwitchLayout8:        return "SwitchLayout8";
+        case HotkeyAction::SwitchLayout9:        return "SwitchLayout9";
         default: return "Unknown";
     }
 }

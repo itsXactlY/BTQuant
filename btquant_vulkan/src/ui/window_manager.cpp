@@ -422,6 +422,16 @@ bool WindowManager::loadLayout(const std::string& name) {
     return true;
 }
 
+bool WindowManager::loadLayoutByIndex(size_t index) {
+    auto profiles = util::LayoutIO::list();
+    if (index >= profiles.size()) {
+        BTQ_LOG_WARN("loadLayoutByIndex: index %zu out of range (%zu profiles)",
+                     index, profiles.size());
+        return false;
+    }
+    return loadLayout(profiles[index].stem().string());
+}
+
 bool WindowManager::saveCurrentTheme() {
     if (!m_themeEditor) return false;
     auto snap = ThemeEditor::capture(ImGui::GetStyle());
@@ -664,6 +674,15 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
             requestDockLayoutReset();
             markSettingsDirty();
             break;
+        case HA::SwitchLayout1: loadLayoutByIndex(0); break;
+        case HA::SwitchLayout2: loadLayoutByIndex(1); break;
+        case HA::SwitchLayout3: loadLayoutByIndex(2); break;
+        case HA::SwitchLayout4: loadLayoutByIndex(3); break;
+        case HA::SwitchLayout5: loadLayoutByIndex(4); break;
+        case HA::SwitchLayout6: loadLayoutByIndex(5); break;
+        case HA::SwitchLayout7: loadLayoutByIndex(6); break;
+        case HA::SwitchLayout8: loadLayoutByIndex(7); break;
+        case HA::SwitchLayout9: loadLayoutByIndex(8); break;
         case HA::OpenSymbolPicker:
             showSymbolPickerOpen = !showSymbolPickerOpen;
             if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);

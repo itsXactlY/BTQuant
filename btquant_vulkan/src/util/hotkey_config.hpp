@@ -34,7 +34,20 @@ enum class HotkeyAction : int {
     ToggleStats          = 19,
     ToggleHotkeyHelp     = 20,
     ToggleHotkeyEditor   = 21,   // self-referential — opens this dialog
-    COUNT                = 22,
+    // Quick-swap layout profiles. Bound to Ctrl+1..Ctrl+9 by default;
+    // SwitchLayoutN applies the Nth .btqlayout file from
+    // LayoutIO::list() (sorted). No-op if there are fewer than N
+    // profiles — keeps the key useful as a "nothing to do" press.
+    SwitchLayout1 = 22,
+    SwitchLayout2 = 23,
+    SwitchLayout3 = 24,
+    SwitchLayout4 = 25,
+    SwitchLayout5 = 26,
+    SwitchLayout6 = 27,
+    SwitchLayout7 = 28,
+    SwitchLayout8 = 29,
+    SwitchLayout9 = 30,
+    COUNT         = 31,
 };
 
 // One hotkey binding — a single GLFW key + optional Ctrl/Shift modifier.

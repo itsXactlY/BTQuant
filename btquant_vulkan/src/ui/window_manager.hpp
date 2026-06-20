@@ -156,6 +156,10 @@ public:
     // ImGui::DockBuilderLoadNodes which needs a live dockspace).
     bool saveLayoutAs(const std::string& name);
     bool loadLayout(const std::string& name);
+    // Switch to the Nth .btqlayout file from LayoutIO::list() (sorted
+    // alphabetically). Out-of-range index = no-op (returns false).
+    // Used by Ctrl+1..Ctrl+9 hotkeys.
+    bool loadLayoutByIndex(size_t index);
     // Apply an already-loaded LayoutSnapshot in-place. Public so tests
     // can drive the apply logic without touching the file layer.
     void applyLayoutSnapshot(const ::btquant::util::LayoutSnapshot& snap);

@@ -6575,4 +6575,65 @@ TradeJournal::ddContributionByTag(
     return out;
 }
 
+std::vector<TradeJournal::ProfitContribution>
+TradeJournal::profitContributionBySymbol() const {
+    // Sprint #167. Each symbol's net realized as a
+    // fraction of total journal realized. Sorted DESC.
+    std::vector<ProfitContribution> out;
+    double totalRealized = 0.0;
+    auto fills = loadAll();
+    for (const auto& f : fills) totalRealized += f.realizedDelta;
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        ProfitContribution c;
+        c.segment = s;
+        c.segmentRealized = symbolSummary(s).realized;
+        c.contribution = std::fabs(totalRealized) > 1e-9
+            ? c.segmentRealized / totalRealized : 0.0;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const ProfitContribution& a,
+           const ProfitContribution& b) {
+            return a.contribution > b.contribution;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::ProfitContribution>
+TradeJournal::profitContributionByTag(
+    bool includeUntagged) const {
+    // Sprint #167. Same as profitContributionBySymbol
+    // but for tags.
+    std::vector<ProfitContribution> out;
+    double totalRealized = 0.0;
+    auto fills = loadAll();
+    for (const auto& f : fills) totalRealized += f.realizedDelta;
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        ProfitContribution c;
+        c.segment = t;
+        c.segmentRealized = tagSummary(t, includeUntagged).realized;
+        c.contribution = std::fabs(totalRealized) > 1e-9
+            ? c.segmentRealized / totalRealized : 0.0;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const ProfitContribution& a,
+           const ProfitContribution& b) {
+            return a.contribution > b.contribution;
+        });
+    return out;
+}
+
 } // namespace btquant

@@ -1677,6 +1677,20 @@ public:
     std::vector<DDContribution> ddContributionByTag(
         bool includeUntagged = true) const;
 
+    // Profit contribution per segment (Sprint #167). Mirror
+    // of ddContributionBySymbol (#166) but using realized
+    // P&L. Answers "which segment drives my profit?"
+    struct ProfitContribution {
+        std::string segment;
+        double      segmentRealized = 0.0;
+        double      contribution     = 0.0;
+    };
+    std::vector<ProfitContribution>
+    profitContributionBySymbol() const;
+    std::vector<ProfitContribution>
+    profitContributionByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

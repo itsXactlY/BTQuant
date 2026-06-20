@@ -12133,5 +12133,272 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 98: perSymbolDayOfWeekStats() / perSymbolHourOfDayStats()
+    //          + per-tag mirrors (Sprint #106).
+    //
+    // Calendar analytics: bucket round-trips by weekday (0..6)
+    // or hour (0..23) per axis. Tests:
+    //   - Empty journal: empty grid.
+    //   - Single fill on known weekday: 1×7 grid, single cell
+    //     with realized + wins=1.
+    //   - Multi-symbol, multi-weekday: 2×7 grid, all 4 cells
+    //     correct (when there are fills on 2 weekdays).
+    //   - Cross-method invariant: sum of grid[].roundTrips ==
+    //     stats().roundTripCount.
+    //   - Hour-of-day: 24 buckets, 2 symbols.
+    //   - perTag default skip-untagged vs includeUntagged.
+    std::cout << "\nTest 98: perSymbolDayOfWeekStats() / HourOfDay..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test98_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        // Anchor: pick a known Wednesday (or any day — we read
+        // tm_wday back from the resulting timestamp).
+        std::tm tm_anchor{};
+        tm_anchor.tm_year = 2026 - 1900;
+        tm_anchor.tm_mon  = 5;      // June
+        tm_anchor.tm_mday = 17;     // 2026-06-17 = Wednesday (weekday=3)
+        tm_anchor.tm_hour = 10;
+        tm_anchor.tm_min  = 0;
+        tm_anchor.tm_sec  = 0;
+        std::time_t wednesday = std::mktime(&tm_anchor);
+        // Verify our anchor is actually Wednesday (weekday=3).
+        std::tm verify{};
+#if defined(_WIN32)
+        localtime_s(&verify, &wednesday);
+#else
+        localtime_r(&wednesday, &verify);
+#endif
+        // verify.tm_wday should be 3 (Wed). If it isn't, the test
+        // below will assert and the failure message will print
+        // the actual weekday.
+        int wednesdayWday = verify.tm_wday;
+
+        // Build a fill at a specific offset from the anchor.
+        // offset=0 → Wednesday, +1 day → Thursday, etc.
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag, int dayOffset) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = wednesday + dayOffset * 86400;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto ps = j.perSymbolDayOfWeekStats();
+            auto ph = j.perSymbolHourOfDayStats();
+            if (ps.symbols.empty() && ps.grid.empty() &&
+                ph.symbols.empty() && ph.grid.empty()) {
+                std::cout << "✓ empty journal: empty grid"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: ps.sym="
+                          << ps.symbols.size()
+                          << " ph.sym=" << ph.symbols.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill on known weekday ----
+        // Fill on Wednesday (offset=0). Expected:
+        //   symbols = [BTCUSDT], grid.size = 7.
+        //   grid[0 * 7 + wednesdayWday] = { rt=1, w=1, realized=$50 }
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 50.0, "", 0));
+            auto ps = j.perSymbolDayOfWeekStats();
+            const auto& cell =
+                ps.grid[0 * 7 + static_cast<size_t>(wednesdayWday)];
+            if (ps.symbols.size() == 1 &&
+                ps.symbols[0] == "BTCUSDT" &&
+                ps.grid.size() == 7 &&
+                cell.roundTrips == 1 &&
+                cell.wins == 1 &&
+                cell.losses == 0 &&
+                std::fabs(cell.realized - 50.0) < 1e-9) {
+                std::cout << "✓ single fill Wed: grid[Wed]={rt=1, "
+                          << "w=1, realized=$50}"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: grid.size="
+                          << ps.grid.size()
+                          << " cell.rt=" << cell.roundTrips
+                          << " wday=" << wednesdayWday << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Cross-method invariant ----
+        // 6 fills spread across 2 symbols × 3 weekdays.
+        // Σ grid[].roundTrips should equal stats().roundTripCount.
+        {
+            fs::path p = tmpDir / "inv.jsonl";
+            TradeJournal j(p.string());
+            // day 0 (Wed): BTC +50, ETH +20
+            // day 2 (Fri): BTC -10, ETH +30
+            // day 5 (Mon): BTC +15, ETH -25
+            j.append(mkFill("BTCUSDT",  50.0, "", 0));
+            j.append(mkFill("ETHUSDT",  20.0, "", 0));
+            j.append(mkFill("BTCUSDT", -10.0, "", 2));
+            j.append(mkFill("ETHUSDT",  30.0, "", 2));
+            j.append(mkFill("BTCUSDT",  15.0, "", 5));
+            j.append(mkFill("ETHUSDT", -25.0, "", 5));
+            auto ps  = j.perSymbolDayOfWeekStats();
+            auto st  = j.stats();
+            size_t sumRt = 0;
+            for (const auto& c : ps.grid) sumRt += c.roundTrips;
+            if (sumRt == st.roundTripCount &&
+                ps.symbols.size() == 2) {
+                std::cout << "✓ invariant: Σ grid.rt=" << sumRt
+                          << " == roundTripCount="
+                          << st.roundTripCount << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ invariant wrong: Σ=" << sumRt
+                          << " vs rt=" << st.roundTripCount
+                          << " sym=" << ps.symbols.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Hour-of-day: 24 buckets, 2 symbols ----
+        // 3 fills at the SAME known hour (anchor's hour, read
+        // back from localtime_r so it's timezone-stable).
+        // Verifies the 24-bucket grid is sized + indexed
+        // correctly without depending on which specific hour
+        // a separate mkFill resolves to.
+        {
+            fs::path p = tmpDir / "hour.jsonl";
+            TradeJournal j(p.string());
+            // Build 3 fills at 3 different day-offsets but at
+            // the same hour (the anchor's hour). Read the
+            // anchor's hour back via localtime_r so we know
+            // which bucket the test should land in.
+            int anchorHour = tm_anchor.tm_hour;
+            // Fill 1: BTC, Wed @ anchorHour.
+            {
+                JournalFill f;
+                f.symbol = "BTCUSDT"; f.isLong = false;
+                f.realizedDelta = 10.0; f.tag = "";
+                f.timestamp_us =
+                    static_cast<uint64_t>(wednesday) * 1000000ULL;
+                j.append(f);
+            }
+            // Fill 2: BTC, Fri @ anchorHour.
+            {
+                JournalFill f;
+                f.symbol = "BTCUSDT"; f.isLong = false;
+                f.realizedDelta = 20.0; f.tag = "";
+                std::time_t ts = wednesday + 2 * 86400;
+                f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+                j.append(f);
+            }
+            // Fill 3: ETH, Wed @ anchorHour.
+            {
+                JournalFill f;
+                f.symbol = "ETHUSDT"; f.isLong = false;
+                f.realizedDelta = -5.0; f.tag = "";
+                f.timestamp_us =
+                    static_cast<uint64_t>(wednesday) * 1000000ULL;
+                j.append(f);
+            }
+            auto ph = j.perSymbolHourOfDayStats();
+            if (ph.symbols.size() == 2 &&
+                ph.symbols[0] == "BTCUSDT" &&
+                ph.symbols[1] == "ETHUSDT" &&
+                ph.grid.size() == 48) {
+                // BTC at anchorHour: rt=2, w=2, $30.
+                // ETH at anchorHour: rt=1, l=1, $-5.
+                auto bH  = ph.grid[0 * 24 + anchorHour];
+                auto eH  = ph.grid[1 * 24 + anchorHour];
+                auto b00 = ph.grid[0 * 24 +  0];  // empty
+                if (bH.roundTrips == 2 &&
+                    std::fabs(bH.realized - 30.0) < 1e-9 &&
+                    eH.roundTrips == 1 && eH.losses == 1 &&
+                    std::fabs(eH.realized + 5.0) < 1e-9 &&
+                    b00.roundTrips == 0) {
+                    std::cout << "✓ hour-of-day: 2×24 grid, "
+                              << "anchorHour bucket has "
+                              << "BTC[rt=2, $30] ETH[rt=1, $-5]"
+                              << std::endl;
+                    ++pass;
+                } else {
+                    std::cout << "✗ hour cells wrong: bH.rt="
+                              << bH.roundTrips << " (expected 2) "
+                              << "eH.l=" << eH.losses
+                              << " hour=" << anchorHour << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ hour grid wrong: sym="
+                          << ph.symbols.size()
+                          << " grid=" << ph.grid.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- perTag day-of-week: includeUntagged ----
+        // 2 tagged fills + 1 untagged. Default: 1 tag bucket;
+        // includeUntagged=true: 2 buckets (__untagged__ + scalp).
+        {
+            fs::path p = tmpDir / "tagdow.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  10.0, "scalp", 0));
+            j.append(mkFill("ETH",  20.0, "scalp", 0));
+            j.append(mkFill("SOL", -5.0, "",      0));
+            auto pt1 = j.perTagDayOfWeekStats();           // skip untagged
+            auto pt2 = j.perTagDayOfWeekStats(true);      // roll up
+            if (pt1.tags.size() == 1 && pt1.tags[0] == "scalp" &&
+                pt1.grid.size() == 7 &&
+                pt1.grid[0 * 7 + wednesdayWday].roundTrips == 2 &&
+                pt2.tags.size() == 2 &&
+                pt2.tags[0] == "__untagged__" &&
+                pt2.tags[1] == "scalp" &&
+                pt2.grid.size() == 14 &&
+                pt2.grid[0 * 7 + wednesdayWday].roundTrips == 1 &&
+                pt2.grid[1 * 7 + wednesdayWday].roundTrips == 2) {
+                std::cout << "✓ perTag DOW: default=1 bucket, "
+                          << "includeUntagged=2 (__untagged__+scalp)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ perTag wrong: tags1="
+                          << pt1.tags.size()
+                          << " tags2=" << pt2.tags.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " calendar tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

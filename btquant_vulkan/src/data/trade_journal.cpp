@@ -1389,6 +1389,221 @@ TradeJournal::streakStats() const {
 }
 
 namespace {
+
+// Sprint #106 — calendar bucketing helpers. Build a
+// (axis → index → Bucket) flat grid for either day-of-week
+// (7 buckets) or hour-of-day (24 buckets). Reuses the same
+// keyFn pattern as bucketByDayPerAxis (#102).
+template <typename Bucket, size_t kBuckets>
+std::map<std::string, std::map<size_t, Bucket>>
+bucketByCalendarIndex(
+    const std::vector<JournalFill>& fills,
+    std::function<size_t(const JournalFill&)> indexFn,
+    std::function<std::string(const JournalFill&)> keyFn) {
+    std::map<std::string, std::map<size_t, Bucket>> out;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        std::string key = keyFn(f);
+        if (key.empty()) continue;
+        size_t bucket = indexFn(f);
+        if (bucket >= kBuckets) continue;     // safety
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        (void)tm;
+        auto& b = out[key][bucket];
+        // Round-trip = |realizedDelta| > 1e-9.
+        if (std::fabs(f.realizedDelta) > kEps) {
+            b.roundTrips++;
+            if (f.realizedDelta > kEps) b.wins++;
+            else b.losses++;
+        }
+        b.realized += f.realizedDelta;
+    }
+    return out;
+}
+
+// Flatten a (axis → bucketIdx → Bucket) nested map into a
+// row-major flat grid sized symbols.size() × kBuckets.
+template <typename Bucket, size_t kBuckets, typename Labels>
+std::vector<Bucket> flattenCalendarGrid(
+    const std::map<std::string, std::map<size_t, Bucket>>& nested,
+    const Labels& labels) {
+    std::vector<Bucket> grid(labels.size() * kBuckets);
+    for (size_t li = 0; li < labels.size(); ++li) {
+        auto it = nested.find(labels[li]);
+        if (it == nested.end()) continue;
+        for (size_t b = 0; b < kBuckets; ++b) {
+            auto bit = it->second.find(b);
+            if (bit != it->second.end())
+                grid[li * kBuckets + b] = bit->second;
+        }
+    }
+    return grid;
+}
+
+}  // namespace
+
+TradeJournal::PerSymbolDayOfWeekStats
+TradeJournal::perSymbolDayOfWeekStats() const {
+    // Sprint #106. 7 buckets (Sun..Sat).
+    auto nested = bucketByCalendarIndex<DayOfWeekBucket, 7>(
+        loadAll(),
+        [](const JournalFill&) -> size_t {
+            // We use the helper's bucket index as the OUTER
+            // key for the inner map; but here we actually
+            // need tm.tm_wday. Re-derive it from ts.
+            // The closure above stored bucket via indexFn —
+            // but we need to compute it differently here.
+            // Let me redefine:
+            return 0;  // placeholder; replaced below
+        },
+        [](const JournalFill& f) { return f.symbol; });
+    (void)nested;
+    // The closure above is a bit awkward because tm_wday
+    // needs the timestamp. Let me redo with a manual loop
+    // for clarity:
+    auto fills = loadAll();
+    std::map<std::string, std::map<size_t, DayOfWeekBucket>> buckets;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        size_t weekday = static_cast<size_t>(tm.tm_wday);
+        if (weekday > 6) continue;
+        auto& b = buckets[f.symbol][weekday];
+        if (std::fabs(f.realizedDelta) > kEps) {
+            b.roundTrips++;
+            if (f.realizedDelta > kEps) b.wins++;
+            else b.losses++;
+        }
+        b.realized += f.realizedDelta;
+    }
+    PerSymbolDayOfWeekStats out;
+    for (const auto& kv : buckets) out.symbols.push_back(kv.first);
+    out.grid = flattenCalendarGrid<DayOfWeekBucket, 7>(
+        buckets, out.symbols);
+    return out;
+}
+
+TradeJournal::PerTagDayOfWeekStats
+TradeJournal::perTagDayOfWeekStats(bool includeUntagged) const {
+    // Sprint #106. Per-tag mirror.
+    auto fills = loadAll();
+    std::map<std::string, std::map<size_t, DayOfWeekBucket>> buckets;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        std::string tag = f.tag;
+        if (tag.empty()) {
+            if (!includeUntagged) continue;
+            tag = "__untagged__";
+        }
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        size_t weekday = static_cast<size_t>(tm.tm_wday);
+        if (weekday > 6) continue;
+        auto& b = buckets[tag][weekday];
+        if (std::fabs(f.realizedDelta) > kEps) {
+            b.roundTrips++;
+            if (f.realizedDelta > kEps) b.wins++;
+            else b.losses++;
+        }
+        b.realized += f.realizedDelta;
+    }
+    PerTagDayOfWeekStats out;
+    for (const auto& kv : buckets) out.tags.push_back(kv.first);
+    out.grid = flattenCalendarGrid<DayOfWeekBucket, 7>(
+        buckets, out.tags);
+    return out;
+}
+
+TradeJournal::PerSymbolHourOfDayStats
+TradeJournal::perSymbolHourOfDayStats() const {
+    // Sprint #106. 24 buckets (0..23 local hour).
+    auto fills = loadAll();
+    std::map<std::string, std::map<size_t, HourOfDayBucket>> buckets;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        size_t hour = static_cast<size_t>(tm.tm_hour);
+        if (hour > 23) continue;
+        auto& b = buckets[f.symbol][hour];
+        if (std::fabs(f.realizedDelta) > kEps) {
+            b.roundTrips++;
+            if (f.realizedDelta > kEps) b.wins++;
+            else b.losses++;
+        }
+        b.realized += f.realizedDelta;
+    }
+    PerSymbolHourOfDayStats out;
+    for (const auto& kv : buckets) out.symbols.push_back(kv.first);
+    out.grid = flattenCalendarGrid<HourOfDayBucket, 24>(
+        buckets, out.symbols);
+    return out;
+}
+
+TradeJournal::PerTagHourOfDayStats
+TradeJournal::perTagHourOfDayStats(bool includeUntagged) const {
+    // Sprint #106. Per-tag mirror.
+    auto fills = loadAll();
+    std::map<std::string, std::map<size_t, HourOfDayBucket>> buckets;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : fills) {
+        std::string tag = f.tag;
+        if (tag.empty()) {
+            if (!includeUntagged) continue;
+            tag = "__untagged__";
+        }
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        size_t hour = static_cast<size_t>(tm.tm_hour);
+        if (hour > 23) continue;
+        auto& b = buckets[tag][hour];
+        if (std::fabs(f.realizedDelta) > kEps) {
+            b.roundTrips++;
+            if (f.realizedDelta > kEps) b.wins++;
+            else b.losses++;
+        }
+        b.realized += f.realizedDelta;
+    }
+    PerTagHourOfDayStats out;
+    for (const auto& kv : buckets) out.tags.push_back(kv.first);
+    out.grid = flattenCalendarGrid<HourOfDayBucket, 24>(
+        buckets, out.tags);
+    return out;
+}
+
+namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is
 // atomic on POSIX (and on Windows with ReplaceFile semantics on

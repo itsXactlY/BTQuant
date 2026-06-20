@@ -519,6 +519,58 @@ public:
     };
     StreakStats streakStats() const;
 
+    // Day-of-week stats — Sprint #106. For each (symbol,
+    // weekday) bucket with at least one round-trip, the
+    // aggregated stats. Answers "do I lose money on Mondays
+    // for SOL specifically?" — the trader wants calendar-aware
+    // analytics that survive across months.
+    //
+    // weekday: 0=Sunday, 1=Monday, ..., 6=Saturday (matches
+    // struct tm.tm_wday from localtime_r).
+    struct DayOfWeekBucket {
+        size_t roundTrips = 0;
+        size_t wins       = 0;
+        size_t losses     = 0;
+        double realized   = 0.0;
+    };
+    struct PerSymbolDayOfWeekStats {
+        std::vector<std::string> symbols;       // rows (sorted ASC)
+        // Indexed as grid[symIdx * 7 + weekday].
+        std::vector<DayOfWeekBucket> grid;
+    };
+    PerSymbolDayOfWeekStats perSymbolDayOfWeekStats() const;
+
+    // Per-tag day-of-week mirror. Honors includeUntagged.
+    struct PerTagDayOfWeekStats {
+        std::vector<std::string> tags;
+        std::vector<DayOfWeekBucket> grid;
+    };
+    PerTagDayOfWeekStats perTagDayOfWeekStats(
+        bool includeUntagged = false) const;
+
+    // Hour-of-day stats — Sprint #106. Same shape as
+    // day-of-week but bucketed by hour 0..23 (local time).
+    // Answers "do I always lose at 14:00?".
+    //
+    // Grid indexed as grid[symIdx * 24 + hour].
+    struct HourOfDayBucket {
+        size_t roundTrips = 0;
+        size_t wins       = 0;
+        size_t losses     = 0;
+        double realized   = 0.0;
+    };
+    struct PerSymbolHourOfDayStats {
+        std::vector<std::string> symbols;
+        std::vector<HourOfDayBucket> grid;
+    };
+    PerSymbolHourOfDayStats perSymbolHourOfDayStats() const;
+    struct PerTagHourOfDayStats {
+        std::vector<std::string> tags;
+        std::vector<HourOfDayBucket> grid;
+    };
+    PerTagHourOfDayStats perTagHourOfDayStats(
+        bool includeUntagged = false) const;
+
     // Per-tag Sortino (Sprint #99). Per-tag mirror.
     struct PerTagSortino {
         std::string tag;

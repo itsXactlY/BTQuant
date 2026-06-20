@@ -1938,6 +1938,17 @@ public:
     double cagrByTag(const std::string& tag,
                      bool includeUntagged = false) const;
 
+    // All-segment CAGR bulk (Sprint #186). Returns CAGR
+    // for every symbol / tag in one call, sorted DESC.
+    struct SegmentCagr {
+        std::string segment;
+        double      cagr = 0.0;
+        size_t      fillCount = 0;
+    };
+    std::vector<SegmentCagr> allSegmentCagr() const;
+    std::vector<SegmentCagr> allSegmentCagrByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

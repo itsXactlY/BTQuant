@@ -7751,4 +7751,75 @@ double TradeJournal::cagrByTag(
         });
 }
 
+std::vector<TradeJournal::SegmentCagr>
+TradeJournal::allSegmentCagr() const {
+    // Sprint #186. Bulk per-symbol CAGR sorted DESC.
+    std::vector<SegmentCagr> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        SegmentCagr c;
+        c.segment = s;
+        c.cagr = cagrBySymbol(s);
+        size_t n = 0;
+        for (const auto& f : fills) {
+            if (f.symbol == s &&
+                std::fabs(f.realizedDelta) > 1e-9) {
+                ++n;
+            }
+        }
+        c.fillCount = n;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentCagr& a, const SegmentCagr& b) {
+            return a.cagr > b.cagr;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SegmentCagr>
+TradeJournal::allSegmentCagrByTag(
+    bool includeUntagged) const {
+    std::vector<SegmentCagr> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        SegmentCagr c;
+        c.segment = t;
+        c.cagr = cagrByTag(t, includeUntagged);
+        size_t n = 0;
+        for (const auto& f : fills) {
+            bool match = false;
+            if (t == "__untagged__") {
+                if (f.tag.empty()) match = true;
+            } else if (includeUntagged && f.tag.empty()) {
+                match = false;
+            } else if (f.tag == t) {
+                match = true;
+            }
+            if (match && std::fabs(f.realizedDelta) > 1e-9) {
+                ++n;
+            }
+        }
+        c.fillCount = n;
+        out.push_back(c);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentCagr& a, const SegmentCagr& b) {
+            return a.cagr > b.cagr;
+        });
+    return out;
+}
+
 } // namespace btquant

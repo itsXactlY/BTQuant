@@ -20615,5 +20615,74 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 167: equityCurveBySymbol/ByTag (Sprint #180).
+    //
+    // Per-segment equity curve. Tests:
+    //   - BTC 3 fills (+100, -50, +50) → curve ends at 100.
+    std::cout << "\nTest 167: per-seg equity curve..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test167_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC + ETH ----
+        {
+            TradeJournal j((tmpDir / "e.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH",  -30.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC",  50.0, "scalp",
+                             t0 + 3));
+            auto btcV = j.equityCurveBySymbol("BTC");
+            auto ethV = j.equityCurveByTag("arb");
+            if (btcV.size() == 3 &&
+                std::fabs(btcV.back().cumulative - 100.0) < 1e-9 &&
+                ethV.size() == 1 &&
+                std::fabs(ethV[0].cumulative + 30.0) < 1e-9) {
+                std::cout << "✓ BTC: 3 pts ends at +100; "
+                          << "arb: 1 pt at -30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC size="
+                          << btcV.size()
+                          << " end="
+                          << (btcV.size() > 0
+                              ? btcV.back().cumulative : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg-equity tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

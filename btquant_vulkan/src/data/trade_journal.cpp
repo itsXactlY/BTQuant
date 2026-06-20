@@ -7486,4 +7486,58 @@ TradeJournal::allRetentionByTag(bool includeUntagged) const {
     return out;
 }
 
+std::vector<TradeJournal::EquityPoint>
+TradeJournal::equityCurveBySymbol(
+    const std::string& symbol) const {
+    // Sprint #180. Filter fills to symbol, compute
+    // chronological equity curve.
+    std::vector<EquityPoint> out;
+    auto fills = loadAll();
+    if (fills.empty()) return out;
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    double cum = 0.0;
+    for (const auto& f : fills) {
+        if (f.symbol != symbol) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        cum += f.realizedDelta;
+        EquityPoint p;
+        p.timestamp_us = f.timestamp_us;
+        p.cumulative   = cum;
+        out.push_back(p);
+    }
+    return out;
+}
+
+std::vector<TradeJournal::EquityPoint>
+TradeJournal::equityCurveByTag(
+    const std::string& tag, bool includeUntagged) const {
+    std::vector<EquityPoint> out;
+    auto fills = loadAll();
+    if (fills.empty()) return out;
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    double cum = 0.0;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (!f.tag.empty()) continue;
+        } else if (includeUntagged && f.tag.empty()) {
+            continue;
+        } else if (f.tag != tag) {
+            continue;
+        }
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        cum += f.realizedDelta;
+        EquityPoint p;
+        p.timestamp_us = f.timestamp_us;
+        p.cumulative   = cum;
+        out.push_back(p);
+    }
+    return out;
+}
+
 } // namespace btquant

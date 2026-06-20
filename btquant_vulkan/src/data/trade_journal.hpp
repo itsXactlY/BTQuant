@@ -1882,6 +1882,14 @@ public:
     std::vector<Retention> allRetentionByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment equity curve (Sprint #180). Same shape
+    // as equityCurve() but filtered to one symbol or tag.
+    std::vector<EquityPoint> equityCurveBySymbol(
+        const std::string& symbol) const;
+    std::vector<EquityPoint> equityCurveByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

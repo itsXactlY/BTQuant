@@ -2378,6 +2378,23 @@ public:
     allSegmentDailyVolByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment avg drawdown duration (Sprint #221).
+    // For each segment: avg/max/min DD duration in
+    // days across all completed drawdowns.
+    // Answers "how long do my BTC drawdowns last?"
+    struct DDDurationSeg {
+        std::string segment;
+        double      avgDurationDays  = 0.0;
+        double      maxDurationDays  = 0.0;
+        double      minDurationDays  = 0.0;
+        size_t      completedDDCount = 0;
+    };
+    DDDurationSeg ddDurationBySymbol(
+        const std::string& symbol) const;
+    DDDurationSeg ddDurationByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -23159,5 +23159,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 207: ddDurationBySymbol/ByTag (Sprint #221).
+    //
+    // Per-segment DD duration. Tests:
+    //   - BTC 1 DD with 3-day duration.
+    std::cout << "\nTest 207: DD duration..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test207_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 1 DD with 3-day duration ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            j.append(mkFill("BTC",  100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + day));
+            j.append(mkFill("BTC",   60.0, t0 + 3 * day));
+            auto btcD = j.ddDurationBySymbol("BTC");
+            if (btcD.completedDDCount == 1 &&
+                btcD.avgDurationDays > 0.0) {
+                std::cout << "✓ BTC: 1 DD, "
+                          << "avgDur=" << btcD.avgDurationDays
+                          << "d"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: count="
+                          << btcD.completedDDCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-duration tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

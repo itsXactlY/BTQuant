@@ -9553,4 +9553,54 @@ TradeJournal::allSegmentDailyVolByTag(
     return out;
 }
 
+namespace {
+// Sprint #221 — per-segment DD duration builder.
+template <typename Iter>
+TradeJournal::DDDurationSeg
+buildDDDurationBySegment(const std::string& segment,
+                          Iter begin, Iter end) {
+    TradeJournal::DDDurationSeg s;
+    s.segment = segment;
+    double sum = 0.0, mx = 0.0, mn = 1e18;
+    size_t count = 0;
+    for (auto it = begin; it != end; ++it) {
+        if (it->recovery_us == 0) continue;
+        uint64_t dur = it->recovery_us;
+        if (it->start_ts > 0 && it->trough_ts > it->start_ts) {
+            dur = it->trough_ts - it->start_ts +
+                  (it->recovery_us - it->trough_ts);
+        }
+        double days = static_cast<double>(dur) /
+                      (86400.0 * 1000000.0);
+        if (days > mx) mx = days;
+        if (days < mn) mn = days;
+        sum += days;
+        ++count;
+    }
+    if (count > 0) {
+        s.completedDDCount = count;
+        s.avgDurationDays = sum / static_cast<double>(count);
+        s.maxDurationDays = mx;
+        s.minDurationDays = mn;
+    }
+    return s;
+}
+}  // namespace
+
+TradeJournal::DDDurationSeg
+TradeJournal::ddDurationBySymbol(
+    const std::string& symbol) const {
+    auto events = drawdownRecoveriesBySymbol(symbol);
+    return buildDDDurationBySegment(symbol,
+        events.begin(), events.end());
+}
+
+TradeJournal::DDDurationSeg
+TradeJournal::ddDurationByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto events = drawdownRecoveriesByTag(tag, includeUntagged);
+    return buildDDDurationBySegment(tag,
+        events.begin(), events.end());
+}
+
 } // namespace btquant

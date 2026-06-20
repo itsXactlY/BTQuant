@@ -7690,4 +7690,65 @@ TradeJournal::allSegmentSharpeStabilityByTag(
     return out;
 }
 
+namespace {
+// Sprint #185 — CAGR builder.
+// Computes CAGR from a starting equity of 1.0 over the
+// span of the filtered fills.
+template <typename Pred>
+double computeCagr(const std::vector<JournalFill>& fills,
+                    Pred pred) {
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f) && std::fabs(f.realizedDelta) > 1e-9) {
+            sub.push_back(f);
+        }
+    }
+    if (sub.size() < 2) return 0.0;
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    double cum = 0.0;
+    for (const auto& f : sub) cum += f.realizedDelta;
+    if (cum <= -1.0) {
+        // Final equity ≤ 0 → CAGR undefined (ruin).
+        // Return a large negative value for visualization.
+        return -1.0;
+    }
+    double spanDays = static_cast<double>(
+        sub.back().timestamp_us - sub.front().timestamp_us) /
+        (86400.0 * 1000000.0);
+    if (spanDays < 1.0) return 0.0;
+    // final = 1.0 + cum, so growth = (1+cum)/1 = 1+cum.
+    double finalEquity = 1.0 + cum;
+    double years = spanDays / 365.0;
+    if (years <= 0.0) return 0.0;
+    return std::pow(finalEquity, 1.0 / years) - 1.0;
+}
+}  // namespace
+
+double TradeJournal::cagr() const {
+    return computeCagr(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+double TradeJournal::cagrBySymbol(
+    const std::string& symbol) const {
+    return computeCagr(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+double TradeJournal::cagrByTag(
+    const std::string& tag, bool includeUntagged) const {
+    return computeCagr(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

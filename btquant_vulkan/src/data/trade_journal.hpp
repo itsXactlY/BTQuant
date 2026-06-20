@@ -1929,6 +1929,15 @@ public:
         bool includeUntagged = true,
         size_t window = 30) const;
 
+    // CAGR (Compound Annual Growth Rate) — Sprint #185.
+    // (final_equity / initial_equity)^(365/days) - 1.
+    // Answers "what's my annualized return rate?"
+    // Returns 0 if journal span < 1 day or initial is 0.
+    double cagr() const;
+    double cagrBySymbol(const std::string& symbol) const;
+    double cagrByTag(const std::string& tag,
+                     bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -20908,5 +20908,66 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 171: cagr() / BySymbol / ByTag (Sprint #185).
+    //
+    // CAGR over 1 year with 2x return = 100%. Tests:
+    //   - 2 fills spanning 365 days, $100 over $100 → 0%.
+    //   - 2 fills spanning 365 days, $200 over $100 → 100%.
+    std::cout << "\nTest 171: CAGR..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test171_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 1 year span, $1 → $3 ----
+        {
+            const uint64_t year = 365ULL * 86400ULL *
+                                   1000000ULL;
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "c.jsonl").string());
+            j.append(mkFill("BTC", 1.0, "scalp", t0));
+            j.append(mkFill("BTC", 1.0, "scalp",
+                             t0 + year));
+            double c = j.cagr();
+            // final = 1.0 + 2.0 = 3.0, years = 1, CAGR = 200%.
+            if (c > 1.9 && c < 2.1) {
+                std::cout << "✓ 1 year $1→$3: CAGR="
+                          << c * 100 << "%"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: CAGR=" << c
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " cagr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

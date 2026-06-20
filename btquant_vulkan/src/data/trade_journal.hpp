@@ -2369,6 +2369,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment daily vol bulk (Sprint #220).
+    // Returns DailyVolSeg for every segment, sorted
+    // DESC by stddevDaily (most volatile first).
+    std::vector<DailyVolSeg>
+    allSegmentDailyVol() const;
+    std::vector<DailyVolSeg>
+    allSegmentDailyVolByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

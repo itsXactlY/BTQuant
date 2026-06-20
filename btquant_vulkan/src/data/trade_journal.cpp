@@ -9510,4 +9510,47 @@ TradeJournal::dailyVolByTag(
     return d;
 }
 
+std::vector<TradeJournal::DailyVolSeg>
+TradeJournal::allSegmentDailyVol() const {
+    // Sprint #220. Bulk per-symbol daily vol
+    // sorted DESC by stddevDaily.
+    std::vector<DailyVolSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(dailyVolBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DailyVolSeg& a, const DailyVolSeg& b) {
+            return a.stddevDaily > b.stddevDaily;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::DailyVolSeg>
+TradeJournal::allSegmentDailyVolByTag(
+    bool includeUntagged) const {
+    std::vector<DailyVolSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(dailyVolByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DailyVolSeg& a, const DailyVolSeg& b) {
+            return a.stddevDaily > b.stddevDaily;
+        });
+    return out;
+}
+
 } // namespace btquant

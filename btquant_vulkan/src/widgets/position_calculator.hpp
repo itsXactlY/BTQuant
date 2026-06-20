@@ -65,6 +65,14 @@ public:
     // entry field without driving the full render loop.
     double lastLivePrice() const { return m_lastLivePrice; }
 
+    // Sprint #70: reset to defaults. Mirrors the initial buffer
+    // values so a fresh calculation can start from the same baseline
+    // every session. Used by the "Reset" button in render() and by
+    // tests that want a known state. Does NOT touch
+    // m_autoUpdateEntry or m_showHelp — those are trader
+    // preferences, not calculation inputs.
+    void resetToDefaults();
+
 private:
     class MarketDataProcessor* m_data = nullptr;
     void refreshLivePrice();

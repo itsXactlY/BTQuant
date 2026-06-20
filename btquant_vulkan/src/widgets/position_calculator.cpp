@@ -22,6 +22,18 @@ void PositionCalculator::setMarketData(::btquant::MarketDataProcessor* data) {
     m_data = data;
 }
 
+void PositionCalculator::resetToDefaults() {
+    // Same values as the field-initializers in the header. The
+    // strings are snprintf'd so trailing-zero precision is preserved.
+    std::snprintf(m_equity,   sizeof(m_equity),   "10000.00");
+    std::snprintf(m_riskPct,  sizeof(m_riskPct),  "1.00");
+    std::snprintf(m_entry,    sizeof(m_entry),    "67500.00");
+    std::snprintf(m_stop,     sizeof(m_stop),     "67000.00");
+    std::snprintf(m_target,   sizeof(m_target),   "68500.00");
+    std::snprintf(m_leverage, sizeof(m_leverage), "1.0");
+    m_lastLivePrice = 0.0;
+}
+
 void PositionCalculator::refreshLivePrice() {
     if (!m_data) return;
     auto snap = m_data->snapshot(1);
@@ -90,6 +102,19 @@ void PositionCalculator::render() {
     if (m_lastLivePrice > 0.0) {
         ImGui::SameLine();
         ImGui::TextDisabled("(live $%.2f)", m_lastLivePrice);
+    }
+    // Sprint #70: Reset button next to the auto-update toggle so
+    // the trader can start a fresh calculation without clearing
+    // each field by hand. Restores the constructor defaults for
+    // equity / risk / entry / stop / target / leverage. Does NOT
+    // touch auto-update or show-help (those are preferences).
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset")) {
+        resetToDefaults();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Restore default equity / risk / entry / "
+                          "stop / target / leverage values");
     }
     ImGui::Separator();
 

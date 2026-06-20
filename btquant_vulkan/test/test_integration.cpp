@@ -22855,5 +22855,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 202: allSegmentTradeSizeHHI (Sprint #216).
+    //
+    // Bulk trade size HHI. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 202: all-seg trade size HHI..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test202_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 50.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + 1));
+            j.append(mkFill("ETH", 10.0, t0));
+            j.append(mkFill("ETH", -10.0, t0 + 1));
+            j.append(mkFill("ETH", -10.0, t0 + 2));
+            auto v = j.allSegmentTradeSizeHHI();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC by HHI: top="
+                          << v[0].segment
+                          << " HHI=" << v[0].hhi
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-hhi tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

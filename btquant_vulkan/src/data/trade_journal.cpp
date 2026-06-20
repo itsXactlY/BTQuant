@@ -9291,4 +9291,47 @@ TradeJournal::tradeSizeHHIByTag(
     return h;
 }
 
+std::vector<TradeJournal::TradeSizeHHI>
+TradeJournal::allSegmentTradeSizeHHI() const {
+    // Sprint #216. Bulk per-symbol trade size HHI
+    // sorted DESC by hhi.
+    std::vector<TradeSizeHHI> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(tradeSizeHHIBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TradeSizeHHI& a, const TradeSizeHHI& b) {
+            return a.hhi > b.hhi;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::TradeSizeHHI>
+TradeJournal::allSegmentTradeSizeHHIByTag(
+    bool includeUntagged) const {
+    std::vector<TradeSizeHHI> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(tradeSizeHHIByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TradeSizeHHI& a, const TradeSizeHHI& b) {
+            return a.hhi > b.hhi;
+        });
+    return out;
+}
+
 } // namespace btquant

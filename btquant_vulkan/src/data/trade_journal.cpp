@@ -8132,4 +8132,46 @@ TradeJournal::allSegmentTradeCountSummaryByTag(
     return out;
 }
 
+std::vector<TradeJournal::SymbolSummary>
+TradeJournal::allSymbolRecoveryFactor() const {
+    // Sprint #193. Bulk per-symbol summary sorted DESC
+    // by recoveryFactor.
+    std::vector<SymbolSummary> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(symbolSummary(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SymbolSummary& a, const SymbolSummary& b) {
+            return a.recoveryFactor > b.recoveryFactor;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::TagSummary>
+TradeJournal::allTagRecoveryFactor(bool includeUntagged) const {
+    std::vector<TagSummary> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(tagSummary(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TagSummary& a, const TagSummary& b) {
+            return a.recoveryFactor > b.recoveryFactor;
+        });
+    return out;
+}
+
 } // namespace btquant

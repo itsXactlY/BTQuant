@@ -2014,6 +2014,15 @@ public:
     allSegmentTradeCountSummaryByTag(
         bool includeUntagged = true) const;
 
+    // All-symbol recovery factor bulk (Sprint #193).
+    // Returns SymbolSummary (which includes recoveryFactor
+    // via Sprint #119) for every symbol, sorted by
+    // recoveryFactor DESC.
+    std::vector<SymbolSummary>
+    allSymbolRecoveryFactor() const;
+    std::vector<TagSummary>
+    allTagRecoveryFactor(bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

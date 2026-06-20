@@ -93,6 +93,31 @@ public:
     // the hotkey path and the click path share one code path.
     bool submit();
 
+    // ---- Persistent-draft controls ----
+    // By default, submit() does NOT clear the draft — qty / side /
+    // type / limit stay so a scalper can re-fire with one click. Opt
+    // in to auto-clear via setClearAfterSubmit(true). The "Reset"
+    // button is always available to manually clear.
+    bool clearAfterSubmit() const         { return m_clearAfterSubmit; }
+    void setClearAfterSubmit(bool v)     { m_clearAfterSubmit = v; }
+
+    // Number of successful submit() calls since construction (or the
+    // last explicit reset). Cheap accessor — no recompute cost.
+    int  submitCount() const              { return m_submitCount; }
+    void resetSubmitCount()               { m_submitCount = 0; }
+
+    // Manually clear the draft to defaults (qty=0.10, side=BUY,
+    // type=market, limit=0.00). Mirrors the buffers' initial state
+    // so the next render shows a fresh ticket.
+    void resetDraft();
+
+    // Test surface for the reset path — the buffers themselves are
+    // private, so this re-reads the parsed values to confirm a reset
+    // took effect. Returns true if qty reads back as the default
+    // (0.10) AND side is BUY AND type is market. Limit price is
+    // allowed to be 0.00 (the default for market orders).
+    bool isDraftAtDefaults() const;
+
 private:
     void refreshRefPrice();
 
@@ -100,6 +125,8 @@ private:
     bool m_sideIsBuy  = true;
     bool m_typeIsLimit = false;
     bool m_altSubmitsOpposite = true;   // opt-out: setAltSubmitsOpposite(false)
+    bool m_clearAfterSubmit  = false;   // opt-in: setClearAfterSubmit(true)
+    int  m_submitCount = 0;             // monotonic counter since construction
     char m_qty  [32] = "0.10";
     char m_limit[32] = "0.00";      // only used when limit
     char m_feeBps[32] = "10";       // 10 bps = 0.10% taker fee

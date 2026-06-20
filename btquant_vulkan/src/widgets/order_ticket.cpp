@@ -258,6 +258,17 @@ void OrderTicket::render() {
         }
     }
 
+    // Submit counter + reset — visible at the bottom of the ticket
+    // so the trader can see how many fills they've put through
+    // this session. Helps catch double-click fat-fingers.
+    if (m_submitCount > 0) {
+        ImGui::TextDisabled("Submitted: %d", m_submitCount);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset##count")) resetSubmitCount();
+        ImGui::SameLine();
+    }
+    if (ImGui::SmallButton("Reset draft")) resetDraft();
+
     ImGui::End();
 }
 
@@ -287,11 +298,34 @@ bool OrderTicket::submit() {
         fee,
         m_sideIsBuy ? "-" : "+", std::fabs(totalCost));
     BTQ_LOG_INFO("OrderTicket: %s", summary);
+    bool fired = false;
     if (m_submit) {
         m_submit(summary);
-        return true;
+        fired = true;
     }
-    return false;
+    if (fired) {
+        ++m_submitCount;
+        if (m_clearAfterSubmit) resetDraft();
+    }
+    return fired;
+}
+
+void OrderTicket::resetDraft() {
+    // Re-initialise the char buffers to the constructor defaults.
+    // Side and type go back to BUY / market; the limit price is
+    // zeroed (the market path uses the live ref price anyway).
+    std::snprintf(m_qty,   sizeof(m_qty),   "0.10");
+    std::snprintf(m_limit, sizeof(m_limit), "0.00");
+    std::snprintf(m_feeBps,sizeof(m_feeBps),"10");
+    std::snprintf(m_slipBps,sizeof(m_slipBps),"5");
+    m_sideIsBuy   = true;
+    m_typeIsLimit = false;
+}
+
+bool OrderTicket::isDraftAtDefaults() const {
+    // qty=0.10, side=BUY, type=market. Limit price is allowed to be
+    // 0.00 — that's the market-mode default, not a draft diff.
+    return quantity() == 0.10 && isBuy() && !isLimit();
 }
 
 } // namespace btquant::ui

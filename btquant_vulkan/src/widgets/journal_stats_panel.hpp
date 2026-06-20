@@ -60,6 +60,12 @@ public:
     bool showWindow = false;
 
 private:
+    // Calendar-table renderer (Sprint #107). Renders either the
+    // day-of-week or hour-of-day breakdown as a color-coded
+    // table (rows = symbols, cols = weekday/hour). Called from
+    // the "When I trade" section.
+    void renderCalendarTable(bool bySymbol);
+
     ::btquant::TradeJournal* m_journal = nullptr;
     bool  m_includeUntagged  = true;
     size_t m_maxRows         = 16;

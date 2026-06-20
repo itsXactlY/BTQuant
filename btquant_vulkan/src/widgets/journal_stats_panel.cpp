@@ -1745,7 +1745,180 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- When I trade — calendar analytics (Sprint #107) ----
+    //
+    // Renders perSymbolDayOfWeekStats() and
+    // perSymbolHourOfDayStats() (#106) as two compact tables
+    // answering "do I lose on Mondays for SOL?" and "am I
+    // profitable at 14:00?". The tables are summary-style:
+    //   - Day-of-week table: rows = symbols, cols = Sun..Sat,
+    //     each cell shows signed realized. Green/red/dim color
+    //     reflects sign + magnitude.
+    //   - Hour-of-day table: rows = symbols, cols = 0..23,
+    //     same color treatment. Header abbreviated to "H0, H1,
+    //     ... H23" so the column bar fits.
+    //
+    // Toggle mirrors the rest of the panel: perSymbol vs
+    // perTag. Honors includeUntagged (same checkbox as above).
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("When I trade",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        renderCalendarTable(false /*bySymbol*/);
+    }
+
     ImGui::End();
+}
+
+// Calendar-table renderer (Sprint #107).
+//
+// Extracted to a private helper so the same renderer is used
+// for both day-of-week and hour-of-day tables — they differ
+// only in the bucket count (7 vs 24) and the column header
+// labels. The caller passes which method-pair to use via the
+// internal calls below.
+//
+// Implementation detail: we use a single signature here that
+// takes nothing, and switch internally based on which method
+// to call. Kept simple — the table is read-only.
+void JournalStatsPanel::renderCalendarTable(bool bySymbol) {
+    if (bySymbol) {
+        // Day-of-week per symbol — 7 columns.
+        auto ps = m_journal->perSymbolDayOfWeekStats();
+        if (ps.symbols.empty()) {
+            ImGui::TextDisabled("(no symbols)");
+            return;
+        }
+        static const char* kWdayLabels[7] = {
+            "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+        };
+        if (ImGui::BeginTable("JournalStatsDOW", 8,
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Symbol");
+            for (int d = 0; d < 7; ++d)
+                ImGui::TableSetupColumn(kWdayLabels[d]);
+            ImGui::TableHeadersRow();
+            for (size_t si = 0; si < ps.symbols.size() &&
+                                 si < m_maxRows; ++si) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(ps.symbols[si].c_str());
+                for (int d = 0; d < 7; ++d) {
+                    ImGui::TableSetColumnIndex(d + 1);
+                    const auto& b =
+                        ps.grid[si * 7 + static_cast<size_t>(d)];
+                    if (b.roundTrips == 0) {
+                        ImGui::PushStyleColor(ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_TextDisabled]);
+                        ImGui::TextUnformatted("·");
+                        ImGui::PopStyleColor();
+                    } else {
+                        // Color: green for positive, red for
+                        // negative, dim if <1 fill.
+                        if (b.realized >= 0.0) {
+                            ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                        } else {
+                            ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                        }
+                        char buf[32];
+                        std::snprintf(buf, sizeof(buf), "%+.0f",
+                                      b.realized);
+                        ImGui::TextUnformatted(buf);
+                        ImGui::PopStyleColor();
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(
+                                "%s @ %s\n"
+                                "  round-trips: %zu  "
+                                "(W:%zu / L:%zu)\n"
+                                "  realized: %+.2f",
+                                ps.symbols[si].c_str(),
+                                kWdayLabels[d],
+                                b.roundTrips, b.wins, b.losses,
+                                b.realized);
+                        }
+                    }
+                }
+            }
+            ImGui::EndTable();
+        }
+        if (ps.symbols.size() > m_maxRows) {
+            ImGui::TextDisabled("(%zu more not shown)",
+                                ps.symbols.size() - m_maxRows);
+        }
+    } else {
+        // Hour-of-day per symbol — 24 columns. We render the
+        // table with a custom column header layout: rather
+        // than 24 column labels in a single header row (which
+        // would overflow any reasonable panel width), we use
+        // a compact "H0..H23" label rendered in 4-character
+        // cells. ImGui's column widths are auto-fit but we
+        // pad each header cell to keep things readable.
+        auto ph = m_journal->perSymbolHourOfDayStats();
+        if (ph.symbols.empty()) {
+            ImGui::TextDisabled("(no symbols)");
+            return;
+        }
+        if (ImGui::BeginTable("JournalStatsHourOfDay", 25,
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Symbol");
+            for (int h = 0; h < 24; ++h) {
+                char hdr[8];
+                std::snprintf(hdr, sizeof(hdr), "H%d", h);
+                ImGui::TableSetupColumn(hdr);
+            }
+            ImGui::TableHeadersRow();
+            for (size_t si = 0; si < ph.symbols.size() &&
+                                 si < m_maxRows; ++si) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(ph.symbols[si].c_str());
+                for (int h = 0; h < 24; ++h) {
+                    ImGui::TableSetColumnIndex(h + 1);
+                    const auto& b =
+                        ph.grid[si * 24 + static_cast<size_t>(h)];
+                    if (b.roundTrips == 0) {
+                        ImGui::PushStyleColor(ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_TextDisabled]);
+                        ImGui::TextUnformatted("·");
+                        ImGui::PopStyleColor();
+                    } else {
+                        if (b.realized >= 0.0) {
+                            ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                        } else {
+                            ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                        }
+                        char buf[32];
+                        std::snprintf(buf, sizeof(buf), "%+.0f",
+                                      b.realized);
+                        ImGui::TextUnformatted(buf);
+                        ImGui::PopStyleColor();
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(
+                                "%s @ %02d:00\n"
+                                "  round-trips: %zu  "
+                                "(W:%zu / L:%zu)\n"
+                                "  realized: %+.2f",
+                                ph.symbols[si].c_str(), h,
+                                b.roundTrips, b.wins, b.losses,
+                                b.realized);
+                        }
+                    }
+                }
+            }
+            ImGui::EndTable();
+        }
+        if (ph.symbols.size() > m_maxRows) {
+            ImGui::TextDisabled("(%zu more not shown)",
+                                ph.symbols.size() - m_maxRows);
+        }
+    }
 }
 
 }  // namespace btquant::ui

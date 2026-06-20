@@ -8310,4 +8310,85 @@ TradeJournal::allTagAvgDayPnL(bool includeUntagged) const {
     return out;
 }
 
+namespace {
+// Sprint #197 — per-segment risk of ruin builder.
+template <typename Pred>
+TradeJournal::RiskOfRuin
+buildRiskOfRuinBySegment(
+    const std::vector<JournalFill>& fills,
+    Pred pred, double ruinFraction) {
+    TradeJournal::RiskOfRuin r;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            grossWin += f.realizedDelta;
+            wins++;
+        } else if (f.realizedDelta < 0) {
+            grossLoss += f.realizedDelta;
+            losses++;
+        }
+    }
+    if (wins == 0 || losses == 0) {
+        r.ruinProb = (losses == 0) ? 0.0 : 1.0;
+        r.winRate = (wins + losses > 0)
+            ? static_cast<double>(wins) /
+              static_cast<double>(wins + losses)
+            : 0.5;
+        return r;
+    }
+    double W = static_cast<double>(wins) /
+               static_cast<double>(wins + losses);
+    double avgWin = grossWin / static_cast<double>(wins);
+    double avgLoss = std::fabs(grossLoss / static_cast<double>(losses));
+    double R = (avgLoss > 1e-9) ? avgWin / avgLoss : 0.0;
+    double realized = grossWin - grossLoss;
+    r.winRate = W;
+    r.payoffRatio = R;
+    r.maxLossFrac = (realized > 1e-9)
+        ? avgLoss / realized : 1.0;
+    // Capital units to lose ruinFraction of equity.
+    double capitalUnits = ruinFraction /
+                          std::max(r.maxLossFrac, 0.01);
+    // PoR approximation:
+    double q = 1.0 - W;
+    double p = W * R;
+    if (p <= q) {
+        // Unfavorable — guaranteed eventual ruin.
+        r.ruinProb = 1.0;
+    } else {
+        r.ruinProb = std::pow(q / p, capitalUnits);
+        if (r.ruinProb < 0) r.ruinProb = 0;
+        if (r.ruinProb > 1) r.ruinProb = 1;
+    }
+    return r;
+}
+}  // namespace
+
+TradeJournal::RiskOfRuin
+TradeJournal::riskOfRuinBySymbol(
+    const std::string& symbol, double ruinFraction) const {
+    auto r = buildRiskOfRuinBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        }, ruinFraction);
+    r.segment = symbol;
+    return r;
+}
+
+TradeJournal::RiskOfRuin
+TradeJournal::riskOfRuinByTag(
+    const std::string& tag, bool includeUntagged,
+    double ruinFraction) const {
+    auto r = buildRiskOfRuinBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        }, ruinFraction);
+    r.segment = tag;
+    return r;
+}
+
 } // namespace btquant

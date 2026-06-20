@@ -21669,5 +21669,74 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 183: riskOfRuinBySymbol/ByTag (Sprint #197).
+    //
+    // Risk of ruin estimate. Tests:
+    //   - Strong edge (60% W, R=2): low PoR.
+    //   - Weak edge (40% W, R=1): high PoR.
+    std::cout << "\nTest 183: risk of ruin..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test183_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Strong edge BTC: 6W +50, 4L -25 → W=60%, R=2 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "r.jsonl").string());
+            for (int i = 0; i < 6; ++i) {
+                j.append(mkFill("BTC", 50.0,
+                                t0 + i * hour));
+            }
+            for (int i = 6; i < 10; ++i) {
+                j.append(mkFill("BTC", -25.0,
+                                t0 + i * hour));
+            }
+            auto btcR = j.riskOfRuinBySymbol("BTC", 0.5);
+            if (btcR.winRate > 0.5 &&
+                btcR.payoffRatio > 1.5 &&
+                btcR.ruinProb < 0.5) {
+                std::cout << "✓ BTC strong: W="
+                          << btcR.winRate << " R="
+                          << btcR.payoffRatio
+                          << " PoR=" << btcR.ruinProb
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: W=" << btcR.winRate
+                          << " R=" << btcR.payoffRatio
+                          << " PoR=" << btcR.ruinProb
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " risk-of-ruin tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -2059,6 +2059,28 @@ public:
     std::vector<SegmentAvgDayPnL>
     allTagAvgDayPnL(bool includeUntagged = true) const;
 
+    // Risk of ruin estimate (Sprint #197). For each
+    // segment, the probability of losing a fraction
+    // (default 50%) of capital over N trades.
+    // Formula (Gambler's ruin approximation):
+    //   PoR = ((1-W) / (1+W*R))^capital_units
+    // where W = win rate, R = avg winner / |avg loser|,
+    // capital_units = 0.5 / max_loss_per_trade_fraction.
+    struct RiskOfRuin {
+        std::string segment;
+        double      winRate       = 0.0;
+        double      payoffRatio   = 0.0;  // avgW / |avgL|
+        double      ruinProb      = 0.0;  // 0..1
+        double      maxLossFrac   = 0.0;  // |avgL| / realized equity
+    };
+    RiskOfRuin riskOfRuinBySymbol(
+        const std::string& symbol,
+        double ruinFraction = 0.5) const;
+    RiskOfRuin riskOfRuinByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        double ruinFraction = 0.5) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

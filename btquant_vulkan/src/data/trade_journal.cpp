@@ -5418,4 +5418,117 @@ TradeJournal::fillIntervalStatsByTag(
         });
 }
 
+namespace {
+// Sprint #151 — per-tag correlation.
+// Per-day Pearson correlation of realized between two
+// tags. Aggregates by local day, finds days both
+// traded, computes Pearson r.
+TradeJournal::SymbolCorrelation
+tagTagCorrelation(const std::vector<JournalFill>& allFills,
+                   const std::string& tagA,
+                   bool includeUntaggedA,
+                   const std::string& tagB,
+                   bool includeUntaggedB) {
+    TradeJournal::SymbolCorrelation r;
+    std::vector<JournalFill> onlyA, onlyB;
+    auto matchesA = [&tagA, includeUntaggedA](
+        const JournalFill& f) {
+        if (tagA == "__untagged__") return f.tag.empty();
+        if (includeUntaggedA && f.tag.empty()) return false;
+        return f.tag == tagA;
+    };
+    auto matchesB = [&tagB, includeUntaggedB](
+        const JournalFill& f) {
+        if (tagB == "__untagged__") return f.tag.empty();
+        if (includeUntaggedB && f.tag.empty()) return false;
+        return f.tag == tagB;
+    };
+    for (const auto& f : allFills) {
+        if (matchesA(f)) onlyA.push_back(f);
+        else if (matchesB(f)) onlyB.push_back(f);
+    }
+    r.fillsA = onlyA.size();
+    r.fillsB = onlyB.size();
+    if (onlyA.size() < 2 || onlyB.size() < 2) return r;
+    auto bucket = [](const std::vector<JournalFill>& src) {
+        std::map<std::string, double> out;
+        for (const auto& f : src) {
+            if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+            std::time_t s = static_cast<std::time_t>(
+                f.timestamp_us / 1000000ULL);
+            std::tm tm{};
+            localtime_r(&s, &tm);
+            char buf[16];
+            std::strftime(buf, sizeof(buf),
+                          "%Y-%m-%d", &tm);
+            out[buf] += f.realizedDelta;
+        }
+        return out;
+    };
+    auto daysA = bucket(onlyA);
+    auto daysB = bucket(onlyB);
+    std::vector<double> x, y;
+    for (const auto& kv : daysA) {
+        auto it = daysB.find(kv.first);
+        if (it != daysB.end()) {
+            x.push_back(kv.second);
+            y.push_back(it->second);
+        }
+    }
+    r.matchedDays = x.size();
+    if (r.matchedDays < 2) return r;
+    double meanX = 0.0, meanY = 0.0;
+    for (size_t k = 0; k < x.size(); ++k) {
+        meanX += x[k]; meanY += y[k];
+    }
+    meanX /= static_cast<double>(x.size());
+    meanY /= static_cast<double>(y.size());
+    double cov = 0.0, varX = 0.0, varY = 0.0;
+    for (size_t k = 0; k < x.size(); ++k) {
+        cov  += (x[k] - meanX) * (y[k] - meanY);
+        varX += (x[k] - meanX) * (x[k] - meanX);
+        varY += (y[k] - meanY) * (y[k] - meanY);
+    }
+    if (varX < 1e-12 || varY < 1e-12) return r;
+    r.correlation = cov / std::sqrt(varX * varY);
+    r.valid = true;
+    return r;
+}
+}  // namespace
+
+std::vector<TradeJournal::CorrelationMatrixEntry>
+TradeJournal::allTagCorrelations(bool includeUntagged) const {
+    // Sprint #151. Mirror of allSymbolCorrelations() (#149)
+    // for tags.
+    std::vector<CorrelationMatrixEntry> out;
+    auto fills = loadAll();
+    std::vector<std::string> tags;
+    {
+        std::set<std::string> uniq;
+        for (const auto& f : fills) {
+            if (f.tag.empty()) {
+                if (includeUntagged) uniq.insert("__untagged__");
+            } else {
+                uniq.insert(f.tag);
+            }
+        }
+        for (const auto& t : uniq) tags.push_back(t);
+    }
+    out.reserve(tags.size() * tags.size() / 2);
+    for (size_t i = 0; i < tags.size(); ++i) {
+        for (size_t j = i + 1; j < tags.size(); ++j) {
+            auto r = tagTagCorrelation(fills, tags[i],
+                includeUntagged, tags[j], includeUntagged);
+            CorrelationMatrixEntry e;
+            e.symA = tags[i];
+            e.symB = tags[j];
+            e.correlation = r.correlation;
+            e.matchedDays = r.matchedDays;
+            e.valid = r.valid;
+            out.push_back(e);
+        }
+    }
+    return out;
+}
+
 } // namespace btquant

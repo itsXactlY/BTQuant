@@ -1477,6 +1477,14 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-tag correlation matrix (Sprint #151). Mirror of
+    // allSymbolCorrelations() (#149) for tags. Pairwise
+    // correlation between every distinct tag in the
+    // journal. Useful for strategy diversification
+    // analysis.
+    std::vector<CorrelationMatrixEntry>
+    allTagCorrelations(bool includeUntagged = true) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

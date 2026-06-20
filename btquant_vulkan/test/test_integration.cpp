@@ -18363,5 +18363,106 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 138: allTagCorrelations() (Sprint #151).
+    //
+    // Pairwise correlation between every distinct tag.
+    // Tests:
+    //   - Empty: 0 entries.
+    //   - 2 tags with matching daily series → 1 pair.
+    std::cout << "\nTest 138: all-tag correlations..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test138_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto m = j.allTagCorrelations();
+            if (m.empty()) {
+                std::cout << "✓ empty: 0 entries"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << m.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 tags with perfectly correlated daily P&L ----
+        {
+            TradeJournal j((tmpDir / "two.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            // scalp tag: BTC +100, ETH +200 day1, BTC +200, ETH +300 day2.
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH", 200.0, "scalp", t0 + 1));
+            j.append(mkFill("BTC", 200.0, "scalp", t0 + day));
+            j.append(mkFill("ETH", 300.0, "scalp", t0 + day + 1));
+            // arb tag: BTC +50, ETH +60 day1, BTC +80, ETH +90 day2.
+            j.append(mkFill("BTC", 50.0, "arb", t0 + 2));
+            j.append(mkFill("ETH", 60.0, "arb", t0 + 3));
+            j.append(mkFill("BTC", 80.0, "arb", t0 + day + 2));
+            j.append(mkFill("ETH", 90.0, "arb", t0 + day + 3));
+            auto m = j.allTagCorrelations();
+            // 1 pair: arb-scalp.
+            // Day1 totals: scalp=300, arb=110.
+            // Day2 totals: scalp=500, arb=170.
+            // r = cov / sqrt(varX*varY)
+            //   meanX=205, meanY=350 (using values 300, 110, 500, 170 as 4 points? no, days=2)
+            // Actually days=2 with (scalp,arb):
+            //   day1: (300, 110), day2: (500, 170).
+            //   meanX=(300+500)/2=400, meanY=(110+170)/2=140.
+            //   cov = (300-400)*(110-140) + (500-400)*(170-140)
+            //        = (-100)*(-30) + (100)*(30) = 3000+3000 = 6000.
+            //   varX = (-100)² + 100² = 20000.
+            //   varY = (-30)² + 30² = 1800.
+            //   r = 6000 / sqrt(20000*1800) = 6000/sqrt(36M)
+            //     = 6000/6000 = 1.0.
+            if (m.size() == 1 &&
+                m[0].valid &&
+                std::fabs(m[0].correlation - 1.0) < 1e-9) {
+                std::cout << "✓ 2 tags perfectly correlated: "
+                          << "r=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: size="
+                          << m.size()
+                          << " r=" << (m.size() > 0
+                              ? m[0].correlation : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-tag-corr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

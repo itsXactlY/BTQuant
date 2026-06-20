@@ -1565,6 +1565,20 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Cumulative gross-profit / gross-loss series
+    // (Sprint #157). One point per round-trip. Tracks
+    // running totals of gross wins and |gross losses|.
+    // Useful for "how much of my edge came from wins vs
+    // losses paid?"
+    struct GrossPoint {
+        uint64_t timestamp_us = 0;
+        double   cumGrossWin  = 0.0;
+        double   cumGrossLoss = 0.0;
+        double   netRealized  = 0.0;
+        size_t   count        = 0;
+    };
+    std::vector<GrossPoint> cumulativeGrossSeries() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

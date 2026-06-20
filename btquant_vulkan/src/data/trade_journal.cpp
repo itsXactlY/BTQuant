@@ -5899,4 +5899,33 @@ TradeJournal::segmentDrawdownStatsByTag(
         [](const DrawdownEvent&) { return true; });
 }
 
+std::vector<TradeJournal::GrossPoint>
+TradeJournal::cumulativeGrossSeries() const {
+    // Sprint #157. Walk fills chronologically, track
+    // running grossWin and |grossLoss|. One point per
+    // round-trip.
+    std::vector<GrossPoint> out;
+    auto fills = loadAll();
+    if (fills.empty()) return out;
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    out.reserve(fills.size());
+    double cumWin = 0.0, cumLoss = 0.0;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (f.realizedDelta > 0) cumWin += f.realizedDelta;
+        else                     cumLoss += f.realizedDelta;
+        GrossPoint p;
+        p.timestamp_us = f.timestamp_us;
+        p.cumGrossWin  = cumWin;
+        p.cumGrossLoss = cumLoss;
+        p.netRealized  = cumWin + cumLoss;
+        p.count        = out.size() + 1;
+        out.push_back(p);
+    }
+    return out;
+}
+
 } // namespace btquant

@@ -18865,5 +18865,89 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 144: cumulativeGrossSeries() (Sprint #157).
+    //
+    // Cumulative grossWin / grossLoss over time. Tests:
+    //   - Empty: 0 points.
+    //   - 4 fills [+100, -50, +200, -25]: 4 points,
+    //     final cumWin=300, cumLoss=-75, net=225.
+    std::cout << "\nTest 144: cumulative gross series..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test144_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.cumulativeGrossSeries();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 points"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 4 fills ----
+        {
+            TradeJournal j((tmpDir / "gross.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            double vals[] = {100.0, -50.0, 200.0, -25.0};
+            for (int i = 0; i < 4; ++i) {
+                j.append(mkFill("BTC", vals[i], "",
+                                t0 + i));
+            }
+            auto v = j.cumulativeGrossSeries();
+            if (v.size() == 4 &&
+                std::fabs(v[3].cumGrossWin - 300.0) < 1e-9 &&
+                std::fabs(v[3].cumGrossLoss + 75.0) < 1e-9 &&
+                std::fabs(v[3].netRealized - 225.0) < 1e-9 &&
+                v[3].count == 4) {
+                std::cout << "✓ 4 fills: final "
+                          << "cumWin=300, "
+                          << "cumLoss=-75, net=225"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ gross wrong: size="
+                          << v.size()
+                          << " cumWin=" << (v.size() > 0
+                              ? v.back().cumGrossWin : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " cum-gross tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

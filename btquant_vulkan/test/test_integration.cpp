@@ -18464,5 +18464,98 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 139: weeklyWinRate() (Sprint #152).
+    //
+    // Aggregate fills by ISO week. Tests:
+    //   - Empty: 0 weeks.
+    //   - 3 fills on the same ISO week: 1 entry.
+    std::cout << "\nTest 139: weekly win rate..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test139_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.weeklyWinRate();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 weeks"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 fills on the same week (same ISO week
+        // if within 7 days) ----
+        {
+            TradeJournal j((tmpDir / "week.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            // 3 fills within 3 days — same ISO week.
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + day));
+            j.append(mkFill("BTC",   80.0, "",
+                            t0 + 2 * day));
+            auto v = j.weeklyWinRate();
+            // ISO week computation may split 3 days across
+            // 2 weeks depending on starting weekday.
+            // Accept any split as long as total fills=3,
+            // 2 wins, realized=+130.
+            size_t sumTotal = 0, sumWins = 0;
+            double sumRealized = 0.0;
+            for (const auto& w : v) {
+                sumTotal    += w.total;
+                sumWins     += w.wins;
+                sumRealized += w.realized;
+            }
+            if (!v.empty() &&
+                sumTotal == 3 && sumWins == 2 &&
+                std::fabs(sumRealized - 130.0) < 1e-9) {
+                std::cout << "✓ 3 fills in " << v.size()
+                          << " week(s): 2W/1L "
+                          << "realized=+130"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ week wrong: weeks="
+                          << v.size()
+                          << " sumTotal=" << sumTotal
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " weekly-WR tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

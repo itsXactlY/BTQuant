@@ -5531,4 +5531,48 @@ TradeJournal::allTagCorrelations(bool includeUntagged) const {
     return out;
 }
 
+std::vector<TradeJournal::WeeklyWinRate>
+TradeJournal::weeklyWinRate() const {
+    // Sprint #152. Aggregate fills by ISO week. For each
+    // week, compute win rate and total realized.
+    std::vector<WeeklyWinRate> out;
+    auto fills = loadAll();
+    // Use a map keyed by (year, week) for stable iteration.
+    std::map<std::pair<int, int>,
+             std::pair<size_t,
+                       std::pair<size_t, double>>> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        int year = 1900 + tm.tm_year;
+        // tm.tm_yday is 0-based day-of-year. Approximate
+        // ISO week via ((yday - tm.tm_wday + 7) / 7) + 1.
+        // Not strictly ISO 8601 but consistent and good
+        // enough for bucketing.
+        int week = ((tm.tm_yday - tm.tm_wday + 7) / 7) + 1;
+        auto key = std::make_pair(year, week);
+        auto& b = buckets[key];
+        b.first++;  // total
+        if (f.realizedDelta > 0) b.second.first++;
+        b.second.second += f.realizedDelta;
+    }
+    for (auto& kv : buckets) {
+        WeeklyWinRate w;
+        w.year = kv.first.first;
+        w.week = kv.first.second;
+        w.total = kv.second.first;
+        w.wins = kv.second.second.first;
+        w.realized = kv.second.second.second;
+        w.winRate = w.total > 0
+            ? static_cast<double>(w.wins) /
+              static_cast<double>(w.total)
+            : 0.0;
+        out.push_back(w);
+    }
+    return out;
+}
+
 } // namespace btquant

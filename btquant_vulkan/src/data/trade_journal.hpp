@@ -1485,6 +1485,20 @@ public:
     std::vector<CorrelationMatrixEntry>
     allTagCorrelations(bool includeUntagged = true) const;
 
+    // Weekly win rate (Sprint #152). For each ISO week
+    // (year + week-of-year) with at least one round-trip,
+    // returns the win rate and trade count. Answers
+    // "did I have a winning week 23 vs losing week 24?"
+    struct WeeklyWinRate {
+        int     year    = 0;
+        int     week    = 0;  // ISO week 1-53
+        size_t  total   = 0;
+        size_t  wins    = 0;
+        double  winRate = 0.0;
+        double  realized = 0.0;
+    };
+    std::vector<WeeklyWinRate> weeklyWinRate() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

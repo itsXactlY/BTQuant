@@ -436,6 +436,79 @@ void RiskPanel::render() {
             ImGui::TextDisabled("(per-symbol breakdown: no symbol-booked "
                                 "fills this session yet)");
         }
+
+        // Per-symbol kill budget rows. For every symbol with a kill
+        // override, draw a labelled progress bar showing
+        // (kill - |realized|) / kill. For symbols with P&L activity
+        // but NO kill override, fall back to the global kill threshold
+        // (so the trader can see that the global backstop is what's
+        // protecting that position).
+        //
+        // Why two layers? Without this section, a trader who set a
+        // per-symbol kill on SOL (-$500) but is now bleeding on a
+        // never-touched BTC position ($-200) sees ZERO context for
+        // BTC's safety — the global bar hides the per-symbol state.
+        ImGui::Separator();
+        ImGui::Text("Per-symbol kill budget:");
+        // Collect: kill overrides take precedence; if a symbol has
+        // P&L activity but no override, render it under the global
+        // cap. Use a std::map for stable alpha order (no third-party
+        // headers — <map> is the obvious choice).
+        std::vector<std::pair<std::string, double>> killBudget;
+        for (const auto& kv : m_riskGuard->killOnDailyLossBySymbol()) {
+            killBudget.emplace_back(kv.first, kv.second);
+        }
+        // Supplement with active P&L symbols that have no override.
+        for (const auto& kv : m_riskGuard->sessionRealizedBySymbol()) {
+            bool alreadyHas = false;
+            for (const auto& existing : killBudget) {
+                if (existing.first == kv.first) { alreadyHas = true; break; }
+            }
+            if (!alreadyHas) {
+                killBudget.emplace_back(kv.first,
+                                        m_riskGuard->config().killOnDailyLossUSD);
+            }
+        }
+        if (killBudget.empty()) {
+            ImGui::TextDisabled("(no symbols with kill overrides or "
+                                "P&L activity yet)");
+        } else {
+            for (const auto& kv : killBudget) {
+                double kill    = kv.second;
+                double realized = m_riskGuard->sessionRealizedFor(kv.first);
+                double remaining = m_riskGuard->remainingLossBudgetForSymbol(
+                    kv.first);
+                double frac = (kill > 0.0)
+                                  ? std::min(1.0, std::fabs(realized) / kill)
+                                  : 0.0;
+                ImVec4 barCol;
+                if (frac < 0.5)      barCol = ImVec4(0.30f, 0.85f, 0.40f, 1.0f);
+                else if (frac < 0.8) barCol = ImVec4(0.95f, 0.85f, 0.30f, 1.0f);
+                else                 barCol = ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+                // Same row: label + ProgressBar + remaining readout.
+                // ProgressBar wants ImVec2 width — use a fixed 220px
+                // so all rows align.
+                ImGui::PushID(kv.first.c_str());
+                ImGui::Text("%s", kv.first.c_str());
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barCol);
+                char overlay[80];
+                std::snprintf(overlay, sizeof(overlay),
+                              "%s$%.0f / -$%.0f",
+                              realized >= 0 ? "+" : "",
+                              std::fabs(realized), kill);
+                ImGui::ProgressBar(frac, ImVec2(220, 0), overlay);
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::Text("%s$%.0f rem",
+                            remaining >= 0 ? "+" : "",
+                            std::fabs(remaining));
+                ImGui::PopID();
+            }
+            ImGui::TextDisabled("(override symbols use their per-symbol "
+                                "kill; active-PnL-only symbols fall back "
+                                "to the global threshold)");
+        }
     }
 
     ImGui::End();

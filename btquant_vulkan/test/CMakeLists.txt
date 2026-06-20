@@ -39,6 +39,14 @@ add_executable(test_integration test_integration.cpp)
 # Same compile flags as main target — BTQUANT_USE_GLFW must be defined for vulkan_context.cpp
 target_compile_definitions(test_integration PRIVATE BTQUANT_USE_GLFW)
 
+# Inherit imgui sources for stats_overlay etc that reference ImGui symbols.
+target_sources(test_integration PRIVATE
+    ${_parent_imgui_src}/imgui.cpp
+    ${_parent_imgui_src}/imgui_draw.cpp
+    ${_parent_imgui_src}/imgui_tables.cpp
+    ${_parent_imgui_src}/imgui_widgets.cpp
+)
+
 # Link libraries
 target_link_libraries(test_integration
     Vulkan::Vulkan Threads::Threads
@@ -55,6 +63,7 @@ target_sources(test_integration PRIVATE
     ../src/core/vulkan_utils.cpp
     ../src/core/vulkan_context.cpp
     ../src/util/settings.cpp
+    ../src/ui/stats_overlay.cpp
 )
 
 # Set C++ standard

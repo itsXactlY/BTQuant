@@ -87,11 +87,16 @@ private:
   }
 
   void initUI() {
+    // Resolve ImGui ini path alongside Settings (BTQUANT_INI env override).
+    auto iniPath = (util::Settings::defaultPath().parent_path() / "imgui.ini").string();
+    if (const char* env = std::getenv("BTQUANT_INI")) iniPath = env;
+
     if (!uiContext.initialize(window, vkContext.instance(),
                               vkContext.physicalDevice(), vkContext.device(),
                               vkContext.queueFamilies().graphicsFamily.value(),
                               vkContext.graphicsQueue(),
-                              vkContext.renderPass())) {
+                              vkContext.renderPass(),
+                              iniPath.c_str())) {
       throw std::runtime_error("Failed to initialize UI Context");
     }
 
@@ -112,6 +117,8 @@ private:
     windowManager.showDOM             = settings.showDOM;
     windowManager.showTrades          = settings.showTrades;
     windowManager.showTPO             = settings.showTPO;
+    windowManager.showSettings        = settings.showSettings;
+    windowManager.showStatsOverlay    = settings.showStatsOverlay;
     windowManager.fpsLimit            = settings.fpsLimit;
     windowManager.heatmapDensity      = settings.heatmapDensity;
     glfwSwapInterval(windowManager.fpsLimit > 0 ? 1 : 0);
@@ -177,6 +184,13 @@ private:
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
 
+      // Hotkeys run BEFORE ImGui's newFrame so user input reaches widgets.
+      // Suppressed automatically when a text field has focus.
+      windowManager.processHotkeys(window);
+
+      // Stats overlay EWMA — one sample per frame.
+      windowManager.tickStatsOverlay();
+
       VkCommandBuffer cmd = vkContext.beginFrame();
       if (cmd == VK_NULL_HANDLE) {
         continue;
@@ -206,6 +220,14 @@ private:
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
       windowManager.showSettingsWindow();
+
+      // Stats overlay (top-right). Pass live queue/candle counters so the user
+      // can see when MarketDataProcessor is falling behind.
+      auto snap = marketData.snapshot(0, 0);  // shallow — just for counts
+      windowManager.renderStatsOverlay(
+          static_cast<uint64_t>(snap.recent_trades.size()),
+          static_cast<uint64_t>(snap.recent_candles.size()));
+
       heatmapWidget.render();
 
       VkClearValue clearColor = {{{0.031f, 0.035f, 0.039f, 1.0f}}};  // #08090a
@@ -239,12 +261,15 @@ private:
     s.showDOM             = windowManager.showDOM;
     s.showTrades          = windowManager.showTrades;
     s.showTPO             = windowManager.showTPO;
+    s.showSettings        = windowManager.showSettings;
+    s.showStatsOverlay    = windowManager.showStatsOverlay;
     s.fpsLimit            = windowManager.fpsLimit;
     s.heatmapDensity      = windowManager.heatmapDensity;
     s.save(settingsPath);
     std::fprintf(stderr, "[BTQuant] saved settings to %s\n",
                  settingsPath.c_str());
 
+    // UIContext::shutdown() also flushes imgui.ini to disk.
     heatmapCompute.shutdown();
     marketData.stop();
     if (window) {

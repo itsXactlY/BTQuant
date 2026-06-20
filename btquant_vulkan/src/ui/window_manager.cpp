@@ -14,15 +14,47 @@
 #include "../widgets/tpo_widget.hpp"
 
 #include "../data/market_data_processor.hpp"
+#include "stats_overlay.hpp"
+
+// GLFW direct key access for hotkeys. Used because ImGui's keyboard input goes
+// through imgui_impl_glfw and we want hotkeys to work even when no widget has
+// focus. We check io.WantCaptureKeyboard so the user can still type into text
+// fields unimpeded.
+#ifdef BTQUANT_USE_GLFW
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#endif
 
 // Static slider bounds (file-local) for the Settings window. SliderScalar
 // needs typed pointers; using static const values avoids allocating per-frame.
-namespace {
+// Hotkey bindings live INSIDE namespace btquant::ui so member pointers to
+// WindowManager resolve correctly via unqualified lookup.
+namespace btquant::ui {
+
 const long kZero = 0;
 const long kFps240 = 240;
 const long kHeatmapMin = 64;
 const long kHeatmapMax = 512;
-} // namespace
+
+#ifdef BTQUANT_USE_GLFW
+// Toggle widget given its F-key hotkey (F2-F9) — looks up in a static table.
+struct HotkeyBinding { int glfwKey; bool WindowManager::*flag; const char* name; };
+constexpr HotkeyBinding kHotkeys[] = {
+    { GLFW_KEY_F2,  &WindowManager::showOrderBook,      "Order Book"        },
+    { GLFW_KEY_F3,  &WindowManager::showOrderBookDepth, "Order Book Depth"  },
+    { GLFW_KEY_F4,  &WindowManager::showDOM,            "DOM"               },
+    { GLFW_KEY_F5,  &WindowManager::showTrades,         "Trades"            },
+    { GLFW_KEY_F6,  &WindowManager::showTPO,            "TPO"               },
+    { GLFW_KEY_F7,  &WindowManager::showFootprint,      "Footprint"         },
+    { GLFW_KEY_F8,  &WindowManager::showVPVR,           "VPVR"              },
+    // F9 is taken by ImGui's default for "show demo window" — we skip it.
+    { GLFW_KEY_F10, &WindowManager::showMultiVWAP,      "Multi VWAP"        },
+    { GLFW_KEY_F11, &WindowManager::showRiskPanel,      "Risk Panel"        },
+    { GLFW_KEY_F12, &WindowManager::showSettings,       "Settings"          },
+};
+#endif // BTQUANT_USE_GLFW
+
+} // namespace btquant::ui (constants + hotkey table)
 
 namespace btquant::ui {
 
@@ -126,6 +158,58 @@ void WindowManager::applyInitialDockLayoutIfNeeded() {
 
 void WindowManager::requestDockLayoutReset() {
     m_layoutResetRequested = true;
+}
+
+void WindowManager::processHotkeys(void* glfwWindow) {
+#ifdef BTQUANT_USE_GLFW
+    if (!glfwWindow) return;
+    auto* win = static_cast<GLFWwindow*>(glfwWindow);
+
+    ImGuiIO& io = ImGui::GetIO();
+    bool textFieldFocus = io.WantCaptureKeyboard && io.WantTextInput;
+
+    // F2..F12 toggle widgets. Edge-triggered: fire only on the rising edge
+    // (key was up last frame, is down now) so holding the key down doesn't
+    // rapidly retoggle the widget.
+    constexpr size_t kNumHotkeys = sizeof(kHotkeys) / sizeof(kHotkeys[0]);
+    static bool prevPressed[kNumHotkeys] = {};
+    bool currPressed[kNumHotkeys];
+    for (size_t i = 0; i < kNumHotkeys; ++i) {
+        currPressed[i] = !textFieldFocus &&
+                         glfwGetKey(win, kHotkeys[i].glfwKey) == GLFW_PRESS;
+        if (currPressed[i] && !prevPressed[i]) {
+            this->*(kHotkeys[i].flag) = !(this->*(kHotkeys[i].flag));
+        }
+        prevPressed[i] = currPressed[i];
+    }
+
+    // Ctrl+L — reset layout (also edge-triggered so it fires once).
+    static bool prevCtrlL = false;
+    bool currCtrlL = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_L) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlL && !prevCtrlL) requestDockLayoutReset();
+    prevCtrlL = currCtrlL;
+
+    // Shift+F1 toggles stats overlay.
+    static bool prevShiftF1 = false;
+    bool currShiftF1 = !textFieldFocus &&
+                       glfwGetKey(win, GLFW_KEY_F1) == GLFW_PRESS &&
+                       (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                        glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+    if (currShiftF1 && !prevShiftF1) {
+        showStatsOverlay = !showStatsOverlay;
+        m_statsOverlay.setEnabled(showStatsOverlay);
+    }
+    prevShiftF1 = currShiftF1;
+#endif // BTQUANT_USE_GLFW
+}
+
+void WindowManager::renderStatsOverlay(uint64_t tradeQueueDepth,
+                                       uint64_t candleCount) {
+    m_statsOverlay.setEnabled(showStatsOverlay);
+    m_statsOverlay.render(tradeQueueDepth, candleCount);
 }
 
 void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {

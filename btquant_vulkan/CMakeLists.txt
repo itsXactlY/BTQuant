@@ -62,6 +62,7 @@ set(SOURCES
     src/widgets/tpo_widget.cpp
     src/widgets/heatmap_widget.cpp
     src/util/settings.cpp
+    src/ui/stats_overlay.cpp
 )
 
 set(HEADERS
@@ -88,6 +89,7 @@ set(HEADERS
     src/widgets/tpo_widget.hpp
     src/widgets/heatmap_widget.hpp
     src/util/settings.hpp
+    src/ui/stats_overlay.hpp
 )
 
 add_executable(btquant_vulkan ${SOURCES} ${HEADERS}

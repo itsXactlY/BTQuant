@@ -67,6 +67,8 @@ Settings Settings::load(const std::filesystem::path& path) {
         else if (key == "showDOM")          s.showDOM = parseBool(val);
         else if (key == "showTrades")       s.showTrades = parseBool(val);
         else if (key == "showTPO")          s.showTPO = parseBool(val);
+        else if (key == "showSettings")     s.showSettings = parseBool(val);
+        else if (key == "showStatsOverlay") s.showStatsOverlay = parseBool(val);
         else if (key == "fpsLimit" && isInt)          s.fpsLimit = std::stol(val);
         else if (key == "heatmapDensity" && isInt)    s.heatmapDensity = std::stol(val);
         else if (key == "tradeWindowSeconds" && isDouble)
@@ -94,6 +96,8 @@ void Settings::save(const std::filesystem::path& path) const {
     out << "showDOM=" << (showDOM ? 1 : 0) << "\n";
     out << "showTrades=" << (showTrades ? 1 : 0) << "\n";
     out << "showTPO=" << (showTPO ? 1 : 0) << "\n";
+    out << "showSettings=" << (showSettings ? 1 : 0) << "\n";
+    out << "showStatsOverlay=" << (showStatsOverlay ? 1 : 0) << "\n";
     out << "fpsLimit=" << fpsLimit << "\n";
     out << "heatmapDensity=" << heatmapDensity << "\n";
     // Fixed notation guarantees the dot is always present, so the parser's

@@ -26,10 +26,14 @@ public:
     UIContext();
     ~UIContext();
 
-    bool initialize(void* window, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, uint32_t graphicsQueueFamily, VkQueue graphicsQueue, VkRenderPass renderPass);
+    bool initialize(void* window, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, uint32_t graphicsQueueFamily, VkQueue graphicsQueue, VkRenderPass renderPass, const char* iniFilename = nullptr);
     void shutdown();
     void newFrame();
     void render(VkCommandBuffer commandBuffer);
+
+    // Persist ImGui's internal state (window positions, dock layout customisation,
+    // collapsed flags, sort orders) to disk. Called from main loop on shutdown.
+    void saveIniSettings() const;
 
     [[nodiscard]] const UIConfig& config() const { return m_config; }
     [[nodiscard]] UIConfig& config() { return m_config; }
@@ -39,6 +43,7 @@ private:
     bool m_initialized = false;
     VkDevice m_imguiDevice = VK_NULL_HANDLE;
     VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
+    std::string m_iniFilename;  // empty → no ini save
 };
 
 } // namespace btquant::ui

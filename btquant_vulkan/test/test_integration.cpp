@@ -5,9 +5,11 @@
 #include "../src/ui/window_manager.hpp"
 #include "../src/data/market_data.hpp"
 #include "../src/util/settings.hpp"
+#include "../src/ui/stats_overlay.hpp"
 #include <iostream>
 #include <cassert>
 #include <filesystem>
+#include <thread>
 
 int main() {
     std::cout << "Starting btquant_vulkan integration test..." << std::endl;
@@ -233,6 +235,42 @@ int main() {
         // Cleanup.
         fs::remove(tmpFile, ec);
         fs::remove(tmpDir, ec);
+    }
+
+    // Test 7: StatsOverlay EWMA tracking.
+    std::cout << "\nTest 7: Testing stats overlay EWMA..." << std::endl;
+    {
+        btquant::ui::StatsOverlay ov;
+        // First tick — no measurement, just seed.
+        ov.tick();
+        if (ov.avgFrameTimeMs() == 0.0) {
+            std::cout << "✓ First tick correctly seeds EWMA to 0" << std::endl;
+        } else {
+            std::cout << "✗ First tick seeded to " << ov.avgFrameTimeMs() << std::endl;
+        }
+
+        // Tick 60 times with ~16ms sleeps (≈60 fps) — EWMA should converge near 16.
+        for (int i = 0; i < 60; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            ov.tick();
+        }
+        double avg = ov.avgFrameTimeMs();
+        double fps = ov.avgFps();
+        if (avg > 10.0 && avg < 50.0 && fps > 20.0 && fps < 100.0) {
+            std::cout << "✓ EWMA converges: avg=" << avg
+                      << " ms, fps=" << fps << std::endl;
+        } else {
+            std::cout << "✗ EWMA out of range: avg=" << avg
+                      << " ms, fps=" << fps << std::endl;
+        }
+
+        // Disable / re-enable.
+        ov.setEnabled(false);
+        if (!ov.enabled()) {
+            std::cout << "✓ setEnabled(false) works" << std::endl;
+        } else {
+            std::cout << "✗ setEnabled(false) didn't stick" << std::endl;
+        }
     }
 
     return 0;

@@ -23,7 +23,7 @@ UIContext::~UIContext() = default;
 bool UIContext::initialize(void* window, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device,
                             uint32_t graphicsQueueFamily, VkQueue graphicsQueue,
-                            VkRenderPass renderPass) {
+                            VkRenderPass renderPass, const char* iniFilename) {
     if (!window || !instance || !device || !renderPass) {
         std::fprintf(stderr, "[UIContext] initialize: invalid handles (window=%p, inst=%p, dev=%p, rp=%p)\n",
                      window, (void*)instance, (void*)device, (void*)renderPass);
@@ -38,6 +38,19 @@ bool UIContext::initialize(void* window, VkInstance instance,
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    // ImGui ini file (window positions, dock layouts). If path is given AND the
+    // file exists, ImGui auto-loads it on first BeginFrame. If we set IniFilename
+    // to a non-NULL path we also need to remember it for saveIniSettings() at
+    // shutdown — ImGui will auto-save on every frame too, but we call it once
+    // explicitly on shutdown so we get the latest state.
+    if (iniFilename) {
+        io.IniFilename = iniFilename;
+        m_iniFilename = iniFilename;
+    } else {
+        io.IniFilename = nullptr;  // disable ImGui ini save
+        m_iniFilename.clear();
+    }
 
     // 2. Apply BTQuant theme (Linear Dark + Kraken Purple per btquant-ui-design.md).
     ImGui::StyleColorsDark();
@@ -120,6 +133,13 @@ bool UIContext::initialize(void* window, VkInstance instance,
 void UIContext::shutdown() {
     if (!m_initialized) return;
 
+    // Save ImGui state before destroying the context — ImGui::SaveIniSettingsToDisk
+    // is the only safe way to flush pending changes (auto-save happens on
+    // platform events but not on plain shutdown).
+    if (!m_iniFilename.empty()) {
+        ImGui::SaveIniSettingsToDisk(m_iniFilename.c_str());
+    }
+
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImPlot::DestroyContext();
@@ -131,6 +151,12 @@ void UIContext::shutdown() {
     m_imguiDescriptorPool = VK_NULL_HANDLE;
     m_imguiDevice = VK_NULL_HANDLE;
     m_initialized = false;
+}
+
+void UIContext::saveIniSettings() const {
+    if (!m_iniFilename.empty()) {
+        ImGui::SaveIniSettingsToDisk(m_iniFilename.c_str());
+    }
 }
 
 void UIContext::newFrame() {

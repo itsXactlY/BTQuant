@@ -31,6 +31,12 @@ struct Settings {
     bool showTrades = true;
     bool showTPO = true;
 
+    // Settings dialog visibility.
+    bool showSettings = false;
+
+    // Stats overlay visibility (FPS / frame-time in top-right corner).
+    bool showStatsOverlay = true;
+
     // General.
     long fpsLimit = 60;          // 0 = uncapped (glfwSwapInterval 0)
     long heatmapDensity = 128;   // resolution of GPU heatmap texture

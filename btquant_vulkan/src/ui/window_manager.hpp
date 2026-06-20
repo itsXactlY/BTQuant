@@ -5,6 +5,8 @@
 #include <memory>
 #include <cstdint>
 
+#include "stats_overlay.hpp"
+
 // MarketDataProcessor is declared in btquant:: namespace (not btquant::ui).
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
 namespace btquant { class MarketDataProcessor; }
@@ -35,6 +37,11 @@ public:
 
     bool showSettings = false;
 
+    // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
+    // menu item, persisted in Settings).
+    bool showStatsOverlay = true;
+    StatsOverlay& statsOverlay() { return m_statsOverlay; }
+
     // Render-target fps limit (0 = uncapped). Read by main loop via
     // glfwSwapInterval; 60 → swap interval 1, anything > 0 → interval 1,
     // 0 → interval 0.
@@ -43,6 +50,20 @@ public:
     // Heatmap GPU texture side length (cells per side). 64–512; main loop
     // passes this to HeatmapWidget.resize() if it changes.
     long heatmapDensity = 128;
+
+    // Process global hotkeys via GLFW direct key access. Call once per frame
+    // AFTER glfwPollEvents but BEFORE imgui::NewFrame so user input reaches
+    // widgets when a text field has focus. F2..F12 toggle widgets, Ctrl+L
+    // resets the docking layout.
+    void processHotkeys(void* glfwWindow);
+
+    // Record one frame for the stats overlay EWMA. Call once per render loop
+    // iteration.
+    void tickStatsOverlay() { m_statsOverlay.tick(); }
+
+    // Render the FPS / frame-time / queue-depth overlay. Trade queue depth
+    // and candle count are passed in from main.
+    void renderStatsOverlay(uint64_t tradeQueueDepth, uint64_t candleCount);
 
     void showOrderBookWindow();
     void showOrderBookDepthWindow();
@@ -81,6 +102,7 @@ private:
     class DOMWidget* m_domWidget = nullptr;
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;
+    StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

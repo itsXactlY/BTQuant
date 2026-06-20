@@ -3410,6 +3410,122 @@ TradeJournal::rollingWindowSharpeByTag(
 }
 
 namespace {
+// Sprint #135 — shared risk-score builder. Combines 4
+// sub-scores into a single overall 0-100 score using fixed
+// weights (30% Sharpe, 30% drawdown, 20% win rate, 20%
+// payoff).
+template <typename Pred>
+TradeJournal::RiskScore
+buildRiskScore(const TradeJournal& j, Pred pred) {
+    TradeJournal::RiskScore out;
+    auto fills = j.loadAll();
+    // Filter fills.
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    if (sub.empty()) return out;
+
+    // Sub-score 1: Sharpe normalized.
+    // Use the existing rollingWindowSharpe(window) — take
+    // the LAST point's sharpe as the current edge quality.
+    auto rsharpe = j.rollingWindowSharpe(30);
+    if (!rsharpe.empty()) {
+        double s = rsharpe.back().sharpe;
+        // Map: 0 → 50, 2 → 100, -1 → 25 (linear extrapolation).
+        out.sharpeScore = std::clamp(50.0 + s * 25.0, 0.0, 100.0);
+    }
+    // Sub-score 2: Drawdown inverse-normalized.
+    double maxDD = 0.0;
+    {
+        auto dds = j.drawdownRecoveries();
+        for (const auto& dd : dds) {
+            if (dd.trough_depth > maxDD) maxDD = dd.trough_depth;
+        }
+    }
+    // log-ish: 0 → 100, 1000 → 50, 10000 → 0.
+    if (maxDD < 1e-9) {
+        out.drawdownScore = 100.0;
+    } else {
+        // Score = 100 * exp(-maxDD / 2000).
+        // maxDD=0    → 100.
+        // maxDD=1000 → 60.65.
+        // maxDD=2000 → 36.79.
+        // maxDD=5000 → 8.21.
+        // maxDD=10000→ 0.67.
+        out.drawdownScore = std::clamp(
+            100.0 * std::exp(-maxDD / 2000.0), 0.0, 100.0);
+    }
+    // Sub-score 3: Win rate × 100.
+    size_t wins = 0, losses = 0;
+    double grossWin = 0.0, grossLoss = 0.0;
+    for (const auto& f : sub) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (f.realizedDelta > 0) {
+            ++wins;
+            grossWin += f.realizedDelta;
+        } else {
+            ++losses;
+            grossLoss += f.realizedDelta;
+        }
+    }
+    size_t total = wins + losses;
+    if (total > 0) {
+        out.winRateScore = 100.0 *
+            static_cast<double>(wins) /
+            static_cast<double>(total);
+    }
+    // Sub-score 4: Payoff (avgW / |avgL|) normalized.
+    double avgW = wins > 0 ? grossWin / static_cast<double>(wins)
+                           : 0.0;
+    double avgL = losses > 0 ? grossLoss /
+                               static_cast<double>(losses)
+                            : 0.0;
+    if (wins > 0 && losses > 0 && std::fabs(avgL) > 1e-9) {
+        double payoff = avgW / std::fabs(avgL);
+        // 1.0 → 50, 2.0 → 100 (cap at 100).
+        out.payoffScore = std::clamp(payoff * 50.0, 0.0, 100.0);
+    } else if (wins > 0 && losses == 0) {
+        out.payoffScore = 100.0;  // all wins
+    }
+    // Overall: weighted combination.
+    out.overall = 0.30 * out.sharpeScore +
+                  0.30 * out.drawdownScore +
+                  0.20 * out.winRateScore +
+                  0.20 * out.payoffScore;
+    return out;
+}
+}  // namespace
+
+TradeJournal::RiskScore
+TradeJournal::riskScore() const {
+    return buildRiskScore(*this,
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::RiskScore
+TradeJournal::riskScoreBySymbol(
+    const std::string& symbol) const {
+    return buildRiskScore(*this,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::RiskScore
+TradeJournal::riskScoreByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildRiskScore(*this,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

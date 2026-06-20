@@ -16743,5 +16743,127 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 122: riskScore() / BySymbol / ByTag (Sprint #135).
+    //
+    // Composite 0-100 score. Tests:
+    //   - Empty: all zeros.
+    //   - 5 winning trades, no DD: high overall (>80).
+    //   - 5 losing trades, big DD: low overall.
+    std::cout << "\nTest 122: composite risk score..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test122_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.riskScore();
+            if (s.overall == 0.0 &&
+                s.sharpeScore == 0.0 &&
+                s.drawdownScore == 0.0 &&
+                s.winRateScore == 0.0 &&
+                s.payoffScore == 0.0) {
+                std::cout << "✓ empty: all zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: overall="
+                          << s.overall << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All wins, no DD: high overall ----
+        {
+            TradeJournal j((tmpDir / "wins.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 100.0 + i,
+                                "", t0 + i*hour));
+            }
+            auto s = j.riskScore();
+            // 5 wins, 0 losses → wr=100, payoff=100.
+            // maxDD=0 → drawdownScore=100.
+            // Sharpe depends on rolling window sharpe — not
+            // exactly 100 since we use last-point sharpe.
+            if (s.payoffScore == 100.0 &&
+                s.drawdownScore == 100.0 &&
+                s.winRateScore == 100.0 &&
+                s.overall >= 70.0) {
+                std::cout << "✓ all-wins: payoff=100, "
+                          << "drawdown=100, winRate=100, "
+                          << "overall=" << s.overall
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-wins wrong: overall="
+                          << s.overall
+                          << " payoff=" << s.payoffScore
+                          << " drawdown=" << s.drawdownScore
+                          << " winRate=" << s.winRateScore
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All losses, big DD: low overall ----
+        {
+            TradeJournal j((tmpDir / "loss.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            // All losses of -200 (total DD ~1000).
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", -200.0,
+                                "", t0 + i*hour));
+            }
+            auto s = j.riskScore();
+            // All losses → wr=0, payoff=0 (no wins).
+            // maxDD ~ 1000 → drawdownScore ≈ 60.
+            // Sharpe negative → sharpeScore low.
+            if (s.winRateScore == 0.0 &&
+                s.payoffScore == 0.0 &&
+                s.overall < 50.0) {
+                std::cout << "✓ all-losses: winRate=0, "
+                          << "payoff=0, overall=" << s.overall
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-losses wrong: overall="
+                          << s.overall
+                          << " winRate=" << s.winRateScore
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " risk-score tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

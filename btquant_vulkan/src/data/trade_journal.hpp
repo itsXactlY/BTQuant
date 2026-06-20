@@ -1193,6 +1193,35 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
+    // Composite risk score (Sprint #135). Single 0-100
+    // number combining Sharpe, drawdown, win rate, and
+    // payoff into one overall edge-quality metric.
+    //
+    // Sub-scores (each 0-100):
+    //   - sharpeScore  : annualized Sharpe normalized.
+    //       Sharpe 0 → 50 (neutral), 2 → 100, -1 → 25.
+    //   - drawdownScore: inverse max DD normalized.
+    //       maxDD 0 → 100, maxDD 1000 → 50, maxDD 10000 → 0.
+    //   - winRateScore : win rate × 100 (50% → 50, 75% → 75).
+    //   - payoffScore  : min(100, |avgW/avgL| × 50).
+    //       |W/L| 1 → 50 (break-even), 2 → 100.
+    //
+    // Overall = 0.30*sharpe + 0.30*drawdown + 0.20*winRate
+    //         + 0.20*payoff.
+    //
+    // Journal-wide + per-symbol + per-tag variants.
+    struct RiskScore {
+        double overall      = 0.0;
+        double sharpeScore  = 0.0;
+        double drawdownScore= 0.0;
+        double winRateScore = 0.0;
+        double payoffScore  = 0.0;
+    };
+    RiskScore riskScore() const;
+    RiskScore riskScoreBySymbol(const std::string& symbol) const;
+    RiskScore riskScoreByTag(const std::string& tag,
+                              bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

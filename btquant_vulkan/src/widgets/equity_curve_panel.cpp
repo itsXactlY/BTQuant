@@ -260,6 +260,72 @@ void EquityCurvePanel::render() {
 
     ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, bottomH));
 
+    // ==== BOTTOM-MOST: rolling Sharpe (Sprint #110) ====
+    //
+    // Tiny strip below the drawdown chart showing the
+    // Sharpe ratio on a rolling window. y=0 is the center
+    // line; positive = green, negative = red, |s| > 2
+    // is a "very strong / very weak edge" signal.
+    auto rs = m_journal->rollingSharpe(m_sharpeWindow);
+    ImVec2 rsTL = ImGui::GetCursorScreenPos();
+    ImVec2 rsBR = ImVec2(rsTL.x +
+                         ImGui::GetContentRegionAvail().x,
+                         rsTL.y + 28.0f);
+    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, 28.0f));
+
+    if (!rs.empty() && !eq.empty()) {
+        ImDrawList* dl2 = ImGui::GetWindowDrawList();
+        dl2->AddRectFilled(rsTL, rsBR,
+                           IM_COL32(20, 20, 20, 255));
+        dl2->AddRect(rsTL, rsBR, IM_COL32(80, 80, 80, 255));
+        // Zero line.
+        float yMid = rsTL.y + 14.0f;
+        dl2->AddLine(ImVec2(rsTL.x, yMid),
+                     ImVec2(rsBR.x, yMid),
+                     IM_COL32(120, 120, 120, 200), 1.0f);
+        // Find max |sharpe| for vertical scaling.
+        double maxAbs = 0.0;
+        for (const auto& p : rs)
+            if (std::fabs(p.sharpe) > maxAbs)
+                maxAbs = std::fabs(p.sharpe);
+        if (maxAbs < 1e-9) maxAbs = 1.0;
+        // We need dates to align with the equity curve's
+        // time axis. rollingSharpe returns points starting
+        // at (first-day + window-1), so map them onto the
+        // same span_secs as the equity chart.
+        // For simplicity, lay the rolling-Sharpe series
+        // across the SAME x-extent as the equity chart —
+        // not strictly aligned with calendar days, but
+        // good enough for the visual read.
+        size_t nRs = rs.size();
+        float prevY = -1;
+        float prevX = -1;
+        for (size_t i = 0; i < nRs; ++i) {
+            float xf = static_cast<float>(i) /
+                        static_cast<float>(
+                            nRs > 1 ? nRs - 1 : 1);
+            float yf = static_cast<float>(rs[i].sharpe /
+                                          maxAbs);
+            float x = rsTL.x + xf * (rsBR.x - rsTL.x);
+            float y = yMid - yf * 12.0f;  // ±12px range
+            ImU32 col = (rs[i].sharpe >= 0.0)
+                ? IM_COL32(80, 220, 120, 220)
+                : IM_COL32(220, 80, 80, 220);
+            if (prevX >= 0) {
+                dl2->AddLine(ImVec2(prevX, prevY),
+                             ImVec2(x, y), col, 1.5f);
+            }
+            prevX = x; prevY = y;
+        }
+        // Label.
+        char rsBuf[64];
+        std::snprintf(rsBuf, sizeof(rsBuf),
+            "Sharpe(%zud) %.2f",
+            m_sharpeWindow, rs.back().sharpe);
+        dl2->AddText(ImVec2(rsTL.x + 4, rsTL.y + 4),
+                     IM_COL32(150, 150, 150, 255), rsBuf);
+    }
+
     // ---- Tooltip on hover ----
     if (ImGui::IsItemHovered()) {
         // Cross-hair at the closest data point.

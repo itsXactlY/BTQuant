@@ -1797,6 +1797,21 @@ public:
     weekdayHourPnLByTag(const std::string& tag,
                          bool includeUntagged = false) const;
 
+    // Top N most-traded segments (Sprint #175). Bulk sort
+    // by fill count DESC. Answers "where do I spend my
+    // trading time?"
+    struct VolumeEntry {
+        std::string segment;
+        size_t      totalFills = 0;
+        double      realized   = 0.0;
+        double      shares     = 0.0;  // share of journal fills
+    };
+    std::vector<VolumeEntry>
+    topMostTradedSymbols(size_t n = 0) const;  // 0 = all
+    std::vector<VolumeEntry>
+    topMostTradedTags(size_t n = 0,
+                       bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

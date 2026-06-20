@@ -20258,5 +20258,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 162: topMostTradedSymbols() / topMostTradedTags()
+    //   (Sprint #175).
+    //
+    // Bulk fill count DESC. Tests:
+    //   - 3 symbols (5+2+1 fills) → top=ETH(5).
+    std::cout << "\nTest 162: most-traded..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test162_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 5, ETH 2, SOL 1 ----
+        {
+            TradeJournal j((tmpDir / "v.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "scalp",
+                                t0 + i));
+            }
+            j.append(mkFill("ETH", 20.0, "arb", t0 + 5));
+            j.append(mkFill("ETH", 30.0, "arb", t0 + 6));
+            j.append(mkFill("SOL", 50.0, "scalp",
+                             t0 + 7));
+            auto symV = j.topMostTradedSymbols();
+            if (symV.size() == 3 &&
+                symV[0].segment == "BTC" &&
+                symV[0].totalFills == 5 &&
+                symV[1].totalFills == 2 &&
+                symV[2].totalFills == 1 &&
+                std::fabs(symV[0].shares - 5.0/8.0) < 1e-9) {
+                std::cout << "✓ 3 syms DESC: "
+                          << "BTC(5), ETH(2), SOL(1)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top="
+                          << (symV.size() > 0
+                              ? symV[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " most-traded tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

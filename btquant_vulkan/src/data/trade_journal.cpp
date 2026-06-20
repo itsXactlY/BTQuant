@@ -7183,4 +7183,72 @@ TradeJournal::weekdayHourPnLByTag(
     return out;
 }
 
+std::vector<TradeJournal::VolumeEntry>
+TradeJournal::topMostTradedSymbols(size_t n) const {
+    // Sprint #175. Bulk per-symbol fill count DESC.
+    std::vector<VolumeEntry> out;
+    auto fills = loadAll();
+    size_t total = 0;
+    std::map<std::string, std::pair<size_t, double>> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        auto& b = buckets[f.symbol];
+        b.first++;
+        b.second += f.realizedDelta;
+        total++;
+    }
+    out.reserve(buckets.size());
+    for (auto& kv : buckets) {
+        VolumeEntry v;
+        v.segment = kv.first;
+        v.totalFills = kv.second.first;
+        v.realized = kv.second.second;
+        v.shares = total > 0
+            ? static_cast<double>(v.totalFills) /
+              static_cast<double>(total) : 0.0;
+        out.push_back(v);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const VolumeEntry& a, const VolumeEntry& b) {
+            return a.totalFills > b.totalFills;
+        });
+    if (n > 0 && out.size() > n) out.resize(n);
+    return out;
+}
+
+std::vector<TradeJournal::VolumeEntry>
+TradeJournal::topMostTradedTags(size_t n, bool includeUntagged) const {
+    // Sprint #175. Bulk per-tag fill count DESC.
+    std::vector<VolumeEntry> out;
+    auto fills = loadAll();
+    size_t total = 0;
+    std::map<std::string, std::pair<size_t, double>> buckets;
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        if (f.tag.empty() && !includeUntagged) continue;
+        auto& b = buckets[key];
+        b.first++;
+        b.second += f.realizedDelta;
+        total++;
+    }
+    out.reserve(buckets.size());
+    for (auto& kv : buckets) {
+        VolumeEntry v;
+        v.segment = kv.first;
+        v.totalFills = kv.second.first;
+        v.realized = kv.second.second;
+        v.shares = total > 0
+            ? static_cast<double>(v.totalFills) /
+              static_cast<double>(total) : 0.0;
+        out.push_back(v);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const VolumeEntry& a, const VolumeEntry& b) {
+            return a.totalFills > b.totalFills;
+        });
+    if (n > 0 && out.size() > n) out.resize(n);
+    return out;
+}
+
 } // namespace btquant

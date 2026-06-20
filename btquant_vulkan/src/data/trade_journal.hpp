@@ -738,6 +738,32 @@ public:
         bool includeUntagged = false) const;
     double journalRecoveryFactor() const;
 
+    // Trading frequency (Sprint #120). Per-symbol / per-tag
+    // answers "how often do I trade this asset?" — a concentration
+    // diagnostic.
+    //
+    // tradesPerDay()  — average number of round-trips per
+    //                   active trading day. >1 means multiple
+    //                   trades per session, <0.2 means sparse.
+    //                   Uses activeTradingDays as denominator
+    //                   (NOT calendar days) so a trader who
+    //                   started recently isn't penalized.
+    // avgTimeBetweenTrades_us() — average microsecond gap
+    //                   between consecutive fills, sorted by
+    //                   timestamp ASC. Returns 0 when <2 fills
+    //                   exist.
+    // Per-symbol / per-tag variants filter then compute.
+    double tradesPerDay() const;
+    double tradesPerDayBySymbol(const std::string& symbol) const;
+    double tradesPerDayByTag(const std::string& tag,
+                             bool includeUntagged = false) const;
+    uint64_t avgTimeBetweenTrades_us() const;
+    uint64_t avgTimeBetweenTrades_usBySymbol(
+        const std::string& symbol) const;
+    uint64_t avgTimeBetweenTrades_usByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

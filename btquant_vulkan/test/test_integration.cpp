@@ -14290,5 +14290,195 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 108: tradesPerDay*() / avgTimeBetweenTrades_us*()
+    //   (Sprint #120).
+    //
+    // Trading frequency queries. Tests:
+    //   - Empty journal: 0.
+    //   - Single fill: tradesPerDay=0 (1 fill / 1 day = 1),
+    //     avgTime=0 (need >=2 fills).
+    //   - 3 fills / 2 days: tradesPerDay = 1.5.
+    //   - Per-symbol: only that symbol's count.
+    //   - avgTimeBetweenTrades: 3 fills 1h apart → 1h avg.
+    std::cout << "\nTest 108: trading frequency..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test108_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            if (j.tradesPerDay() == 0.0 &&
+                j.avgTimeBetweenTrades_us() == 0) {
+                std::cout << "✓ empty: 0 trades/day, 0 avg time"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill: tradesPerDay=1.0, avgTime=0 ----
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            j.append(mkFill("BTC", 100.0, "",
+                            1774000000000000ULL));
+            if (std::fabs(j.tradesPerDay() - 1.0) < 1e-9 &&
+                j.avgTimeBetweenTrades_us() == 0) {
+                std::cout << "✓ single: 1 fill / 1 day = "
+                          << "1.0 trades/day, avgTime=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: tpd="
+                          << j.tradesPerDay() << " avg="
+                          << j.avgTimeBetweenTrades_us()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 fills across 2 days: tradesPerDay=1.5 ----
+        // Day1: 2 fills (10:00, 14:00). Day2: 1 fill (10:00).
+        {
+            TradeJournal j((tmpDir / "freq.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 50.0, "", day1));
+            j.append(mkFill("BTC", 30.0, "",
+                             day1 + 4ULL * 3600 * 1000000ULL));
+            j.append(mkFill("BTC", -20.0, "", day2));
+            // Expected avg time:
+            //   gap1 = 4h, gap2 = (24-4)h = 20h. avg = 12h.
+            const uint64_t expectedAvg = 12ULL * 3600 * 1000000ULL;
+            if (std::fabs(j.tradesPerDay() - 1.5) < 1e-9 &&
+                j.avgTimeBetweenTrades_us() == expectedAvg) {
+                std::cout << "✓ 3 fills / 2 days: 1.5 trades/day, "
+                          << "12h avg time"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ freq wrong: tpd="
+                          << j.tradesPerDay()
+                          << " avg=" << j.avgTimeBetweenTrades_us()
+                          << " expected=" << expectedAvg
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: BTC=3/day, ETH=1/day ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            // 3 BTC + 1 ETH on day1, 1 ETH on day2.
+            j.append(mkFill("BTC", 50.0, "", day1));
+            j.append(mkFill("BTC", 30.0, "", day1));
+            j.append(mkFill("ETH", 10.0, "", day1));
+            j.append(mkFill("BTC", -20.0, "", day1));
+            j.append(mkFill("ETH", -5.0, "",
+                             day1 + 86400ULL * 1000000ULL));
+            double btcTpd = j.tradesPerDayBySymbol("BTC");
+            double ethTpd = j.tradesPerDayBySymbol("ETH");
+            if (std::fabs(btcTpd - 3.0) < 1e-9 &&
+                std::fabs(ethTpd - 1.0) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC=3.0 trades/day "
+                          << "(3 fills / 1 day), ETH=1.0 "
+                          << "(2 fills / 2 days)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-symbol wrong: btc="
+                          << btcTpd << " eth=" << ethTpd
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC", 50.0, "scalp", day1));
+            j.append(mkFill("BTC", 30.0, "scalp", day1));
+            j.append(mkFill("BTC", -10.0, "", day2));
+            double scalpTpd = j.tradesPerDayByTag(
+                "scalp", false);
+            double untagTpd = j.tradesPerDayByTag(
+                "__untagged__", false);
+            if (std::fabs(scalpTpd - 2.0) < 1e-9 &&
+                std::fabs(untagTpd - 1.0) < 1e-9) {
+                std::cout << "✓ per-tag: scalp=2.0 trades/day "
+                          << "(2 fills / 1 day), "
+                          << "__untagged__=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << scalpTpd << " untag=" << untagTpd
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol avg time between trades ----
+        {
+            TradeJournal j((tmpDir / "avgt.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // 3 BTC fills, 1h apart → 1h avg.
+            j.append(mkFill("BTC", 50.0, "", t0));
+            j.append(mkFill("BTC", 30.0, "",
+                             t0 + 3600ULL * 1000000ULL));
+            j.append(mkFill("BTC", -10.0, "",
+                             t0 + 7200ULL * 1000000ULL));
+            // 1 ETH fill → 0 avg (need >=2).
+            j.append(mkFill("ETH", 5.0, "", t0));
+            uint64_t btcAvg =
+                j.avgTimeBetweenTrades_usBySymbol("BTC");
+            uint64_t ethAvg =
+                j.avgTimeBetweenTrades_usBySymbol("ETH");
+            if (btcAvg == 3600ULL * 1000000ULL &&
+                ethAvg == 0) {
+                std::cout << "✓ per-symbol avgTime: BTC=1h, "
+                          << "ETH=0 (1 fill)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ avgTime wrong: btc=" << btcAvg
+                          << " eth=" << ethAvg << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " frequency tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -1914,6 +1914,106 @@ double TradeJournal::journalRecoveryFactor() const {
     return recoveryFactor(net, dd.maxDrawdown);
 }
 
+double TradeJournal::tradesPerDay() const {
+    auto fills = loadAll();
+    size_t days = activeTradingDays();
+    if (days == 0) return 0.0;
+    return static_cast<double>(fills.size()) /
+           static_cast<double>(days);
+}
+
+double TradeJournal::tradesPerDayBySymbol(
+    const std::string& symbol) const {
+    auto fills = loadAll();
+    size_t count = 0;
+    for (const auto& f : fills) {
+        if (f.symbol == symbol) ++count;
+    }
+    size_t days = activeTradingDaysBySymbol(symbol);
+    if (days == 0) return 0.0;
+    return static_cast<double>(count) /
+           static_cast<double>(days);
+}
+
+double TradeJournal::tradesPerDayByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    auto fills = loadAll();
+    size_t count = 0;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (f.tag.empty()) ++count;
+        } else {
+            if (includeUntagged && f.tag.empty()) continue;
+            if (f.tag == tag) ++count;
+        }
+    }
+    size_t days = activeTradingDaysByTag(tag, includeUntagged);
+    if (days == 0) return 0.0;
+    return static_cast<double>(count) /
+           static_cast<double>(days);
+}
+
+uint64_t TradeJournal::avgTimeBetweenTrades_us() const {
+    auto fills = loadAll();
+    std::sort(fills.begin(), fills.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    if (fills.size() < 2) return 0;
+    uint64_t total = 0;
+    for (size_t i = 1; i < fills.size(); ++i) {
+        total += fills[i].timestamp_us - fills[i-1].timestamp_us;
+    }
+    return total / (fills.size() - 1);
+}
+
+uint64_t TradeJournal::avgTimeBetweenTrades_usBySymbol(
+    const std::string& symbol) const {
+    auto fills = loadAll();
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (f.symbol == symbol) sub.push_back(f);
+    }
+    std::sort(sub.begin(), sub.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    if (sub.size() < 2) return 0;
+    uint64_t total = 0;
+    for (size_t i = 1; i < sub.size(); ++i) {
+        total += sub[i].timestamp_us - sub[i-1].timestamp_us;
+    }
+    return total / (sub.size() - 1);
+}
+
+uint64_t TradeJournal::avgTimeBetweenTrades_usByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    auto fills = loadAll();
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (f.tag.empty()) sub.push_back(f);
+        } else {
+            if (includeUntagged && f.tag.empty()) continue;
+            if (f.tag == tag) sub.push_back(f);
+        }
+    }
+    std::sort(sub.begin(), sub.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    if (sub.size() < 2) return 0;
+    uint64_t total = 0;
+    for (size_t i = 1; i < sub.size(); ++i) {
+        total += sub[i].timestamp_us - sub[i-1].timestamp_us;
+    }
+    return total / (sub.size() - 1);
+}
+
 namespace {
 // Sprint #115 — shared monthly bucket builder. The three
 // monthlyReturns*() methods differ only in the filter predicate.

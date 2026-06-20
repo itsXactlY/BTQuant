@@ -8,6 +8,7 @@
 #include "../src/ui/stats_overlay.hpp"
 #include "../src/data/mock_producer.hpp"
 #include "../src/widgets/alerts_panel.hpp"
+#include "../src/widgets/watchlist_widget.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -467,6 +468,64 @@ int main() {
         ap.setMarketData(&mdp);
         mdp.stop();
         std::cout << "✓ AlertsPanel.setMarketData() accepts a processor" << std::endl;
+    }
+
+    // Test 12: WatchlistWidget — symbol set + per-tick update produces rows.
+    std::cout << "\nTest 12: Testing WatchlistWidget..." << std::endl;
+    {
+        btquant::ui::WatchlistWidget wl;
+        wl.setSymbols({"BTC/USDT", "ETH/USDT", "SOL/USDT"});
+        if (wl.rowCount() != 3) {
+            std::cout << "✗ rowCount after setSymbols: " << wl.rowCount() << std::endl;
+        } else {
+            std::cout << "✓ WatchlistWidget.setSymbols created 3 rows" << std::endl;
+        }
+
+        // Push 3 ticks into BTC/USDT.
+        for (int i = 0; i < 3; ++i) {
+            wl.update("BTC/USDT", 100.0 + i, 0.5, i % 2 == 0, 1000 + i);
+        }
+        auto* r = wl.row("BTC/USDT");
+        if (r && r->lastPrice == 102.0 && r->tickCount == 3 &&
+            r->buyVol > 0 && r->sellVol > 0) {
+            std::cout << "✓ WatchlistWidget.update() computes last/volume/tickCount"
+                      << std::endl;
+        } else {
+            std::cout << "✗ WatchlistWidget update failed: "
+                      << "last=" << (r ? r->lastPrice : -1)
+                      << " ticks=" << (r ? r->tickCount : 0)
+                      << " buy=" << (r ? r->buyVol : -1)
+                      << " sell=" << (r ? r->sellVol : -1)
+                      << std::endl;
+        }
+
+        // Other rows untouched.
+        auto* e = wl.row("ETH/USDT");
+        if (e && e->lastPrice == 0.0 && e->tickCount == 0) {
+            std::cout << "✓ Other symbols untouched (last=0, ticks=0)" << std::endl;
+        } else {
+            std::cout << "✗ Other symbols leaked: "
+                      << "ETH last=" << (e ? e->lastPrice : -1)
+                      << std::endl;
+        }
+
+        // Sparkline grows up to kMaxSparkPoints.
+        for (int i = 0; i < 100; ++i) wl.update("SOL/USDT", 200.0 + i, 1.0, true, 2000 + i);
+        auto* s = wl.row("SOL/USDT");
+        if (s && s->spark.size() == btquant::ui::WatchlistWidget::kMaxSparkPoints) {
+            std::cout << "✓ Sparkline capped at kMaxSparkPoints ("
+                      << s->spark.size() << ")" << std::endl;
+        } else {
+            std::cout << "✗ Sparkline cap failed: size="
+                      << (s ? s->spark.size() : 0) << std::endl;
+        }
+
+        wl.clear();
+        if (wl.rowCount() == 0) {
+            std::cout << "✓ WatchlistWidget.clear() empties all rows" << std::endl;
+        } else {
+            std::cout << "✗ clear() left " << wl.rowCount() << " rows" << std::endl;
+        }
     }
 
     return 0;

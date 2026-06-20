@@ -220,6 +220,14 @@ private:
                          static_cast<float>(t.size),
                          t.isBuy ? 0u : 1u);
     }
+
+    // Mirror the most recent trade into the watchlist for the active symbol.
+    // (Single-symbol MVP — the wire format has no symbol field yet. When the
+    //  multi-symbol spine lands, this becomes a per-symbol dispatcher.)
+    const auto& latest = snap.recent_trades.front();
+    windowManager.updateWatchlist("BTC/USDT",
+                                  latest.price, latest.size,
+                                  latest.isBuy, latest.timestamp);
   }
 
   void mainLoop() {
@@ -279,6 +287,7 @@ private:
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
       windowManager.showAlertsWindow();
+      windowManager.showWatchlistWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

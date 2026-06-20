@@ -23038,5 +23038,66 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 205: dailyVolBySymbol/ByTag (Sprint #219).
+    //
+    // Daily P&L volatility. Tests:
+    //   - BTC 2 days [+50, -50] → mean=0, stddev=50.
+    std::cout << "\nTest 205: daily vol..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test205_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 days [+50, -50] → stddev=50 ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "v.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + day));
+            auto btcV = j.dailyVolBySymbol("BTC");
+            if (btcV.activeDays == 2 &&
+                std::fabs(btcV.meanDaily - 0.0) < 1e-9 &&
+                std::fabs(btcV.stddevDaily - 50.0) < 1e-9) {
+                std::cout << "✓ BTC: 2 days, mean=0, "
+                          << "stddev=50"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: mean="
+                          << btcV.meanDaily
+                          << " stddev="
+                          << btcV.stddevDaily
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " daily-vol tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

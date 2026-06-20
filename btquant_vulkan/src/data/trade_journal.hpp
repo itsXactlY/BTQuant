@@ -2351,6 +2351,24 @@ public:
     allSegmentDayStreakByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment daily P&L volatility (Sprint #219).
+    // For each segment: stddev of daily realized across
+    // active trading days. Answers "how volatile are
+    // my BTC daily returns?"
+    struct DailyVolSeg {
+        std::string segment;
+        double      meanDaily   = 0.0;
+        double      stddevDaily = 0.0;
+        double      minDaily    = 0.0;
+        double      maxDaily    = 0.0;
+        size_t      activeDays  = 0;
+    };
+    DailyVolSeg dailyVolBySymbol(
+        const std::string& symbol) const;
+    DailyVolSeg dailyVolByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

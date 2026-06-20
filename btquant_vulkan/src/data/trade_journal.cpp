@@ -9445,4 +9445,69 @@ TradeJournal::allSegmentDayStreakByTag(
     return out;
 }
 
+namespace {
+// Sprint #219 — per-segment daily P&L volatility builder.
+template <typename Pred>
+TradeJournal::DailyVolSeg
+buildDailyVolBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::DailyVolSeg d;
+    std::map<std::string, double> dailyPnL;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        dailyPnL[buf] += f.realizedDelta;
+    }
+    if (dailyPnL.empty()) return d;
+    d.activeDays = dailyPnL.size();
+    double sum = 0.0, mn = 1e18, mx = -1e18;
+    for (auto& kv : dailyPnL) {
+        sum += kv.second;
+        if (kv.second < mn) mn = kv.second;
+        if (kv.second > mx) mx = kv.second;
+    }
+    d.meanDaily = sum / static_cast<double>(dailyPnL.size());
+    d.minDaily = mn;
+    d.maxDaily = mx;
+    double var = 0.0;
+    for (auto& kv : dailyPnL) {
+        var += (kv.second - d.meanDaily) *
+               (kv.second - d.meanDaily);
+    }
+    var /= static_cast<double>(dailyPnL.size());
+    d.stddevDaily = std::sqrt(var);
+    return d;
+}
+}  // namespace
+
+TradeJournal::DailyVolSeg
+TradeJournal::dailyVolBySymbol(
+    const std::string& symbol) const {
+    auto d = buildDailyVolBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    d.segment = symbol;
+    return d;
+}
+
+TradeJournal::DailyVolSeg
+TradeJournal::dailyVolByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto d = buildDailyVolBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    d.segment = tag;
+    return d;
+}
+
 } // namespace btquant

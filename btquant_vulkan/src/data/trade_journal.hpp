@@ -1222,6 +1222,23 @@ public:
     RiskScore riskScoreByTag(const std::string& tag,
                               bool includeUntagged = false) const;
 
+    // Symbol concentration risk (Sprint #136). How much of
+    // the journal's total realized P&L comes from each
+    // symbol? Concentration = risk: a journal where 80% of
+    // profit comes from one symbol has hidden fragility.
+    //
+    // Returns the symbols sorted by contribution DESC,
+    // with absolute and relative share. Also returns the
+    // top symbol's share as a quick "how concentrated am I?"
+    // number.
+    struct SymbolShare {
+        std::string symbol;
+        double      realized     = 0.0;
+        double      share        = 0.0;  // 0..1 of |total|
+        double      cumShare     = 0.0;  // running cum share
+    };
+    std::vector<SymbolShare> symbolConcentration() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -16865,5 +16865,99 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 123: symbolConcentration() (Sprint #136).
+    //
+    // Symbol share of total |realized|. Tests:
+    //   - Empty: empty vector.
+    //   - 3 symbols with different contributions: sorted
+    //     DESC by |realized|, shares sum to 1.0.
+    std::cout << "\nTest 123: symbol concentration..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test123_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.symbolConcentration();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 symbols"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 symbols: BTC +600 (60%), ETH +300 (30%),
+        // SOL +100 (10%) ----
+        {
+            TradeJournal j((tmpDir / "conc.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  300.0, "", t0));
+            j.append(mkFill("BTC",  300.0, "", t0 + 1));
+            j.append(mkFill("ETH",  300.0, "", t0 + 2));
+            j.append(mkFill("SOL",  100.0, "", t0 + 3));
+            auto v = j.symbolConcentration();
+            // grandAbs = 1000. Sorted DESC by |realized|.
+            // BTC: 600/1000 = 0.6, ETH: 300/1000 = 0.3,
+            // SOL: 100/1000 = 0.1.
+            // cumShare: 0.6, 0.9, 1.0.
+            if (v.size() == 3 &&
+                v[0].symbol == "BTC" &&
+                std::fabs(v[0].share - 0.6) < 1e-9 &&
+                std::fabs(v[0].cumShare - 0.6) < 1e-9 &&
+                v[1].symbol == "ETH" &&
+                std::fabs(v[1].share - 0.3) < 1e-9 &&
+                std::fabs(v[1].cumShare - 0.9) < 1e-9 &&
+                v[2].symbol == "SOL" &&
+                std::fabs(v[2].share - 0.1) < 1e-9 &&
+                std::fabs(v[2].cumShare - 1.0) < 1e-9) {
+                std::cout << "✓ 3 symbols 60/30/10: "
+                          << "BTC.cumShare=0.6, ETH=0.9, SOL=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ conc wrong: "
+                          << (v.size() > 0 ? v[0].symbol : "")
+                          << "/"
+                          << (v.size() > 0 ? v[0].share : 0.0)
+                          << "/"
+                          << (v.size() > 0 ? v[0].cumShare : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " symbol-concentration tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

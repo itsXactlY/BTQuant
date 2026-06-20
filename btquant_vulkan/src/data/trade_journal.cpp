@@ -3525,6 +3525,40 @@ TradeJournal::riskScoreByTag(
         });
 }
 
+std::vector<TradeJournal::SymbolShare>
+TradeJournal::symbolConcentration() const {
+    // Sprint #136. Bucket realized P&L by symbol. Sort DESC
+    // by |realized|. Compute share as fraction of total
+    // |realized| (sign-agnostic — we're measuring
+    // contribution, not direction).
+    std::vector<SymbolShare> out;
+    auto fills = loadAll();
+    std::map<std::string, double> totals;
+    double grandAbs = 0.0;
+    for (const auto& f : fills) {
+        totals[f.symbol] += f.realizedDelta;
+        grandAbs += std::fabs(f.realizedDelta);
+    }
+    if (grandAbs < 1e-9) return out;
+    for (const auto& kv : totals) {
+        SymbolShare s;
+        s.symbol   = kv.first;
+        s.realized = kv.second;
+        s.share    = std::fabs(kv.second) / grandAbs;
+        out.push_back(s);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SymbolShare& a, const SymbolShare& b) {
+            return std::fabs(a.realized) > std::fabs(b.realized);
+        });
+    double cum = 0.0;
+    for (auto& s : out) {
+        cum += s.share;
+        s.cumShare = cum;
+    }
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

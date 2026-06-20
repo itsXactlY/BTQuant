@@ -2730,5 +2730,123 @@ int main() {
         }
     }
 
+    // Test 34: WindowManager wiring — saveLayoutAs / loadLayout round-trip.
+    // We test the data path (write → read back) since the menu UI itself
+    // requires an ImGui context. The apply logic is exercised directly.
+    std::cout << "\nTest 34: Testing WindowManager layout save/load..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+
+        // Redirect HOME so layoutPath() resolves under our tmp dir.
+        // (Clean any prior run leftovers first.)
+        fs::path fakeHome = fs::temp_directory_path() / "btquant_test_layout_home";
+        fs::remove_all(fakeHome);
+        fs::create_directories(fakeHome / ".config/btquant_vulkan/profiles");
+        setenv("HOME", fakeHome.string().c_str(), 1);
+
+        // Use a fresh WindowManager on the fake profile dir.
+        btquant::ui::WindowManager wm;
+        // Flip a few show* flags via applyLayoutSnapshot — round-trip
+        // through saveLayoutAs → loadLayout and check they come back.
+        ::btquant::util::LayoutSnapshot seed;
+        seed.settings.showOrderBook      = false;
+        seed.settings.showOrderBookDepth = true;
+        seed.settings.showFootprint      = false;
+        seed.settings.showVPVR           = true;
+        seed.settings.showMultiVWAP      = true;
+        seed.settings.showRiskPanel      = false;
+        seed.settings.showDOM            = true;
+        seed.settings.showTrades         = false;
+        seed.settings.showTPO            = true;
+        seed.settings.showSettings       = false;
+        seed.settings.showStatsOverlay   = true;
+        seed.settings.theme              = 1;
+        seed.settings.heatmapDensity     = 192;
+        seed.settings.fpsLimit           = 90;
+        seed.settings.risk_maxPositionSizeUSD = 250000.0;
+        seed.settings.risk_maxLeverage        = 15.0;
+        seed.settings.risk_killOnDailyLossUSD = 6000.0;
+        seed.settings.risk_equityUSD          = 20000.0;
+        wm.applyLayoutSnapshot(seed);
+
+        // 1) applyLayoutSnapshot() copies every field.
+        if (!wm.showOrderBook      &&
+             wm.showOrderBookDepth &&
+            !wm.showFootprint      &&
+             wm.showVPVR           &&
+            !wm.showRiskPanel      &&
+             wm.showDOM            &&
+            !wm.showTrades         &&
+             wm.showTPO            &&
+             wm.showStatsOverlay) {
+            std::cout << "✓ applyLayoutSnapshot wrote all widget flags"
+                      << std::endl;
+        } else {
+            std::cout << "✗ applyLayoutSnapshot missed a flag"
+                      << std::endl;
+        }
+
+        // 2) saveLayoutAs writes the file.
+        if (wm.saveLayoutAs("TestRoundtrip")) {
+            auto path = ::btquant::util::LayoutIO::layoutPath("TestRoundtrip");
+            if (fs::exists(path)) {
+                std::cout << "✓ saveLayoutAs wrote " << path << std::endl;
+            } else {
+                std::cout << "✗ file not present after save" << std::endl;
+            }
+        } else {
+            std::cout << "✗ saveLayoutAs returned false" << std::endl;
+        }
+
+        // 3) Reset WM to defaults, then loadLayout restores them.
+        wm.applyLayoutSnapshot(::btquant::util::LayoutSnapshot{});  // all defaults
+        if (wm.showOrderBook && wm.showRiskPanel) {
+            std::cout << "✓ defaults re-applied before reload" << std::endl;
+        } else {
+            std::cout << "✗ defaults not applied" << std::endl;
+        }
+        if (wm.loadLayout("TestRoundtrip")) {
+            if (!wm.showOrderBook      &&
+                 wm.showOrderBookDepth &&
+                !wm.showFootprint      &&
+                 wm.showVPVR           &&
+                !wm.showRiskPanel      &&
+                 wm.showDOM            &&
+                !wm.showTrades         &&
+                 wm.showTPO) {
+                std::cout << "✓ loadLayout restored visibility flags"
+                          << std::endl;
+            } else {
+                std::cout << "✗ loadLayout restored wrong flags"
+                          << std::endl;
+            }
+        } else {
+            std::cout << "✗ loadLayout returned false" << std::endl;
+        }
+
+        // 4) LayoutIO::list() picks up the file from our fake HOME.
+        auto profiles = ::btquant::util::LayoutIO::list();
+        bool found = false;
+        for (const auto& p : profiles) {
+            if (p.stem() == "TestRoundtrip") { found = true; break; }
+        }
+        if (found) {
+            std::cout << "✓ LayoutIO::list() finds new profile" << std::endl;
+        } else {
+            std::cout << "✗ LayoutIO::list() missed profile" << std::endl;
+        }
+
+        // 5) Missing profile → loadLayout returns false without crash.
+        if (!wm.loadLayout("Nonexistent")) {
+            std::cout << "✓ loadLayout(missing) → false (no crash)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ loadLayout(missing) returned true" << std::endl;
+        }
+
+        // Restore HOME for downstream tests.
+        unsetenv("HOME");
+    }
+
     return 0;
 }

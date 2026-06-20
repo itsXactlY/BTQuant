@@ -11,6 +11,7 @@
 // MarketDataProcessor is declared in btquant:: namespace (not btquant::ui).
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
 #include "../util/hotkey_config.hpp"
+#include "../util/layout_io.hpp"
 
 namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
@@ -147,6 +148,17 @@ public:
     void showThemeEditorWindow();
     void applyPersistedTheme();
     void applyPersistedRiskConfig();
+    // Layout profile save/load — writes a LayoutSnapshot (current
+    // Settings + dock text) to ~/.config/btquant_vulkan/profiles/<name>.btqlayout
+    // and reloads the same on demand. WindowManager's loadLayout(name)
+    // applies show* booleans, theme, and risk config; dock text is
+    // stored but the actual ImGui dock restore is a follow-on (it needs
+    // ImGui::DockBuilderLoadNodes which needs a live dockspace).
+    bool saveLayoutAs(const std::string& name);
+    bool loadLayout(const std::string& name);
+    // Apply an already-loaded LayoutSnapshot in-place. Public so tests
+    // can drive the apply logic without touching the file layer.
+    void applyLayoutSnapshot(const ::btquant::util::LayoutSnapshot& snap);
     bool saveCurrentTheme();
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();
@@ -218,6 +230,10 @@ private:
     ::btquant::widgets::HotkeyEditor* m_hotkeyEditor = nullptr;
     // Hotkey file path — saved to on each remap so user changes survive restart.
     std::string                    m_hotkeyPath;
+    // Layout profile save/load UI state.
+    bool   m_layoutSaveOpen  = false;
+    bool   m_layoutLoadOpen  = false;
+    char   m_layoutNameBuf[64] = "Custom";
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

@@ -35,6 +35,7 @@
 #include "../data/trade_journal.hpp"
 #include "../data/market_data.hpp"
 #include "../util/hotkey_config.hpp"
+#include "../util/layout_io.hpp"
 #include "../widgets/hotkey_editor.hpp"
 
 using btquant::ui::LogPanel;
@@ -350,6 +351,73 @@ void WindowManager::applyPersistedRiskConfig() {
     BTQ_LOG_INFO("applied persisted risk config (cap=$%.0f lev=%.2fx kill=$%.0f eq=$%.0f)",
                  c.maxPositionSizeUSD, c.maxLeverage,
                  c.killOnDailyLossUSD, c.equityUSD);
+}
+
+void WindowManager::applyLayoutSnapshot(const util::LayoutSnapshot& snap) {
+    const auto& s = snap.settings;
+    // Widget visibility — every show* bool from the snapshot. The
+    // existing showXxxWindow() guards in the render path check these
+    // booleans, so mutating them is enough to show/hide widgets.
+    showOrderBook       = s.showOrderBook;
+    showOrderBookDepth  = s.showOrderBookDepth;
+    showFootprint       = s.showFootprint;
+    showVPVR            = s.showVPVR;
+    showMultiVWAP       = s.showMultiVWAP;
+    showRiskPanel       = s.showRiskPanel;
+    showDOM             = s.showDOM;
+    showTrades          = s.showTrades;
+    showTPO             = s.showTPO;
+    showSettings        = s.showSettings;
+    showStatsOverlay    = s.showStatsOverlay;
+    // Theme + general scalars owned by WindowManager.
+    theme           = s.theme;
+    heatmapDensity  = s.heatmapDensity;
+    fpsLimit        = s.fpsLimit;
+    // tradeWindowSeconds lives only in Settings — it will be written
+    // back to state.ini via markSettingsDirty() + the next save cycle.
+    // Risk config → RiskGuard.
+    if (m_riskGuard) {
+        ::btquant::RiskConfig c = m_riskGuard->config();
+        c.maxPositionSizeUSD = s.risk_maxPositionSizeUSD;
+        c.maxLeverage        = s.risk_maxLeverage;
+        c.killOnDailyLossUSD = s.risk_killOnDailyLossUSD;
+        c.equityUSD          = s.risk_equityUSD;
+        m_riskGuard->setConfig(c);
+    }
+    // The dock layout is captured as text but not auto-applied here
+    // — rebuilding the dock mid-session needs ImGui::DockBuilderLoad
+    // which expects a live dockspace; mark a reset so buildDockLayout
+    // runs again with the new visibility.
+    if (!snap.dockLayout.empty()) {
+        BTQ_LOG_INFO("LayoutSnapshot: dock text %zu bytes (reload on next dock reset)",
+                     snap.dockLayout.size());
+    }
+    requestDockLayoutReset();
+    markSettingsDirty();
+}
+
+bool WindowManager::saveLayoutAs(const std::string& name) {
+    util::Settings s = captureCurrentSettings();
+    util::LayoutSnapshot snap = util::LayoutIO::fromSettings(s, "", name);
+    auto path = util::LayoutIO::layoutPath(name);
+    if (!util::LayoutIO::save(path, snap)) {
+        BTQ_LOG_WARN("saveLayoutAs: failed to write %s", path.string().c_str());
+        return false;
+    }
+    BTQ_LOG_INFO("saveLayoutAs: wrote %s", path.string().c_str());
+    return true;
+}
+
+bool WindowManager::loadLayout(const std::string& name) {
+    auto path = util::LayoutIO::layoutPath(name);
+    auto snap = util::LayoutIO::load(path);
+    if (!snap.has_value()) {
+        BTQ_LOG_WARN("loadLayout: failed to load %s", path.string().c_str());
+        return false;
+    }
+    applyLayoutSnapshot(*snap);
+    BTQ_LOG_INFO("loadLayout: applied %s", path.string().c_str());
+    return true;
 }
 
 bool WindowManager::saveCurrentTheme() {
@@ -876,6 +944,34 @@ void WindowManager::showMainMenu() {
                 if (ImGui::MenuItem("Fullscreen"))   { applyPreset(util::Settings::presetFullscreen());   }
                 ImGui::EndMenu();
             }
+            // Layout — save/load custom .btqlayout profiles. Distinct
+            // from the hardcoded Profiles menu above (which applies a
+            // built-in preset); Layout is the user's own saved state.
+            if (ImGui::BeginMenu("Layout")) {
+                if (ImGui::MenuItem("Save layout as…")) {
+                    m_layoutSaveOpen = true;
+                }
+                if (ImGui::MenuItem("Load layout…")) {
+                    m_layoutLoadOpen = true;
+                }
+                ImGui::Separator();
+                // Quick-pick from existing .btqlayout files in profiles/.
+                auto profiles = util::LayoutIO::list();
+                if (profiles.empty()) {
+                    ImGui::TextDisabled("(no saved layouts)");
+                } else {
+                    for (const auto& p : profiles) {
+                        std::string stem = p.stem().string();
+                        if (ImGui::MenuItem(stem.c_str())) {
+                            if (!loadLayout(stem)) {
+                                BTQ_LOG_WARN("Layout: failed to load '%s'",
+                                             stem.c_str());
+                            }
+                        }
+                    }
+                }
+                ImGui::EndMenu();
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) {
                 requestDockLayoutReset();
@@ -889,6 +985,58 @@ void WindowManager::showMainMenu() {
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
+    }
+
+    // Save Layout popup — modal-ish (no dim/close-on-click-outside;
+    // close via Cancel/Save buttons). Shows a text field for the
+    // profile name; on Save, calls saveLayoutAs() which sanitizes the
+    // name and writes the file. Hidden after a successful save.
+    if (m_layoutSaveOpen) {
+        ImGui::OpenPopup("Save Layout");
+        m_layoutSaveOpen = false;
+    }
+    if (ImGui::BeginPopupModal("Save Layout", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("Profile name", m_layoutNameBuf,
+                         sizeof(m_layoutNameBuf));
+        ImGui::SameLine();
+        ImGui::TextDisabled("(a-z, 0-9, _, -)");
+        if (ImGui::Button("Save")) {
+            if (saveLayoutAs(std::string(m_layoutNameBuf))) {
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Load Layout popup — lists existing profiles. Click one to load,
+    // click Cancel to close.
+    if (m_layoutLoadOpen) {
+        ImGui::OpenPopup("Load Layout");
+        m_layoutLoadOpen = false;
+    }
+    if (ImGui::BeginPopupModal("Load Layout", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto profiles = util::LayoutIO::list();
+        if (profiles.empty()) {
+            ImGui::TextDisabled("(no saved layouts)");
+        }
+        for (const auto& p : profiles) {
+            std::string stem = p.stem().string();
+            if (ImGui::Selectable(stem.c_str(), false)) {
+                loadLayout(stem);
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::Separator();
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 }
 

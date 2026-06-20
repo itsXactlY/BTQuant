@@ -55,6 +55,112 @@ void JournalStatsPanel::render() {
     size_t nFills = m_journal->count();
     ImGui::TextDisabled("(%zu fill%s on disk)",
                         nFills, nFills == 1 ? "" : "s");
+
+    // ---- Stats header (Sprint #76) ----
+    //
+    // Win rate + profit factor + expectancy + win/loss counts in a
+    // compact row above the breakdowns. Sourced from
+    // TradeJournal::stats() (#75) — same field semantics as
+    // RiskMetrics, so a future Stats tab can render both without a
+    // translation layer. The journal-wide view makes this the
+    // persistent, all-time counterpart to RiskPanel's rolling
+    // window.
+    //
+    // Rendered as a small table so columns line up regardless of
+    // font / DPI. Profit factor uses the +inf sentinel from
+    // TradeJournal::stats() (all wins, no losses) — formatted as
+    // "∞" rather than "inf" to fit the visual style of the panel.
+    auto st = m_journal->stats();
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Stats",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (st.roundTripCount == 0) {
+            ImGui::TextDisabled("(no round-trip fills yet)");
+        } else if (ImGui::BeginTable("JournalStatsHeader",
+                                      6,
+                                      ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Win rate");
+            ImGui::TableSetupColumn("PF");
+            ImGui::TableSetupColumn("Avg win");
+            ImGui::TableSetupColumn("Avg loss");
+            ImGui::TableSetupColumn("Expectancy");
+            ImGui::TableSetupColumn("W / L");
+            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+            // Win rate: green when >= 50%, red when < 50%, dim at 0.
+            ImGui::TableSetColumnIndex(0);
+            if (st.winRate >= 0.5) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+            } else if (st.winRate > 0.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+            }
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.1f%%", st.winRate * 100.0);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+
+            // Profit factor: green when >= 1.5, red when < 1.0,
+            // dim otherwise. "∞" when +inf (all wins, no losses).
+            ImGui::TableSetColumnIndex(1);
+            if (std::isinf(st.profitFactor)) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                ImGui::TextUnformatted("∞");
+                ImGui::PopStyleColor();
+            } else if (st.profitFactor >= 1.5) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", st.profitFactor);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else if (st.profitFactor < 1.0) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "%.2f", st.profitFactor);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+            } else {
+                std::snprintf(buf, sizeof(buf), "%.2f", st.profitFactor);
+                ImGui::TextUnformatted(buf);
+            }
+
+            // Avg winner: green positive.
+            ImGui::TableSetColumnIndex(2);
+            colorizeRow(st.avgWinner);
+            std::snprintf(buf, sizeof(buf), "%+.2f", st.avgWinner);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+
+            // Avg loser: red negative.
+            ImGui::TableSetColumnIndex(3);
+            colorizeRow(st.avgLoser);
+            std::snprintf(buf, sizeof(buf), "%+.2f", st.avgLoser);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+
+            // Expectancy: green when >= 0, red when < 0.
+            ImGui::TableSetColumnIndex(4);
+            colorizeRow(st.expectancy);
+            std::snprintf(buf, sizeof(buf), "%+.2f", st.expectancy);
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+
+            // W / L counts.
+            ImGui::TableSetColumnIndex(5);
+            std::snprintf(buf, sizeof(buf), "%zu / %zu",
+                          st.winCount, st.lossCount);
+            ImGui::TextUnformatted(buf);
+
+            ImGui::EndTable();
+        }
+    }
+
     ImGui::Separator();
 
     // ---- By-symbol table (Sprint #72) ----

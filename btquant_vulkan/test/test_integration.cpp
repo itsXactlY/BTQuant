@@ -17524,5 +17524,95 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 129: winRateBySize() / BySymbol / ByTag
+    //   (Sprint #142).
+    //
+    // Win rate by trade-size bucket. Tests:
+    //   - Empty: all zeros.
+    //   - 3 trades at sizes 25, 200, 1000:
+    //       tiny=1W, medium=1W, large=1L.
+    std::cout << "\nTest 129: win rate by size..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test129_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.winRateBySize();
+            if (s.tiny.total == 0 &&
+                s.medium.total == 0 &&
+                s.large.total == 0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: tiny.total="
+                          << s.tiny.total << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 trades: +25 (tiny W), +200 (medium W),
+        // -999 (large L) ----
+        // Use 999 instead of 1000 so it lands in the
+        // `large` bucket (< 1000). 1000 itself goes to
+        // `huge`.
+        {
+            TradeJournal j((tmpDir / "size.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  25.0,  "", t0));
+            j.append(mkFill("BTC",  200.0, "", t0 + 1));
+            j.append(mkFill("BTC", -999.0, "", t0 + 2));
+            auto s = j.winRateBySize();
+            if (s.tiny.total == 1 && s.tiny.wins == 1 &&
+                std::fabs(s.tiny.winRate - 1.0) < 1e-9 &&
+                s.medium.total == 1 && s.medium.wins == 1 &&
+                s.large.total == 1 && s.large.losses == 1 &&
+                std::fabs(s.large.winRate) < 1e-9) {
+                std::cout << "✓ 3 sizes: tiny=1W (100%), "
+                          << "medium=1W (100%), "
+                          << "large=1L (0%)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ size wrong: tiny total="
+                          << s.tiny.total << " wins="
+                          << s.tiny.wins
+                          << " medium total=" << s.medium.total
+                          << " large total=" << s.large.total
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " win-rate-by-size tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

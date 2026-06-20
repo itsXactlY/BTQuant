@@ -3891,6 +3891,72 @@ TradeJournal::winRateCIByTag(
 }
 
 namespace {
+// Sprint #142 — win-rate-by-size helper.
+template <typename Pred>
+TradeJournal::WinRateBySize
+buildWinRateBySize(const std::vector<JournalFill>& fills,
+                    Pred pred) {
+    TradeJournal::WinRateBySize out;
+    auto classify = [&](double abs) -> TradeJournal::SizeBucketWR* {
+        if (abs < 50.0)   return &out.tiny;
+        if (abs < 100.0)  return &out.small;
+        if (abs < 500.0)  return &out.medium;
+        if (abs < 1000.0) return &out.large;
+        if (abs < 5000.0) return &out.huge;
+        return &out.massive;
+    };
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        double a = std::fabs(f.realizedDelta);
+        auto* b = classify(a);
+        b->total++;
+        b->meanAbs += a;
+        if (f.realizedDelta > 0) b->wins++;
+        else b->losses++;
+    }
+    auto finalize = [](TradeJournal::SizeBucketWR& b) {
+        if (b.total > 0) {
+            b.winRate = static_cast<double>(b.wins) /
+                        static_cast<double>(b.total);
+            b.meanAbs /= static_cast<double>(b.total);
+        }
+    };
+    finalize(out.tiny); finalize(out.small);
+    finalize(out.medium); finalize(out.large);
+    finalize(out.huge); finalize(out.massive);
+    return out;
+}
+}  // namespace
+
+TradeJournal::WinRateBySize
+TradeJournal::winRateBySize() const {
+    return buildWinRateBySize(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::WinRateBySize
+TradeJournal::winRateBySizeBySymbol(
+    const std::string& symbol) const {
+    return buildWinRateBySize(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::WinRateBySize
+TradeJournal::winRateBySizeByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildWinRateBySize(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

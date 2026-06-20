@@ -1328,6 +1328,39 @@ public:
     WinRateCI winRateCIByTag(const std::string& tag,
                               bool includeUntagged = false) const;
 
+    // Win rate by trade-size bucket (Sprint #142). For each
+    // size bucket, compute the win rate. Answers "do my big
+    // trades win more often than my small trades?"
+    //
+    // Buckets (in |realized|):
+    //   tiny      <  50
+    //   small     <  100
+    //   medium    <  500
+    //   large     <  1000
+    //   huge      <  5000
+    //   massive   >= 5000
+    struct SizeBucketWR {
+        size_t total      = 0;
+        size_t wins       = 0;
+        size_t losses     = 0;
+        double winRate    = 0.0;
+        double meanAbs    = 0.0;
+    };
+    struct WinRateBySize {
+        SizeBucketWR tiny;
+        SizeBucketWR small;
+        SizeBucketWR medium;
+        SizeBucketWR large;
+        SizeBucketWR huge;
+        SizeBucketWR massive;
+    };
+    WinRateBySize winRateBySize() const;
+    WinRateBySize winRateBySizeBySymbol(
+        const std::string& symbol) const;
+    WinRateBySize winRateBySizeByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

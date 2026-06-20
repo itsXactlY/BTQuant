@@ -8891,4 +8891,47 @@ TradeJournal::bestHourOfDayByTag(
     return b;
 }
 
+std::vector<TradeJournal::BestHourOfDay>
+TradeJournal::allSegmentBestHourOfDay() const {
+    // Sprint #208. Bulk per-symbol best hour of day
+    // sorted DESC by bestMeanPnL.
+    std::vector<BestHourOfDay> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(bestHourOfDayBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestHourOfDay& a, const BestHourOfDay& b) {
+            return a.bestMeanPnL > b.bestMeanPnL;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::BestHourOfDay>
+TradeJournal::allSegmentBestHourOfDayByTag(
+    bool includeUntagged) const {
+    std::vector<BestHourOfDay> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(bestHourOfDayByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestHourOfDay& a, const BestHourOfDay& b) {
+            return a.bestMeanPnL > b.bestMeanPnL;
+        });
+    return out;
+}
+
 } // namespace btquant

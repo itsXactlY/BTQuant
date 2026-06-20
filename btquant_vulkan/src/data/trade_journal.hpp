@@ -2212,6 +2212,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment best hour of day bulk (Sprint #208).
+    // Returns BestHourOfDay for every segment, sorted
+    // DESC by bestMeanPnL.
+    std::vector<BestHourOfDay>
+    allSegmentBestHourOfDay() const;
+    std::vector<BestHourOfDay>
+    allSegmentBestHourOfDayByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

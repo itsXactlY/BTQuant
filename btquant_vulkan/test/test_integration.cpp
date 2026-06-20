@@ -22365,5 +22365,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 194: allSegmentBestHourOfDay (Sprint #208).
+    //
+    // Bulk best hour. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 194: all-seg best hour..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test194_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols, different hours ----
+        {
+            const uint64_t h14 = 1704284400ULL * 1000000ULL;
+            const uint64_t h9  = 1704266400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 100.0, h14));
+            j.append(mkFill("ETH", 200.0, h9));
+            auto v = j.allSegmentBestHourOfDay();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC: top="
+                          << v[0].segment
+                          << " hour="
+                          << v[0].bestHour
+                          << " mean="
+                          << v[0].bestMeanPnL
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-best-hour tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

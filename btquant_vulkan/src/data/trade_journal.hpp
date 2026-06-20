@@ -1978,6 +1978,23 @@ public:
     // inspection without parsing the JSONL file.
     std::string journalSummaryJson() const;
 
+    // Per-segment profit-per-trade stats (Sprint #190).
+    // For each segment: average profit, median profit,
+    // win rate, count. Answers "what's my avg P&L per
+    // BTC trade?"
+    struct ProfitPerTrade {
+        std::string segment;
+        double      avgProfit   = 0.0;
+        double      medianProfit = 0.0;
+        double      winRate     = 0.0;
+        size_t      totalTrades = 0;
+    };
+    ProfitPerTrade profitPerTradeBySymbol(
+        const std::string& symbol) const;
+    ProfitPerTrade profitPerTradeByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

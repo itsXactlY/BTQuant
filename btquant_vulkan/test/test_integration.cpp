@@ -21226,5 +21226,72 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 176: profitPerTradeBySymbol/ByTag (Sprint #190).
+    //
+    // Avg/median profit per trade per segment. Tests:
+    //   - BTC 3 fills [+100, -50, +200] → avg=83.33, winRate=0.67.
+    std::cout << "\nTest 176: profit per trade..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test176_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 3 fills: +100, -50, +200 ----
+        {
+            TradeJournal j((tmpDir / "p.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC",  200.0, "scalp",
+                             t0 + 2));
+            auto btcP = j.profitPerTradeBySymbol("BTC");
+            if (btcP.totalTrades == 3 &&
+                std::fabs(btcP.avgProfit - 250.0/3.0) < 1e-9 &&
+                std::fabs(btcP.winRate - 2.0/3.0) < 1e-9) {
+                std::cout << "✓ BTC: avgProfit="
+                          << btcP.avgProfit
+                          << " winRate="
+                          << btcP.winRate
+                          << " median="
+                          << btcP.medianProfit
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: avg="
+                          << btcP.avgProfit
+                          << " winRate=" << btcP.winRate
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " profit-per-trade tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -7978,4 +7978,63 @@ std::string TradeJournal::journalSummaryJson() const {
     return os.str();
 }
 
+namespace {
+// Sprint #190 — per-segment profit-per-trade builder.
+template <typename Pred>
+TradeJournal::ProfitPerTrade
+buildProfitPerTradeBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::ProfitPerTrade s;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f) && std::fabs(f.realizedDelta) > 1e-9) {
+            sub.push_back(f);
+        }
+    }
+    if (sub.empty()) return s;
+    std::vector<double> rets;
+    rets.reserve(sub.size());
+    double sum = 0.0;
+    size_t wins = 0;
+    for (const auto& f : sub) {
+        rets.push_back(f.realizedDelta);
+        sum += f.realizedDelta;
+        if (f.realizedDelta > 0) wins++;
+    }
+    s.segment = sub.front().symbol;  // overwritten by caller
+    s.totalTrades = sub.size();
+    s.avgProfit = sum / static_cast<double>(sub.size());
+    s.winRate = static_cast<double>(wins) /
+                static_cast<double>(sub.size());
+    std::sort(rets.begin(), rets.end());
+    s.medianProfit = rets[rets.size() / 2];
+    return s;
+}
+}  // namespace
+
+TradeJournal::ProfitPerTrade
+TradeJournal::profitPerTradeBySymbol(
+    const std::string& symbol) const {
+    auto s = buildProfitPerTradeBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    s.segment = symbol;
+    return s;
+}
+
+TradeJournal::ProfitPerTrade
+TradeJournal::profitPerTradeByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto s = buildProfitPerTradeBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    s.segment = tag;
+    return s;
+}
+
 } // namespace btquant

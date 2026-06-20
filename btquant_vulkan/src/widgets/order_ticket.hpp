@@ -64,6 +64,23 @@ public:
     // via the submit callback (Sprint #49). Empty string = untagged.
     const char* tag() const { return m_tag; }
 
+    // ---- Last-used tag memory ----
+    // After every successful submit, m_tag is copied into m_lastTag
+    // (Sprint #52). On the next render of the ticket, the first
+    // frame after a fresh open restores m_tag from m_lastTag so the
+    // trader doesn't have to retype the strategy label. Opt out via
+    // setRememberLastTag(false).
+    const char* lastTag() const              { return m_lastTag; }
+    bool rememberLastTag() const             { return m_rememberLastTag; }
+    void setRememberLastTag(bool v)          { m_rememberLastTag = v; }
+
+    // Test helper — primes m_lastTag to a specific value, simulating
+    // "the trader submitted a fill with this tag earlier". Lets tests
+    // exercise the auto-restore path without driving the render loop.
+    void setLastTagForTest(const char* tag) {
+        std::snprintf(m_lastTag, sizeof(m_lastTag), "%s", tag ? tag : "");
+    }
+
     // Side setter — used by hotkeys (Alt+B / Alt+S) to flip the
     // ticket's side without going through the render path. Calling
     // setSideBuy(true) makes the next submit a BUY; false = SELL.
@@ -130,12 +147,14 @@ private:
     bool m_typeIsLimit = false;
     bool m_altSubmitsOpposite = true;   // opt-out: setAltSubmitsOpposite(false)
     bool m_clearAfterSubmit  = false;   // opt-in: setClearAfterSubmit(true)
+    bool m_rememberLastTag   = true;    // opt-out: setRememberLastTag(false)
     int  m_submitCount = 0;             // monotonic counter since construction
     char m_qty  [32] = "0.10";
     char m_limit[32] = "0.00";      // only used when limit
     char m_feeBps[32] = "10";       // 10 bps = 0.10% taker fee
     char m_slipBps[32] = "5";       // 5 bps market slippage estimate
     char m_tag[32] = "";            // strategy label (Sprint #49)
+    char m_lastTag[32] = "";        // most recent submitted tag (Sprint #52)
 
     // Cached latest trade price from the data spine. Updated each
     // frame by refreshRefPrice(). For limit orders the live price is

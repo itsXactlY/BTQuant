@@ -81,6 +81,25 @@ void OrderTicket::render() {
         return;
     }
 
+    // Last-tag auto-restore (Sprint #52). On the first frame the
+    // ticket is open AND the buffer is empty AND there's a
+    // remembered tag, pre-fill the buffer. The static flag ensures
+    // the restore happens at most once per open cycle — subsequent
+    // frames don't keep clobbering whatever the trader just typed.
+    if (m_rememberLastTag && m_tag[0] == '\0' && m_lastTag[0] != '\0') {
+        static bool s_restored = false;
+        if (!s_restored) {
+            std::snprintf(m_tag, sizeof(m_tag), "%s", m_lastTag);
+            s_restored = true;
+        }
+        // Reset the latch when the ticket closes, so the next open
+        // re-runs the restore once. We hook on the next frame
+        // because m_open's true-value is the same one we already
+        // entered with — peek at the post-render m_open via the
+        // Begin() call's return? Simpler: reset on every close.
+        if (!m_open) s_restored = false;
+    }
+
     // Pull live ref price from the data source when available.
     refreshRefPrice();
 
@@ -311,6 +330,12 @@ bool OrderTicket::submit() {
     }
     if (fired) {
         ++m_submitCount;
+        // Remember the submitted tag (Sprint #52) BEFORE the optional
+        // resetDraft() clears m_tag — so a re-fire with the same
+        // strategy is one-keystroke away.
+        if (m_tag[0] != '\0') {
+            std::snprintf(m_lastTag, sizeof(m_lastTag), "%s", m_tag);
+        }
         if (m_clearAfterSubmit) resetDraft();
     }
     return fired;

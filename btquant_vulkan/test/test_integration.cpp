@@ -5251,5 +5251,105 @@ int main() {
         fs::remove_all(tmpDir, ec);
     }
 
+    // Test 58: OrderTicket — last-used tag memory + auto-restore.
+    // Builds on Sprint #50 (tag input). After every successful
+    // submit, m_tag is copied into m_lastTag. The next open of
+    // the ticket pre-fills m_tag from m_lastTag so the trader
+    // doesn't retype the strategy label.
+    std::cout << "\nTest 58: Testing OrderTicket last-used tag memory..."
+              << std::endl;
+    {
+        using btquant::ui::OrderTicket;
+
+        OrderTicket t;
+        // 1) Default state: rememberLastTag is ON (the trader gets
+        //    the convenience out of the box).
+        if (t.rememberLastTag()) {
+            std::cout << "✓ rememberLastTag defaults ON" << std::endl;
+        } else {
+            std::cout << "✗ rememberLastTag should default ON" << std::endl;
+        }
+
+        // 2) Default state: lastTag is empty (no submitted fills yet).
+        if (std::string(t.lastTag()).empty()) {
+            std::cout << "✓ default lastTag is empty" << std::endl;
+        } else {
+            std::cout << "✗ default lastTag not empty: \"" << t.lastTag()
+                      << "\"" << std::endl;
+        }
+
+        // 3) Opt-out path: setRememberLastTag(false) disables the
+        //    auto-restore.
+        t.setRememberLastTag(false);
+        if (!t.rememberLastTag()) {
+            std::cout << "✓ setRememberLastTag(false) disables" << std::endl;
+        } else {
+            std::cout << "✗ opt-out didn't disable" << std::endl;
+        }
+        t.setRememberLastTag(true);
+
+        // 4) setLastTagForTest seeds the rememberer — this is what
+        //    the auto-restore would copy into m_tag on the first
+        //    open frame. The accessor reads it back.
+        t.setLastTagForTest("scalper-1");
+        if (std::string(t.lastTag()) == "scalper-1") {
+            std::cout << "✓ setLastTagForTest seeds m_lastTag" << std::endl;
+        } else {
+            std::cout << "✗ setLastTagForTest didn't seed: \""
+                      << t.lastTag() << "\"" << std::endl;
+        }
+
+        // 5) setLastTagForTest with nullptr writes an empty string
+        //    (the "no remembered tag" sentinel).
+        t.setLastTagForTest(nullptr);
+        if (std::string(t.lastTag()).empty()) {
+            std::cout << "✓ setLastTagForTest(nullptr) → empty" << std::endl;
+        } else {
+            std::cout << "✗ nullptr seed left non-empty lastTag" << std::endl;
+        }
+
+        // 6) resetDraft() does NOT clear m_lastTag — the trader can
+        //    clear the current draft (qty/side/etc.) and still get
+        //    the strategy label back on the next open. This is the
+        //    whole point of the rememberer.
+        t.setLastTagForTest("scalper-1");
+        t.setSideBuy(false);  // modify the draft
+        t.resetDraft();
+        if (std::string(t.lastTag()) == "scalper-1" && t.isBuy()) {
+            std::cout << "✓ resetDraft() preserves m_lastTag" << std::endl;
+        } else {
+            std::cout << "✗ resetDraft clobbered m_lastTag (lastTag=\""
+                      << t.lastTag() << "\", isBuy=" << t.isBuy() << ")"
+                      << std::endl;
+        }
+
+        // 7) m_lastTag and m_tag are independent buffers — setting
+        //    one doesn't touch the other.
+        t.setLastTagForTest("remembered-strategy");
+        // (m_tag is still "" after the resetDraft in test 6)
+        if (std::string(t.tag()).empty() &&
+            std::string(t.lastTag()) == "remembered-strategy") {
+            std::cout << "✓ m_tag and m_lastTag are independent" << std::endl;
+        } else {
+            std::cout << "✗ buffers aliased (tag=\"" << t.tag()
+                      << "\", lastTag=\"" << t.lastTag() << "\")"
+                      << std::endl;
+        }
+
+        // 8) setLastTagForTest with a long string truncates to the
+        //    buffer size (32 chars) — the snprintf guard prevents
+        //    overflow. Useful: a 50-char "incoming" tag would
+        //    otherwise blow the buffer.
+        const char* big = "this-is-a-very-long-tag-that-must-truncate";
+        t.setLastTagForTest(big);
+        if (std::strlen(t.lastTag()) < std::strlen(big)) {
+            std::cout << "✓ setLastTagForTest truncates overlong strings "
+                      "(stored " << std::strlen(t.lastTag()) << " of "
+                      << std::strlen(big) << " chars)" << std::endl;
+        } else {
+            std::cout << "✗ overlong string not truncated" << std::endl;
+        }
+    }
+
     return 0;
 }

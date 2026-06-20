@@ -7,6 +7,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <unordered_map>
 
@@ -201,6 +202,60 @@ TradeJournal::realizedByTag(bool includeUntagged) const {
                   return std::fabs(a.second) > std::fabs(b.second);
               });
     return out;
+}
+
+TradeJournal::Stats TradeJournal::stats() const {
+    // Epsilon for "is this a real win/loss vs a rounding artifact".
+    // 1e-9 is well below any meaningful dollar amount on a typical
+    // trade but large enough to swallow float-json round-trip noise.
+    constexpr double kEps = 1e-9;
+
+    std::vector<JournalFill> fills = loadAll();
+    Stats s;
+    s.fillCount = fills.size();
+
+    double grossWin  = 0.0;
+    double grossLoss = 0.0;
+    double sumRTpnl  = 0.0;
+
+    for (const auto& f : fills) {
+        s.netRealized += f.realizedDelta;
+        // Only round-trip fills (realized != 0) count for win/loss
+        // statistics. Open fills have realizedDelta == 0 by
+        // definition and would otherwise skew winRate toward 0%.
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        s.roundTripCount++;
+        sumRTpnl += f.realizedDelta;
+        if (f.realizedDelta > kEps) {
+            s.winCount++;
+            grossWin += f.realizedDelta;
+        } else if (f.realizedDelta < -kEps) {
+            s.lossCount++;
+            grossLoss += f.realizedDelta;  // negative
+        }
+    }
+
+    if (s.roundTripCount > 0) {
+        s.winRate    = static_cast<double>(s.winCount) /
+                       static_cast<double>(s.roundTripCount);
+        s.expectancy = sumRTpnl /
+                       static_cast<double>(s.roundTripCount);
+    }
+    if (s.winCount  > 0) s.avgWinner = grossWin  / s.winCount;
+    if (s.lossCount > 0) s.avgLoser  = grossLoss /
+                                      static_cast<double>(s.lossCount);
+    // Mirror RiskMetrics sentinel: no losses + at least one win =
+    // "infinite" profit factor. No fills at all = 0 (not inf, not
+    // NaN — the panel can format it as "—" without special-casing).
+    if (s.lossCount == 0) {
+        s.profitFactor = (s.winCount > 0)
+            ? std::numeric_limits<double>::infinity()
+            : 0.0;
+    } else {
+        s.profitFactor = grossWin / -grossLoss;
+    }
+
+    return s;
 }
 
 namespace {

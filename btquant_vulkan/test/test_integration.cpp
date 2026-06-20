@@ -7998,5 +7998,205 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 77: TradeJournal.stats() (Sprint #75).
+    // All-time aggregate stats: win rate, profit factor, avg
+    // winner/loser, expectancy, net realized. The journal-wide
+    // counterpart to RiskMetrics — answers "what's my all-time
+    // win rate?" without exporting to CSV.
+    std::cout << "\nTest 77: Testing TradeJournal.stats()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test77_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        fs::path journalPath = tmpDir / "journal.jsonl";
+        TradeJournal j(journalPath.string());
+
+        // Empty journal: all zeros, profit factor = 0 (not inf).
+        auto empty = j.stats();
+        if (empty.fillCount == 0 && empty.roundTripCount == 0 &&
+            empty.winCount == 0 && empty.lossCount == 0 &&
+            empty.winRate == 0.0 && empty.profitFactor == 0.0 &&
+            empty.expectancy == 0.0 && empty.netRealized == 0.0) {
+            std::cout << "✓ empty journal: all zeros" << std::endl;
+        } else {
+            std::cout << "✗ empty journal wrong" << std::endl;
+        }
+
+        // 6 round-trip fills: 3 wins (+$100, +$200, +$300) +
+        // 2 losses (-$150, -$50) + 1 open (realized = 0, ignored).
+        //   winCount=3, lossCount=2, roundTripCount=5
+        //   winRate = 3/5 = 0.6
+        //   grossWin = $600, grossLoss = -$200
+        //   profitFactor = 600 / 200 = 3.0
+        //   avgWinner = 600/3 = $200
+        //   avgLoser = -200/2 = -$100
+        //   expectancy = (600-200)/5 = $80
+        //   netRealized = 600-200 = $400
+        auto make = [](const std::string& sym, bool isLong,
+                       double qty, double px, double realized,
+                       const std::string& tag) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = isLong; f.qty = qty;
+            f.price = px; f.realizedDelta = realized; f.tag = tag;
+            return f;
+        };
+        j.append(make("BTCUSDT", false, 0.1, 30000,   100, "scalp"));
+        j.append(make("BTCUSDT", true,  0.1, 30500,   200, "scalp"));
+        j.append(make("ETHUSDT", false, 1.0,  2000,   300, "scalp"));
+        j.append(make("ETHUSDT", true,  1.0,  1900,  -150, "scalp"));
+        j.append(make("XRPUSDT", false, 100,  0.50,   -50, "scalp"));
+        j.append(make("XRPUSDT", false, 50,   0.60,     0, "scalp"));  // open
+
+        auto s = j.stats();
+        bool countOk = (s.fillCount == 6) &&
+                       (s.roundTripCount == 5) &&
+                       (s.winCount == 3) &&
+                       (s.lossCount == 2);
+        if (countOk) {
+            std::cout << "✓ counts: 6 fills, 5 rounds, 3 wins, 2 losses"
+                      << std::endl;
+        } else {
+            std::cout << "✗ counts wrong: fill=" << s.fillCount
+                      << " rt=" << s.roundTripCount
+                      << " win=" << s.winCount
+                      << " loss=" << s.lossCount << std::endl;
+        }
+
+        bool wrOk = std::fabs(s.winRate - 0.6) < 1e-9;
+        if (wrOk) {
+            std::cout << "✓ winRate = 60% (3/5)" << std::endl;
+        } else {
+            std::cout << "✗ winRate = " << s.winRate << std::endl;
+        }
+
+        bool pfOk = std::fabs(s.profitFactor - 3.0) < 1e-9;
+        if (pfOk) {
+            std::cout << "✓ profitFactor = 3.0 ($600 wins / $200 losses)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ profitFactor = " << s.profitFactor << std::endl;
+        }
+
+        bool awOk = std::fabs(s.avgWinner - 200.0) < 1e-9;
+        bool alOk = std::fabs(s.avgLoser - (-100.0)) < 1e-9;
+        bool exOk = std::fabs(s.expectancy - 80.0) < 1e-9;
+        bool nrOk = std::fabs(s.netRealized - 400.0) < 1e-9;
+        if (awOk && alOk && exOk && nrOk) {
+            std::cout << "✓ avgWinner=$200, avgLoser=-$100, "
+                         "expectancy=$80, net=$400" << std::endl;
+        } else {
+            std::cout << "✗ aw=" << s.avgWinner
+                      << " al=" << s.avgLoser
+                      << " ex=" << s.expectancy
+                      << " nr=" << s.netRealized << std::endl;
+        }
+
+        // All-wins, no-losses → profitFactor = +infinity.
+        fs::path journalPath2 = tmpDir / "journal2.jsonl";
+        TradeJournal j2(journalPath2.string());
+        j2.append(make("BTCUSDT", true, 0.1, 30000, 100, ""));
+        j2.append(make("BTCUSDT", false, 0.1, 31000, 200, ""));
+        auto s2 = j2.stats();
+        bool pfInfOk = std::isinf(s2.profitFactor) && s2.profitFactor > 0 &&
+                       s2.winCount == 2 && s2.lossCount == 0 &&
+                       s2.winRate == 1.0;
+        if (pfInfOk) {
+            std::cout << "✓ all-wins no-losses: profitFactor = +inf, "
+                         "winRate = 100%" << std::endl;
+        } else {
+            std::cout << "✗ all-wins wrong: pf=" << s2.profitFactor
+                      << " winCount=" << s2.winCount
+                      << " lossCount=" << s2.lossCount << std::endl;
+        }
+
+        // All-losses, no-wins → profitFactor = 0 (grossWin = 0,
+        // division would yield 0; explicit branch handles this
+        // because lossCount != 0).
+        fs::path journalPath3 = tmpDir / "journal3.jsonl";
+        TradeJournal j3(journalPath3.string());
+        j3.append(make("BTCUSDT", false, 0.1, 30000, -100, ""));
+        j3.append(make("BTCUSDT", true, 0.1, 31000, -200, ""));
+        auto s3 = j3.stats();
+        bool pfZeroOk = s3.profitFactor == 0.0 && s3.winCount == 0 &&
+                        s3.lossCount == 2 && s3.winRate == 0.0 &&
+                        std::fabs(s3.avgLoser - (-150.0)) < 1e-9;
+        if (pfZeroOk) {
+            std::cout << "✓ all-losses: profitFactor = 0, "
+                         "avgLoser = -$150" << std::endl;
+        } else {
+            std::cout << "✗ all-losses wrong: pf=" << s3.profitFactor
+                      << " winCount=" << s3.winCount
+                      << " lossCount=" << s3.lossCount
+                      << " avgLoser=" << s3.avgLoser << std::endl;
+        }
+
+        // netRealized consistency: should equal totalRealized() across
+        // all fills, not just round-trip fills.
+        double tot = j.totalRealized();
+        bool nrConsOk = std::fabs(s.netRealized - tot) < 1e-9 &&
+                        std::fabs(tot - 400.0) < 1e-9;
+        if (nrConsOk) {
+            std::cout << "✓ netRealized = totalRealized = $400"
+                      << std::endl;
+        } else {
+            std::cout << "✗ netRealized=" << s.netRealized
+                      << " totalRealized=" << tot << std::endl;
+        }
+
+        // Open fills only (no round-trips): roundTripCount = 0,
+        // winRate/avgWinner/avgLoser/expectancy stay 0 (no division
+        // by zero), netRealized still 0.
+        fs::path journalPath4 = tmpDir / "journal4.jsonl";
+        TradeJournal j4(journalPath4.string());
+        j4.append(make("BTCUSDT", true, 0.1, 30000, 0, ""));
+        j4.append(make("ETHUSDT", true, 1.0,  2000, 0, ""));
+        auto s4 = j4.stats();
+        bool openOnlyOk = s4.fillCount == 2 && s4.roundTripCount == 0 &&
+                          s4.winCount == 0 && s4.lossCount == 0 &&
+                          s4.winRate == 0.0 && s4.expectancy == 0.0 &&
+                          s4.profitFactor == 0.0 &&
+                          s4.netRealized == 0.0;
+        if (openOnlyOk) {
+            std::cout << "✓ open fills only: zeroed stats, no div-by-zero"
+                      << std::endl;
+        } else {
+            std::cout << "✗ open fills only wrong: "
+                      << "rt=" << s4.roundTripCount
+                      << " wr=" << s4.winRate
+                      << " pf=" << s4.profitFactor << std::endl;
+        }
+
+        // Persist-and-reload: stats() must be stable across reloads
+        // (no caching, no hidden state). Re-derive after re-opening
+        // the same path and confirm key fields match.
+        j.clear();
+        fs::path journalPath5 = tmpDir / "journal5.jsonl";
+        TradeJournal j5(journalPath5.string());
+        j5.append(make("BTCUSDT", false, 0.1, 30000, 250, ""));
+        j5.append(make("ETHUSDT", true,  1.0,  2000, -100, ""));
+        auto s5a = j5.stats();
+        TradeJournal j5b(journalPath5.string());  // fresh read
+        auto s5b = j5b.stats();
+        bool persistOk = (s5a.fillCount == s5b.fillCount) &&
+                         (s5a.winCount == s5b.winCount) &&
+                         (s5a.lossCount == s5b.lossCount) &&
+                         std::fabs(s5a.winRate - s5b.winRate) < 1e-9 &&
+                         std::fabs(s5a.profitFactor - s5b.profitFactor) < 1e-9 &&
+                         std::fabs(s5a.netRealized - s5b.netRealized) < 1e-9;
+        if (persistOk) {
+            std::cout << "✓ stats stable across reload (no hidden state)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ stats drifted across reload" << std::endl;
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

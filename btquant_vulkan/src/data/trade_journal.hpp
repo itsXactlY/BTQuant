@@ -73,6 +73,47 @@ public:
     std::vector<std::pair<std::string, double>>
     realizedByTag(bool includeUntagged = false) const;
 
+    // All-time aggregate stats (Sprint #75). The journal-wide
+    // counterpart to RiskMetrics (#Sprint #46) — same fields, but
+    // computed across every persisted fill rather than a rolling
+    // in-memory window. Answers "what's my all-time win rate?"
+    // without exporting to CSV.
+    //
+    // Field semantics match RiskMetrics 1:1 so a future "Stats" tab
+    // can render both side-by-side without a translation layer.
+    //
+    //   * fillCount      — every persisted fill, open or close.
+    //   * roundTripCount — count of fills with realized != 0
+    //                      (closing fills). Wins and losses count
+    //                      from here, not from open fills.
+    //   * winCount       — roundTripCount where realized > +eps.
+    //   * lossCount      — roundTripCount where realized < -eps.
+    //   * winRate        — winCount / roundTripCount (0 when no
+    //                      rounds yet; not NaN).
+    //   * avgWinner      — mean realized across wins (positive).
+    //   * avgLoser       — mean realized across losses (negative or
+    //                      zero when no losses).
+    //   * profitFactor   — gross wins / abs(gross losses). Infinity
+    //                      when losses are zero and wins > 0 (mirror
+    //                      RiskMetrics sentinel). Zero when no fills.
+    //   * expectancy     — mean realized per round-trip fill.
+    //   * netRealized    — sum of realized across all fills
+    //                      (== totalRealized(); kept here for
+    //                      stats-block convenience).
+    struct Stats {
+        size_t fillCount      = 0;
+        size_t roundTripCount = 0;
+        size_t winCount       = 0;
+        size_t lossCount      = 0;
+        double winRate        = 0.0;
+        double avgWinner      = 0.0;
+        double avgLoser       = 0.0;
+        double profitFactor   = 0.0;
+        double expectancy     = 0.0;
+        double netRealized    = 0.0;
+    };
+    Stats stats() const;
+
     // Delete the journal file. Returns true if removed or never existed.
     bool clear();
 

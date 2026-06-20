@@ -6398,4 +6398,50 @@ TradeJournal::topDDProneTags(size_t n, bool includeUntagged) const {
     return out;
 }
 
+std::vector<TradeJournal::SegmentDrawdownStats>
+TradeJournal::allSegmentDrawdownStats() const {
+    // Sprint #164. Bulk per-symbol DD stats.
+    std::vector<SegmentDrawdownStats> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(segmentDrawdownStatsBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentDrawdownStats& a,
+           const SegmentDrawdownStats& b) {
+            return a.maxDepth > b.maxDepth;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SegmentDrawdownStats>
+TradeJournal::allSegmentDrawdownStatsByTag(
+    bool includeUntagged) const {
+    // Sprint #164. Bulk per-tag DD stats.
+    std::vector<SegmentDrawdownStats> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(segmentDrawdownStatsByTag(t,
+            includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentDrawdownStats& a,
+           const SegmentDrawdownStats& b) {
+            return a.maxDepth > b.maxDepth;
+        });
+    return out;
+}
+
 } // namespace btquant

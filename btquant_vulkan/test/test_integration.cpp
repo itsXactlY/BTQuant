@@ -19457,5 +19457,69 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 151: allSegmentDrawdownStats() / ByTag
+    //   (Sprint #164).
+    //
+    // Bulk per-segment DD stats. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 151: all-seg DD stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test151_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "all.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + day));
+            j.append(mkFill("ETH",   50.0, "arb",
+                             t0 + 2 * day));
+            auto symV = j.allSegmentDrawdownStats();
+            auto tagV = j.allSegmentDrawdownStatsByTag();
+            if (symV.size() == 2 &&
+                tagV.size() == 2) {
+                std::cout << "✓ 2 symbols + 2 tags bulk"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: sym="
+                          << symV.size()
+                          << " tag=" << tagV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-DD tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

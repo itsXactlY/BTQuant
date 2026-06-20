@@ -1640,6 +1640,16 @@ public:
     topDDProneTags(size_t n = 10,
                    bool includeUntagged = true) const;
 
+    // All-segment DD stats (Sprint #164). Bulk variant of
+    // segmentDrawdownStatsBySymbol/ByTag (#156). Returns
+    // SegmentDrawdownStats for every symbol/tag in one
+    // call, sorted by maxDepth DESC.
+    std::vector<SegmentDrawdownStats>
+    allSegmentDrawdownStats() const;
+    std::vector<SegmentDrawdownStats>
+    allSegmentDrawdownStatsByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

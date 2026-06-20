@@ -5928,4 +5928,60 @@ TradeJournal::cumulativeGrossSeries() const {
     return out;
 }
 
+namespace {
+// Sprint #158 — per-segment cumulative gross series.
+template <typename Pred>
+std::vector<TradeJournal::GrossPoint>
+buildCumulativeGrossSeriesBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::vector<TradeJournal::GrossPoint> out;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    if (sub.empty()) return out;
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    out.reserve(sub.size());
+    double cumWin = 0.0, cumLoss = 0.0;
+    for (const auto& f : sub) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (f.realizedDelta > 0) cumWin += f.realizedDelta;
+        else                     cumLoss += f.realizedDelta;
+        TradeJournal::GrossPoint p;
+        p.timestamp_us = f.timestamp_us;
+        p.cumGrossWin  = cumWin;
+        p.cumGrossLoss = cumLoss;
+        p.netRealized  = cumWin + cumLoss;
+        p.count        = out.size() + 1;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::GrossPoint>
+TradeJournal::cumulativeGrossSeriesBySymbol(
+    const std::string& symbol) const {
+    return buildCumulativeGrossSeriesBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::GrossPoint>
+TradeJournal::cumulativeGrossSeriesByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildCumulativeGrossSeriesBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

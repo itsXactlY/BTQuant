@@ -18949,5 +18949,74 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 145: cumulativeGrossSeriesBySymbol/ByTag
+    //   (Sprint #158).
+    //
+    // Per-segment cumulative gross. Tests:
+    //   - BTC: 3 fills [+100, -50, +200]: 3 points,
+    //     final cumWin=300, cumLoss=-50, net=250.
+    std::cout << "\nTest 145: per-seg cumulative gross..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test145_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 3 fills ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH",  -50.0, "", t0 + 1));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 2));
+            j.append(mkFill("BTC",  200.0, "", t0 + 3));
+            auto btcV = j.cumulativeGrossSeriesBySymbol("BTC");
+            auto ethV = j.cumulativeGrossSeriesBySymbol("ETH");
+            if (btcV.size() == 3 &&
+                std::fabs(btcV[2].cumGrossWin - 300.0) < 1e-9 &&
+                std::fabs(btcV[2].cumGrossLoss + 50.0) < 1e-9 &&
+                std::fabs(btcV[2].netRealized - 250.0) < 1e-9 &&
+                ethV.size() == 1) {
+                std::cout << "✓ BTC: 3 fills final "
+                          << "cumWin=300, cumLoss=-50, net=250; "
+                          << "ETH: 1 fill"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: size="
+                          << btcV.size()
+                          << " cumWin=" << (btcV.size() > 0
+                              ? btcV.back().cumGrossWin : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg gross tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

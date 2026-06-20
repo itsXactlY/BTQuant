@@ -1624,6 +1624,22 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Top DD-prone symbols (Sprint #163). Bulk helper:
+    // returns symbols sorted by their max DD depth DESC.
+    // Useful for "which symbols give me the most pain?"
+    // panel section.
+    struct DDSymbolEntry {
+        std::string symbol;
+        double      maxDD        = 0.0;
+        double      recoveryFactor = 0.0;
+        size_t      ddCount      = 0;
+    };
+    std::vector<DDSymbolEntry>
+    topDDProneSymbols(size_t n = 10) const;
+    std::vector<DDSymbolEntry>
+    topDDProneTags(size_t n = 10,
+                   bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

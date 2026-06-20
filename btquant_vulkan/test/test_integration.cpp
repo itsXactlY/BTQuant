@@ -19358,5 +19358,104 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 150: topDDProneSymbols() / topDDProneTags()
+    //   (Sprint #163).
+    //
+    // Top N segments sorted by maxDD DESC. Tests:
+    //   - 3 symbols, top 2 returned.
+    //   - 2 tags, top 2 returned.
+    std::cout << "\nTest 150: top DD-prone..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test150_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 symbols ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            // 1 symbol with 1 fill (no DD).
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            // 2 fills on same symbol across 2 days.
+            j.append(mkFill("ETH",  100.0, "arb",
+                             t0 + day));
+            j.append(mkFill("ETH",  -50.0, "arb",
+                             t0 + 2 * day));
+            // 3 fills on same symbol across 3 days.
+            j.append(mkFill("SOL",  100.0, "scalp",
+                             t0 + 3 * day));
+            j.append(mkFill("SOL",  -50.0, "scalp",
+                             t0 + 4 * day));
+            j.append(mkFill("SOL",   30.0, "scalp",
+                             t0 + 5 * day));
+            auto v = j.topDDProneSymbols(2);
+            // 2 entries, sorted DESC.
+            if (v.size() == 2) {
+                std::cout << "✓ top 2: "
+                          << v[0].symbol << "(maxDD="
+                          << v[0].maxDD << "), "
+                          << v[1].symbol << "(maxDD="
+                          << v[1].maxDD << ")"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ size wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 tags ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + day));
+            j.append(mkFill("ETH",   50.0, "arb",
+                             t0 + 2 * day));
+            auto v = j.topDDProneTags(2);
+            if (v.size() >= 1) {
+                std::cout << "✓ tags: top="
+                          << v[0].symbol
+                          << " maxDD=" << v[0].maxDD
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " top-DD-prone tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

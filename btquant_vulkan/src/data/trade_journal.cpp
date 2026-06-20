@@ -6327,4 +6327,75 @@ TradeJournal::monthlyMaxDrawdownByTag(
         });
 }
 
+std::vector<TradeJournal::DDSymbolEntry>
+TradeJournal::topDDProneSymbols(size_t n) const {
+    // Sprint #163. For each symbol, compute max DD and
+    // recovery factor. Return sorted by maxDD DESC.
+    std::vector<DDSymbolEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        DDSymbolEntry e;
+        e.symbol = s;
+        // Use perSymbolDrawdown for max DD.
+        auto psd = perSymbolDrawdown();
+        for (const auto& psdRow : psd) {
+            if (psdRow.symbol == s) {
+                e.maxDD = psdRow.maxDrawdown;
+                break;
+            }
+        }
+        e.recoveryFactor = perSymbolRecoveryFactor(s);
+        e.ddCount = static_cast<size_t>(
+            drawdownRecoveriesBySymbol(s).size());
+        out.push_back(e);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDSymbolEntry& a, const DDSymbolEntry& b) {
+            return a.maxDD > b.maxDD;
+        });
+    if (out.size() > n) out.resize(n);
+    return out;
+}
+
+std::vector<TradeJournal::DDSymbolEntry>
+TradeJournal::topDDProneTags(size_t n, bool includeUntagged) const {
+    // Sprint #163. Same as topDDProneSymbols but for tags.
+    std::vector<DDSymbolEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        DDSymbolEntry e;
+        e.symbol = t;  // reuse 'symbol' field for the key
+        auto ptd = perTagDrawdown();
+        for (const auto& ptdRow : ptd) {
+            if (ptdRow.tag == t) {
+                e.maxDD = ptdRow.maxDrawdown;
+                break;
+            }
+        }
+        e.recoveryFactor = perTagRecoveryFactor(t,
+            includeUntagged);
+        e.ddCount = static_cast<size_t>(
+            drawdownRecoveriesByTag(t, includeUntagged).size());
+        out.push_back(e);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDSymbolEntry& a, const DDSymbolEntry& b) {
+            return a.maxDD > b.maxDD;
+        });
+    if (out.size() > n) out.resize(n);
+    return out;
+}
+
 } // namespace btquant

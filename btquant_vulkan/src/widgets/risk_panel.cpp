@@ -2,6 +2,7 @@
 
 #include "../data/market_data_processor.hpp"
 #include "../data/market_data.hpp"
+#include "../data/risk_guard.hpp"
 
 #include <imgui.h>
 #include <vector>
@@ -323,6 +324,59 @@ void RiskPanel::render() {
     //   before relying on it for strategy comparison.
     ImGui::TextDisabled("Notes: window-scoped; naive avg-entry; no fees/partials; "
                         "Sharpe = sqrt(N) heuristic.");
+
+    ImGui::Separator();
+    if (m_riskGuard) {
+        // Live daily-loss progress — the trader can see at a glance
+        // how much of the kill threshold has been consumed. The bar
+        // goes red once we cross the threshold. We use the absolute
+        // value of sessionRealized against killOnDailyLossUSD (both
+        // are positive magnitudes; sessionRealized is signed in the
+        // underlying API because losses are negative).
+        double sessionRealized = m_riskGuard->sessionRealized();
+        double killThreshold   = m_riskGuard->config().killOnDailyLossUSD;
+        if (killThreshold > 0.0) {
+            double frac = std::min(1.0, std::fabs(sessionRealized) / killThreshold);
+            // Colour: green below 50%, yellow 50–80%, red ≥ 80%.
+            ImVec4 barCol;
+            if (frac < 0.5)      barCol = ImVec4(0.30f, 0.85f, 0.40f, 1.0f);
+            else if (frac < 0.8) barCol = ImVec4(0.95f, 0.85f, 0.30f, 1.0f);
+            else                 barCol = ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barCol);
+            char overlay[64];
+            std::snprintf(overlay, sizeof(overlay), "%s$%.0f / -$%.0f",
+                          sessionRealized >= 0 ? "+" : "",
+                          std::fabs(sessionRealized), killThreshold);
+            ImGui::ProgressBar(frac, ImVec2(-1, 0), overlay);
+            ImGui::PopStyleColor();
+            // Remaining budget readout (live; recomputed each frame).
+            double remaining = m_riskGuard->remainingLossBudget();
+            ImGui::Text("Remaining loss budget: %s$%.2f",
+                        remaining >= 0 ? "+" : "",
+                        std::fabs(remaining));
+        }
+        // Reset Session button — clears the running P&L counter so the
+        // trader can start a new trading day without restarting the app.
+        // Confirmation popup prevents accidental clicks.
+        ImGui::SameLine();
+        if (ImGui::Button("Reset session")) {
+            ImGui::OpenPopup("Confirm reset session");
+        }
+        if (ImGui::BeginPopupModal("Confirm reset session", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Reset session realized P&L to $0.00?");
+            ImGui::Text("This clears today's kill-switch counter.");
+            if (ImGui::Button("Confirm")) {
+                m_riskGuard->resetSession();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+    } else {
+        ImGui::TextDisabled("(RiskGuard not bound — no daily-loss tracking)");
+    }
 
     ImGui::End();
 }

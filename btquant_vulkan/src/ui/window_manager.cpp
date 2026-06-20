@@ -866,6 +866,7 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_vpvrWidget) m_vpvrWidget->setMarketData(data);
     if (m_multiVwapWidget) m_multiVwapWidget->setMarketData(data);
     if (m_riskPanel) m_riskPanel->setMarketData(data);
+    if (m_riskPanel && m_riskGuard) m_riskPanel->setRiskGuard(m_riskGuard);
     if (m_domWidget) m_domWidget->setMarketData(data);
     if (m_tradesWidget) m_tradesWidget->setMarketData(data);
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);

@@ -5,7 +5,7 @@
 
 #include "../data/market_data.hpp"
 
-namespace btquant { class MarketDataProcessor; }
+namespace btquant { class MarketDataProcessor; class RiskGuard; }
 
 namespace btquant::ui {
 
@@ -19,6 +19,10 @@ namespace btquant::ui {
 //   * Aggregate risk metrics: Sharpe (per-trade + sqrt(N) heuristic),
 //     max drawdown on cumP&L, win rate, profit factor, expectancy.
 //
+// When a RiskGuard is bound, the panel also shows a live progress bar
+// of session realized vs the configured daily kill threshold, plus a
+// Reset Session button.
+//
 // Pulls from snap.recent_trades — no new data model. Position state is
 // purely derived on-the-fly from the trade history.
 class RiskPanel {
@@ -28,6 +32,7 @@ public:
     void render();
 
     void setMarketData(::btquant::MarketDataProcessor* data);
+    void setRiskGuard(::btquant::RiskGuard* guard) { m_riskGuard = guard; }
 
     bool showWindow = true;
 
@@ -35,6 +40,7 @@ private:
     bool m_initialized = false;
 
     ::btquant::MarketDataProcessor* m_data = nullptr;
+    ::btquant::RiskGuard*          m_riskGuard = nullptr;
 };
 
 // Plain-old-data structs exposed for testing.

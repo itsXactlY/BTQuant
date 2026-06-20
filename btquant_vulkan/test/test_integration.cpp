@@ -2848,5 +2848,71 @@ int main() {
         unsetenv("HOME");
     }
 
+    // Test 35: pendingDockLayout plumbing — applyLayoutSnapshot must
+    // stage snap.dockLayout into WindowManager::pendingDockLayout so
+    // applyInitialDockLayoutIfNeeded can feed it to
+    // ImGui::DockBuilderLoadNodes (when upstream ImGui ships it).
+    {
+        std::cout << "\nTest 35: Testing WindowManager::pendingDockLayout plumbing..."
+                  << std::endl;
+
+        btquant::ui::WindowManager wm;
+        // Start clean.
+        wm.pendingDockLayout.clear();
+
+        // 1) Apply snapshot with dock text → pendingDockLayout copies it.
+        ::btquant::util::LayoutSnapshot snap{};
+        snap.dockLayout = "{\"DockBuilder\":true,\"NodeID\":42}";
+        snap.settings.showOrderBook = false;
+        snap.settings.theme = 1;  // 0=dark, 1=light; int theme field
+        wm.applyLayoutSnapshot(snap);
+        if (wm.pendingDockLayout == "{\"DockBuilder\":true,\"NodeID\":42}") {
+            std::cout << "✓ applyLayoutSnapshot staged dockLayout into pendingDockLayout"
+                      << std::endl;
+        } else {
+            std::cout << "✗ pendingDockLayout not staged (got: '"
+                      << wm.pendingDockLayout << "')" << std::endl;
+        }
+
+        // 2) Empty dockLayout → pendingDockLayout empty (no clobber).
+        ::btquant::util::LayoutSnapshot snap2{};
+        snap2.dockLayout = "";
+        snap2.settings.showOrderBook = true;
+        wm.applyLayoutSnapshot(snap2);
+        if (wm.pendingDockLayout.empty()) {
+            std::cout << "✓ empty snap.dockLayout → empty pendingDockLayout"
+                      << std::endl;
+        } else {
+            std::cout << "✗ pendingDockLayout unexpectedly populated: '"
+                      << wm.pendingDockLayout << "'" << std::endl;
+        }
+
+        // 3) Re-applying with dock text replaces previous content.
+        ::btquant::util::LayoutSnapshot snap3{};
+        snap3.dockLayout = "second-payload";
+        wm.applyLayoutSnapshot(snap3);
+        if (wm.pendingDockLayout == "second-payload") {
+            std::cout << "✓ second applyLayoutSnapshot overwrites pendingDockLayout"
+                      << std::endl;
+        } else {
+            std::cout << "✗ pendingDockLayout not overwritten (got: '"
+                      << wm.pendingDockLayout << "')" << std::endl;
+        }
+
+        // 4) applyInitialDockLayoutIfNeeded is a no-op without a live
+        //    ImGui context (DockBuilderGetNode returns null because no
+        //    dockspace has been rendered), so pendingDockLayout stays
+        //    queued — confirms the field is durable across the
+        //    wait-for-dockspace path.
+        wm.applyInitialDockLayoutIfNeeded();
+        if (wm.pendingDockLayout == "second-payload") {
+            std::cout << "✓ pendingDockLayout preserved while waiting for dockspace"
+                      << std::endl;
+        } else {
+            std::cout << "✗ pendingDockLayout clobbered before dockspace existed"
+                      << std::endl;
+        }
+    }
+
     return 0;
 }

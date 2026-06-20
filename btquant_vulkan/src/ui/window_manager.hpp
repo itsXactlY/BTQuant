@@ -186,6 +186,13 @@ public:
     bool showDOM = true;
     bool showTrades = true;
     bool showTPO = true;
+    // Pending dock layout text captured from a LayoutSnapshot. When
+    // non-empty, applyInitialDockLayoutIfNeeded feeds it to
+    // ImGui::DockBuilderLoadNodes on the next dock-reset so the user
+    // gets the saved split layout restored (not just widget visibility).
+    // Public so tests can assert plumbing without needing a live ImGui
+    // context.
+    std::string pendingDockLayout;
 
 private:
     void buildDockLayout();

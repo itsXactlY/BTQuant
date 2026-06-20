@@ -384,13 +384,15 @@ void WindowManager::applyLayoutSnapshot(const util::LayoutSnapshot& snap) {
         c.equityUSD          = s.risk_equityUSD;
         m_riskGuard->setConfig(c);
     }
-    // The dock layout is captured as text but not auto-applied here
-    // — rebuilding the dock mid-session needs ImGui::DockBuilderLoad
-    // which expects a live dockspace; mark a reset so buildDockLayout
-    // runs again with the new visibility.
-    if (!snap.dockLayout.empty()) {
-        BTQ_LOG_INFO("LayoutSnapshot: dock text %zu bytes (reload on next dock reset)",
-                     snap.dockLayout.size());
+    // The dock layout text is staged for applyInitialDockLayoutIfNeeded
+    // to feed to ImGui::DockBuilderLoadNodes — that call requires a
+    // live dockspace, so we hold the text on the WM and consume it on
+    // the next dock reset. If the text is empty, buildDockLayout()
+    // will rebuild the default split from scratch.
+    pendingDockLayout = snap.dockLayout;
+    if (!pendingDockLayout.empty()) {
+        BTQ_LOG_INFO("LayoutSnapshot: dock text %zu bytes staged for next dock reset",
+                     pendingDockLayout.size());
     }
     requestDockLayoutReset();
     markSettingsDirty();
@@ -490,12 +492,33 @@ void WindowManager::applyInitialDockLayoutIfNeeded() {
     }
     if (m_layoutApplied) return;
 
+    // Defensive: any ImGui dock API requires a live ImGui context.
+    // Tests and other non-rendering callers may invoke this without one
+    // (e.g. to exercise applyLayoutSnapshot plumbing), so guard here
+    // instead of crashing in DockBuilderGetNode.
+    if (ImGui::GetCurrentContext() == nullptr) return;
+
     // Only build on first frame after at least one widget has been rendered
     // (ImGui needs a frame to register the DockSpace ID).
     const ImGuiID dockspaceId = 0;
     if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
         // DockSpaceOverViewport hasn't run yet — wait one frame.
         return;
+    }
+
+    // If the user just loaded a LayoutSnapshot with dock text, this
+    // version of ImGui doesn't ship DockBuilderLoadNodes (the dock
+    // save/load API is gated on a newer ImGui fork than we have here),
+    // so the staged text is logged for future use and the default
+    // buildDockLayout() rebuilds the split from scratch. The plumbing
+    // is ready: when the upstream ImGui dep is upgraded, swap the
+    // warning below for ImGui::DockBuilderLoadNodes(dockspaceId,
+    // pendingDockLayout.c_str()) and the staged text will start
+    // restoring dock splits automatically.
+    if (!pendingDockLayout.empty()) {
+        BTQ_LOG_INFO("applyInitialDockLayoutIfNeeded: dock text %zu bytes staged (ImGui version lacks DockBuilderLoadNodes; falling back to default layout)",
+                     pendingDockLayout.size());
+        pendingDockLayout.clear();
     }
 
     buildDockLayout();

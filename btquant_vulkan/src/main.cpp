@@ -236,6 +236,25 @@ private:
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
 
+      // HiDPI monitor change detection — GLFW's content scale can
+      // change when the window moves between monitors (or when the
+      // user changes the OS scaling). We re-apply every frame but
+      // WindowManager::applyDpiScale short-circuits when the value is
+      // unchanged, so the cost is one glfwGetMonitor + one float
+      // comparison per tick. Falls back to 1.0 when no monitor is
+      // associated with the window (shouldn't happen in practice —
+      // glfwGetWindowMonitor returns the primary when null).
+      {
+          GLFWmonitor* mon = glfwGetWindowMonitor(window);
+          if (mon) {
+              float xScale = 1.0f, yScale = 1.0f;
+              glfwGetMonitorContentScale(mon, &xScale, &yScale);
+              // x and y should match on every platform we target —
+              // use the x scale as the canonical value.
+              windowManager.applyDpiScale(static_cast<double>(xScale));
+          }
+      }
+
       // Hotkeys run BEFORE ImGui's newFrame so user input reaches widgets.
       // Suppressed automatically when a text field has focus.
       windowManager.processHotkeys(window);

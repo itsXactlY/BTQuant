@@ -9093,4 +9093,47 @@ TradeJournal::riskRewardRatioByTag(
     return r;
 }
 
+std::vector<TradeJournal::RiskRewardRatio>
+TradeJournal::allSegmentRiskRewardRatio() const {
+    // Sprint #212. Bulk per-symbol risk-reward
+    // sorted DESC by ratio.
+    std::vector<RiskRewardRatio> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(riskRewardRatioBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskRewardRatio& a, const RiskRewardRatio& b) {
+            return a.ratio > b.ratio;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::RiskRewardRatio>
+TradeJournal::allSegmentRiskRewardRatioByTag(
+    bool includeUntagged) const {
+    std::vector<RiskRewardRatio> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(riskRewardRatioByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskRewardRatio& a, const RiskRewardRatio& b) {
+            return a.ratio > b.ratio;
+        });
+    return out;
+}
+
 } // namespace btquant

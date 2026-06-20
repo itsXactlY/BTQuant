@@ -19018,5 +19018,89 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 146: allRecentPerformance() /
+    //   allRecentPerformanceByTag() (Sprint #159).
+    //
+    // Bulk recent performance per segment. Tests:
+    //   - 2 symbols → 2 entries, sorted DESC by realized.
+    //   - 2 tags → 2 entries, sorted DESC by realized.
+    std::cout << "\nTest 146: all-seg recent perf..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test146_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 300.0, "scalp", t0));
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 1));
+            auto v = j.allRecentPerformance(30, true, 1);
+            if (v.size() == 2 &&
+                std::fabs(v[0].realized - 300.0) < 1e-9 &&
+                std::fabs(v[1].realized - 100.0) < 1e-9) {
+                std::cout << "✓ 2 symbols sorted DESC: "
+                          << "BTC=300, ETH=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ sym wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 tags ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 200.0, "scalp", t0));
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 1));
+            auto v = j.allRecentPerformanceByTag(30,
+                true, 1);
+            if (v.size() == 2 &&
+                std::fabs(v[0].realized - 200.0) < 1e-9 &&
+                std::fabs(v[1].realized - 100.0) < 1e-9) {
+                std::cout << "✓ 2 tags sorted DESC: "
+                          << "scalp=200, arb=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-recent tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

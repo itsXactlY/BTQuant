@@ -5984,4 +5984,53 @@ TradeJournal::cumulativeGrossSeriesByTag(
         });
 }
 
+std::vector<TradeJournal::PerformanceSnapshot>
+TradeJournal::allRecentPerformance(
+    size_t lastDays,
+    bool byFillCount,
+    size_t fillCount) const {
+    // Sprint #159. Bulk recent performance per symbol.
+    std::vector<PerformanceSnapshot> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(recentPerformanceBySymbol(
+            s, lastDays, byFillCount, fillCount));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const PerformanceSnapshot& a,
+           const PerformanceSnapshot& b) {
+            return a.realized > b.realized;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::PerformanceSnapshot>
+TradeJournal::allRecentPerformanceByTag(
+    size_t lastDays,
+    bool byFillCount,
+    size_t fillCount) const {
+    // Sprint #159. Bulk recent performance per tag.
+    std::vector<PerformanceSnapshot> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) tags.insert("__untagged__");
+        else tags.insert(f.tag);
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(recentPerformanceByTag(
+            t, false, lastDays, byFillCount, fillCount));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const PerformanceSnapshot& a,
+           const PerformanceSnapshot& b) {
+            return a.realized > b.realized;
+        });
+    return out;
+}
+
 } // namespace btquant

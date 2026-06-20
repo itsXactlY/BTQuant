@@ -1588,6 +1588,21 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment recent performance (Sprint #159).
+    // Returns PerformanceSnapshot for every symbol in the
+    // journal, sorted by realized DESC. One call replaces
+    // N recentPerformanceBySymbol() calls.
+    std::vector<PerformanceSnapshot>
+    allRecentPerformance(size_t lastDays = 30,
+                         bool byFillCount = false,
+                         size_t fillCount = 30) const;
+    // Per-tag version (Sprint #159). __untagged__
+    // included as synthetic key for empty-tag fills.
+    std::vector<PerformanceSnapshot>
+    allRecentPerformanceByTag(size_t lastDays = 30,
+                              bool byFillCount = false,
+                              size_t fillCount = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <unordered_map>
 
 #include "../data/trade_journal.hpp"
 
@@ -985,18 +986,26 @@ void JournalStatsPanel::render() {
     // annotation as the per-symbol risk-adjusted table (#92).
     auto perTagSh = m_journal->perTagSharpe(m_includeUntagged);
     size_t rowsTagSh = std::min(m_maxRows, perTagSh.size());
+    // Calmar by-tag (#98) — same zip pattern as the per-symbol
+    // table. Reuses m_includeUntagged so the rollup stays
+    // consistent across the per-tag sub-tables.
+    auto perTagCl = m_journal->perTagCalmar(m_includeUntagged);
+    std::unordered_map<std::string, double> calmarByTag;
+    calmarByTag.reserve(perTagCl.size());
+    for (const auto& c : perTagCl) calmarByTag[c.tag] = c.calmarRatio;
     if (ImGui::CollapsingHeader("Per-tag risk-adjusted",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (perTagSh.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerTagSharpe",
-                                     4,
+                                     5,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Tag");
             ImGui::TableSetupColumn("Mean / day");
             ImGui::TableSetupColumn("Daily Sharpe");
             ImGui::TableSetupColumn("Annualized");
+            ImGui::TableSetupColumn("Calmar");   // Sprint #98
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsTagSh; ++i) {
                 const auto& e = perTagSh[i];
@@ -1061,6 +1070,46 @@ void JournalStatsPanel::render() {
                         ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
                     std::snprintf(buf, sizeof(buf), "%.2f",
                                   e.annualizedSharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+
+                // Calmar (Sprint #98): same threshold rules as
+                // the per-symbol table. Zipped from
+                // perTagCalmar() by tag name.
+                ImGui::TableSetColumnIndex(4);
+                double tagCalmar = 0.0;
+                bool   tagHasCalmar = false;
+                auto it = calmarByTag.find(e.tag);
+                if (it != calmarByTag.end()) {
+                    tagCalmar = it->second;
+                    tagHasCalmar = true;
+                }
+                if (tagHasCalmar && tagCalmar >= 3.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  tagCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (tagHasCalmar && tagCalmar < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  tagCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (tagHasCalmar) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  tagCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "—");
                     ImGui::TextUnformatted(buf);
                     ImGui::PopStyleColor();
                 }
@@ -1213,18 +1262,26 @@ void JournalStatsPanel::render() {
     //     Sharpe is a losing strategy.
     auto perSymSh = m_journal->perSymbolSharpe();
     size_t rowsSh = std::min(m_maxRows, perSymSh.size());
+    // Calmar by-symbol (#98) — fetched separately and zipped by
+    // symbol name into a map. Avoids changing the PerSymbolSharpe
+    // struct shape just to add a single Calmar column.
+    auto perSymCl = m_journal->perSymbolCalmar();
+    std::unordered_map<std::string, double> calmarBySymbol;
+    calmarBySymbol.reserve(perSymCl.size());
+    for (const auto& c : perSymCl) calmarBySymbol[c.symbol] = c.calmarRatio;
     if (ImGui::CollapsingHeader("Per-symbol risk-adjusted",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (perSymSh.empty()) {
             ImGui::TextDisabled("(empty)");
         } else if (ImGui::BeginTable("JournalStatsPerSymbolSharpe",
-                                     4,
+                                     5,
                                      ImGuiTableFlags_RowBg |
                                      ImGuiTableFlags_BordersH)) {
             ImGui::TableSetupColumn("Symbol");
             ImGui::TableSetupColumn("Mean / day");
             ImGui::TableSetupColumn("Daily Sharpe");
             ImGui::TableSetupColumn("Annualized");
+            ImGui::TableSetupColumn("Calmar");   // Sprint #98
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < rowsSh; ++i) {
                 const auto& e = perSymSh[i];
@@ -1292,6 +1349,46 @@ void JournalStatsPanel::render() {
                         ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
                     std::snprintf(buf, sizeof(buf), "%.2f",
                                   e.annualizedSharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+
+                // Calmar (Sprint #98): green >= 3.0, red < 0,
+                // dim otherwise. Sentinel 0 (no DD yet for this
+                // symbol) renders as "—".
+                ImGui::TableSetColumnIndex(4);
+                double symCalmar = 0.0;
+                bool   symHasCalmar = false;
+                auto it = calmarBySymbol.find(e.symbol);
+                if (it != calmarBySymbol.end()) {
+                    symCalmar = it->second;
+                    symHasCalmar = true;
+                }
+                if (symHasCalmar && symCalmar >= 3.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  symCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (symHasCalmar && symCalmar < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  symCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (symHasCalmar) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  symCalmar);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "—");
                     ImGui::TextUnformatted(buf);
                     ImGui::PopStyleColor();
                 }

@@ -8576,4 +8576,47 @@ TradeJournal::ddStreakStatsByTag(
     return buildDDStreakStats(tag, events.begin(), events.end());
 }
 
+std::vector<TradeJournal::DDStreakStats>
+TradeJournal::allSegmentDDStreakStats() const {
+    // Sprint #202. Bulk per-segment DD streak stats
+    // sorted DESC by longestStreak.
+    std::vector<DDStreakStats> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(ddStreakStatsBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDStreakStats& a, const DDStreakStats& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::DDStreakStats>
+TradeJournal::allSegmentDDStreakStatsByTag(
+    bool includeUntagged) const {
+    std::vector<DDStreakStats> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(ddStreakStatsByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DDStreakStats& a, const DDStreakStats& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
 } // namespace btquant

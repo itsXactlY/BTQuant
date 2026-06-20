@@ -16,6 +16,7 @@
 #include "../src/widgets/symbol_picker.hpp"
 #include "../src/widgets/theme_editor.hpp"
 #include "../src/util/theme_io.hpp"
+#include "../src/widgets/position_calculator.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -1066,6 +1067,77 @@ int main() {
         }
 
         fs::remove(tmpFile, ec);
+    }
+
+    // Test 20: PositionCalculator — size/notional/RR math.
+    std::cout << "\nTest 20: Testing PositionCalculator..." << std::endl;
+    {
+        using btquant::ui::PositionCalculator;
+        PositionCalculator pc;
+
+        // 1% risk on $10k with $500 stop distance → size = 10000 * 0.01 / 500 = 0.2
+        double size = pc.computeSize(10000.0, 1.0, 67500.0, 67000.0);
+        if (std::abs(size - 0.2) < 1e-6) {
+            std::cout << "✓ size = $100 risk / $500 stop = 0.2 base" << std::endl;
+        } else {
+            std::cout << "✗ size: " << size << " (expected 0.2)" << std::endl;
+        }
+
+        // 2% risk on $5000 with $0.25 stop → 100 / 0.25 = 400
+        double size2 = pc.computeSize(5000.0, 2.0, 100.0, 99.75);
+        if (std::abs(size2 - 400.0) < 1e-6) {
+            std::cout << "✓ 2% risk on $5000 with $0.25 stop = 400" << std::endl;
+        } else {
+            std::cout << "✗ size2: " << size2 << std::endl;
+        }
+
+        // Notional = size * price.
+        double notional = pc.computeNotional(0.2, 67500.0);
+        if (std::abs(notional - 13500.0) < 1e-3) {
+            std::cout << "✓ notional = 0.2 × $67500 = $13500" << std::endl;
+        } else {
+            std::cout << "✗ notional: " << notional << std::endl;
+        }
+
+        // R:R with reward / risk.
+        // entry=100, stop=99, target=103 → reward=3, risk=1, R:R=3.
+        double rr = pc.computeRR(100.0, 99.0, 103.0);
+        if (std::abs(rr - 3.0) < 1e-6) {
+            std::cout << "✓ R:R = (103-100)/(100-99) = 3.0" << std::endl;
+        } else {
+            std::cout << "✗ rr: " << rr << std::endl;
+        }
+
+        // R:R=0 when stop == entry (degenerate).
+        if (pc.computeRR(100.0, 100.0, 105.0) == 0.0) {
+            std::cout << "✓ degenerate R:R (stop == entry) → 0" << std::endl;
+        } else {
+            std::cout << "✗ degenerate R:R should be 0" << std::endl;
+        }
+
+        // Zero equity or zero risk → size = 0.
+        if (pc.computeSize(0.0, 1.0, 100.0, 99.0) == 0.0 &&
+            pc.computeSize(1000.0, 0.0, 100.0, 99.0) == 0.0) {
+            std::cout << "✓ zero equity / zero risk → size = 0" << std::endl;
+        } else {
+            std::cout << "✗ zero-input size check failed" << std::endl;
+        }
+
+        // Negative-direction stop (short trade): |entry - stop| still works.
+        // entry=100, stop=101 → size = risk / 1.
+        double short_size = pc.computeSize(1000.0, 1.0, 100.0, 101.0);
+        if (std::abs(short_size - 10.0) < 1e-6) {
+            std::cout << "✓ short (stop > entry) size = 10" << std::endl;
+        } else {
+            std::cout << "✗ short size: " << short_size << std::endl;
+        }
+
+        // Notional with sign is absolute.
+        if (pc.computeNotional(-5.0, 100.0) == 500.0) {
+            std::cout << "✓ notional(|size|) → absolute" << std::endl;
+        } else {
+            std::cout << "✗ notional abs failed" << std::endl;
+        }
     }
 
     return 0;

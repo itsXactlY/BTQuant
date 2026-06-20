@@ -24,6 +24,7 @@
 #include "../widgets/symbol_picker.hpp"
 #include "../widgets/theme_editor.hpp"
 #include "../util/theme_io.hpp"
+#include "../widgets/position_calculator.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -106,6 +107,7 @@ WindowManager::WindowManager() {
     });
 
     m_themeEditor = new ThemeEditor();
+    m_positionCalculator = new PositionCalculator();
 }
 
 WindowManager::~WindowManager() {
@@ -124,6 +126,7 @@ WindowManager::~WindowManager() {
     delete m_profileManager;
     delete m_symbolPicker;
     delete m_themeEditor;
+    delete m_positionCalculator;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -452,6 +455,11 @@ void WindowManager::showThemeEditorWindow() {
     if (m_themeEditor) m_themeEditor->render();
 }
 
+void WindowManager::showPositionCalculatorWindow() {
+    if (!showPositionCalculator) return;
+    if (m_positionCalculator) m_positionCalculator->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -471,6 +479,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Profile Manager…",  nullptr, &showProfileManager))  markSettingsDirty();
             if (ImGui::MenuItem("Symbol Picker… (Ctrl+P)", nullptr, &showSymbolPickerOpen)) markSettingsDirty();
             if (ImGui::MenuItem("Theme Editor… (Ctrl+T)",   nullptr, &showThemeEditorOpen))  markSettingsDirty();
+            if (ImGui::MenuItem("Position Calculator",  nullptr, &showPositionCalculator)) markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

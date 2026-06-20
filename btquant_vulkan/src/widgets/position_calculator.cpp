@@ -1,0 +1,155 @@
+#include "position_calculator.hpp"
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <imgui.h>
+
+namespace btquant::ui {
+
+namespace {
+double parseOrZero(const char* s) {
+    if (!s || !*s) return 0.0;
+    char* end = nullptr;
+    double v = std::strtod(s, &end);
+    return (end == s) ? 0.0 : v;
+}
+} // namespace
+
+double PositionCalculator::computeSize(double equity, double riskPct,
+                                      double entry, double stop) const {
+    if (equity <= 0.0 || riskPct <= 0.0) return 0.0;
+    double riskUSD = equity * (riskPct / 100.0);
+    double perUnitRisk = std::fabs(entry - stop);
+    if (perUnitRisk <= 0.0) return 0.0;
+    return riskUSD / perUnitRisk;
+}
+
+double PositionCalculator::computeNotional(double size, double price) const {
+    return std::fabs(size) * price;
+}
+
+double PositionCalculator::computeRR(double entry, double stop, double target) const {
+    double risk  = std::fabs(entry - stop);
+    double reward = std::fabs(target - entry);
+    if (risk <= 0.0) return 0.0;
+    return reward / risk;
+}
+
+void PositionCalculator::render() {
+    if (!ImGui::Begin("Position Calculator", nullptr,
+                      ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Inputs (edit, results update live):");
+    ImGui::PushItemWidth(160);
+    ImGui::InputText("Equity (USD)",   m_equity,   sizeof(m_equity));
+    ImGui::InputText("Risk per trade %", m_riskPct, sizeof(m_riskPct));
+    ImGui::InputText("Entry price",     m_entry,    sizeof(m_entry));
+    ImGui::InputText("Stop-loss price", m_stop,     sizeof(m_stop));
+    ImGui::InputText("Take-profit price", m_target, sizeof(m_target));
+    ImGui::InputText("Leverage (x)",    m_leverage, sizeof(m_leverage));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    ImGui::Checkbox("Show help", &m_showHelp);
+    ImGui::Separator();
+
+    double equity   = parseOrZero(m_equity);
+    double riskPct  = parseOrZero(m_riskPct);
+    double entry    = parseOrZero(m_entry);
+    double stop     = parseOrZero(m_stop);
+    double target   = parseOrZero(m_target);
+    double leverage = parseOrZero(m_leverage);
+    if (leverage <= 0.0) leverage = 1.0;
+
+    double size      = computeSize(equity, riskPct, entry, stop);
+    double notional  = computeNotional(size, entry);
+    double riskUSD   = equity * (riskPct / 100.0);
+    double rr        = computeRR(entry, stop, target);
+
+    ImGui::Columns(2, "PosCalc", false);
+    ImGui::SetColumnWidth(0, 200);
+
+    ImGui::Text("Position size (base)"); ImGui::NextColumn();
+    if (size > 0.0) ImGui::Text("%.6f", size); else ImGui::TextDisabled("—");
+    ImGui::NextColumn();
+
+    ImGui::Text("Notional (USD)");       ImGui::NextColumn();
+    if (notional > 0.0) ImGui::Text("$%.2f", notional);
+    else                ImGui::TextDisabled("—");
+    ImGui::NextColumn();
+
+    ImGui::Text("Risk amount (USD)");    ImGui::NextColumn();
+    ImGui::Text("$%.2f", riskUSD); ImGui::NextColumn();
+
+    ImGui::Text("R:R ratio");            ImGui::NextColumn();
+    if (rr > 0.0) {
+        ImVec4 col = rr >= 2.0 ? ImVec4(0.30f, 0.95f, 0.40f, 1.0f)
+                     : rr >= 1.0 ? ImVec4(1.00f, 0.85f, 0.30f, 1.0f)
+                                  : ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+        ImGui::TextColored(col, "%.2f R", rr);
+    } else {
+        ImGui::TextDisabled("—");
+    }
+    ImGui::NextColumn();
+
+    ImGui::Text("Effective leverage");   ImGui::NextColumn();
+    if (size > 0.0 && equity > 0.0) {
+        double effLev = notional / equity;
+        ImVec4 col = effLev > leverage * 1.01f ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f)
+                                                : ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        ImGui::TextColored(col, "%.2fx (input %.2fx)", effLev, leverage);
+    } else {
+        ImGui::TextDisabled("—");
+    }
+    ImGui::NextColumn();
+
+    ImGui::Columns(1);
+
+    ImGui::Separator();
+    ImGui::Text("P&L scenarios:");
+
+    if (size > 0.0 && entry > 0.0) {
+        // 1R = risk amount. 2R = double profit.
+        // Also show actual target profit.
+        double oneR        = riskUSD;
+        double twoR        = riskUSD * 2.0;
+        double targetProfit = (target > entry ? 1.0 : -1.0) *
+                              size * std::fabs(target - entry);
+
+        ImGui::Columns(4, "scenarios", false);
+        ImGui::Text("1R win"); ImGui::NextColumn();
+        ImGui::Text("2R win"); ImGui::NextColumn();
+        ImGui::Text("Target win"); ImGui::NextColumn();
+        ImGui::Text("Stop loss"); ImGui::NextColumn();
+        ImGui::TextColored(ImVec4(0.30f, 0.95f, 0.40f, 1.0f), "+$%.2f", oneR);
+        ImGui::NextColumn();
+        ImGui::TextColored(ImVec4(0.30f, 0.95f, 0.40f, 1.0f), "+$%.2f", twoR);
+        ImGui::NextColumn();
+        ImVec4 tcol = targetProfit >= 0 ? ImVec4(0.30f, 0.95f, 0.40f, 1.0f)
+                                        : ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+        ImGui::TextColored(tcol, "%s$%.2f",
+                           targetProfit >= 0 ? "+" : "", targetProfit);
+        ImGui::NextColumn();
+        ImGui::TextColored(ImVec4(0.95f, 0.30f, 0.30f, 1.0f), "-$%.2f", riskUSD);
+        ImGui::Columns(1);
+    } else {
+        ImGui::TextDisabled("Set equity, risk %, entry, and stop to see scenarios.");
+    }
+
+    if (m_showHelp) {
+        ImGui::Separator();
+        ImGui::TextWrapped(
+            "Position size = (equity × risk%) / |entry - stop|. "
+            "If R:R < 1, the trade has more downside than upside relative to "
+            "your stop. Effective leverage = notional / equity; if it exceeds "
+            "your input leverage, you're over-sizing.");
+    }
+
+    ImGui::End();
+}
+
+} // namespace btquant::ui

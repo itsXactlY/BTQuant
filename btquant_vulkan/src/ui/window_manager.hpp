@@ -67,6 +67,9 @@ public:
     // Theme Editor toggle (modal).
     bool showThemeEditorOpen = false;
 
+    // Position Calculator toggle.
+    bool showPositionCalculator = true;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -125,6 +128,7 @@ public:
     void showThemeEditorWindow();
     void applyPersistedTheme();
     bool saveCurrentTheme();
+    void showPositionCalculatorWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -162,6 +166,7 @@ private:
     class ProfileManager*  m_profileManager  = nullptr;
     class SymbolPicker*    m_symbolPicker    = nullptr;
     class ThemeEditor*     m_themeEditor     = nullptr;
+    class PositionCalculator* m_positionCalculator = nullptr;
     StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;

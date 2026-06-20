@@ -90,6 +90,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/symbol_picker.cpp
     ../src/util/theme_io.cpp
     ../src/widgets/theme_editor.cpp
+    ../src/widgets/position_calculator.cpp
 )
 
 # Set C++ standard

@@ -8722,4 +8722,67 @@ TradeJournal::allSegmentSharpeTrendByTag(
     return out;
 }
 
+namespace {
+// Sprint #205 — Best-Day-of-Week builder.
+template <typename Pred>
+TradeJournal::BestDayOfWeek
+buildBestDayOfWeekBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::BestDayOfWeek b;
+    std::array<double, 7> sum{};
+    std::array<size_t, 7> cnt{};
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int wd = tm.tm_wday;  // 0=Sun..6=Sat
+        sum[wd] += f.realizedDelta;
+        cnt[wd]++;
+    }
+    int best = -1;
+    double bestMean = -1e18;
+    size_t bestCnt = 0;
+    for (int i = 0; i < 7; ++i) {
+        if (cnt[i] == 0) continue;
+        double mean = sum[i] / static_cast<double>(cnt[i]);
+        if (mean > bestMean) {
+            bestMean = mean;
+            best = i;
+            bestCnt = cnt[i];
+        }
+    }
+    b.bestWeekday = best;
+    b.bestMeanPnL = (best >= 0) ? bestMean : 0.0;
+    b.bestDayFills = bestCnt;
+    return b;
+}
+}  // namespace
+
+TradeJournal::BestDayOfWeek
+TradeJournal::bestDayOfWeekBySymbol(
+    const std::string& symbol) const {
+    auto b = buildBestDayOfWeekBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    b.segment = symbol;
+    return b;
+}
+
+TradeJournal::BestDayOfWeek
+TradeJournal::bestDayOfWeekByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto b = buildBestDayOfWeekBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    b.segment = tag;
+    return b;
+}
+
 } // namespace btquant

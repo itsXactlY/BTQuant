@@ -2173,6 +2173,21 @@ public:
         size_t window = 30,
         size_t lastN = 30) const;
 
+    // Per-segment Best-Day-of-Week (Sprint #205). For
+    // each segment, identify the weekday (0=Sun..6=Sat)
+    // with the highest mean realized.
+    struct BestDayOfWeek {
+        std::string segment;
+        int         bestWeekday  = -1;  // 0=Sun..6=Sat
+        double      bestMeanPnL  = 0.0;
+        size_t      bestDayFills = 0;
+    };
+    BestDayOfWeek bestDayOfWeekBySymbol(
+        const std::string& symbol) const;
+    BestDayOfWeek bestDayOfWeekByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

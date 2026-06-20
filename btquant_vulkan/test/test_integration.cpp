@@ -22184,5 +22184,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 191: bestDayOfWeekBySymbol/ByTag (Sprint #205).
+    //
+    // Per-segment best weekday. Tests:
+    //   - BTC: 1 fill on Wed (tm_wday=3) → bestWeekday=3.
+    std::cout << "\nTest 191: best day of week..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test191_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2024-01-03 is Wed (tm_wday=3) ----
+        {
+            // 2024-01-03 12:00:00 UTC = 1704283200
+            const uint64_t wed = 1704283200ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "w.jsonl").string());
+            j.append(mkFill("BTC", 100.0, wed));
+            auto btcB = j.bestDayOfWeekBySymbol("BTC");
+            if (btcB.bestWeekday == 3 &&
+                btcB.bestDayFills == 1 &&
+                std::fabs(btcB.bestMeanPnL - 100.0) < 1e-9) {
+                std::cout << "✓ BTC: bestWeekday=Wed, "
+                          << "meanPnL=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: best="
+                          << btcB.bestWeekday
+                          << " mean=" << btcB.bestMeanPnL
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " best-day tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -8198,5 +8198,200 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 78: TradeJournal.realizedByDay() (Sprint #77).
+    // Per-day realized from the persisted journal. Bucketed by
+    // local-time calendar day, sorted by date ASC (oldest first),
+    // format "YYYY-MM-DD" — joins cleanly with formatFillsCSV().
+    std::cout << "\nTest 78: Testing TradeJournal.realizedByDay()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test78_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        fs::path journalPath = tmpDir / "journal.jsonl";
+        TradeJournal j(journalPath.string());
+
+        // Empty journal → empty vector.
+        auto empty = j.realizedByDay();
+        if (empty.empty()) {
+            std::cout << "✓ empty journal: empty breakdown" << std::endl;
+        } else {
+            std::cout << "✗ empty journal: size=" << empty.size()
+                      << std::endl;
+        }
+
+        // Build fills with controlled timestamps (UTC for the
+        // timestamp_us values; the panel groups by localtime so the
+        // exact date may shift across TZ — but in this test the
+        // system local TZ is the one grouping, so we work in local
+        // time directly: pick three distinct local days).
+        //
+        // Construct today's local midnight for the current day,
+        // then subtract N*86400 seconds for earlier days. This
+        // keeps the test TZ-independent (no hardcoded UTC dates).
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        // Today's local midnight.
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today_midnight = std::mktime(&tm_now);
+        std::time_t yesterday      = today_midnight - 86400;
+        std::time_t two_days_ago  = today_midnight - 2*86400;
+
+        // Format the dates for verification.
+        auto dateStr = [](std::time_t t) -> std::string {
+            std::tm tm_out{};
+#if defined(_WIN32)
+            localtime_s(&tm_out, &t);
+#else
+            localtime_r(&t, &tm_out);
+#endif
+            char buf[16];
+            std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm_out);
+            return std::string(buf);
+        };
+        std::string d_today = dateStr(today_midnight);
+        std::string d_yday  = dateStr(yesterday);
+        std::string d_2ago  = dateStr(two_days_ago);
+
+        // Today: 3 fills, +$100, +$200, -$50 = +$250
+        // Yesterday: 1 fill, +$400
+        // 2 days ago: 2 fills, -$150, -$50 = -$200
+        auto mkFill = [](const std::string& sym, double realized,
+                         std::time_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false; f.realizedDelta = realized;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+        // Today: noon
+        std::time_t today_noon = today_midnight + 12*3600;
+        j.append(mkFill("BTCUSDT",  100, today_noon));
+        j.append(mkFill("ETHUSDT",  200, today_noon + 60));
+        j.append(mkFill("XRPUSDT", -50, today_noon + 120));
+        // Yesterday: 10am
+        std::time_t yday_10am = yesterday + 10*3600;
+        j.append(mkFill("BTCUSDT",  400, yday_10am));
+        // 2 days ago: 14:30 and 14:35
+        std::time_t t2_1430 = two_days_ago + 14*3600 + 30*60;
+        std::time_t t2_1435 = t2_1430 + 5*60;
+        j.append(mkFill("ETHUSDT", -150, t2_1430));
+        j.append(mkFill("ETHUSDT",  -50, t2_1435));
+
+        auto day = j.realizedByDay();
+
+        // 3 buckets (one per trading day), sorted ASC: 2-ago, yday, today.
+        bool sizeOk = (day.size() == 3);
+        if (sizeOk) {
+            std::cout << "✓ 3 distinct days → 3 buckets" << std::endl;
+        } else {
+            std::cout << "✗ size wrong: " << day.size() << std::endl;
+        }
+
+        bool sortedOk = sizeOk &&
+                        day[0].first == d_2ago &&
+                        day[1].first == d_yday  &&
+                        day[2].first == d_today;
+        if (sortedOk) {
+            std::cout << "✓ sorted ASC by date ("
+                      << day[0].first << " < "
+                      << day[1].first << " < "
+                      << day[2].first << ")" << std::endl;
+        } else {
+            std::cout << "✗ sort wrong" << std::endl;
+            for (const auto& kv : day)
+                std::cout << "  " << kv.first << " " << kv.second << std::endl;
+        }
+
+        // Sums: 2-ago = -200, yday = +400, today = +250.
+        bool sumOk = sortedOk &&
+                     std::fabs(day[0].second - (-200.0)) < 1e-9 &&
+                     std::fabs(day[1].second -   400.0) < 1e-9 &&
+                     std::fabs(day[2].second -   250.0) < 1e-9;
+        if (sumOk) {
+            std::cout << "✓ daily sums correct "
+                      << "(-$200 / +$400 / +$250)" << std::endl;
+        } else {
+            std::cout << "✗ sums wrong" << std::endl;
+            for (const auto& kv : day)
+                std::cout << "  " << kv.first << " = " << kv.second
+                          << std::endl;
+        }
+
+        // Sum of all daily buckets == totalRealized() — consistency
+        // invariant (same fills, different grouping).
+        double sumDay = 0.0;
+        for (const auto& kv : day) sumDay += kv.second;
+        double total = j.totalRealized();
+        bool sumConsOk = std::fabs(sumDay - total) < 1e-9 &&
+                         std::fabs(total - 450.0) < 1e-9;
+        if (sumConsOk) {
+            std::cout << "✓ sum(daily) == totalRealized ($450)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ sum(daily)=" << sumDay
+                      << " totalRealized=" << total << std::endl;
+        }
+
+        // Open fills (realized == 0) DO contribute — same-day bucket
+        // grows by zero, but the day stays in the list.
+        fs::path journalPath2 = tmpDir / "journal2.jsonl";
+        TradeJournal j2(journalPath2.string());
+        std::time_t today_15h = today_midnight + 15*3600;
+        j2.append(mkFill("BTCUSDT",    0, today_15h));  // open fill
+        j2.append(mkFill("BTCUSDT", -100, today_15h + 60));  // close
+        auto day2 = j2.realizedByDay();
+        bool openOk = (day2.size() == 1) &&
+                      (day2[0].first == d_today) &&
+                      std::fabs(day2[0].second - (-100.0)) < 1e-9;
+        if (openOk) {
+            std::cout << "✓ open fill (realized=0) doesn't pollute day bucket"
+                      << std::endl;
+        } else {
+            std::cout << "✗ open-fill day wrong" << std::endl;
+            for (const auto& kv : day2)
+                std::cout << "  " << kv.first << " = " << kv.second
+                          << std::endl;
+        }
+
+        // ISO format check: every key is exactly "YYYY-MM-DD"
+        // (10 chars, hyphens at positions 4 and 7). Verifies the
+        // format string matches what downstream tools expect.
+        bool isoOk = !day.empty();
+        for (const auto& kv : day) {
+            if (kv.first.size() != 10 ||
+                kv.first[4]  != '-' ||
+                kv.first[7]  != '-') {
+                isoOk = false; break;
+            }
+        }
+        if (isoOk) {
+            std::cout << "✓ ISO date format (YYYY-MM-DD) verified"
+                      << std::endl;
+        } else {
+            std::cout << "✗ ISO format wrong" << std::endl;
+        }
+
+        // Cleared journal → empty again.
+        j.clear();
+        auto cleared = j.realizedByDay();
+        if (cleared.empty()) {
+            std::cout << "✓ cleared journal: empty breakdown" << std::endl;
+        } else {
+            std::cout << "✗ cleared journal: size=" << cleared.size()
+                      << std::endl;
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

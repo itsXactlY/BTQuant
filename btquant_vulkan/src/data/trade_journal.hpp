@@ -73,6 +73,27 @@ public:
     std::vector<std::pair<std::string, double>>
     realizedByTag(bool includeUntagged = false) const;
 
+    // Per-day realized (Sprint #77). Buckets persisted fills by
+    // local-time calendar day (the trader's day, not UTC) and
+    // returns one row per day that had at least one fill, sorted by
+    // date ASCENDING (oldest first).
+    //
+    // Format: "YYYY-MM-DD" — sortable as a string and matches the
+    // timestamp format used by formatFillsCSV() (#66), so the two
+    // can be joined in a downstream tool without translation.
+    //
+    // Open fills (realized == 0) DO contribute to the bucket — a
+    // day with only opens is still a trading day, and the trader
+    // wants to see "I traded but didn't close anything" without a
+    // second pass. Days with no fills at all are simply absent
+    // from the output.
+    //
+    // Wall-clock time matters: timestamp_us is system_clock::now()
+    // at fill time, so localtime_r groups by the trader's local
+    // midnight — same convention as RiskGuard's auto-reset (#69).
+    std::vector<std::pair<std::string, double>>
+    realizedByDay() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

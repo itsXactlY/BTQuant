@@ -5,9 +5,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <unordered_map>
 
@@ -256,6 +258,46 @@ TradeJournal::Stats TradeJournal::stats() const {
     }
 
     return s;
+}
+
+std::vector<std::pair<std::string, double>>
+TradeJournal::realizedByDay() const {
+    std::vector<JournalFill> fills = loadAll();
+
+    // Build a date-bucketed map. std::map (not unordered) so the
+    // iteration is naturally sorted by date string — and since the
+    // key is "YYYY-MM-DD", lexical sort matches chronological sort.
+    // A trader who wants to read "last week" just slices the tail.
+    std::map<std::string, double> buckets;
+
+    for (const auto& f : fills) {
+        // timestamp_us is system_clock::now() at fill time.
+        // localtime_r groups by the trader's local midnight — same
+        // convention as RiskGuard's auto-reset (#69). std::time_t
+        // is seconds; truncate microseconds before conversion.
+        std::time_t secs = static_cast<std::time_t>(f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        // localtime_r is POSIX; localtime_s is Windows. Use the
+        // POSIX form with a portable fallback via localtime when
+        // _POSIX_C_SOURCE isn't defined.
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        char date[16];  // "YYYY-MM-DD" + null
+        std::strftime(date, sizeof(date), "%Y-%m-%d", &tm);
+        buckets[date] += f.realizedDelta;
+    }
+
+    // std::map iteration is already date-ASC (lexical sort ==
+    // chronological for ISO dates). Drain into a vector and return.
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(buckets.size());
+    for (auto& kv : buckets) {
+        out.emplace_back(std::move(kv.first), kv.second);
+    }
+    return out;
 }
 
 namespace {

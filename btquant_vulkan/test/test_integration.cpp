@@ -17373,5 +17373,156 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 128: winRateCI() / BySymbol / ByTag
+    //   (Sprint #141).
+    //
+    // Wilson 95% CI for win rate. Tests:
+    //   - Empty: zeros.
+    //   - 60 wins / 40 losses (n=100, p=0.6):
+    //       lower95 ≈ 0.500, upper95 ≈ 0.692.
+    //   - 10 wins / 0 losses (n=10, p=1.0):
+    //       upper95 clamped to 1.0, lower95 ≈ 0.722.
+    //   - 0 wins / 10 losses (n=10, p=0.0):
+    //       lower95 = 0.0, upper95 ≈ 0.278.
+    std::cout << "\nTest 128: win rate CI..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test128_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto c = j.winRateCI();
+            if (c.total == 0 &&
+                c.observed == 0.0 &&
+                c.lower95 == 0.0 &&
+                c.upper95 == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << c.total << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 60W / 40L ----
+        // n=100, p=0.6. Wilson:
+        //   z=1.96, z²=3.8416.
+        //   center = (0.6 + 0.019208) / 1.038416 ≈ 0.5966.
+        //   margin = 1.96 * sqrt((0.24 + 0.009604)/100)
+        //            / 1.038416 ≈ 0.0958.
+        //   lower ≈ 0.5008, upper ≈ 0.6924.
+        {
+            TradeJournal j((tmpDir / "p60.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 60; ++i) {
+                j.append(mkFill("BTC",  100.0, "",
+                                t0 + i));
+            }
+            for (int i = 0; i < 40; ++i) {
+                j.append(mkFill("BTC", -100.0, "",
+                                t0 + 60 + i));
+            }
+            auto c = j.winRateCI();
+            if (c.total == 100 &&
+                std::fabs(c.observed - 0.6) < 1e-9 &&
+                c.lower95 > 0.49 && c.lower95 < 0.51 &&
+                c.upper95 > 0.68 && c.upper95 < 0.71) {
+                std::cout << "✓ 60/40 (n=100): CI=["
+                          << c.lower95 << ", "
+                          << c.upper95 << "]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ 60/40 wrong: CI=["
+                          << c.lower95 << ", "
+                          << c.upper95 << "]"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 10W / 0L (all wins): upper=1.0 ----
+        {
+            TradeJournal j((tmpDir / "allw.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 10; ++i) {
+                j.append(mkFill("BTC",  100.0, "",
+                                t0 + i));
+            }
+            auto c = j.winRateCI();
+            if (c.total == 10 &&
+                std::fabs(c.observed - 1.0) < 1e-9 &&
+                std::fabs(c.upper95 - 1.0) < 1e-9 &&
+                c.lower95 > 0.7) {
+                std::cout << "✓ all-wins (n=10): "
+                          << "upper=1.0, lower=" << c.lower95
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-wins wrong: CI=["
+                          << c.lower95 << ", "
+                          << c.upper95 << "]"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 0W / 10L: lower=0.0 ----
+        {
+            TradeJournal j((tmpDir / "alll.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 10; ++i) {
+                j.append(mkFill("BTC", -100.0, "",
+                                t0 + i));
+            }
+            auto c = j.winRateCI();
+            if (c.total == 10 &&
+                std::fabs(c.observed) < 1e-9 &&
+                c.lower95 == 0.0 &&
+                c.upper95 < 0.3) {
+                std::cout << "✓ all-losses (n=10): "
+                          << "lower=0.0, upper=" << c.upper95
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-losses wrong: CI=["
+                          << c.lower95 << ", "
+                          << c.upper95 << "]"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " win-rate-ci tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -3832,6 +3832,65 @@ TradeJournal::equityVolatilityByTag(
 }
 
 namespace {
+// Sprint #141 — Wilson score CI helper.
+// Generic: counts wins + losses in matching fills, returns
+// the CI struct.
+template <typename Pred>
+TradeJournal::WinRateCI
+buildWinRateCI(const std::vector<JournalFill>& fills,
+               Pred pred) {
+    TradeJournal::WinRateCI out;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        if (f.realizedDelta > 0) out.wins++;
+        else out.losses++;
+    }
+    out.total = out.wins + out.losses;
+    if (out.total == 0) return out;
+    double n = static_cast<double>(out.total);
+    double p = static_cast<double>(out.wins) / n;
+    out.observed = p;
+    constexpr double z = 1.959963984540054;  // 95% CI
+    double z2 = z * z;
+    double denom = 1.0 + z2 / n;
+    double center = (p + z2 / (2.0 * n)) / denom;
+    double margin = z * std::sqrt(
+        (p * (1.0 - p) + z2 / (4.0 * n)) / n) / denom;
+    out.lower95 = std::max(0.0, center - margin);
+    out.upper95 = std::min(1.0, center + margin);
+    return out;
+}
+}  // namespace
+
+TradeJournal::WinRateCI
+TradeJournal::winRateCI() const {
+    return buildWinRateCI(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::WinRateCI
+TradeJournal::winRateCIBySymbol(
+    const std::string& symbol) const {
+    return buildWinRateCI(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::WinRateCI
+TradeJournal::winRateCIByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildWinRateCI(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

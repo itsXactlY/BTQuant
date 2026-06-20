@@ -1307,6 +1307,27 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
+    // Win-rate confidence interval (Sprint #141). Wilson
+    // score interval — better-behaved than normal
+    // approximation for small samples and edge cases (p=0
+    // or p=1).
+    //
+    // Returns lower/upper bounds on the true win rate at
+    // 95% confidence. Sample size n = wins + losses.
+    // Zero-realized fills (rounding artefacts) are excluded.
+    struct WinRateCI {
+        double observed    = 0.0;
+        double lower95     = 0.0;
+        double upper95     = 0.0;
+        size_t wins        = 0;
+        size_t losses      = 0;
+        size_t total       = 0;
+    };
+    WinRateCI winRateCI() const;
+    WinRateCI winRateCIBySymbol(const std::string& symbol) const;
+    WinRateCI winRateCIByTag(const std::string& tag,
+                              bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

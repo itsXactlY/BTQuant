@@ -5245,4 +5245,67 @@ bool TradeJournal::exportCSVByTag(const std::string& path,
     }
 }
 
+TradeJournal::SymbolCorrelation
+TradeJournal::symbolSymbolCorrelation(
+    const std::string& symA,
+    const std::string& symB) const {
+    // Sprint #148. Per-day Pearson correlation of realized
+    // between symA and symB. Aggregate each symbol's
+    // fills by local day, find days both traded, compute
+    // correlation on matched pairs.
+    SymbolCorrelation r;
+    auto fills = loadAll();
+    std::vector<JournalFill> onlyA, onlyB;
+    for (const auto& f : fills) {
+        if (f.symbol == symA) onlyA.push_back(f);
+        else if (f.symbol == symB) onlyB.push_back(f);
+    }
+    r.fillsA = onlyA.size();
+    r.fillsB = onlyB.size();
+    if (onlyA.size() < 2 || onlyB.size() < 2) return r;
+    auto bucket = [](const std::vector<JournalFill>& src) {
+        std::map<std::string, double> out;
+        for (const auto& f : src) {
+            if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+            std::time_t s = static_cast<std::time_t>(
+                f.timestamp_us / 1000000ULL);
+            std::tm tm{};
+            localtime_r(&s, &tm);
+            char buf[16];
+            std::strftime(buf, sizeof(buf),
+                          "%Y-%m-%d", &tm);
+            out[buf] += f.realizedDelta;
+        }
+        return out;
+    };
+    auto daysA = bucket(onlyA);
+    auto daysB = bucket(onlyB);
+    std::vector<double> x, y;
+    for (const auto& kv : daysA) {
+        auto it = daysB.find(kv.first);
+        if (it != daysB.end()) {
+            x.push_back(kv.second);
+            y.push_back(it->second);
+        }
+    }
+    r.matchedDays = x.size();
+    if (r.matchedDays < 2) return r;
+    double meanX = 0.0, meanY = 0.0;
+    for (size_t k = 0; k < x.size(); ++k) {
+        meanX += x[k]; meanY += y[k];
+    }
+    meanX /= static_cast<double>(x.size());
+    meanY /= static_cast<double>(y.size());
+    double cov = 0.0, varX = 0.0, varY = 0.0;
+    for (size_t k = 0; k < x.size(); ++k) {
+        cov  += (x[k] - meanX) * (y[k] - meanY);
+        varX += (x[k] - meanX) * (x[k] - meanX);
+        varY += (y[k] - meanY) * (y[k] - meanY);
+    }
+    if (varX < 1e-12 || varY < 1e-12) return r;
+    r.correlation = cov / std::sqrt(varX * varY);
+    r.valid = true;
+    return r;
+}
+
 } // namespace btquant

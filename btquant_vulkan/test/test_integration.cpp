@@ -18081,5 +18081,112 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 135: symbolSymbolCorrelation() (Sprint #148).
+    //
+    // Per-day Pearson r between two symbols. Tests:
+    //   - Insufficient data: valid=false.
+    //   - Perfectly correlated: r ≈ 1.0.
+    //   - Perfectly anti-correlated: r ≈ -1.0.
+    std::cout << "\nTest 135: symbol-symbol correlation..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test135_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Insufficient data ----
+        {
+            TradeJournal j((tmpDir / "few.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("ETH", 100.0, "", t0 + 1));
+            auto r = j.symbolSymbolCorrelation("BTC", "ETH");
+            if (!r.valid &&
+                r.fillsA == 1 && r.fillsB == 1) {
+                std::cout << "✓ insufficient: valid=false"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ insufficient wrong: valid="
+                          << r.valid << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Perfect correlation: BTC and ETH both +100
+        // on Day1, +200 on Day2 ----
+        {
+            TradeJournal j((tmpDir / "pcor.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH",  100.0, "", t0 + 1));
+            j.append(mkFill("BTC",  200.0, "", t0 + day));
+            j.append(mkFill("ETH",  200.0, "", t0 + day + 1));
+            auto r = j.symbolSymbolCorrelation("BTC", "ETH");
+            if (r.valid &&
+                r.matchedDays == 2 &&
+                std::fabs(r.correlation - 1.0) < 1e-9) {
+                std::cout << "✓ perfect +1.0 correlation"
+                          << " (matchedDays=2)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ pcor wrong: r=" << r.correlation
+                          << " matchedDays=" << r.matchedDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Anti-correlation: BTC +100 / ETH -100 on D1,
+        // BTC +200 / ETH -200 on D2 ----
+        {
+            TradeJournal j((tmpDir / "ncor.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH", -100.0, "", t0 + 1));
+            j.append(mkFill("BTC",  200.0, "", t0 + day));
+            j.append(mkFill("ETH", -200.0, "", t0 + day + 1));
+            auto r = j.symbolSymbolCorrelation("BTC", "ETH");
+            if (r.valid &&
+                std::fabs(r.correlation + 1.0) < 1e-9) {
+                std::cout << "✓ perfect -1.0 anti-correlation"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ ncor wrong: r="
+                          << r.correlation << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " sym-corr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -1425,6 +1425,27 @@ public:
         const std::string& tag, bool includeUntagged = false,
         size_t n = 5) const;
 
+    // Symbol-symbol correlation (Sprint #148). Pearson
+    // correlation of per-day realized between two symbols.
+    // Returns NaN (via `valid=false`) when either symbol
+    // has < 2 fills or fewer than 2 matched days.
+    //
+    // High positive correlation (≈1.0): symbols move
+    // together — no diversification benefit.
+    // Negative correlation (<0): symbols move opposite —
+    // good for hedging.
+    // Near zero (±0.1): independent.
+    struct SymbolCorrelation {
+        double correlation = 0.0;
+        size_t fillsA       = 0;
+        size_t fillsB       = 0;
+        size_t matchedDays  = 0;
+        bool   valid        = false;
+    };
+    SymbolCorrelation symbolSymbolCorrelation(
+        const std::string& symA,
+        const std::string& symB) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

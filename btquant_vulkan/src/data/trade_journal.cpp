@@ -6636,4 +6636,69 @@ TradeJournal::profitContributionByTag(
     return out;
 }
 
+std::vector<TradeJournal::RiskEfficiency>
+TradeJournal::riskEfficiencyBySymbol() const {
+    // Sprint #168. Combine profit and DD contributions
+    // (#167 + #166) into a per-segment efficiency score.
+    auto profits = profitContributionBySymbol();
+    auto dds = ddContributionBySymbol();
+    // Build a map ddShare[segment] for fast lookup.
+    std::map<std::string, double> ddShare;
+    for (const auto& d : dds) ddShare[d.segment] = d.contribution;
+    std::vector<RiskEfficiency> out;
+    out.reserve(profits.size());
+    for (const auto& p : profits) {
+        RiskEfficiency r;
+        r.segment = p.segment;
+        r.profitShare = p.contribution;
+        auto it = ddShare.find(p.segment);
+        r.ddShare = it != ddShare.end() ? it->second : 0.0;
+        // efficiency: profitShare / ddShare when both
+        // have the same sign (both positive = good, both
+        // negative = bad — net loss segment).
+        if (std::fabs(r.ddShare) > 1e-9) {
+            r.efficiency = r.profitShare / r.ddShare;
+        } else {
+            r.efficiency = 0.0;
+        }
+        out.push_back(r);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskEfficiency& a, const RiskEfficiency& b) {
+            return a.efficiency > b.efficiency;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::RiskEfficiency>
+TradeJournal::riskEfficiencyByTag(
+    bool includeUntagged) const {
+    // Sprint #168. Same as riskEfficiencyBySymbol but
+    // for tags.
+    auto profits = profitContributionByTag(includeUntagged);
+    auto dds = ddContributionByTag(includeUntagged);
+    std::map<std::string, double> ddShare;
+    for (const auto& d : dds) ddShare[d.segment] = d.contribution;
+    std::vector<RiskEfficiency> out;
+    out.reserve(profits.size());
+    for (const auto& p : profits) {
+        RiskEfficiency r;
+        r.segment = p.segment;
+        r.profitShare = p.contribution;
+        auto it = ddShare.find(p.segment);
+        r.ddShare = it != ddShare.end() ? it->second : 0.0;
+        if (std::fabs(r.ddShare) > 1e-9) {
+            r.efficiency = r.profitShare / r.ddShare;
+        } else {
+            r.efficiency = 0.0;
+        }
+        out.push_back(r);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RiskEfficiency& a, const RiskEfficiency& b) {
+            return a.efficiency > b.efficiency;
+        });
+    return out;
+}
+
 } // namespace btquant

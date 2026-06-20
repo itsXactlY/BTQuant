@@ -1691,6 +1691,22 @@ public:
     profitContributionByTag(
         bool includeUntagged = true) const;
 
+    // Risk-Efficiency per segment (Sprint #168). For each
+    // segment, ratio of profit contribution to DD
+    // contribution. Higher = more profit per unit of pain.
+    // Returns sorted DESC by efficiency score.
+    struct RiskEfficiency {
+        std::string segment;
+        double      profitShare     = 0.0;
+        double      ddShare         = 0.0;
+        double      efficiency      = 0.0;
+        // raw = profitShare / ddShare when both > 0.
+        // 0.0 if either is 0 (or they have opposite signs).
+    };
+    std::vector<RiskEfficiency> riskEfficiencyBySymbol() const;
+    std::vector<RiskEfficiency> riskEfficiencyByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -19286,5 +19286,77 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 149: monthlyMaxDrawdownBySymbol/ByTag (Sprint #162).
+    //
+    // Per-segment monthly max DD. Tests:
+    //   - BTC 3 fills across 1 month (Jan 2024).
+    //   - ETH 1 fill in Jan 2024.
+    std::cout << "\nTest 149: per-seg monthly DD..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test149_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC + ETH across Jan 2024 ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t jan = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", jan));
+            j.append(mkFill("ETH",  -50.0, "arb",
+                             jan + day));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             jan + 2 * day));
+            j.append(mkFill("BTC",   80.0, "scalp",
+                             jan + 3 * day));
+            auto btcV = j.monthlyMaxDrawdownBySymbol("BTC");
+            auto ethV = j.monthlyMaxDrawdownBySymbol("ETH");
+            if (btcV.size() == 1 &&
+                btcV[0].maxDD > 0.0 &&
+                ethV.size() == 1 &&
+                ethV[0].maxDD == 0.0) {
+                std::cout << "✓ BTC: 1 month maxDD="
+                          << btcV[0].maxDD
+                          << "; ETH: 1 month maxDD=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC size="
+                          << btcV.size()
+                          << " maxDD=" << (btcV.size() > 0
+                              ? btcV[0].maxDD : 0.0)
+                          << " ETH size=" << ethV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg monthly-DD tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

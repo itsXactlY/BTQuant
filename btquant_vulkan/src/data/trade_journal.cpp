@@ -6242,4 +6242,89 @@ TradeJournal::tagLeaderboard(
     return out;
 }
 
+namespace {
+// Sprint #162 — per-segment monthly max DD.
+// Reuses the daily-equity bucketing by month (#160) but
+// filters fills per segment.
+template <typename Pred>
+std::vector<TradeJournal::MonthlyMaxDD>
+buildMonthlyMaxDrawdownBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::vector<TradeJournal::MonthlyMaxDD> out;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    if (sub.empty()) return out;
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::map<std::pair<int, int>,
+             std::vector<double>> perMonthCum;
+    double cum = 0.0;
+    int lastY = 0, lastM = 0, lastD = -1;
+    auto curKey = std::make_pair(0, 0);
+    for (const auto& f : sub) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int y = 1900 + tm.tm_year;
+        int m = tm.tm_mon + 1;
+        int d = tm.tm_mday;
+        if (d != lastD || y != lastY) {
+            if (lastD >= 0) {
+                perMonthCum[curKey].push_back(cum);
+            }
+            curKey = std::make_pair(y, m);
+            lastD = d; lastY = y;
+        }
+        cum += f.realizedDelta;
+    }
+    if (lastD >= 0) perMonthCum[curKey].push_back(cum);
+    for (auto& kv : perMonthCum) {
+        auto& series = kv.second;
+        if (series.empty()) continue;
+        double peak = std::numeric_limits<double>::lowest();
+        double maxDD = 0.0;
+        for (double v : series) {
+            if (v > peak) peak = v;
+            double dd = peak - v;
+            if (dd > maxDD) maxDD = dd;
+        }
+        TradeJournal::MonthlyMaxDD m;
+        m.year = kv.first.first;
+        m.month = kv.first.second;
+        m.maxDD = maxDD;
+        m.days = series.size();
+        out.push_back(m);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::MonthlyMaxDD>
+TradeJournal::monthlyMaxDrawdownBySymbol(
+    const std::string& symbol) const {
+    return buildMonthlyMaxDrawdownBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::MonthlyMaxDD>
+TradeJournal::monthlyMaxDrawdownByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildMonthlyMaxDrawdownBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

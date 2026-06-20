@@ -1615,6 +1615,15 @@ public:
     };
     std::vector<MonthlyMaxDD> monthlyMaxDrawdown() const;
 
+    // Per-segment monthly max DD (Sprint #162). Same
+    // shape as monthlyMaxDrawdown (#160) but filtered to
+    // a single symbol or tag.
+    std::vector<MonthlyMaxDD> monthlyMaxDrawdownBySymbol(
+        const std::string& symbol) const;
+    std::vector<MonthlyMaxDD> monthlyMaxDrawdownByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

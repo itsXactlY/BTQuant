@@ -1158,6 +1158,17 @@ public:
     };
     std::vector<Annotation> equityAnnotations() const;
 
+    // Per-symbol / per-tag annotation sets (Sprint #133).
+    // Same Annotation struct, but only includes events
+    // drawn from that symbol's/tag's fill sequence. The
+    // MaxDDStart/MaxDDEnd for a symbol is the worst DD
+    // experienced by that symbol alone.
+    std::vector<Annotation> equityAnnotationsBySymbol(
+        const std::string& symbol) const;
+    std::vector<Annotation> equityAnnotationsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

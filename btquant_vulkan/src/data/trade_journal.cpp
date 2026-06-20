@@ -3077,95 +3077,172 @@ TradeJournal::ddDurationStatsByTag(
         drawdownRecoveriesByTag(tag, includeUntagged));
 }
 
+// Sprint #132/133 — equity annotation builder. Templated
+// on the filter predicate so journal-wide + per-symbol +
+// per-tag share one tested core.
+template <typename Pred>
 std::vector<TradeJournal::Annotation>
-TradeJournal::equityAnnotations() const {
-    // Sprint #132. Build a list of significant equity-curve
-    // events the UI can overlay as labels.
-    std::vector<Annotation> out;
-    auto curve = equityCurve();
-    if (curve.empty()) return out;
-    // 1. Every recovered DD start + end.
-    auto dds = drawdownRecoveries();
-    for (const auto& dd : dds) {
-        Annotation a;
-        a.kind        = AnnotationKind::DDStart;
-        a.timestamp_us = dd.start_ts;
-        a.value       = dd.peak_before;
-        a.label       = "DD start (-" +
-            std::to_string(static_cast<int>(dd.trough_depth)) +
-            ")";
-        out.push_back(a);
-        Annotation b;
-        b.kind        = AnnotationKind::DDEnd;
-        b.timestamp_us = dd.end_ts;
-        b.value       = dd.peak_before;
-        b.label       = "DD recovered";
-        out.push_back(b);
+buildEquityAnnotations(const TradeJournal& j, Pred pred) {
+    std::vector<TradeJournal::Annotation> out;
+    auto fills = j.loadAll();
+    // Filter fills.
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
     }
-    // 2. The single deepest DD's start/end (max-of-above).
-    if (!dds.empty()) {
-        const auto& maxDD = dds.front();  // already sorted DESC
-        Annotation a;
-        a.kind        = AnnotationKind::MaxDDStart;
-        a.timestamp_us = maxDD.start_ts;
-        a.value       = maxDD.peak_before;
-        a.label       = "MAX DD start (-" +
-            std::to_string(
-                static_cast<int>(maxDD.trough_depth)) + ")";
-        out.push_back(a);
-        Annotation b;
-        b.kind        = AnnotationKind::MaxDDEnd;
-        b.timestamp_us = maxDD.end_ts;
-        b.value       = maxDD.peak_before;
-        b.label       = "MAX DD recovered";
-        out.push_back(b);
-    }
-    // 3. Best + worst day (single-day net P&L).
-    auto days = bucketByLocalDay(loadAll());
-    if (!days.empty()) {
-        double bestVal = -1e18, worstVal = 1e18;
-        std::string bestDate, worstDate;
-        for (const auto& kv : days) {
-            if (kv.second > bestVal) {
-                bestVal = kv.second;
-                bestDate = kv.first;
-            }
-            if (kv.second < worstVal) {
-                worstVal = kv.second;
-                worstDate = kv.first;
-            }
-        }
-        if (!bestDate.empty()) {
-            Annotation a;
-            a.kind        = AnnotationKind::BestDay;
-            a.timestamp_us = 0;  // date only, no ts
-            a.value       = bestVal;
-            a.label       = "Best day " + bestDate + ": " +
-                std::to_string(static_cast<int>(bestVal));
-            out.push_back(a);
-        }
-        // Only emit WorstDay if it differs from BestDay
-        // (single-day journals shouldn't emit "best == worst"
-        // as two separate annotations).
-        if (!worstDate.empty() && worstDate != bestDate) {
-            Annotation a;
-            a.kind        = AnnotationKind::WorstDay;
-            a.timestamp_us = 0;
-            a.value       = worstVal;
-            a.label       = "Worst day " + worstDate + ": " +
-                std::to_string(static_cast<int>(worstVal));
-            out.push_back(a);
-        }
-    }
-    // 4. Equity high water marks (every time cum exceeds
-    //    all previous values). Include the FIRST point —
-    //    that's the starting equity, also a high.
+    // Build a filtered equity curve. Reuse equityCurve()
+    // shape by sorting and walking.
+    if (sub.empty()) return out;
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<TradeJournal::EquityPoint> curve;
+    curve.reserve(sub.size());
     {
-        Annotation a;
-        a.kind        = AnnotationKind::EquityHigh;
+        double cum = 0.0;
+        for (const auto& f : sub) {
+            cum += f.realizedDelta;
+            TradeJournal::EquityPoint p;
+            p.cumulative   = cum;
+            p.timestamp_us = f.timestamp_us;
+            curve.push_back(p);
+        }
+    }
+    if (curve.empty()) return out;
+    std::vector<TradeJournal::DrawdownEvent> dds;
+    {
+        // Mirror Sprint #113 drawdown walker logic.
+        constexpr double kEps = 1e-9;
+        double peak = std::numeric_limits<double>::lowest();
+        uint64_t peak_ts = 0;
+        bool in_dd = false;
+        TradeJournal::DrawdownEvent cur;
+        for (size_t i = 0; i < curve.size(); ++i) {
+            const auto& p = curve[i];
+            if (p.cumulative > peak) {
+                if (in_dd) {
+                    cur.end_ts = peak_ts;
+                    cur.drawdown_us = cur.end_ts - cur.start_ts;
+                    cur.recovery_us = cur.end_ts - cur.trough_ts;
+                    dds.push_back(cur);
+                    in_dd = false;
+                }
+                peak = p.cumulative;
+                peak_ts = p.timestamp_us;
+            } else if (!in_dd) {
+                cur = TradeJournal::DrawdownEvent{};
+                cur.start_ts = peak_ts;
+                cur.trough_ts = p.timestamp_us;
+                cur.peak_before = peak;
+                cur.trough_value = p.cumulative;
+                cur.trough_depth = peak - p.cumulative;
+                in_dd = true;
+            } else {
+                if (p.cumulative < cur.trough_value) {
+                    cur.trough_value = p.cumulative;
+                    cur.trough_ts = p.timestamp_us;
+                    cur.trough_depth = peak - p.cumulative;
+                }
+            }
+            (void)kEps;
+        }
+        if (in_dd) {
+            cur.end_ts = peak_ts;
+            cur.drawdown_us = cur.end_ts - cur.start_ts;
+            cur.recovery_us = cur.end_ts - cur.trough_ts;
+            dds.push_back(cur);
+        }
+        std::sort(dds.begin(), dds.end(),
+            [](const TradeJournal::DrawdownEvent& a,
+               const TradeJournal::DrawdownEvent& b) {
+                return a.trough_depth > b.trough_depth;
+            });
+    }
+    // 1. Every recovered DD start + end.
+    for (const auto& dd : dds) {
+        TradeJournal::Annotation a;
+        a.kind = TradeJournal::AnnotationKind::DDStart;
+        a.timestamp_us = dd.start_ts;
+        a.value = dd.peak_before;
+        a.label = "DD start (-" +
+            std::to_string(static_cast<int>(dd.trough_depth)) + ")";
+        out.push_back(a);
+        TradeJournal::Annotation b;
+        b.kind = TradeJournal::AnnotationKind::DDEnd;
+        b.timestamp_us = dd.end_ts;
+        b.value = dd.peak_before;
+        b.label = "DD recovered";
+        out.push_back(b);
+    }
+    // 2. The single deepest DD.
+    if (!dds.empty()) {
+        const auto& maxDD = dds.front();
+        TradeJournal::Annotation a;
+        a.kind = TradeJournal::AnnotationKind::MaxDDStart;
+        a.timestamp_us = maxDD.start_ts;
+        a.value = maxDD.peak_before;
+        a.label = "MAX DD start (-" +
+            std::to_string(static_cast<int>(maxDD.trough_depth)) + ")";
+        out.push_back(a);
+        TradeJournal::Annotation b;
+        b.kind = TradeJournal::AnnotationKind::MaxDDEnd;
+        b.timestamp_us = maxDD.end_ts;
+        b.value = maxDD.peak_before;
+        b.label = "MAX DD recovered";
+        out.push_back(b);
+    }
+    // 3. Best + worst day (within filtered fills).
+    {
+        std::map<std::string, double> days;
+        for (const auto& f : sub) {
+            std::time_t s = static_cast<std::time_t>(
+                f.timestamp_us / 1000000ULL);
+            std::tm tm{};
+            localtime_r(&s, &tm);
+            char buf[16];
+            std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+            days[buf] += f.realizedDelta;
+        }
+        if (!days.empty()) {
+            double bestVal = -1e18, worstVal = 1e18;
+            std::string bestDate, worstDate;
+            for (const auto& kv : days) {
+                if (kv.second > bestVal) {
+                    bestVal = kv.second; bestDate = kv.first;
+                }
+                if (kv.second < worstVal) {
+                    worstVal = kv.second; worstDate = kv.first;
+                }
+            }
+            if (!bestDate.empty()) {
+                TradeJournal::Annotation a;
+                a.kind = TradeJournal::AnnotationKind::BestDay;
+                a.timestamp_us = 0;
+                a.value = bestVal;
+                a.label = "Best day " + bestDate + ": " +
+                    std::to_string(static_cast<int>(bestVal));
+                out.push_back(a);
+            }
+            if (!worstDate.empty() && worstDate != bestDate) {
+                TradeJournal::Annotation a;
+                a.kind = TradeJournal::AnnotationKind::WorstDay;
+                a.timestamp_us = 0;
+                a.value = worstVal;
+                a.label = "Worst day " + worstDate + ": " +
+                    std::to_string(static_cast<int>(worstVal));
+                out.push_back(a);
+            }
+        }
+    }
+    // 4. Equity high water marks.
+    {
+        TradeJournal::Annotation a;
+        a.kind = TradeJournal::AnnotationKind::EquityHigh;
         a.timestamp_us = curve[0].timestamp_us;
-        a.value       = curve[0].cumulative;
-        a.label       = "Equity high: " +
+        a.value = curve[0].cumulative;
+        a.label = "Equity high: " +
             std::to_string(static_cast<int>(curve[0].cumulative));
         out.push_back(a);
     }
@@ -3173,29 +3250,55 @@ TradeJournal::equityAnnotations() const {
     for (size_t i = 1; i < curve.size(); ++i) {
         if (curve[i].cumulative > runningPeak) {
             runningPeak = curve[i].cumulative;
-            Annotation a;
-            a.kind        = AnnotationKind::EquityHigh;
+            TradeJournal::Annotation a;
+            a.kind = TradeJournal::AnnotationKind::EquityHigh;
             a.timestamp_us = curve[i].timestamp_us;
-            a.value       = curve[i].cumulative;
-            a.label       = "Equity high: " +
+            a.value = curve[i].cumulative;
+            a.label = "Equity high: " +
                 std::to_string(static_cast<int>(curve[i].cumulative));
             out.push_back(a);
         }
     }
     // 5. Sort by timestamp ASC.
     std::sort(out.begin(), out.end(),
-        [](const Annotation& a, const Annotation& b) {
+        [](const TradeJournal::Annotation& a,
+           const TradeJournal::Annotation& b) {
             return a.timestamp_us < b.timestamp_us;
         });
     return out;
+}
+
+std::vector<TradeJournal::Annotation>
+TradeJournal::equityAnnotations() const {
+    return buildEquityAnnotations(*this,
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::Annotation>
+TradeJournal::equityAnnotationsBySymbol(
+    const std::string& symbol) const {
+    return buildEquityAnnotations(*this,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::Annotation>
+TradeJournal::equityAnnotationsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildEquityAnnotations(*this,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
 }
 
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week
-// (7 buckets) or hour-of-day (24 buckets). Reuses the same
-// keyFn pattern as bucketByDayPerAxis (#102).
 template <typename Bucket, size_t kBuckets>
 std::map<std::string, std::map<size_t, Bucket>>
 bucketByCalendarIndex(

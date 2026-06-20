@@ -16530,6 +16530,50 @@ int main() {
             }
         }
 
+        // ---- Per-symbol: BTC has a DD, ETH doesn't ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 1*hour));
+            j.append(mkFill("BTC",  200.0, "", t0 + 2*hour));
+            j.append(mkFill("ETH",  300.0, "",
+                             t0 + 3*hour));
+            // BTC: 1 DD + 2 EquityHigh + BestDay +
+            //   MaxDDStart + MaxDDEnd = 6 events
+            //   (DDStart, DDEnd, MaxDDStart, MaxDDEnd,
+            //   EquityHigh, EquityHigh, BestDay).
+            // ETH: 0 DDs + 1 EquityHigh + BestDay = 2 events.
+            auto btcAnns = j.equityAnnotationsBySymbol("BTC");
+            auto ethAnns = j.equityAnnotationsBySymbol("ETH");
+            size_t btcDDs = 0, btcHighs = 0;
+            for (const auto& a : btcAnns) {
+                if (a.kind == btquant::TradeJournal::AnnotationKind::DDStart ||
+                    a.kind == btquant::TradeJournal::AnnotationKind::DDEnd)
+                    ++btcDDs;
+                if (a.kind == btquant::TradeJournal::AnnotationKind::EquityHigh)
+                    ++btcHighs;
+            }
+            if (btcDDs == 2 && btcHighs == 2 &&
+                ethAnns.size() == 2) {
+                std::cout << "✓ per-symbol: BTC=" << btcAnns.size()
+                          << " events (2 DD + 2 highs), "
+                          << "ETH=" << ethAnns.size()
+                          << " events (high + best day)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-seg wrong: BTC events="
+                          << btcAnns.size()
+                          << " (DDs=" << btcDDs
+                          << " highs=" << btcHighs
+                          << "), ETH events=" << ethAnns.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
         fs::remove_all(tmpDir);
 
         std::cout << "  ─── " << pass << "/" << (pass + fail)

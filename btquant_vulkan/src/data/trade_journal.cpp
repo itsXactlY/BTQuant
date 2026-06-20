@@ -6444,4 +6444,62 @@ TradeJournal::allSegmentDrawdownStatsByTag(
     return out;
 }
 
+std::vector<TradeJournal::DrawdownEventExt>
+TradeJournal::allDrawdownRecoveries() const {
+    // Sprint #165. Combine drawdownRecoveriesBySymbol()
+    // across all symbols into one chronological list.
+    std::vector<DrawdownEventExt> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    for (const auto& s : syms) {
+        auto events = drawdownRecoveriesBySymbol(s);
+        for (const auto& e : events) {
+            DrawdownEventExt ext;
+            static_cast<DrawdownEvent&>(ext) = e;
+            ext.segment = s;
+            out.push_back(ext);
+        }
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DrawdownEventExt& a,
+           const DrawdownEventExt& b) {
+            return a.start_ts < b.start_ts;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::DrawdownEventExt>
+TradeJournal::allDrawdownRecoveriesByTag(
+    bool includeUntagged) const {
+    // Sprint #165. Combine drawdownRecoveriesByTag()
+    // across all tags into one chronological list.
+    std::vector<DrawdownEventExt> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    for (const auto& t : tags) {
+        auto events = drawdownRecoveriesByTag(t,
+            includeUntagged);
+        for (const auto& e : events) {
+            DrawdownEventExt ext;
+            static_cast<DrawdownEvent&>(ext) = e;
+            ext.segment = t;
+            out.push_back(ext);
+        }
+    }
+    std::sort(out.begin(), out.end(),
+        [](const DrawdownEventExt& a,
+           const DrawdownEventExt& b) {
+            return a.start_ts < b.start_ts;
+        });
+    return out;
+}
+
 } // namespace btquant

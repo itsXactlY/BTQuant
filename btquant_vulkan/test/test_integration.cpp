@@ -19521,5 +19521,79 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 152: allDrawdownRecoveries() / ByTag
+    //   (Sprint #165).
+    //
+    // All DD events chronologically. Tests:
+    //   - 2 symbols each with 1 DD → 2 events, both with
+    //     segment field populated.
+    std::cout << "\nTest 152: all DD events..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test152_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols, each with 1 DD ----
+        {
+            TradeJournal j((tmpDir / "events.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + day));
+            j.append(mkFill("BTC",   60.0, "scalp",
+                             t0 + 2 * day));
+            j.append(mkFill("ETH",  100.0, "arb",
+                             t0 + 3 * day));
+            j.append(mkFill("ETH",  -50.0, "arb",
+                             t0 + 4 * day));
+            j.append(mkFill("ETH",   60.0, "arb",
+                             t0 + 5 * day));
+            auto symV = j.allDrawdownRecoveries();
+            auto tagV = j.allDrawdownRecoveriesByTag();
+            if (symV.size() == 2 &&
+                tagV.size() == 2 &&
+                !symV[0].segment.empty() &&
+                !tagV[0].segment.empty()) {
+                std::cout << "✓ 2 sym events, 2 tag events, "
+                          << "segments populated"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: sym="
+                          << symV.size()
+                          << " tag=" << tagV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-DD-events tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

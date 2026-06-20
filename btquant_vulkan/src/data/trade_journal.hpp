@@ -1650,6 +1650,20 @@ public:
     allSegmentDrawdownStatsByTag(
         bool includeUntagged = true) const;
 
+    // All DD events chronological (Sprint #165). Returns
+    // the combined list of all DD events from every
+    // symbol/tag in chronological order. Each event is
+    // tagged with the segment that produced it (added as
+    // a string field in DrawdownEvent or via a wrapper).
+    struct DrawdownEventExt : DrawdownEvent {
+        std::string segment;  // symbol or tag name
+    };
+    std::vector<DrawdownEventExt>
+    allDrawdownRecoveries() const;
+    std::vector<DrawdownEventExt>
+    allDrawdownRecoveriesByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

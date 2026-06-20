@@ -81,6 +81,13 @@ public:
     void resetSession();
 
     bool isKillTripped() const;
+    // Symbol-aware kill check. Returns true when EITHER the global
+    // session losses have tripped the global threshold OR the
+    // per-symbol session losses for `symbol` have tripped that
+    // symbol's override (if any). The global threshold is always
+    // the backstop — per-symbol overrides tighten but never
+    // loosen the kill switch.
+    bool isKillTrippedForSymbol(const std::string& symbol) const;
     double sessionRealized() const { return m_sessionRealized; }
     // How much more session loss the account can absorb before the kill
     // switch trips. Starts at killOnDailyLossUSD and shrinks as
@@ -138,6 +145,28 @@ public:
     std::vector<std::pair<std::string, double>>
     maxOrderNotionalBySymbol() const;
 
+    // ---- Per-symbol kill thresholds ----
+    //
+    // Override the global killOnDailyLossUSD for a single symbol.
+    // Typical use: tighter kill on illiquid alt-coins (-$500) while
+    // leaving the majors at the global -$5,000. The global threshold
+    // is always the backstop — per-symbol overrides tighten, never
+    // loosen. usd <= 0 clears the override.
+    void setKillOnDailyLossUSDForSymbol(const std::string& sym, double usd);
+    void clearKillOnDailyLossUSDForSymbol(const std::string& sym);
+
+    double killOnDailyLossUSDForSymbol(const std::string& sym) const;
+    bool   hasKillOnDailyLossUSDForSymbol(const std::string& sym) const;
+
+    // Per-symbol remaining loss budget. Returns the override budget
+    // (if set) or the global budget (otherwise). Mirrors the global
+    // remainingLossBudget() formula but per symbol.
+    double remainingLossBudgetForSymbol(const std::string& symbol) const;
+
+    // Alpha-sorted snapshot of {symbol, kill_threshold} pairs.
+    std::vector<std::pair<std::string, double>>
+    killOnDailyLossBySymbol() const;
+
     // ---- Pure math (test surface) ----
 
     // Compute effective leverage for a given notional. Returns
@@ -164,6 +193,12 @@ private:
     // this map (per-symbol overrides are a separate lever from the
     // global notional cap).
     std::unordered_map<std::string, double> m_maxOrderNotionalBySymbol;
+
+    // Per-symbol kill thresholds. Keyed by symbol; value is the
+    // override for killOnDailyLossUSD when checking that symbol's
+    // session losses. Absent key = use global threshold. setConfig()
+    // does not touch this map.
+    std::unordered_map<std::string, double> m_killOnDailyLossBySymbol;
 };
 
 } // namespace btquant

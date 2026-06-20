@@ -5660,5 +5660,170 @@ int main() {
         }
     }
 
+    // Test 61: RiskGuard — per-symbol kill thresholds.
+    // Per-symbol kill overrides tighten the global threshold for a
+    // single symbol. The global threshold is always the backstop —
+    // per-symbol overrides tighten, never loosen. A per-symbol
+    // override only trips when the symbol's session realized has
+    // crossed -override, regardless of global state.
+    std::cout << "\nTest 61: Testing RiskGuard per-symbol kill thresholds..."
+              << std::endl;
+    {
+        using btquant::RiskGuard;
+        using btquant::RiskConfig;
+
+        // 1) No per-symbol override → returns global.
+        {
+            RiskGuard g;  // conservative: $5,000 global kill
+            if (g.killOnDailyLossUSDForSymbol("BTCUSDT") == 5000.0 &&
+                !g.hasKillOnDailyLossUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ no override: returns global, "
+                             "has()=false" << std::endl;
+            } else {
+                std::cout << "✗ no-override default broke" << std::endl;
+            }
+        }
+
+        // 2) Set override → returned; other symbols unaffected.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            if (g.killOnDailyLossUSDForSymbol("SOLUSDT") == 500.0 &&
+                g.hasKillOnDailyLossUSDForSymbol("SOLUSDT") &&
+                g.killOnDailyLossUSDForSymbol("BTCUSDT") == 5000.0 &&
+                !g.hasKillOnDailyLossUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ override isolated per-symbol" << std::endl;
+            } else {
+                std::cout << "✗ override isolation broke" << std::endl;
+            }
+        }
+
+        // 3) isKillTrippedForSymbol uses per-symbol realized.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            g.addRealized(-300.0, std::string("BTCUSDT"));  // BTC under
+            g.addRealized(-600.0, std::string("SOLUSDT"));  // SOL over
+            if (!g.isKillTripped() &&         // global NOT tripped
+                !g.isKillTrippedForSymbol("BTCUSDT") &&
+                g.isKillTrippedForSymbol("SOLUSDT")) {
+                std::cout << "✓ per-symbol kill trips before global"
+                          << std::endl;
+            } else {
+                std::cout << "✗ isKillTrippedForSymbol wrong: "
+                          << "global=" << g.isKillTripped()
+                          << " BTC=" << g.isKillTrippedForSymbol("BTCUSDT")
+                          << " SOL=" << g.isKillTrippedForSymbol("SOLUSDT")
+                          << std::endl;
+            }
+        }
+
+        // 4) Global kill trip backstops per-symbol.
+        {
+            RiskGuard g;
+            g.addRealized(-6000.0, std::string("BTCUSDT"));  // > $5k global
+            if (g.isKillTripped() &&
+                g.isKillTrippedForSymbol("ETHUSDT")) {
+                std::cout << "✓ global kill backstops every symbol"
+                          << std::endl;
+            } else {
+                std::cout << "✗ global backstop failed" << std::endl;
+            }
+        }
+
+        // 5) checkOrder rejects on per-symbol kill trip.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            g.addRealized(-600.0, std::string("SOLUSDT"));
+            auto r = g.checkOrder(0.1, 100.0, true, "SOLUSDT");
+            if (r.has_value() &&
+                r->find("per-symbol kill switch") != std::string::npos &&
+                r->find("SOLUSDT") != std::string::npos) {
+                std::cout << "✓ per-symbol kill rejects checkOrder"
+                          << std::endl;
+            } else {
+                std::cout << "✗ per-symbol kill rejection failed: "
+                          << (r ? r->c_str() : "no rejection") << std::endl;
+            }
+        }
+
+        // 6) checkOrder for non-tripped symbol passes (other symbol tripped).
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            g.addRealized(-600.0, std::string("SOLUSDT"));
+            auto r = g.checkOrder(0.1, 100.0, true, "BTCUSDT");
+            if (!r.has_value()) {
+                std::cout << "✓ non-tripped symbol passes checkOrder"
+                          << std::endl;
+            } else {
+                std::cout << "✗ BTCUSDT incorrectly rejected: "
+                          << r->c_str() << std::endl;
+            }
+        }
+
+        // 7) usd <= 0 clears override.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("BTCUSDT", 1000.0);
+            g.setKillOnDailyLossUSDForSymbol("BTCUSDT", -1.0);
+            if (!g.hasKillOnDailyLossUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ usd <= 0 clears kill override" << std::endl;
+            } else {
+                std::cout << "✗ usd<=0 did not clear" << std::endl;
+            }
+        }
+
+        // 8) remainingLossBudgetForSymbol mirrors global formula.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            g.addRealized(-200.0, std::string("SOLUSDT"));
+            if (g.remainingLossBudgetForSymbol("SOLUSDT") == 300.0) {
+                std::cout << "✓ remainingLossBudgetForSymbol = "
+                             "kill + realized" << std::endl;
+            } else {
+                std::cout << "✗ remaining budget wrong: "
+                          << g.remainingLossBudgetForSymbol("SOLUSDT")
+                          << std::endl;
+            }
+        }
+
+        // 9) killOnDailyLossBySymbol sorted alphabetically.
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("SOLUSDT", 500.0);
+            g.setKillOnDailyLossUSDForSymbol("BTCUSDT", 2500.0);
+            g.setKillOnDailyLossUSDForSymbol("ETHUSDT", 1500.0);
+            auto kills = g.killOnDailyLossBySymbol();
+            if (kills.size() == 3 &&
+                kills[0].first == "BTCUSDT" &&
+                kills[1].first == "ETHUSDT" &&
+                kills[2].first == "SOLUSDT") {
+                std::cout << "✓ kill overrides sorted alphabetically"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sort order wrong" << std::endl;
+            }
+        }
+
+        // 10) setConfig preserves kill overrides (independent lever).
+        {
+            RiskGuard g;
+            g.setKillOnDailyLossUSDForSymbol("BTCUSDT", 1500.0);
+            RiskConfig c = g.config();
+            c.killOnDailyLossUSD = 10000.0;  // bump global
+            g.setConfig(c);
+            if (g.killOnDailyLossUSDForSymbol("BTCUSDT") == 1500.0 &&
+                g.hasKillOnDailyLossUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ setConfig preserves kill overrides"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setConfig wiped kill override" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

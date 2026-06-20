@@ -29,13 +29,38 @@ RiskGuard::checkOrder(double qty, double price, bool /*isLong*/) const {
 }
 
 std::optional<std::string>
-RiskGuard::checkOrder(double qty, double price, bool /*isLong*/,
+RiskGuard::checkOrder(double qty, double price, bool isLong,
                       const std::string& symbol) const {
     if (qty <= 0.0 || price <= 0.0) {
         return std::string("invalid order: qty and price must be positive");
     }
+    // Kill-switch check FIRST so a tripped symbol is blocked before
+    // any other check runs. Global is the backstop — if the global
+    // session losses have tripped, every order is rejected regardless
+    // of per-symbol state.
     if (isKillTripped()) {
         return killReason(m_sessionRealized, m_cfg.killOnDailyLossUSD);
+    }
+    // Per-symbol kill override (only when set AND symbol is non-empty).
+    // Tighter than the global — this is the only way per-symbol kill
+    // differs from global.
+    if (!symbol.empty()) {
+        auto kit = m_killOnDailyLossBySymbol.find(symbol);
+        if (kit != m_killOnDailyLossBySymbol.end() && kit->second > 0.0) {
+            double symRealized = sessionRealizedFor(symbol);
+            if (symRealized <= -kit->second) {
+                char buf[240];
+                std::snprintf(buf, sizeof(buf),
+                    "per-symbol kill switch tripped: %s session realized "
+                    "%s$%.2f ≤ -$%.2f per-symbol limit (global $%.2f)",
+                    symbol.c_str(),
+                    symRealized >= 0 ? "+" : "",
+                    symRealized,
+                    kit->second,
+                    m_cfg.killOnDailyLossUSD);
+                return std::string(buf);
+            }
+        }
     }
     double notional = qty * price;
     // Global notional cap first. The per-symbol check below only
@@ -130,6 +155,51 @@ RiskGuard::maxOrderNotionalBySymbol() const {
     return out;
 }
 
+void RiskGuard::setKillOnDailyLossUSDForSymbol(const std::string& sym,
+                                                double usd) {
+    if (sym.empty()) return;
+    if (usd <= 0.0) {
+        m_killOnDailyLossBySymbol.erase(sym);
+        return;
+    }
+    m_killOnDailyLossBySymbol[sym] = usd;
+}
+
+void RiskGuard::clearKillOnDailyLossUSDForSymbol(const std::string& sym) {
+    m_killOnDailyLossBySymbol.erase(sym);
+}
+
+double RiskGuard::killOnDailyLossUSDForSymbol(const std::string& sym) const {
+    auto it = m_killOnDailyLossBySymbol.find(sym);
+    if (it == m_killOnDailyLossBySymbol.end() || it->second <= 0.0)
+        return m_cfg.killOnDailyLossUSD;
+    return it->second;
+}
+
+bool RiskGuard::hasKillOnDailyLossUSDForSymbol(const std::string& sym) const {
+    auto it = m_killOnDailyLossBySymbol.find(sym);
+    return it != m_killOnDailyLossBySymbol.end() && it->second > 0.0;
+}
+
+double RiskGuard::remainingLossBudgetForSymbol(const std::string& symbol) const {
+    return killOnDailyLossUSDForSymbol(symbol) + sessionRealizedFor(symbol);
+}
+
+std::vector<std::pair<std::string, double>>
+RiskGuard::killOnDailyLossBySymbol() const {
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(m_killOnDailyLossBySymbol.size());
+    for (const auto& kv : m_killOnDailyLossBySymbol) {
+        if (kv.second > 0.0) out.emplace_back(kv.first, kv.second);
+    }
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<std::string, double>& a,
+                 const std::pair<std::string, double>& b) {
+                  return a.first < b.first;
+              });
+    return out;
+}
+
 void RiskGuard::addRealized(double delta) {
     m_sessionRealized += delta;
 }
@@ -186,6 +256,17 @@ RiskGuard::symbolsBookedThisSession() const {
 
 bool RiskGuard::isKillTripped() const {
     return m_sessionRealized <= -m_cfg.killOnDailyLossUSD;
+}
+
+bool RiskGuard::isKillTrippedForSymbol(const std::string& symbol) const {
+    // Global is always the backstop — if it's tripped, the per-symbol
+    // question is moot.
+    if (isKillTripped()) return true;
+    if (symbol.empty()) return false;
+    auto it = m_killOnDailyLossBySymbol.find(symbol);
+    if (it == m_killOnDailyLossBySymbol.end() || it->second <= 0.0)
+        return false;  // no override = use global, which already passed
+    return sessionRealizedFor(symbol) <= -it->second;
 }
 
 } // namespace btquant

@@ -3077,6 +3077,119 @@ TradeJournal::ddDurationStatsByTag(
         drawdownRecoveriesByTag(tag, includeUntagged));
 }
 
+std::vector<TradeJournal::Annotation>
+TradeJournal::equityAnnotations() const {
+    // Sprint #132. Build a list of significant equity-curve
+    // events the UI can overlay as labels.
+    std::vector<Annotation> out;
+    auto curve = equityCurve();
+    if (curve.empty()) return out;
+    // 1. Every recovered DD start + end.
+    auto dds = drawdownRecoveries();
+    for (const auto& dd : dds) {
+        Annotation a;
+        a.kind        = AnnotationKind::DDStart;
+        a.timestamp_us = dd.start_ts;
+        a.value       = dd.peak_before;
+        a.label       = "DD start (-" +
+            std::to_string(static_cast<int>(dd.trough_depth)) +
+            ")";
+        out.push_back(a);
+        Annotation b;
+        b.kind        = AnnotationKind::DDEnd;
+        b.timestamp_us = dd.end_ts;
+        b.value       = dd.peak_before;
+        b.label       = "DD recovered";
+        out.push_back(b);
+    }
+    // 2. The single deepest DD's start/end (max-of-above).
+    if (!dds.empty()) {
+        const auto& maxDD = dds.front();  // already sorted DESC
+        Annotation a;
+        a.kind        = AnnotationKind::MaxDDStart;
+        a.timestamp_us = maxDD.start_ts;
+        a.value       = maxDD.peak_before;
+        a.label       = "MAX DD start (-" +
+            std::to_string(
+                static_cast<int>(maxDD.trough_depth)) + ")";
+        out.push_back(a);
+        Annotation b;
+        b.kind        = AnnotationKind::MaxDDEnd;
+        b.timestamp_us = maxDD.end_ts;
+        b.value       = maxDD.peak_before;
+        b.label       = "MAX DD recovered";
+        out.push_back(b);
+    }
+    // 3. Best + worst day (single-day net P&L).
+    auto days = bucketByLocalDay(loadAll());
+    if (!days.empty()) {
+        double bestVal = -1e18, worstVal = 1e18;
+        std::string bestDate, worstDate;
+        for (const auto& kv : days) {
+            if (kv.second > bestVal) {
+                bestVal = kv.second;
+                bestDate = kv.first;
+            }
+            if (kv.second < worstVal) {
+                worstVal = kv.second;
+                worstDate = kv.first;
+            }
+        }
+        if (!bestDate.empty()) {
+            Annotation a;
+            a.kind        = AnnotationKind::BestDay;
+            a.timestamp_us = 0;  // date only, no ts
+            a.value       = bestVal;
+            a.label       = "Best day " + bestDate + ": " +
+                std::to_string(static_cast<int>(bestVal));
+            out.push_back(a);
+        }
+        // Only emit WorstDay if it differs from BestDay
+        // (single-day journals shouldn't emit "best == worst"
+        // as two separate annotations).
+        if (!worstDate.empty() && worstDate != bestDate) {
+            Annotation a;
+            a.kind        = AnnotationKind::WorstDay;
+            a.timestamp_us = 0;
+            a.value       = worstVal;
+            a.label       = "Worst day " + worstDate + ": " +
+                std::to_string(static_cast<int>(worstVal));
+            out.push_back(a);
+        }
+    }
+    // 4. Equity high water marks (every time cum exceeds
+    //    all previous values). Include the FIRST point —
+    //    that's the starting equity, also a high.
+    {
+        Annotation a;
+        a.kind        = AnnotationKind::EquityHigh;
+        a.timestamp_us = curve[0].timestamp_us;
+        a.value       = curve[0].cumulative;
+        a.label       = "Equity high: " +
+            std::to_string(static_cast<int>(curve[0].cumulative));
+        out.push_back(a);
+    }
+    double runningPeak = curve[0].cumulative;
+    for (size_t i = 1; i < curve.size(); ++i) {
+        if (curve[i].cumulative > runningPeak) {
+            runningPeak = curve[i].cumulative;
+            Annotation a;
+            a.kind        = AnnotationKind::EquityHigh;
+            a.timestamp_us = curve[i].timestamp_us;
+            a.value       = curve[i].cumulative;
+            a.label       = "Equity high: " +
+                std::to_string(static_cast<int>(curve[i].cumulative));
+            out.push_back(a);
+        }
+    }
+    // 5. Sort by timestamp ASC.
+    std::sort(out.begin(), out.end(),
+        [](const Annotation& a, const Annotation& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

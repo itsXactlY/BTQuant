@@ -1131,6 +1131,33 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Equity curve annotations (Sprint #132). Significant
+    // events on the equity curve that the UI can overlay as
+    // labels: max DD start, max DD recovery, every recovered
+    // DD (start/end/depth), best single-day gain, worst
+    // single-day loss.
+    //
+    // Sorted by timestamp ASC. Each event has a `kind` enum
+    // + a human-readable label + the timestamp. The UI can
+    // pick which kinds to display.
+    enum class AnnotationKind {
+        DDStart,          // peak before a drawdown
+        DDEnd,            // recovery back to a previous peak
+        MaxDDStart,       // the deepest DD's peak
+        MaxDDEnd,         // deepest DD's recovery
+        BestDay,          // day with highest positive P&L
+        WorstDay,         // day with lowest negative P&L
+        EquityHigh,       // new equity high water mark
+        EquityLow,        // equity local low (not in DD)
+    };
+    struct Annotation {
+        AnnotationKind kind      = AnnotationKind::DDStart;
+        uint64_t       timestamp_us = 0;
+        std::string    label;
+        double         value = 0.0;  // equity at that point
+    };
+    std::vector<Annotation> equityAnnotations() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

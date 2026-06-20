@@ -16422,5 +16422,120 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 120: equityAnnotations() (Sprint #132).
+    //
+    // Significant equity-curve events. Tests:
+    //   - Empty: 0 annotations.
+    //   - 1 recovered DD: 4 annotations (DDStart, DDEnd,
+    //     MaxDDStart, MaxDDEnd) + 2 (BestDay, WorstDay)
+    //     if dates differ + at least 1 EquityHigh.
+    //   - Multiple DDs: maxDDStart is the deepest one.
+    std::cout << "\nTest 120: equity annotations..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test120_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto anns = j.equityAnnotations();
+            if (anns.empty()) {
+                std::cout << "✓ empty: 0 annotations"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << anns.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 1 recovered DD + equity high marks ----
+        {
+            TradeJournal j((tmpDir / "ann.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            // DD1: peak 100 (t0), trough 50 (t0+1h), recovery 200 (t0+2h).
+            // EquityHigh: +100 (t0), +200 (t0+2h).
+            // BestDay: t0 day → +250 net. WorstDay: none
+            //   (single day, all positive).
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 1*hour));
+            j.append(mkFill("BTC",  200.0, "", t0 + 2*hour));
+            auto anns = j.equityAnnotations();
+            // Count kinds.
+            size_t ddStart = 0, ddEnd = 0, maxStart = 0,
+                   maxEnd = 0, bestDay = 0, worstDay = 0,
+                   eqHigh = 0;
+            for (const auto& a : anns) {
+                switch (a.kind) {
+                    case btquant::TradeJournal::AnnotationKind::DDStart:
+                        ++ddStart; break;
+                    case btquant::TradeJournal::AnnotationKind::DDEnd:
+                        ++ddEnd; break;
+                    case btquant::TradeJournal::AnnotationKind::MaxDDStart:
+                        ++maxStart; break;
+                    case btquant::TradeJournal::AnnotationKind::MaxDDEnd:
+                        ++maxEnd; break;
+                    case btquant::TradeJournal::AnnotationKind::BestDay:
+                        ++bestDay; break;
+                    case btquant::TradeJournal::AnnotationKind::WorstDay:
+                        ++worstDay; break;
+                    case btquant::TradeJournal::AnnotationKind::EquityHigh:
+                        ++eqHigh; break;
+                    default: break;
+                }
+            }
+            if (ddStart == 1 && ddEnd == 1 &&
+                maxStart == 1 && maxEnd == 1 &&
+                bestDay == 1 && worstDay == 0 &&
+                eqHigh == 2) {
+                std::cout << "✓ 1 DD + 2 highs: "
+                          << "DDStart=1, DDEnd=1, "
+                          << "MaxDD=1, BestDay=1, "
+                          << "EquityHigh=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ ann wrong: DDStart=" << ddStart
+                          << " DDEnd=" << ddEnd
+                          << " MaxStart=" << maxStart
+                          << " MaxEnd=" << maxEnd
+                          << " BestDay=" << bestDay
+                          << " WorstDay=" << worstDay
+                          << " EquityHigh=" << eqHigh
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " equity-annotation tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

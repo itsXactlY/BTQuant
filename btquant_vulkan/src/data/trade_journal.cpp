@@ -5308,4 +5308,33 @@ TradeJournal::symbolSymbolCorrelation(
     return r;
 }
 
+std::vector<TradeJournal::CorrelationMatrixEntry>
+TradeJournal::allSymbolCorrelations() const {
+    // Sprint #149. Find every distinct symbol in the
+    // journal, compute correlation for every pair (where
+    // symA < symB alphabetically to avoid duplicates).
+    std::vector<CorrelationMatrixEntry> out;
+    auto fills = loadAll();
+    std::vector<std::string> syms;
+    {
+        std::set<std::string> uniq;
+        for (const auto& f : fills) uniq.insert(f.symbol);
+        for (const auto& s : uniq) syms.push_back(s);
+    }
+    out.reserve(syms.size() * syms.size() / 2);
+    for (size_t i = 0; i < syms.size(); ++i) {
+        for (size_t j = i + 1; j < syms.size(); ++j) {
+            auto r = symbolSymbolCorrelation(syms[i], syms[j]);
+            CorrelationMatrixEntry e;
+            e.symA = syms[i];
+            e.symB = syms[j];
+            e.correlation = r.correlation;
+            e.matchedDays = r.matchedDays;
+            e.valid = r.valid;
+            out.push_back(e);
+        }
+    }
+    return out;
+}
+
 } // namespace btquant

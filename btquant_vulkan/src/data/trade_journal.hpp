@@ -1446,6 +1446,20 @@ public:
         const std::string& symA,
         const std::string& symB) const;
 
+    // All-symbol correlation matrix (Sprint #149).
+    // Returns correlations for every (symA, symB) pair
+    // where symA < symB alphabetically (avoids duplicates).
+    // Useful for a heatmap visualization.
+    struct CorrelationMatrixEntry {
+        std::string symA;
+        std::string symB;
+        double      correlation = 0.0;
+        size_t      matchedDays = 0;
+        bool        valid       = false;
+    };
+    std::vector<CorrelationMatrixEntry>
+    allSymbolCorrelations() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

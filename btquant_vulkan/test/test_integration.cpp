@@ -18188,5 +18188,95 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 136: allSymbolCorrelations() (Sprint #149).
+    //
+    // Pairwise correlation matrix. Tests:
+    //   - 3 symbols → 3 pairs.
+    //   - Empty: 0 entries.
+    std::cout << "\nTest 136: all-symbol correlations..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test136_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto m = j.allSymbolCorrelations();
+            if (m.empty()) {
+                std::cout << "✓ empty: 0 entries"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << m.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 symbols, 3 pairs (BTC-ETH, BTC-SOL, ETH-SOL) ----
+        {
+            TradeJournal j((tmpDir / "three.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            // BTC and ETH perfectly correlated (+100 each day).
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("ETH",  100.0, "", t0 + 1));
+            j.append(mkFill("BTC",  200.0, "", t0 + day));
+            j.append(mkFill("ETH",  200.0, "", t0 + day + 1));
+            // SOL only has 1 fill — invalid correlation.
+            j.append(mkFill("SOL",   50.0, "", t0 + 2));
+            auto m = j.allSymbolCorrelations();
+            // 3 pairs: BTC-ETH (valid r=1.0), BTC-SOL
+            // (invalid), ETH-SOL (invalid).
+            if (m.size() == 3 &&
+                m[0].symA == "BTC" && m[0].symB == "ETH" &&
+                m[0].valid &&
+                std::fabs(m[0].correlation - 1.0) < 1e-9 &&
+                !m[1].valid && !m[2].valid) {
+                std::cout << "✓ 3 symbols, 3 pairs: "
+                          << "BTC-ETH r=1.0 (valid), "
+                          << "BTC-SOL/ETH-SOL invalid"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ matrix wrong: size="
+                          << m.size()
+                          << " [0].valid=" << (m.size() > 0
+                              ? m[0].valid : false)
+                          << " [0].r=" << (m.size() > 0
+                              ? m[0].correlation : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-corr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

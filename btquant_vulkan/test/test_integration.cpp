@@ -7927,22 +7927,42 @@ int main() {
             std::cout << "✗ maxRows default = " << panel.maxRows()
                       << std::endl;
         }
+        if (panel.dayLookback() == 30) {
+            std::cout << "✓ dayLookback default = 30" << std::endl;
+        } else {
+            std::cout << "✗ dayLookback default = "
+                      << panel.dayLookback() << std::endl;
+        }
 
         // Setters flip both the public state and (via the getter) the
         // internal flag that drives the rendered behavior.
         panel.showWindow = true;
         panel.setIncludeUntagged(false);
         panel.setMaxRows(32);
+        panel.setDayLookback(90);
         if (panel.showWindow &&
             !panel.includeUntagged() &&
-            panel.maxRows() == 32) {
-            std::cout << "✓ setters flip state (open/32rows/skip-untagged)"
-                      << std::endl;
+            panel.maxRows() == 32 &&
+            panel.dayLookback() == 90) {
+            std::cout << "✓ setters flip state (open/32rows/90day/"
+                         "skip-untagged)" << std::endl;
         } else {
             std::cout << "✗ setters wrong: "
                       << panel.showWindow << " / "
                       << panel.includeUntagged() << " / "
-                      << panel.maxRows() << std::endl;
+                      << panel.maxRows() << " / "
+                      << panel.dayLookback() << std::endl;
+        }
+
+        // 0-day lookback is the "all-time" preset — distinct from
+        // 30 / 90 / 365 and must round-trip through the setter.
+        panel.setDayLookback(0);
+        if (panel.dayLookback() == 0) {
+            std::cout << "✓ dayLookback(0) = all-time preset"
+                      << std::endl;
+        } else {
+            std::cout << "✗ dayLookback(0) wrong: "
+                      << panel.dayLookback() << std::endl;
         }
 
         // Bind a TradeJournal — must accept a non-null pointer and

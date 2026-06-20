@@ -264,6 +264,109 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- By-day table (Sprint #78) ----
+    //
+    // Surfaces TradeJournal::realizedByDay() (#77) — daily P&L
+    // buckets in "YYYY-MM-DD" format. Sorted newest-first when a
+    // lookback is set (default 30 days), since traders read this
+    // as "what did I do recently?". When lookback=0, the entire
+    // journal is shown oldest-first (matches realizedByDay's
+    // natural order, and lets the trader see their full history).
+    //
+    // The lookback slider is right above the table so the trader
+    // can flip between "last week / month / quarter / all" without
+    // scrolling.
+    ImGui::Separator();
+    int lookback = static_cast<int>(m_dayLookback);
+    int presets[] = { 7, 30, 90, 365, 0 };  // 0 = all-time
+    const char* presetLabels[] = {
+        "7d", "30d", "90d", "1y", "all"
+    };
+    ImGui::Text("Lookback:");
+    ImGui::SameLine();
+    for (int i = 0; i < 5; ++i) {
+        if (i > 0) ImGui::SameLine();
+        bool isSel = (lookback == presets[i]);
+        if (isSel) ImGui::PushStyleColor(ImGuiCol_Button,
+                                         ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+        if (ImGui::SmallButton(presetLabels[i])) {
+            lookback = presets[i];
+            m_dayLookback = static_cast<size_t>(lookback);
+        }
+        if (isSel) ImGui::PopStyleColor();
+    }
+
+    auto byDay = m_journal->realizedByDay();
+    size_t rowsDay = 0;
+    if (m_dayLookback > 0 && byDay.size() > m_dayLookback) {
+        rowsDay = std::min(m_maxRows, m_dayLookback);
+    } else {
+        rowsDay = std::min(m_maxRows, byDay.size());
+    }
+
+    // The vector from realizedByDay is oldest-first. For the
+    // "recent activity" view we want newest-first — reverse the
+    // tail when a lookback is set. For all-time, leave it
+    // oldest-first.
+    std::vector<std::pair<std::string, double>> displayRows;
+    if (m_dayLookback > 0 && byDay.size() > m_dayLookback) {
+        // Last m_dayLookback entries, reversed to newest-first.
+        size_t start = byDay.size() - m_dayLookback;
+        for (size_t i = byDay.size(); i > start; --i) {
+            displayRows.push_back(byDay[i - 1]);
+        }
+    } else {
+        displayRows = byDay;
+    }
+    rowsDay = std::min(m_maxRows, displayRows.size());
+
+    if (ImGui::CollapsingHeader("By day",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (displayRows.empty()) {
+            ImGui::TextDisabled("(empty)");
+        } else if (ImGui::BeginTable("JournalStatsByDay",
+                                     2,
+                                     ImGuiTableFlags_RowBg |
+                                     ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Date");
+            ImGui::TableSetupColumn("Realized");
+            ImGui::TableHeadersRow();
+
+            double sumWindow = 0.0;
+            for (size_t i = 0; i < rowsDay; ++i) {
+                const auto& kv = displayRows[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(kv.first.c_str());
+                ImGui::TableSetColumnIndex(1);
+                colorizeRow(kv.second);
+                char buf[64];
+                std::snprintf(buf, sizeof(buf), "%+.2f", kv.second);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+                sumWindow += kv.second;
+            }
+            ImGui::EndTable();
+
+            // Window sum (sum of the displayed rows) — useful at a
+            // glance: "the last 30 days netted $X". Colored to
+            // match the row convention.
+            ImGui::Text("Window total:");
+            ImGui::SameLine();
+            colorizeRow(sumWindow);
+            char sumBuf[64];
+            std::snprintf(sumBuf, sizeof(sumBuf), "%+.2f", sumWindow);
+            ImGui::TextUnformatted(sumBuf);
+            ImGui::PopStyleColor();
+        }
+        size_t hiddenCount = displayRows.size() > rowsDay
+                                 ? displayRows.size() - rowsDay
+                                 : 0;
+        if (hiddenCount > 0) {
+            ImGui::TextDisabled("(%zu more not shown)", hiddenCount);
+        }
+    }
+
     ImGui::End();
 }
 

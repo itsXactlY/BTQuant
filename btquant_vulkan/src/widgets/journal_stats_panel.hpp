@@ -45,6 +45,14 @@ public:
     void setMaxRows(size_t n)    { m_maxRows = n; }
     size_t maxRows() const       { return m_maxRows; }
 
+    // Lookback window for the by-day table (Sprint #78). When > 0,
+    // only the last N days are shown (newest first). When 0 (the
+    // default), the entire journal is shown — practical for traders
+    // with < 1 year of history, but typically you'd set this to 30
+    // or 90 for the "last month / quarter" view.
+    void  setDayLookback(size_t n)   { m_dayLookback = n; }
+    size_t dayLookback() const       { return m_dayLookback; }
+
     void render();
 
     // Default closed so the panel doesn't pop up uninvited when the
@@ -55,6 +63,7 @@ private:
     ::btquant::TradeJournal* m_journal = nullptr;
     bool  m_includeUntagged  = true;
     size_t m_maxRows         = 16;
+    size_t m_dayLookback     = 30;   // Sprint #78 default
 };
 
 }  // namespace btquant::ui

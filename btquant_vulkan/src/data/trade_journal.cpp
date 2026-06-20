@@ -3956,6 +3956,68 @@ TradeJournal::winRateBySizeByTag(
         });
 }
 
+std::vector<TradeJournal::EquitySlopePoint>
+TradeJournal::equityRateOfChange(size_t window) const {
+    // Sprint #143. OLS slope of equity vs fill index
+    // over a rolling window. Per-fill slope: cum change
+    // per round-trip.
+    //
+    // Formula: slope = (N*Σ(xy) - Σx*Σy) /
+    //                  (N*Σ(x²) - (Σx)²)
+    //   where x_i = i - (N-1)/2  (centered for numerical
+    //   stability of the denominator).
+    std::vector<EquitySlopePoint> out;
+    auto curve = equityCurve();
+    if (curve.size() < window) return out;
+    out.reserve(curve.size() - window + 1);
+    auto computeSlope = [&](size_t start, size_t end) {
+        size_t N = end - start;
+        // Center x values around 0 for numerical stability.
+        double xCenter = -static_cast<double>(N - 1) / 2.0;
+        double sumX = 0.0, sumY = 0.0, sumXY = 0.0;
+        double sumX2 = 0.0;
+        for (size_t k = 0; k < N; ++k) {
+            double x = xCenter + static_cast<double>(k);
+            double y = curve[start + k].cumulative;
+            sumX  += x;
+            sumY  += y;
+            sumXY += x * y;
+            sumX2 += x * x;
+        }
+        double denom = static_cast<double>(N) * sumX2 -
+                       sumX * sumX;
+        if (std::fabs(denom) < 1e-12) return 0.0;
+        double numer = static_cast<double>(N) * sumXY -
+                       sumX * sumY;
+        return numer / denom;
+    };
+    // First point.
+    {
+        double s = computeSlope(0, window);
+        EquitySlopePoint p;
+        p.timestamp_us = curve[window - 1].timestamp_us;
+        p.equityValue  = curve[window - 1].cumulative;
+        p.slope        = s;
+        p.count        = window;
+        out.push_back(p);
+    }
+    // Sliding: window shifts by 1 each step. Slope is NOT
+    // O(1) updatable in general (numerator changes by
+    // recomputed terms), so we recompute each step. With
+    // O(N) total work this is still cheap for journal
+    // sizes.
+    for (size_t i = window; i < curve.size(); ++i) {
+        double s = computeSlope(i - window, i);
+        EquitySlopePoint p;
+        p.timestamp_us = curve[i].timestamp_us;
+        p.equityValue  = curve[i].cumulative;
+        p.slope        = s;
+        p.count        = window;
+        out.push_back(p);
+    }
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

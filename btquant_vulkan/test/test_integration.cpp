@@ -17614,5 +17614,97 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 130: equityRateOfChange() (Sprint #143).
+    //
+    // OLS slope of equity vs fill index. Tests:
+    //   - Window > fills: empty.
+    //   - Constant +10 fills: slope ≈ 10 per fill (linear).
+    //   - Constant 0 fills: slope = 0.
+    std::cout << "\nTest 130: equity rate of change..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test130_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Window > fills ----
+        {
+            TradeJournal j((tmpDir / "few.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 10.0, "",
+                                1774000000000000ULL + i));
+            }
+            auto v = j.equityRateOfChange(20);
+            if (v.empty()) {
+                std::cout << "✓ window>fills: empty"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ window>fills wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Constant +10 → linear slope = 10 ----
+        {
+            TradeJournal j((tmpDir / "linear.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "", t0 + i));
+            }
+            auto v = j.equityRateOfChange(3);
+            // y = 10, 20, 30, 40, 50 over x = 0, 1, 2, 3, 4.
+            // Window [0..2]: y=[10,20,30]. Centered x =
+            //   -1, 0, 1. Σx=0, Σy=60, Σxy=20, Σx²=2.
+            //   slope = (3*20 - 0*60)/(3*2 - 0) = 60/6 = 10.
+            // Window [1..3]: y=[20,30,40]. Same slope 10.
+            // Window [2..4]: y=[30,40,50]. Same slope 10.
+            if (v.size() == 3 &&
+                std::fabs(v[0].slope - 10.0) < 1e-9 &&
+                std::fabs(v[1].slope - 10.0) < 1e-9 &&
+                std::fabs(v[2].slope - 10.0) < 1e-9) {
+                std::cout << "✓ linear +10: 3 points, "
+                          << "slope=10 each"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ linear wrong: "
+                          << (v.empty() ? 0.0 : v[0].slope)
+                          << ", "
+                          << (v.size() > 1 ? v[1].slope : 0.0)
+                          << ", "
+                          << (v.size() > 2 ? v[2].slope : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " equity-rate tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

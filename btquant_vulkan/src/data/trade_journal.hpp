@@ -1361,6 +1361,24 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Equity curve rate of change (Sprint #143). Rolling
+    // linear-regression slope over the last N equity
+    // values. Positive slope = accelerating equity, zero
+    // = flat, negative = decelerating.
+    //
+    // Uses simple OLS: slope = (N*Σxy - Σx*Σy) /
+    // (N*Σx² - (Σx)²).  Time index i is the x-value.
+    //
+    // Returns empty vector if equity.size() < window.
+    struct EquitySlopePoint {
+        uint64_t timestamp_us = 0;
+        double   equityValue   = 0.0;
+        double   slope         = 0.0;  // per-fill-step
+        size_t   count         = 0;
+    };
+    std::vector<EquitySlopePoint> equityRateOfChange(
+        size_t window = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

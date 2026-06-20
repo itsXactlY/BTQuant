@@ -12400,5 +12400,240 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 99: dailyPnLSeries() / rollingSharpe() (Sprint #109).
+    //
+    // Time-series analytics. Tests:
+    //   - Empty journal: empty daily series.
+    //   - Single fill: 1-day series with realized=$X.
+    //   - Multi-day: each day gets its own bucket, sorted ASC.
+    //   - Cross-method invariant: Σ daily.realized ==
+    //     stats().netRealized; Σ daily.roundTrips ==
+    //     stats().roundTripCount.
+    //   - rollingSharpe(N) for N > # of days → empty (window
+    //     never completes).
+    //   - rollingSharpe(2) on a 3-day series → 2 points.
+    //   - rollingSharpe(1) on a 3-day series → 3 points (every
+    //     day's window is just that day).
+    //   - perSymbolDailyPnL returns 1 series per symbol.
+    std::cout << "\nTest 99: dailyPnLSeries() / rollingSharpe()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test99_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto d = j.dailyPnLSeries();
+            auto r = j.rollingSharpe(30);
+            if (d.empty() && r.empty()) {
+                std::cout << "✓ empty: no daily series, no rolling"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: d=" << d.size()
+                          << " r=" << r.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill, single day ----
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100.0, 0, 10));
+            auto d = j.dailyPnLSeries();
+            if (d.size() == 1 &&
+                std::fabs(d[0].realized - 100.0) < 1e-9 &&
+                d[0].roundTrips == 1) {
+                std::cout << "✓ single fill: 1 day, $100, 1 round-trip"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: d.size=" << d.size()
+                          << " realized=" << d[0].realized << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-day + cross-method invariant ----
+        // Day -2: BTC +50, ETH -10
+        // Day  0: BTC +30
+        // Day  5: SOL +100
+        // Expected: 3 distinct days, sorted ASC.
+        // Σ realized = 50 - 10 + 30 + 100 = 170.
+        // roundTrips = 4.
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  50.0, 2, 10));
+            j.append(mkFill("ETH", -10.0, 2, 11));
+            j.append(mkFill("BTC",  30.0, 0, 10));
+            j.append(mkFill("SOL", 100.0, 5, 10));
+            auto d  = j.dailyPnLSeries();
+            auto st = j.stats();
+            double sumR = 0.0;
+            size_t sumRt = 0;
+            for (const auto& x : d) {
+                sumR  += x.realized;
+                sumRt += x.roundTrips;
+            }
+            if (d.size() == 3 &&
+                std::fabs(sumR - 170.0) < 1e-9 &&
+                sumRt == st.roundTripCount &&
+                sumRt == 4 &&
+                d[0].date < d[1].date &&
+                d[1].date < d[2].date) {
+                std::cout << "✓ multi-day: 3 days sorted ASC, "
+                          << "Σ realized=$170 == netRealized, "
+                          << "Σ rt=4"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: days=" << d.size()
+                          << " sumR=" << sumR
+                          << " sumRt=" << sumRt << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- rollingSharpe(N) where N > #days → empty ----
+        {
+            fs::path p = tmpDir / "short.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 10.0, 0, 10));
+            j.append(mkFill("BTC", -5.0, 1, 10));
+            // Only 2 days of history.
+            auto r = j.rollingSharpe(30);   // window > history
+            if (r.empty()) {
+                std::cout << "✓ rollingSharpe(30) on 2-day "
+                          << "history: empty (window never completes)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rollingSharpe wrong: r.size="
+                          << r.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- rollingSharpe(2) on 3-day series ----
+        // Construct exactly 3 distinct days with non-zero
+        // realized. rollingSharpe zero-fills calendar days
+        // BETWEEN them, so the actual point count is the
+        // span in days + 1 - window.
+        // daysAgo 10, 5, 0 → 11 calendar days (inclusive).
+        // rollingSharpe(2) → 11 - 2 + 1 = 10 points.
+        {
+            fs::path p = tmpDir / "rolling.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  10.0, 10, 10));
+            j.append(mkFill("BTC",  20.0,  5, 10));
+            j.append(mkFill("BTC", -10.0,  0, 10));
+            auto d = j.dailyPnLSeries();
+            auto r = j.rollingSharpe(2);
+            if (d.size() == 3 && r.size() == 10 &&
+                // First rolling point's date = 1 day AFTER the
+                // earliest fill (window-of-2 needs 2 days, so
+                // the first window ends 1 day after the start).
+                // Last rolling point's date = today = d[2].date
+                // (last fill's day, which is the end of the
+                // 11-day calendar span).
+                r.back().date == d[2].date) {
+                std::cout << "✓ rollingSharpe(2) on 11-day span "
+                          << "(3 fills, 8 zero-fills): 10 points"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rolling wrong: d=" << d.size()
+                          << " r=" << r.size()
+                          << " r.back.date=" << r.back().date
+                          << " d[2].date=" << d[2].date << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- rollingSharpe(1) on 3-day series ----
+        // 11-day span → 11 - 1 + 1 = 11 points (one per day).
+        {
+            fs::path p = tmpDir / "w1.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  10.0, 10, 10));
+            j.append(mkFill("BTC",  20.0,  5, 10));
+            j.append(mkFill("BTC", -10.0,  0, 10));
+            auto r = j.rollingSharpe(1);
+            if (r.size() == 11) {
+                std::cout << "✓ rollingSharpe(1) on 11-day span: "
+                          << "11 points"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ rolling(1) wrong: r=" << r.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- perSymbolDailyPnL: 1 series per symbol ----
+        {
+            fs::path p = tmpDir / "persym.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 10.0, 0, 10));
+            j.append(mkFill("ETH", 20.0, 0, 11));
+            j.append(mkFill("BTC",  5.0, 1, 10));
+            auto ps = j.perSymbolDailyPnL();
+            if (ps.size() == 2 &&
+                ps.count("BTCUSDT") == 0 &&
+                ps.count("BTC") == 1 &&
+                ps.count("ETH") == 1 &&
+                ps["BTC"].size() == 2 &&    // 2 days
+                std::fabs(ps["BTC"][0].realized - 5.0) < 1e-9 &&
+                std::fabs(ps["BTC"][1].realized - 10.0) < 1e-9) {
+                std::cout << "✓ perSymbolDailyPnL: 2 symbols, "
+                          << "BTC has 2 days"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ perSym wrong: keys="
+                          << ps.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " rolling tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

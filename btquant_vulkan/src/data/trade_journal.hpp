@@ -2,6 +2,7 @@
 #define BTQUANT_TRADE_JOURNAL_HPP
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -547,6 +548,66 @@ public:
     };
     PerTagDayOfWeekStats perTagDayOfWeekStats(
         bool includeUntagged = false) const;
+
+    // Daily P&L time series (Sprint #109). One entry per
+    // calendar day with at least one round-trip. Sorted by
+    // date ASC. Used as the input for rolling Sharpe + other
+    // time-series analytics.
+    //
+    // Each point: (date, realized, roundTrips). realized is
+    // the sum of realizedDelta for fills on that day; roundTrips
+    // is the count of round-trip fills (|realizedDelta|>1e-9).
+    //
+    // Cross-method invariant:
+    //   Σ realized == stats().netRealized (over the full history)
+    //   Σ roundTrips == stats().roundTripCount
+    // (Test 99 verifies this.)
+    struct DailyPnL {
+        std::string date;        // YYYY-MM-DD
+        double      realized     = 0.0;
+        size_t      roundTrips   = 0;
+    };
+    std::vector<DailyPnL> dailyPnLSeries() const;
+
+    // Per-symbol daily P&L series (Sprint #109). Returns a
+    // map: symbol → ordered list of (date, realized,
+    // roundTrips). Used by rollingSharpeBySymbol() + future
+    // per-symbol Sharpe time-series widgets.
+    std::map<std::string, std::vector<DailyPnL>>
+        perSymbolDailyPnL() const;
+
+    // Per-tag daily P&L series (Sprint #109). Honors
+    // includeUntagged (rolls untagged fills into "__untagged__"
+    // when true; skips them when false).
+    std::map<std::string, std::vector<DailyPnL>>
+        perTagDailyPnL(bool includeUntagged = false) const;
+
+    // Rolling Sharpe (Sprint #109). Daily Sharpe ratio on a
+    // rolling window of size `windowDays` (default 30).
+    // Returns one point per day where the rolling window is
+    // complete (i.e. at least windowDays days of history are
+    // available up to that day).
+    //
+    // Sharpe = mean(window daily returns) / stddev(window
+    // daily returns) * sqrt(252) (annualized trading-day
+    // convention).
+    //
+    // Each point: (date, sharpe). Days with no fills get
+    // realized=0 in the input series (not skipped) — this
+    // keeps the rolling window aligned with calendar days.
+    struct RollingSharpePoint {
+        std::string date;        // YYYY-MM-DD (last day of window)
+        double      sharpe       = 0.0;   // 0 if stddev==0
+    };
+    std::vector<RollingSharpePoint>
+        rollingSharpe(size_t windowDays = 30) const;
+
+    // Per-symbol rolling Sharpe (Sprint #109). Returns one
+    // RollingSharpePoint series per symbol that has enough
+    // history (>= windowDays of fills). Symbols with fewer
+    // than windowDays of history get an empty vector.
+    std::map<std::string, std::vector<RollingSharpePoint>>
+        rollingSharpeBySymbol(size_t windowDays = 30) const;
 
     // Hour-of-day stats — Sprint #106. Same shape as
     // day-of-week but bucketed by hour 0..23 (local time).

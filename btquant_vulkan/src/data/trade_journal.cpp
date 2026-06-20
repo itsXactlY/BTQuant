@@ -1597,9 +1597,188 @@ TradeJournal::perTagHourOfDayStats(bool includeUntagged) const {
         b.realized += f.realizedDelta;
     }
     PerTagHourOfDayStats out;
+    out.tags.reserve(buckets.size());
     for (const auto& kv : buckets) out.tags.push_back(kv.first);
     out.grid = flattenCalendarGrid<HourOfDayBucket, 24>(
         buckets, out.tags);
+    return out;
+}
+
+namespace {
+// Sprint #109 — daily P&L aggregation. Walks fills sorted by
+// timestamp ASC, groups by YYYY-MM-DD, sums realizedDelta and
+// counts round-trips (|realizedDelta|>1e-9). Output is sorted
+// by date ASC.
+//
+// Used by dailyPnLSeries() (whole journal) and by
+// perSymbolDailyPnL() / perTagDailyPnL() (per axis).
+template <typename KeyFn>
+std::map<std::string, std::vector<TradeJournal::DailyPnL>>
+bucketByDay(const std::vector<JournalFill>& fills,
+            KeyFn keyFn) {
+    auto sorted = fills;
+    std::sort(sorted.begin(), sorted.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    std::map<std::string, std::vector<TradeJournal::DailyPnL>> out;
+    constexpr double kEps = 1e-9;
+    for (const auto& f : sorted) {
+        std::string key = keyFn(f);
+        if (key.empty()) continue;
+        std::time_t secs = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        char date[16];
+        std::strftime(date, sizeof(date), "%Y-%m-%d", &tm);
+        if (out[key].empty() ||
+            out[key].back().date != date) {
+            TradeJournal::DailyPnL p;
+            p.date = date;
+            out[key].push_back(p);
+        }
+        auto& dp = out[key].back();
+        dp.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) > kEps)
+            dp.roundTrips++;
+    }
+    return out;
+}
+
+// Parse "YYYY-MM-DD" to time_t (midnight local). Used by
+// rollingSharpe() to align daily series with calendar days.
+std::time_t parseDay(const std::string& iso) {
+    std::tm tm{};
+    std::sscanf(iso.c_str(), "%d-%d-%d",
+                &tm.tm_year, &tm.tm_mon, &tm.tm_mday);
+    tm.tm_year -= 1900;
+    tm.tm_mon  -= 1;
+    return std::mktime(&tm);
+}
+
+// Format time_t as "YYYY-MM-DD" (local).
+std::string fmtDay(std::time_t t) {
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char buf[16];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+    return buf;
+}
+
+// Compute rolling Sharpe on a per-day series. Input is a
+// sorted vector of (date, realized). Output is one
+// RollingSharpePoint per day where the window is complete.
+//
+// When stddev is zero (all-zero window) → sharpe = 0.0
+// (sentinel — trader sees a flat line).
+std::vector<TradeJournal::RollingSharpePoint>
+computeRollingSharpe(
+    const std::vector<TradeJournal::DailyPnL>& daily,
+    size_t windowDays) {
+    std::vector<TradeJournal::RollingSharpePoint> out;
+    if (daily.size() < windowDays || windowDays == 0) return out;
+    std::time_t t0 = parseDay(daily.front().date);
+    std::time_t tN = parseDay(daily.back().date);
+    size_t nDays = static_cast<size_t>((tN - t0) / 86400) + 1;
+    std::vector<double> dailyR(nDays, 0.0);
+    for (const auto& d : daily) {
+        size_t idx = static_cast<size_t>(
+            (parseDay(d.date) - t0) / 86400);
+        dailyR[idx] = d.realized;
+    }
+    for (size_t i = windowDays - 1; i < nDays; ++i) {
+        double sum  = 0.0;
+        double sum2 = 0.0;
+        for (size_t k = i + 1 - windowDays; k <= i; ++k) {
+            sum  += dailyR[k];
+            sum2 += dailyR[k] * dailyR[k];
+        }
+        double mean = sum / static_cast<double>(windowDays);
+        double ex2  = sum2 / static_cast<double>(windowDays);
+        double var  = ex2 - mean * mean;
+        if (var < 0.0) var = 0.0;
+        double stddev = std::sqrt(var);
+        double sharpe = (stddev > 1e-12)
+            ? (mean / stddev) * std::sqrt(252.0)
+            : 0.0;
+        TradeJournal::RollingSharpePoint p;
+        std::time_t ti = t0 +
+            static_cast<std::time_t>(i) * 86400;
+        p.date   = fmtDay(ti);
+        p.sharpe = sharpe;
+        out.push_back(p);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::DailyPnL>
+TradeJournal::dailyPnLSeries() const {
+    // Sprint #109. Whole-journal daily series. Empty input
+    // → empty output (no synthetic zero-fill days).
+    //
+    // bucketByDay()'s keyFn expects a non-empty key (it skips
+    // empty keys because the perSymbol/perTag callers use the
+    // empty string as the "skip this fill" signal). We use the
+    // sentinel "$all" here so all fills land in a single bucket
+    // — then we pop that bucket out as the result.
+    auto bucketed = bucketByDay(
+        loadAll(),
+        [](const JournalFill&) { return std::string("$all"); });
+    if (bucketed.empty()) return {};
+    return std::move(bucketed["$all"]);
+}
+
+std::map<std::string, std::vector<TradeJournal::DailyPnL>>
+TradeJournal::perSymbolDailyPnL() const {
+    // Sprint #109. Per-symbol mirror of dailyPnLSeries().
+    return bucketByDay(
+        loadAll(),
+        [](const JournalFill& f) { return f.symbol; });
+}
+
+std::map<std::string, std::vector<TradeJournal::DailyPnL>>
+TradeJournal::perTagDailyPnL(bool includeUntagged) const {
+    // Sprint #109. Per-tag mirror. Honors includeUntagged.
+    return bucketByDay(
+        loadAll(),
+        [includeUntagged](const JournalFill& f) -> std::string {
+            if (f.tag.empty()) {
+                return includeUntagged ? "__untagged__" : "";
+            }
+            return f.tag;
+        });
+}
+
+std::vector<TradeJournal::RollingSharpePoint>
+TradeJournal::rollingSharpe(size_t windowDays) const {
+    // Sprint #109. Whole-journal rolling Sharpe.
+    return computeRollingSharpe(dailyPnLSeries(), windowDays);
+}
+
+std::map<std::string,
+         std::vector<TradeJournal::RollingSharpePoint>>
+TradeJournal::rollingSharpeBySymbol(size_t windowDays) const {
+    // Sprint #109. Per-symbol mirror. Symbols with < windowDays
+    // of history get an empty vector (UI can skip them).
+    auto perSym = perSymbolDailyPnL();
+    std::map<std::string, std::vector<RollingSharpePoint>> out;
+    for (auto& kv : perSym) {
+        if (kv.second.size() < windowDays) {
+            out[kv.first] = {};
+            continue;
+        }
+        out[kv.first] = computeRollingSharpe(kv.second, windowDays);
+    }
     return out;
 }
 

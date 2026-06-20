@@ -9646,4 +9646,69 @@ TradeJournal::allSegmentDDDurationByTag(
     return out;
 }
 
+namespace {
+// Sprint #223 — per-segment Kelly fraction builder.
+template <typename Pred>
+TradeJournal::KellyFraction
+buildKellyFractionBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::KellyFraction k;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            grossWin += f.realizedDelta;
+            wins++;
+        } else if (f.realizedDelta < 0) {
+            grossLoss += f.realizedDelta;
+            losses++;
+        }
+    }
+    size_t total = wins + losses;
+    if (total == 0) return k;
+    k.totalTrades = total;
+    double W = static_cast<double>(wins) /
+               static_cast<double>(total);
+    double avgW = wins > 0
+                  ? grossWin / static_cast<double>(wins) : 0.0;
+    double avgL = losses > 0
+                  ? std::fabs(grossLoss / static_cast<double>(losses)) : 0.0;
+    if (avgL < 1e-9) return k;
+    double R = avgW / avgL;
+    // K = W - (1-W)/R
+    double K = W - (1.0 - W) / R;
+    if (K < 0) K = 0;
+    k.winRate = W;
+    k.payoff = R;
+    k.fullKelly = K;
+    k.halfKelly = K / 2.0;
+    return k;
+}
+}  // namespace
+
+TradeJournal::KellyFraction
+TradeJournal::kellyFractionBySymbol(
+    const std::string& symbol) const {
+    auto k = buildKellyFractionBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    k.segment = symbol;
+    return k;
+}
+
+TradeJournal::KellyFraction
+TradeJournal::kellyFractionByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto k = buildKellyFractionBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    k.segment = tag;
+    return k;
+}
+
 } // namespace btquant

@@ -23282,5 +23282,72 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 209: kellyFractionBySymbol/ByTag (Sprint #223).
+    //
+    // Per-segment Kelly fraction. Tests:
+    //   - BTC 6W+50 4L-25 → W=0.6, R=2 → K = 0.6 - 0.4/2
+    //     = 0.4. Half = 0.2.
+    std::cout << "\nTest 209: Kelly fraction..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test209_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 6W+50 4L-25 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "k.jsonl").string());
+            for (int i = 0; i < 6; ++i) {
+                j.append(mkFill("BTC", 50.0,
+                                t0 + i * hour));
+            }
+            for (int i = 6; i < 10; ++i) {
+                j.append(mkFill("BTC", -25.0,
+                                t0 + i * hour));
+            }
+            auto btcK = j.kellyFractionBySymbol("BTC");
+            if (btcK.totalTrades == 10 &&
+                std::fabs(btcK.fullKelly - 0.4) < 1e-9 &&
+                std::fabs(btcK.halfKelly - 0.2) < 1e-9) {
+                std::cout << "✓ BTC: K=0.4, "
+                          << "K/2=0.2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: K="
+                          << btcK.fullKelly
+                          << " K/2=" << btcK.halfKelly
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " kelly tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

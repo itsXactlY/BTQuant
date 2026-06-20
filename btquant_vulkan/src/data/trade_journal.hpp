@@ -2404,6 +2404,24 @@ public:
     allSegmentDDDurationByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment Kelly fraction (Sprint #223). For
+    // each segment: K = W - (1-W)/R where W = win rate,
+    // R = avg win / |avg loss|. Half-Kelly = K/2.
+    // Answers "what fraction of capital should I risk?"
+    struct KellyFraction {
+        std::string segment;
+        double      winRate   = 0.0;
+        double      payoff    = 0.0;  // R
+        double      fullKelly = 0.0;  // K
+        double      halfKelly = 0.0;  // K/2
+        size_t      totalTrades = 0;
+    };
+    KellyFraction kellyFractionBySymbol(
+        const std::string& symbol) const;
+    KellyFraction kellyFractionByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -44,6 +44,10 @@ public:
 
     std::optional<HotSpineEntry> readEntry(uint32_t symbolIndex);
     std::optional<HotSpineEntry> readLatest();
+
+    // Find a symbol's index by exact symbol-name match (e.g. "BTC/USDT").
+    // Returns std::nullopt if the spine doesn't carry that symbol.
+    [[nodiscard]] std::optional<uint32_t> findSymbolIndex(const std::string& symbol) const;
     
     // Additional methods for data pipeline
     std::vector<HotSpineEntry> readAllEntries();

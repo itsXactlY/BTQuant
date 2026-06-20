@@ -22,6 +22,11 @@ public:
     // Currently selected (filter input) symbol — empty if nothing typed.
     const std::string& current() const { return m_filter; }
 
+    // Test-only API: directly set the filter text and refresh the filtered
+    // list. The production path is via render() reading the ImGui input,
+    // but tests need to exercise the filter without spinning up a context.
+    void setFilter(const std::string& f) { m_filter = f; refresh(); }
+
     // Open / close the modal.
     void setOpen(bool v) { m_open = v; if (v) refresh(); }
     bool isOpen() const   { return m_open; }

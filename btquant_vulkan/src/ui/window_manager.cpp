@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>   // DockBuilder*
+#include <algorithm>          // std::find / std::rotate (symbol-picker callback)
 
 #include "../widgets/order_book_widget.hpp"
 #include "../widgets/order_book_depth_widget.hpp"
@@ -101,9 +102,21 @@ WindowManager::WindowManager() {
     m_symbolPicker = new SymbolPicker();
     m_symbolPicker->setSelectFn([this](const std::string& sym) {
         BTQ_LOG_INFO("SymbolPicker: selected %s", sym.c_str());
-        // Single-symbol MVP: log it. Multi-symbol wireup would update the
-        // MarketDataProcessor's symbol field here and switch the watchlist
-        // active row.
+        // Forward the selection to the MarketDataProcessor — setSymbol()
+        // atomically swaps the active spine index and resets the aggregator
+        // so the UI immediately starts feeding ticks from the new symbol.
+        if (m_marketData) {
+            m_marketData->setSymbol(sym);
+        }
+        // Promote the picked symbol to the top of the watchlist so the user
+        // sees it highlighted without scrolling.
+        if (m_watchlistWidget) {
+            std::vector<std::string> cur = m_watchlistWidget->symbols();
+            auto it = std::find(cur.begin(), cur.end(), sym);
+            if (it != cur.end()) std::rotate(cur.begin(), it, it + 1);
+            else                  cur.insert(cur.begin(), sym);
+            m_watchlistWidget->setSymbols(cur);
+        }
     });
 
     m_themeEditor = new ThemeEditor();
@@ -355,6 +368,7 @@ void WindowManager::renderStatsOverlay(uint64_t tradeQueueDepth,
 }
 
 void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
+    m_marketData = data;
     if (m_orderBookWidget) m_orderBookWidget->setMarketData(data);
     if (m_orderBookDepthWidget) m_orderBookDepthWidget->setMarketData(data);
     if (m_footprintWidget) m_footprintWidget->setMarketData(data);

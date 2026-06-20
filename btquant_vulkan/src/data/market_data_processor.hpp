@@ -46,6 +46,19 @@ public:
     uint64_t           ticksSeen () const noexcept { return m_ticksSeen.load(std::memory_order_relaxed); }
     uint64_t           parseErrors() const noexcept { return m_parseErrors.load(std::memory_order_relaxed); }
 
+    // Switch the active symbol. Thread-safe: updates an atomic target the
+    // runLoop reads each tick; resets the aggregator so stale candles/trades
+    // don't bleed across the switch. If the spine carries the new symbol,
+    // filters incoming ticks to that index; otherwise the runLoop falls back
+    // to the synthetic generator.
+    void setSymbol(const std::string& sym);
+
+    // Spine-side resolution helper — exposed so tests + UI can introspect
+    // whether a given symbol is actually published by the active producer.
+    std::optional<uint32_t> activeSymbolIndex() const {
+        return m_activeSymbolIndex.load(std::memory_order_acquire);
+    }
+
     // Snapshot of the current state — thread-safe, returns by-value copy.
     // Trade list is bounded to last_n_trades; candles by last_n_candles.
     // recent_candles holds bucket-finalized candles; current_candle is a
@@ -76,6 +89,8 @@ private:
     std::atomic<bool> m_shouldStop{false};
     std::atomic<uint64_t> m_ticksSeen{0};
     std::atomic<uint64_t> m_parseErrors{0};
+    // Active symbol index in the spine (std::nullopt = synthetic fallback).
+    std::atomic<std::optional<uint32_t>> m_activeSymbolIndex{std::nullopt};
     std::thread m_thread;
     uint32_t m_pollIntervalMs = 16;
     uint64_t m_snapshotSeq = 0;

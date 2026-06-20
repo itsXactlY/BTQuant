@@ -877,6 +877,30 @@ int main() {
         } else {
             std::cout << "✗ selectFn leaked without UI" << std::endl;
         }
+
+        // setFilter — directly drive the substring filter and confirm
+        // filtered() narrows correctly. "A" matches AAPL, AMZN, META (all
+        // contain 'a'); "MS" matches MSFT only.
+        sp.setFilter("A");
+        if (sp.filteredCount() == 3) {
+            std::cout << "✓ filter \"A\" narrows to 3 (AAPL, AMZN, META)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ filter \"A\": " << sp.filteredCount()
+                      << " matches" << std::endl;
+        }
+        sp.setFilter("MS");
+        if (sp.filteredCount() == 1 && sp.filtered()[0] == "MSFT") {
+            std::cout << "✓ filter \"MS\" → MSFT" << std::endl;
+        } else {
+            std::cout << "✗ filter \"MS\" result: " << sp.filteredCount() << std::endl;
+        }
+        sp.setFilter("");
+        if (sp.filteredCount() == 5) {
+            std::cout << "✓ clearing filter restores all" << std::endl;
+        } else {
+            std::cout << "✗ clear filter: " << sp.filteredCount() << std::endl;
+        }
     }
 
     // Test 18: ThemeEditor — Snapshot POD invariants + apply round-trip.
@@ -1138,6 +1162,71 @@ int main() {
         } else {
             std::cout << "✗ notional abs failed" << std::endl;
         }
+    }
+
+    // Test 21: MarketDataProcessor::setSymbol — symbol swap with synthetic
+    // fallback (no live spine in the test). Verifies the symbol field
+    // updates, ticksSeen resets, and activeSymbolIndex is nullopt when the
+    // spine isn't carrying the requested symbol.
+    std::cout << "\nTest 21: Testing MarketDataProcessor::setSymbol..." << std::endl;
+    {
+        btquant::MarketDataProcessor mdp;
+        // start() against a non-existent path — runs into the synthetic
+        // fallback branch, which still exercises the symbol machinery.
+        auto err = mdp.start("/tmp/__no_such_hotspine__", 16);
+        (void)err;
+
+        if (mdp.symbol() == "BTC/USDT") {
+            std::cout << "✓ initial symbol = BTC/USDT" << std::endl;
+        } else {
+            std::cout << "✗ initial symbol: " << mdp.symbol() << std::endl;
+        }
+
+        // No spine → activeSymbolIndex must be nullopt.
+        if (!mdp.activeSymbolIndex().has_value()) {
+            std::cout << "✓ no-spine → activeSymbolIndex nullopt" << std::endl;
+        } else {
+            std::cout << "✗ activeSymbolIndex should be nullopt without spine"
+                      << std::endl;
+        }
+
+        // Tick the synthetic generator a few times so ticksSeen > 0.
+        for (int i = 0; i < 20; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            (void)mdp.snapshot();
+        }
+        uint64_t before = mdp.ticksSeen();
+        if (before > 0) {
+            std::cout << "✓ synthetic ticksSeen = " << before << std::endl;
+        } else {
+            std::cout << "✗ no ticks observed in synthetic mode" << std::endl;
+        }
+
+        // Swap symbol — must update field and reset counter.
+        mdp.setSymbol("ETH/USDT");
+        if (mdp.symbol() == "ETH/USDT") {
+            std::cout << "✓ setSymbol updated field → ETH/USDT" << std::endl;
+        } else {
+            std::cout << "✗ symbol after swap: " << mdp.symbol() << std::endl;
+        }
+        if (mdp.ticksSeen() == 0) {
+            std::cout << "✓ ticksSeen reset to 0 on swap" << std::endl;
+        } else {
+            std::cout << "✗ ticksSeen after swap: " << mdp.ticksSeen() << std::endl;
+        }
+
+        // Aggregator should be cleared — snapshot's recent_trades empty.
+        auto snap = mdp.snapshot();
+        if (snap.recent_trades.empty() && snap.recent_candles.empty()) {
+            std::cout << "✓ aggregator cleared (no bleed across swap)" << std::endl;
+        } else {
+            std::cout << "✗ aggregator not cleared on swap"
+                      << " (trades=" << snap.recent_trades.size()
+                      << ", candles=" << snap.recent_candles.size() << ")"
+                      << std::endl;
+        }
+
+        mdp.stop();
     }
 
     return 0;

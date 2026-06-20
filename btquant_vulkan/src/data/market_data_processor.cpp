@@ -31,6 +31,15 @@ MarketDataProcessor::start(const std::string& hotspine_path, uint32_t poll_inter
     m_pollIntervalMs = poll_interval_ms;
     m_shouldStop.store(false);
     m_running.store(true);
+    // Resolve the active symbol against the (now-open) spine; fall back to
+    // nullopt if the spine didn't open or doesn't carry the requested symbol
+    // — the runLoop then uses the synthetic generator.
+    if (m_spine && m_spine->isOpen()) {
+        m_activeSymbolIndex.store(m_spine->findSymbolIndex(m_symbol),
+                                  std::memory_order_release);
+    } else {
+        m_activeSymbolIndex.store(std::nullopt, std::memory_order_release);
+    }
     m_thread = std::thread([this]() { runLoop(); });
     return std::nullopt;
 }
@@ -41,6 +50,27 @@ void MarketDataProcessor::stop() {
     if (m_thread.joinable()) m_thread.join();
     m_running.store(false);
     if (m_spine) { m_spine->close(); m_spine.reset(); }
+}
+
+// Switch active symbol — atomically updates the target, resets the
+// aggregator and counters so stale state doesn't leak across switches.
+void MarketDataProcessor::setSymbol(const std::string& sym) {
+    m_symbol = sym;
+    std::optional<uint32_t> idx;
+    if (m_spine && m_spine->isOpen()) {
+        idx = m_spine->findSymbolIndex(sym);
+    }
+    m_activeSymbolIndex.store(idx, std::memory_order_release);
+    // Reset aggregator under snapshot mutex so the next snapshot reflects
+    // the cleared state immediately.
+    {
+        std::lock_guard<std::mutex> lock(m_snapshotMutex);
+        m_aggregator.reset();
+        m_latestSnapshot = Snapshot{};
+        m_latestSnapshot.snapshot_seq = ++m_snapshotSeq;
+    }
+    m_ticksSeen.store(0, std::memory_order_relaxed);
+    m_parseErrors.store(0, std::memory_order_relaxed);
 }
 
 void MarketDataProcessor::runLoop() {
@@ -57,9 +87,15 @@ void MarketDataProcessor::runLoop() {
         bool gotTick = false;
 
         if (m_spine && m_spine->isOpen()) {
-            // Read all symbols, aggregate each into the aggregator.
+            // Read all symbols but only feed the active one to the
+            // aggregator — switching symbols must not blend two price feeds.
+            auto idxOpt = m_activeSymbolIndex.load(std::memory_order_acquire);
             auto entries = m_spine->readAllEntries();
-            for (const auto& e : entries) {
+            // Entries are index-correlated: entries[i] == spine symbol i.
+            // If the active index is unset we fall back to the synthetic
+            // generator branch below; otherwise pick only that slot.
+            if (idxOpt.has_value() && *idxOpt < entries.size()) {
+                const auto& e = entries[*idxOpt];
                 data::MarketTick tick{};
                 tick.price = (e.bid_price + e.ask_price) * 0.5;
                 tick.size = e.bid_size + e.ask_size;

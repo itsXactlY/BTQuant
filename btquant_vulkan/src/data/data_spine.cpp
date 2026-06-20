@@ -136,6 +136,18 @@ std::vector<HotSpineEntry> DataSpine::readAllEntries() {
     return entries;
 }
 
+// Resolve a symbol name (e.g. "BTC/USDT") to its index in the spine.
+// Returns std::nullopt if the spine doesn't carry that symbol — callers
+// can then decide to fall back to a synthetic generator for that symbol.
+std::optional<uint32_t> DataSpine::findSymbolIndex(const std::string& symbol) const {
+    for (size_t i = 0; i < m_symbolSymbols.size(); ++i) {
+        if (m_symbolSymbols[i].symbol == symbol) {
+            return static_cast<uint32_t>(i);
+        }
+    }
+    return std::nullopt;
+}
+
 // Method to subscribe to updates for a specific symbol
 void DataSpine::subscribeToSymbol(uint32_t symbolIndex, std::function<void(const HotSpineEntry&)> callback) {
     // This would typically run in a separate thread

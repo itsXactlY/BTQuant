@@ -168,6 +168,10 @@ private:
     class ThemeEditor*     m_themeEditor     = nullptr;
     class PositionCalculator* m_positionCalculator = nullptr;
     StatsOverlay m_statsOverlay;
+    // Cached MarketDataProcessor pointer — used by the SymbolPicker callback
+    // to actually swap the active symbol on selection. Without this, the
+    // picker would only log and the UI would still show the old symbol.
+    ::btquant::MarketDataProcessor* m_marketData = nullptr;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

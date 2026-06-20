@@ -56,12 +56,22 @@ double OrderTicket::referencePrice() const { return parseOrZero(m_limit); }
 void OrderTicket::refreshRefPrice() {
     if (!m_data) return;
     auto snap = m_data->snapshot(1, 0);
-    if (!snap.recent_trades.empty()) {
-        // Use the most recent trade price as the reference. Limit field
-        // is pre-filled with this so the user only edits on intent.
-        double p = snap.recent_trades.front().price;
-        std::snprintf(m_limit, sizeof(m_limit), "%.2f", p);
+    if (snap.recent_trades.empty()) return;
+    // Use the most recent trade price as the reference.
+    double p = snap.recent_trades.front().price;
+    if (p <= 0.0) return;
+    m_liveRefPrice = p;
+    if (m_typeIsLimit) {
+        // For limit orders, the user picks the price — don't clobber
+        // their input. The live price is exposed via liveRefPrice()
+        // for the UI hint below.
+        return;
     }
+    // For market orders, seed m_limit on the first non-empty render
+    // (m_limit starts at "0.00") and keep refreshing thereafter so
+    // the greyed-out "Ref price (auto)" field tracks the live price.
+    // The slippage estimate (m_slipBps) is applied on top of this.
+    std::snprintf(m_limit, sizeof(m_limit), "%.2f", p);
 }
 
 void OrderTicket::render() {
@@ -105,6 +115,13 @@ void OrderTicket::render() {
     ImGui::InputText("Quantity (base)",   m_qty,    sizeof(m_qty));
     if (m_typeIsLimit) {
         ImGui::InputText("Limit price",   m_limit,  sizeof(m_limit));
+        ImGui::SameLine();
+        // Live price hint — the user typed a limit, but seeing the
+        // current market lets them sanity-check whether the order
+        // would cross or rest.
+        if (m_liveRefPrice > 0.0) {
+            ImGui::TextDisabled("(live $%.2f)", m_liveRefPrice);
+        }
     } else {
         // Greyed-out hint: market uses ref price + slippage.
         ImGui::BeginDisabled();

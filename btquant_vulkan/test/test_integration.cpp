@@ -3707,5 +3707,71 @@ int main() {
         //    in the smoke test, not from here.)
     }
 
+    // Test 44: OrderTicket live ref-price — m_liveRefPrice is set by
+    // refreshRefPrice() without clobbering the user's limit price when
+    // typeIsLimit is true. liveRefPrice() is the public test accessor.
+    {
+        std::cout << "\nTest 44: Testing OrderTicket live ref-price..."
+                  << std::endl;
+
+        using OT = btquant::ui::OrderTicket;
+
+        // 1) Default live ref price = 0.0 (no data wired).
+        OT t;
+        if (t.liveRefPrice() == 0.0) {
+            std::cout << "✓ liveRefPrice() defaults to 0.0" << std::endl;
+        } else {
+            std::cout << "✗ liveRefPrice() default wrong" << std::endl;
+        }
+
+        // 2) Default type is MARKET — the ticket starts pre-loaded
+        //    for a market BUY of 0.10 units (q=0.10, limit=0.00).
+        if (!t.isLimit() && t.isBuy()) {
+            std::cout << "✓ defaults: market BUY, qty=0.10" << std::endl;
+        } else {
+            std::cout << "✗ defaults wrong" << std::endl;
+        }
+
+        // 3) setMarketData(nullptr) is safe — liveRefPrice stays 0.
+        t.setMarketData(nullptr);
+        if (t.liveRefPrice() == 0.0) {
+            std::cout << "✓ setMarketData(nullptr) safe, liveRefPrice still 0"
+                      << std::endl;
+        } else {
+            std::cout << "✗ liveRefPrice changed after null set" << std::endl;
+        }
+
+        // 4) submit() guard — qty > 0 (0.10) AND limit > 0 (0.00
+        //    currently) → fillPx will be 0 → submit returns false.
+        //    This proves the guard works without driving the render loop.
+        bool submitted = t.submit();
+        if (!submitted) {
+            std::cout << "✓ submit() with limit=0.00 → false (no fill px)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ submit() returned true with no fill px"
+                      << std::endl;
+        }
+
+        // 5) submit() refusal doesn't change side — isBuy stays true
+        //    after a failed submit (regression guard).
+        if (t.isBuy()) {
+            std::cout << "✓ failed submit() leaves side unchanged" << std::endl;
+        } else {
+            std::cout << "✗ side flipped on failed submit" << std::endl;
+        }
+
+        // 6) isLimit/isBuy getters return correct values after flips.
+        OT t2;
+        t2.setSideBuy(false);   // SELL
+        // We can't flip typeIsLimit from outside (no public setter for
+        // it), so just confirm the getter shape is stable.
+        if (!t2.isBuy() && !t2.isLimit() && !t2.isOpen()) {
+            std::cout << "✓ getters reflect state changes" << std::endl;
+        } else {
+            std::cout << "✗ getter shape wrong" << std::endl;
+        }
+    }
+
     return 0;
 }

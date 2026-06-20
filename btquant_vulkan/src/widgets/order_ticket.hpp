@@ -55,6 +55,11 @@ public:
     double limitPrice() const;
     double referencePrice() const;
 
+    // Last live trade price the refresh path observed (0.0 when no
+    // data). Public so tests can assert the plumbing without driving
+    // the render loop.
+    double liveRefPrice() const { return m_liveRefPrice; }
+
     // Side setter — used by hotkeys (Alt+B / Alt+S) to flip the
     // ticket's side without going through the render path. Calling
     // setSideBuy(true) makes the next submit a BUY; false = SELL.
@@ -77,6 +82,13 @@ private:
     char m_limit[32] = "0.00";      // only used when limit
     char m_feeBps[32] = "10";       // 10 bps = 0.10% taker fee
     char m_slipBps[32] = "5";       // 5 bps market slippage estimate
+
+    // Cached latest trade price from the data spine. Updated each
+    // frame by refreshRefPrice(). For limit orders the live price is
+    // shown as a hint but never overwrites the user-edited limit. For
+    // market orders it seeds m_limit on the first render so the
+    // greyed-out "Ref price (auto)" field has a sensible value.
+    double m_liveRefPrice = 0.0;
 
     ::btquant::MarketDataProcessor* m_data = nullptr;
     SubmitFn m_submit;

@@ -51,6 +51,9 @@ public:
     bool showHotkeyHelp = false;
     void showJournalStatsWindow();
     bool showJournalStats = false;
+    // Sprint #103 — calendar-style P&L heatmap (Ctrl+Shift+H).
+    void showPnLHeatmapWindow();
+    bool showPnLHeatmap = false;
 
     // Theme — owned by UIContext but the WindowManager menu triggers changes.
     // We store the current theme here so we can detect changes and rebuild.
@@ -279,6 +282,9 @@ private:
     // JournalStatsPanel — Sprint #74. All-time P&L by total /
     // symbol / tag, sourced from the persisted journal.
     class JournalStatsPanel* m_journalStatsPanel = nullptr;
+    // PnLHeatmapPanel — Sprint #103. Calendar-style grid of
+    // realized P&L per symbol/tag × date.
+    class PnLHeatmapPanel* m_pnlHeatmapPanel = nullptr;
     // Hotkey file path — saved to on each remap so user changes survive restart.
     std::string                    m_hotkeyPath;
     // Layout profile save/load UI state.

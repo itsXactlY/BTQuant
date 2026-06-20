@@ -45,6 +45,7 @@ HotkeyMap HotkeyMap::defaults() {
     m.set(HotkeyAction::ToggleRiskLimits,     { GLFW_KEY_R,        true, false, false });
     m.set(HotkeyAction::ToggleMiniPriceChart, { GLFW_KEY_M,        true, false, false });
     m.set(HotkeyAction::ToggleJournalStats,   { GLFW_KEY_J,        true, false, false });
+    m.set(HotkeyAction::TogglePnLHeatmap,     { GLFW_KEY_H,        true, false, true  });  // Ctrl+Shift+H: Heatmap
     m.set(HotkeyAction::KillSwitch,           { GLFW_KEY_K,        true, false, false });
     m.set(HotkeyAction::ToggleStats,          { GLFW_KEY_F1,      false, false, true  });
     m.set(HotkeyAction::ToggleHotkeyHelp,     { GLFW_KEY_SLASH,   false, false, true  });
@@ -110,6 +111,7 @@ std::string HotkeyMap::actionName(HotkeyAction a) {
         case HotkeyAction::ToggleRiskLimits:     return "ToggleRiskLimits";
         case HotkeyAction::ToggleMiniPriceChart: return "ToggleMiniPriceChart";
         case HotkeyAction::ToggleJournalStats:   return "ToggleJournalStats";
+        case HotkeyAction::TogglePnLHeatmap:     return "TogglePnLHeatmap";
         case HotkeyAction::KillSwitch:           return "KillSwitch";
         case HotkeyAction::ToggleStats:          return "ToggleStats";
         case HotkeyAction::ToggleHotkeyHelp:     return "ToggleHotkeyHelp";

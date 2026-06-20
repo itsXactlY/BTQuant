@@ -60,7 +60,13 @@ enum class HotkeyAction : int {
     // Ctrl+J by default — same modifier group as the other Ctrl
     // toggles (P/T/R/B/M/H).
     ToggleJournalStats = 33,
-    COUNT             = 34,
+    // Sprint #103: toggle the P&L Heatmap panel (calendar-style
+    // grid of realized P&L per symbol/tag × date). Bound to
+    // Ctrl+Shift+H by default — Ctrl+H is the HotkeyHelp overlay,
+    // and Ctrl+Shift+H keeps the same muscle memory as the
+    // "history / heatmap" association.
+    TogglePnLHeatmap = 34,
+    COUNT             = 35,
 };
 
 // One hotkey binding — a single GLFW key + optional modifier chord

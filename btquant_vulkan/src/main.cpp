@@ -320,6 +320,7 @@ private:
       windowManager.showRiskLimitsWindow();
       windowManager.showMiniPriceChartWindow();
       windowManager.showJournalStatsWindow();
+      windowManager.showPnLHeatmapWindow();
       windowManager.showHotkeyEditorWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();

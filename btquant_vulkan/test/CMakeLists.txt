@@ -101,6 +101,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/journal_stats_panel.cpp
     ../src/widgets/mini_price_chart.cpp
     ../src/widgets/hotkey_editor.cpp
+    ../src/widgets/pnl_heatmap_panel.cpp
     ../src/data/position_book.cpp
     ../src/data/risk_guard.cpp
     ../src/data/trade_journal.cpp

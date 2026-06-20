@@ -8413,5 +8413,247 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 80: TradeJournal.maxDrawdown() (Sprint #80).
+    // Worst peak-to-trough decline on the daily equity curve.
+    // Equity[t] = cumulative daily realized, oldest → t.
+    // Peak[t]   = max(equity[0..t]).
+    // Drawdown[t] = peak[t] - equity[t] (>= 0).
+    // Max drawdown = max over t of drawdown[t].
+    std::cout << "\nTest 80: Testing TradeJournal.maxDrawdown()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test80_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        // Today's local midnight + offset helper (same as Test 78).
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today_midnight = std::mktime(&tm_now);
+
+        auto dateStr = [](std::time_t t) -> std::string {
+            std::tm tm_out{};
+#if defined(_WIN32)
+            localtime_s(&tm_out, &t);
+#else
+            localtime_r(&t, &tm_out);
+#endif
+            char buf[16];
+            std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm_out);
+            return std::string(buf);
+        };
+
+        auto mkFill = [](const std::string& sym, double realized,
+                         std::time_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false; f.realizedDelta = realized;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Scenario 1: empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto dd = j.maxDrawdown();
+            if (dd.maxDrawdown == 0.0 && dd.peakDate.empty() &&
+                dd.troughDate.empty() && dd.currentDD == 0.0) {
+                std::cout << "✓ empty journal: zero drawdown, empty dates"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty wrong: max=" << dd.maxDrawdown
+                          << " peak='" << dd.peakDate
+                          << "' trough='" << dd.troughDate
+                          << "' cur=" << dd.currentDD << std::endl;
+            }
+        }
+
+        // ---- Scenario 2: monotonically rising equity ----
+        // Days: +100, +50, +200 (3 days back-to-front).
+        // Equity: 100, 150, 350. Peak = 350. DD: 0,0,0. maxDD = 0.
+        {
+            fs::path p = tmpDir / "monotonic.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", 100, today_midnight - 2*86400 + 12*3600));
+            j.append(mkFill("BTC",  50, today_midnight - 1*86400 + 12*3600));
+            j.append(mkFill("BTC", 200, today_midnight + 12*3600));
+            auto dd = j.maxDrawdown();
+            if (dd.maxDrawdown == 0.0 && dd.currentDD == 0.0 &&
+                dd.peakDate.empty() && dd.troughDate.empty()) {
+                std::cout << "✓ monotonic rise: no drawdown"
+                          << std::endl;
+            } else {
+                std::cout << "✗ monotonic wrong: max=" << dd.maxDrawdown
+                          << " cur=" << dd.currentDD
+                          << " peak='" << dd.peakDate
+                          << "' trough='" << dd.troughDate << "'" << std::endl;
+            }
+        }
+
+        // ---- Scenario 3: rise then dip ----
+        // Days: +100, +200, -150. Equity: 100, 300, 150.
+        // Peak = 300 (day 2). DD: 0, 0, 150. maxDD = 150.
+        // peakDate = day 2, troughDate = day 3, currentDD = 150.
+        {
+            fs::path p = tmpDir / "risedip.jsonl";
+            TradeJournal j(p.string());
+            std::time_t d1 = today_midnight - 2*86400 + 12*3600;
+            std::time_t d2 = today_midnight - 1*86400 + 12*3600;
+            std::time_t d3 = today_midnight + 12*3600;
+            j.append(mkFill("BTC",  100, d1));
+            j.append(mkFill("BTC",  200, d2));
+            j.append(mkFill("BTC", -150, d3));
+            auto dd = j.maxDrawdown();
+            std::string d2s = dateStr(d2);
+            std::string d3s = dateStr(d3);
+            bool ok = std::fabs(dd.maxDrawdown - 150.0) < 1e-9 &&
+                      std::fabs(dd.currentDD  - 150.0) < 1e-9 &&
+                      dd.peakDate   == d2s &&
+                      dd.troughDate == d3s;
+            if (ok) {
+                std::cout << "✓ rise-then-dip: maxDD=$150 ("
+                          << dd.peakDate << " → "
+                          << dd.troughDate << ")" << std::endl;
+            } else {
+                std::cout << "✗ rise-dip wrong: max=" << dd.maxDrawdown
+                          << " cur=" << dd.currentDD
+                          << " peak='" << dd.peakDate
+                          << "' (want '" << d2s << "')"
+                          << " trough='" << dd.troughDate
+                          << "' (want '" << d3s << "')" << std::endl;
+            }
+        }
+
+        // ---- Scenario 4: rise, dip, recover, deeper dip ----
+        // Days: +100, -200, +300, -500.
+        // Equity: 100, -100, 200, -300.
+        // Peak = 200 (day 3). DD: 0, 100, 0, 500. maxDD = 500.
+        // peakDate = day 3, troughDate = day 4, currentDD = 500.
+        {
+            fs::path p = tmpDir / "deeper.jsonl";
+            TradeJournal j(p.string());
+            std::time_t d1 = today_midnight - 3*86400 + 12*3600;
+            std::time_t d2 = today_midnight - 2*86400 + 12*3600;
+            std::time_t d3 = today_midnight - 1*86400 + 12*3600;
+            std::time_t d4 = today_midnight + 12*3600;
+            j.append(mkFill("BTC",  100, d1));
+            j.append(mkFill("BTC", -200, d2));
+            j.append(mkFill("BTC",  300, d3));
+            j.append(mkFill("BTC", -500, d4));
+            auto dd = j.maxDrawdown();
+            std::string d3s = dateStr(d3);
+            std::string d4s = dateStr(d4);
+            bool ok = std::fabs(dd.maxDrawdown - 500.0) < 1e-9 &&
+                      std::fabs(dd.currentDD  - 500.0) < 1e-9 &&
+                      dd.peakDate   == d3s &&
+                      dd.troughDate == d4s;
+            if (ok) {
+                std::cout << "✓ deeper drawdown: maxDD=$500 ("
+                          << dd.peakDate << " → "
+                          << dd.troughDate << "), currentDD=$500"
+                          << std::endl;
+            } else {
+                std::cout << "✗ deeper wrong: max=" << dd.maxDrawdown
+                          << " cur=" << dd.currentDD
+                          << " peak='" << dd.peakDate
+                          << "' trough='" << dd.troughDate << "'"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 5: dip then full recovery ----
+        // Days: +100, -50, +80.
+        // Equity: 100, 50, 130. Peak = 130. DD: 0, 50, 0.
+        // maxDD = 50 (day 1 → 2), currentDD = 0 (recovered).
+        {
+            fs::path p = tmpDir / "recover.jsonl";
+            TradeJournal j(p.string());
+            std::time_t d1 = today_midnight - 2*86400 + 12*3600;
+            std::time_t d2 = today_midnight - 1*86400 + 12*3600;
+            std::time_t d3 = today_midnight + 12*3600;
+            j.append(mkFill("BTC",  100, d1));
+            j.append(mkFill("BTC",  -50, d2));
+            j.append(mkFill("BTC",   80, d3));
+            auto dd = j.maxDrawdown();
+            std::string d1s = dateStr(d1);
+            std::string d2s = dateStr(d2);
+            bool ok = std::fabs(dd.maxDrawdown - 50.0) < 1e-9 &&
+                      std::fabs(dd.currentDD  -  0.0) < 1e-9 &&
+                      dd.peakDate   == d1s &&
+                      dd.troughDate == d2s;
+            if (ok) {
+                std::cout << "✓ dip-then-recover: maxDD=$50 ("
+                          << dd.peakDate << " → "
+                          << dd.troughDate << "), currentDD=$0 (recovered)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ recover wrong: max=" << dd.maxDrawdown
+                          << " cur=" << dd.currentDD
+                          << " peak='" << dd.peakDate
+                          << "' trough='" << dd.troughDate << "'"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 6: single-day drawdown (1 trading day) ----
+        // Day: -100. Equity: -100. Peak = 0 (initial). DD = 100.
+        // maxDD = 100, currentDD = 100.
+        {
+            fs::path p = tmpDir / "single.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC", -100, today_midnight + 12*3600));
+            auto dd = j.maxDrawdown();
+            bool ok = std::fabs(dd.maxDrawdown - 100.0) < 1e-9 &&
+                      std::fabs(dd.currentDD  - 100.0) < 1e-9;
+            if (ok) {
+                std::cout << "✓ single losing day: maxDD=$100"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single wrong: max=" << dd.maxDrawdown
+                          << " cur=" << dd.currentDD << std::endl;
+            }
+        }
+
+        // ---- Scenario 7: stability across reload ----
+        // Compute on one TradeJournal, reload, recompute, must match.
+        {
+            fs::path p = tmpDir / "stable.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  100, today_midnight - 2*86400 + 12*3600));
+            j.append(mkFill("BTC", -200, today_midnight - 1*86400 + 12*3600));
+            j.append(mkFill("BTC",  300, today_midnight + 12*3600));
+            auto dd1 = j.maxDrawdown();
+            TradeJournal j2(p.string());  // fresh load
+            auto dd2 = j2.maxDrawdown();
+            bool ok = std::fabs(dd1.maxDrawdown - dd2.maxDrawdown) < 1e-9 &&
+                      dd1.peakDate == dd2.peakDate &&
+                      dd1.troughDate == dd2.troughDate &&
+                      std::fabs(dd1.currentDD - dd2.currentDD) < 1e-9;
+            if (ok) {
+                std::cout << "✓ maxDrawdown stable across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ drifted: a=(" << dd1.maxDrawdown
+                          << "," << dd1.peakDate << "," << dd1.troughDate
+                          << "," << dd1.currentDD << ") b=("
+                          << dd2.maxDrawdown << "," << dd2.peakDate
+                          << "," << dd2.troughDate << ","
+                          << dd2.currentDD << ")" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

@@ -300,6 +300,103 @@ TradeJournal::realizedByDay() const {
     return out;
 }
 
+TradeJournal::Drawdown TradeJournal::maxDrawdown() const {
+    Drawdown dd;
+    auto daily = realizedByDay();
+    if (daily.empty()) return dd;
+
+    // Walk the equity curve. Track:
+    //   running peak (the highest equity seen so far)
+    //   current drawdown (peak - current equity)
+    //   worst drawdown seen (and the dates that bracket it)
+    double equity  = 0.0;
+    double peak    = 0.0;
+    double worstDD = 0.0;
+    std::string peakDateAtWorst;   // date of the high that preceded worstDD
+    std::string troughDateAtWorst; // date of the low that ended worstDD
+
+    for (const auto& kv : daily) {
+        equity += kv.second;
+        if (equity > peak) {
+            peak = equity;
+            // A new high water mark resets the peakDateAtWorst to
+            // the date the peak was reached — but only if we
+            // haven't yet seen any drawdown. Once we've recorded a
+            // worstDD, the peakDate for the *current* drawdown is
+            // whatever the peak was when this drawdown started,
+            // not necessarily today.
+        }
+        double curDD = peak - equity;  // >= 0
+        if (curDD > worstDD + 1e-9) {
+            worstDD = curDD;
+            troughDateAtWorst = kv.first;
+            // peakDateAtWorst: we need the date of the high that
+            // preceded this drawdown. Walk backwards from today
+            // until we find the last peak. Simpler: track it
+            // forward — when equity first exceeded the previous
+            // peak, record that date as the new "peak anchor".
+        }
+    }
+
+    // Recompute peakDateAtWorst properly: walk forward, tracking
+    // the date of the most recent equity-high (running peak).
+    // The peak anchor for the worst drawdown is the last date on
+    // which equity reached the peak that the drawdown started
+    // from. Re-walking costs O(N) which matches the loop above —
+    // could fuse but clarity wins.
+    equity = 0.0;
+    double anchorPeak = 0.0;
+    std::string anchorDate;
+    std::string troughAnchor;   // troughDate → anchorDate mapping
+    double runningWorstDD = 0.0;
+    for (const auto& kv : daily) {
+        equity += kv.second;
+        if (equity >= anchorPeak) {
+            anchorPeak = equity;
+            anchorDate = kv.first;
+        }
+        double curDD = anchorPeak - equity;
+        if (curDD > runningWorstDD + 1e-9) {
+            runningWorstDD = curDD;
+            troughAnchor = kv.first;
+            // The peak that started this drawdown is anchorDate.
+        }
+    }
+
+    dd.maxDrawdown = runningWorstDD;
+    if (runningWorstDD > 1e-9) {
+        // Final peakDateAtWorst: walk forward once more, this time
+        // stopping when we hit the troughDate and recording the
+        // peak that was current at that moment.
+        equity = 0.0;
+        double p = 0.0;
+        std::string lastPeakDate;
+        for (const auto& kv : daily) {
+            equity += kv.second;
+            if (equity >= p) {
+                p = equity;
+                lastPeakDate = kv.first;
+            }
+            if (kv.first == troughAnchor) {
+                dd.peakDate   = lastPeakDate;
+                dd.troughDate = troughAnchor;
+                break;
+            }
+        }
+    }
+
+    // currentDD: peak - last equity.
+    equity = 0.0;
+    double lastPeak = 0.0;
+    for (const auto& kv : daily) {
+        equity += kv.second;
+        if (equity > lastPeak) lastPeak = equity;
+    }
+    dd.currentDD = lastPeak - equity;
+
+    return dd;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

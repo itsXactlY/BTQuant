@@ -94,6 +94,39 @@ public:
     std::vector<std::pair<std::string, double>>
     realizedByDay() const;
 
+    // Max drawdown across the persisted history (Sprint #80).
+    // Computed on the daily equity curve derived from realizedByDay():
+    //
+    //   equity[t]   = cumulative sum of daily realized, oldest → t
+    //   peak[t]     = max(equity[0..t])
+    //   drawdown[t] = peak[t] - equity[t]   (>= 0 by construction)
+    //   maxDD       = max over t of drawdown[t]
+    //
+    // The result captures the worst peak-to-trough decline seen in
+    // the persisted history. Fields:
+    //
+    //   maxDrawdown — positive dollar amount of the worst peak-
+    //                 to-trough drop. Zero when the equity curve
+    //                 never declines from a prior peak (no
+    //                 drawdown yet, or all-time-high right now).
+    //   peakDate    — date of the high that preceded the worst
+    //                 drawdown ("YYYY-MM-DD"). Empty when
+    //                 maxDrawdown == 0.
+    //   troughDate  — date of the low that ended the worst
+    //                 drawdown ("YYYY-MM-DD"). Empty when
+    //                 maxDrawdown == 0.
+    //   currentDD   — drawdown as of the most recent day in the
+    //                 series. Always >= 0; equals maxDrawdown when
+    //                 the worst drawdown is the one we're still
+    //                 inside. Zero when equity is at all-time high.
+    struct Drawdown {
+        double maxDrawdown = 0.0;
+        std::string peakDate;     // YYYY-MM-DD or ""
+        std::string troughDate;   // YYYY-MM-DD or ""
+        double currentDD = 0.0;
+    };
+    Drawdown maxDrawdown() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

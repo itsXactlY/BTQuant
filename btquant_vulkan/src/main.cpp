@@ -296,6 +296,7 @@ private:
       windowManager.showSymbolPickerWindow();
       windowManager.showThemeEditorWindow();
       windowManager.showPositionCalculatorWindow();
+      windowManager.showOrderTicketWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

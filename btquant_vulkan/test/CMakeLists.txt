@@ -91,6 +91,7 @@ target_sources(test_integration PRIVATE
     ../src/util/theme_io.cpp
     ../src/widgets/theme_editor.cpp
     ../src/widgets/position_calculator.cpp
+    ../src/widgets/order_ticket.cpp
 )
 
 # Set C++ standard

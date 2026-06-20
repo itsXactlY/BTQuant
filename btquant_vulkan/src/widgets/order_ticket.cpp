@@ -1,0 +1,226 @@
+#include "order_ticket.hpp"
+
+#include "../data/market_data_processor.hpp"
+#include "log_panel.hpp"
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <imgui.h>
+
+namespace btquant::ui {
+
+namespace {
+double parseOrZero(const char* s) {
+    if (!s || !*s) return 0.0;
+    char* end = nullptr;
+    double v = std::strtod(s, &end);
+    return (end == s) ? 0.0 : v;
+}
+} // namespace
+
+double OrderTicket::computeFee(double size, double price, double feeBps) {
+    return std::fabs(size) * price * (feeBps / 10000.0);
+}
+
+double OrderTicket::estimateFillPrice(bool isBuy, bool isLimit,
+                                      double limitPrice, double refPrice,
+                                      double slippageBps) {
+    if (isLimit) {
+        // Limit fills at the limit price when the market crosses it,
+        // otherwise leaves the order pending (ref price unchanged).
+        if (isBuy  && limitPrice >= refPrice) return limitPrice;
+        if (!isBuy && limitPrice <= refPrice) return limitPrice;
+        return refPrice;  // resting — UI shows "would not fill"
+    }
+    // Market order: apply slippage against the trader. Buy pays more,
+    // sell receives less.
+    double slip = refPrice * (slippageBps / 10000.0);
+    return isBuy ? refPrice + slip : refPrice - slip;
+}
+
+double OrderTicket::computeTotalCost(double size, double effectivePrice,
+                                     double feeBps) {
+    double notional = std::fabs(size) * effectivePrice;
+    double fee      = notional * (feeBps / 10000.0);
+    // Cost = notional + fee (positive for buys); for sells we subtract
+    // fee from proceeds — the caller can negate as needed.
+    return (size >= 0.0) ? (notional + fee) : -(notional - fee);
+}
+
+double OrderTicket::quantity() const    { return parseOrZero(m_qty); }
+double OrderTicket::limitPrice() const  { return parseOrZero(m_limit); }
+double OrderTicket::referencePrice() const { return parseOrZero(m_limit); }
+
+void OrderTicket::refreshRefPrice() {
+    if (!m_data) return;
+    auto snap = m_data->snapshot(1, 0);
+    if (!snap.recent_trades.empty()) {
+        // Use the most recent trade price as the reference. Limit field
+        // is pre-filled with this so the user only edits on intent.
+        double p = snap.recent_trades.front().price;
+        std::snprintf(m_limit, sizeof(m_limit), "%.2f", p);
+    }
+}
+
+void OrderTicket::render() {
+    if (!ImGui::Begin("Order Ticket", &m_open,
+                      ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
+
+    // Pull live ref price from the data source when available.
+    refreshRefPrice();
+
+    // --- Side toggle (buy/sell) ---
+    if (m_sideIsBuy) {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.10f, 0.55f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.15f, 0.70f, 0.25f, 1.0f));
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.65f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.80f, 0.20f, 0.20f, 1.0f));
+    }
+    if (ImGui::Button(m_sideIsBuy ? "BUY" : "SELL", ImVec2(120, 32))) {
+        m_sideIsBuy = !m_sideIsBuy;
+    }
+    ImGui::PopStyleColor(2);
+    ImGui::SameLine();
+    ImGui::TextDisabled("click to toggle side");
+
+    ImGui::Separator();
+
+    // --- Order type ---
+    ImGui::Text("Order type:");
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Market", !m_typeIsLimit)) m_typeIsLimit = false;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Limit",   m_typeIsLimit))  m_typeIsLimit = true;
+
+    ImGui::Separator();
+
+    // --- Inputs ---
+    ImGui::PushItemWidth(160);
+    ImGui::InputText("Quantity (base)",   m_qty,    sizeof(m_qty));
+    if (m_typeIsLimit) {
+        ImGui::InputText("Limit price",   m_limit,  sizeof(m_limit));
+    } else {
+        // Greyed-out hint: market uses ref price + slippage.
+        ImGui::BeginDisabled();
+        ImGui::InputText("Ref price (auto)", m_limit, sizeof(m_limit));
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Live trade price pulled from the data spine. "
+                              "Edit only if you want to model a custom ref.");
+        }
+    }
+    ImGui::InputText("Fee (bps)",         m_feeBps, sizeof(m_feeBps));
+    ImGui::InputText("Slippage (bps)",    m_slipBps,sizeof(m_slipBps));
+    ImGui::PopItemWidth();
+
+    // Quick-fill buttons.
+    ImGui::TextDisabled("Quick fill:");
+    ImGui::SameLine();
+    for (double pct : {0.25, 0.50, 0.75, 1.00}) {
+        char label[16];
+        std::snprintf(label, sizeof(label), "%d%%", (int)(pct * 100));
+        if (ImGui::SmallButton(label)) {
+            // Apply against the live ref price — assumes a notional budget
+            // of 1.0 unit of quote. For BTC pairs that means a $1 fill.
+            double ref = parseOrZero(m_limit);
+            if (ref > 0.0) {
+                std::snprintf(m_qty, sizeof(m_qty), "%.4f", pct / ref);
+            }
+        }
+        ImGui::SameLine();
+    }
+    ImGui::NewLine();
+
+    ImGui::Separator();
+
+    // --- Live preview ---
+    double qty        = quantity();
+    double limitPx    = limitPrice();
+    double feeBps     = parseOrZero(m_feeBps);
+    double slipBps    = parseOrZero(m_slipBps);
+    double refPx      = limitPx;  // m_limit doubles as ref when market
+    double fillPx     = estimateFillPrice(m_sideIsBuy, m_typeIsLimit,
+                                          limitPx, refPx, slipBps);
+    double fee        = computeFee(qty, fillPx, feeBps);
+    double totalCost  = computeTotalCost(qty, fillPx, feeBps);
+    double notional   = std::fabs(qty) * fillPx;
+
+    ImGui::Columns(2, "ticket_preview", false);
+    ImGui::SetColumnWidth(0, 180);
+    ImGui::Text("Effective fill price"); ImGui::NextColumn();
+    if (refPx > 0.0) ImGui::Text("$%.2f", fillPx);
+    else              ImGui::TextDisabled("—");
+    ImGui::NextColumn();
+
+    ImGui::Text("Notional"); ImGui::NextColumn();
+    if (notional > 0.0) ImGui::Text("$%.2f", notional);
+    else                 ImGui::TextDisabled("—");
+    ImGui::NextColumn();
+
+    ImGui::Text("Fee"); ImGui::NextColumn();
+    if (fee > 0.0) ImGui::Text("$%.4f (%.0f bps)", fee, feeBps);
+    else           ImGui::TextDisabled("—");
+    ImGui::NextColumn();
+
+    ImGui::Text("Total cost"); ImGui::NextColumn();
+    if (qty > 0.0) {
+        ImVec4 col = m_sideIsBuy ? ImVec4(0.95f, 0.40f, 0.40f, 1.0f)
+                                 : ImVec4(0.30f, 0.85f, 0.40f, 1.0f);
+        ImGui::TextColored(col, "%s$%.2f",
+                           m_sideIsBuy ? "-" : "+", std::fabs(totalCost));
+    } else {
+        ImGui::TextDisabled("—");
+    }
+    ImGui::Columns(1);
+
+    // Resting-order warning for limit orders that wouldn't cross.
+    if (m_typeIsLimit && refPx > 0.0) {
+        bool wouldFill = m_sideIsBuy ? (limitPx >= refPx)
+                                     : (limitPx <= refPx);
+        if (!wouldFill) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.30f, 1.0f));
+            ImGui::TextWrapped("⚠ Limit %s ref — order would rest unfilled.",
+                               m_sideIsBuy ? "below" : "above");
+            ImGui::PopStyleColor();
+        }
+    }
+
+    ImGui::Separator();
+
+    // --- Submit ---
+    bool canSubmit = (qty > 0.0) && (fillPx > 0.0);
+    if (!canSubmit) ImGui::BeginDisabled();
+    ImVec4 submitCol = m_sideIsBuy ? ImVec4(0.10f, 0.55f, 0.20f, 1.0f)
+                                   : ImVec4(0.65f, 0.15f, 0.15f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        submitCol);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, submitCol);
+    if (ImGui::Button(m_sideIsBuy ? "Submit BUY" : "Submit SELL",
+                      ImVec2(-FLT_MIN, 36)) ||
+        (ImGui::IsKeyPressed(ImGuiKey_Enter) &&
+         ImGui::IsKeyDown(ImGuiKey_LeftCtrl))) {
+        char summary[256];
+        std::snprintf(summary, sizeof(summary),
+            "%s %.4f %s @ %s $%.2f  (fee $%.4f, total %s$%.2f)",
+            m_sideIsBuy ? "BUY" : "SELL",
+            qty,
+            m_data ? m_data->symbol().c_str() : "?",
+            m_typeIsLimit ? "limit" : "market",
+            fillPx,
+            fee,
+            m_sideIsBuy ? "-" : "+", std::fabs(totalCost));
+        BTQ_LOG_INFO("OrderTicket: %s", summary);
+        if (m_submit) m_submit(summary);
+    }
+    ImGui::PopStyleColor(2);
+    if (!canSubmit) ImGui::EndDisabled();
+
+    ImGui::End();
+}
+
+} // namespace btquant::ui

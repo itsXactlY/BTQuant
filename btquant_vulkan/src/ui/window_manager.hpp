@@ -70,6 +70,9 @@ public:
     // Position Calculator toggle.
     bool showPositionCalculator = true;
 
+    // Order Ticket toggle (Ctrl+Enter).
+    bool showOrderTicket = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -129,6 +132,7 @@ public:
     void applyPersistedTheme();
     bool saveCurrentTheme();
     void showPositionCalculatorWindow();
+    void showOrderTicketWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -167,6 +171,7 @@ private:
     class SymbolPicker*    m_symbolPicker    = nullptr;
     class ThemeEditor*     m_themeEditor     = nullptr;
     class PositionCalculator* m_positionCalculator = nullptr;
+    class OrderTicket*       m_orderTicket        = nullptr;
     StatsOverlay m_statsOverlay;
     // Cached MarketDataProcessor pointer — used by the SymbolPicker callback
     // to actually swap the active symbol on selection. Without this, the

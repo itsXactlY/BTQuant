@@ -71,6 +71,7 @@ set(SOURCES
     src/util/settings.cpp
     src/util/theme_io.cpp
     src/widgets/position_calculator.cpp
+    src/widgets/order_ticket.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
 )
@@ -108,6 +109,7 @@ set(HEADERS
     src/util/settings.hpp
     src/util/theme_io.hpp
     src/widgets/position_calculator.hpp
+    src/widgets/order_ticket.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp
 )

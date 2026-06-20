@@ -26,6 +26,7 @@
 #include "../widgets/theme_editor.hpp"
 #include "../util/theme_io.hpp"
 #include "../widgets/position_calculator.hpp"
+#include "../widgets/order_ticket.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -121,6 +122,11 @@ WindowManager::WindowManager() {
 
     m_themeEditor = new ThemeEditor();
     m_positionCalculator = new PositionCalculator();
+    m_orderTicket = new OrderTicket();
+    m_orderTicket->setSubmitFn([](const std::string& summary) {
+        // Default submit: just log. Real exchange wiring would go here.
+        BTQ_LOG_INFO("OrderTicket.submit: %s", summary.c_str());
+    });
 }
 
 WindowManager::~WindowManager() {
@@ -140,6 +146,7 @@ WindowManager::~WindowManager() {
     delete m_symbolPicker;
     delete m_themeEditor;
     delete m_positionCalculator;
+    delete m_orderTicket;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -358,6 +365,19 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         if (m_themeEditor) m_themeEditor->setOpen(showThemeEditorOpen);
     }
     prevCtrlT = currCtrlT;
+
+    // Ctrl+Enter toggles the order ticket. Edge-triggered.
+    static bool prevCtrlEnter = false;
+    bool currCtrlEnter = !textFieldFocus &&
+                         glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS &&
+                         (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                          glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlEnter && !prevCtrlEnter) {
+        showOrderTicket = !showOrderTicket;
+        if (m_orderTicket) m_orderTicket->setOpen(showOrderTicket);
+        markSettingsDirty();
+    }
+    prevCtrlEnter = currCtrlEnter;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -369,6 +389,7 @@ void WindowManager::renderStatsOverlay(uint64_t tradeQueueDepth,
 
 void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     m_marketData = data;
+    if (m_orderTicket) m_orderTicket->setMarketData(data);
     if (m_orderBookWidget) m_orderBookWidget->setMarketData(data);
     if (m_orderBookDepthWidget) m_orderBookDepthWidget->setMarketData(data);
     if (m_footprintWidget) m_footprintWidget->setMarketData(data);
@@ -474,6 +495,11 @@ void WindowManager::showPositionCalculatorWindow() {
     if (m_positionCalculator) m_positionCalculator->render();
 }
 
+void WindowManager::showOrderTicketWindow() {
+    if (!showOrderTicket) return;
+    if (m_orderTicket) m_orderTicket->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -494,6 +520,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Symbol Picker… (Ctrl+P)", nullptr, &showSymbolPickerOpen)) markSettingsDirty();
             if (ImGui::MenuItem("Theme Editor… (Ctrl+T)",   nullptr, &showThemeEditorOpen))  markSettingsDirty();
             if (ImGui::MenuItem("Position Calculator",  nullptr, &showPositionCalculator)) markSettingsDirty();
+            if (ImGui::MenuItem("Order Ticket (Ctrl+Enter)", nullptr, &showOrderTicket))  markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();
@@ -568,6 +595,9 @@ void WindowManager::showHotkeyHelpWindow() {
         row("Shift+F1", "Toggle Stats overlay");
         row("?",        "Toggle this Hotkey Reference");
         row("Ctrl+L",   "Reset docking layout");
+        row("Ctrl+P",   "Open Symbol Picker");
+        row("Ctrl+T",   "Open Theme Editor");
+        row("Ctrl+Enter", "Toggle Order Ticket");
         row("ESC",      "Close topmost popup / window");
 
         ImGui::EndTable();

@@ -18,8 +18,31 @@ public:
 
     void initialize();
     void shutdown();
-    void beginFrame();
-    void endFrame();
+
+    // Call once on the first frame after DockSpaceOverViewport() to build the
+    // default 5-region layout (OrderBook | DOM | Trades | TPO/Risk/VPVR/VWAP
+    // stacked). Idempotent — no-op on subsequent frames.
+    void applyInitialDockLayoutIfNeeded();
+
+    // Tear down the saved docking tree and rebuild the default layout on next
+    // frame. Triggered by "View → Reset Layout".
+    void requestDockLayoutReset();
+
+    // Toggle the Settings window. Settings state lives in the application;
+    // WindowManager just renders the window and exposes accessors.
+    void showSettingsWindow();
+    void setShowSettings(bool v) { showSettings = v; }
+
+    bool showSettings = false;
+
+    // Render-target fps limit (0 = uncapped). Read by main loop via
+    // glfwSwapInterval; 60 → swap interval 1, anything > 0 → interval 1,
+    // 0 → interval 0.
+    long fpsLimit = 60;
+
+    // Heatmap GPU texture side length (cells per side). 64–512; main loop
+    // passes this to HeatmapWidget.resize() if it changes.
+    long heatmapDensity = 128;
 
     void showOrderBookWindow();
     void showOrderBookDepthWindow();
@@ -47,6 +70,8 @@ public:
     bool showTPO = true;
 
 private:
+    void buildDockLayout();
+
     class OrderBookWidget* m_orderBookWidget = nullptr;
     class OrderBookDepthWidget* m_orderBookDepthWidget = nullptr;
     class FootprintWidget* m_footprintWidget = nullptr;
@@ -57,6 +82,8 @@ private:
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;
     bool m_initialized = false;
+    bool m_layoutApplied = false;
+    bool m_layoutResetRequested = false;
 };
 
 } // namespace btquant::ui

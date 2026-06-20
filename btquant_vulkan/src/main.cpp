@@ -12,6 +12,7 @@
 #include "core/vulkan_context.hpp"
 #include "ui/ui_context.hpp"
 #include "ui/window_manager.hpp"
+#include "util/settings.hpp"
 
 #include "data/market_data_processor.hpp"
 #include "renderer/heatmap_compute.hpp"
@@ -62,6 +63,10 @@ private:
     if (!window) {
       throw std::runtime_error("Failed to create GLFW window");
     }
+
+    // Vsync: fpsLimit==0 → no vsync (uncapped render loop), otherwise → vsync on
+    // (set swap interval to 1; the renderer itself does not throttle above vsync).
+    glfwSwapInterval(1);
   }
 
   void initVulkan() {
@@ -89,7 +94,27 @@ private:
                               vkContext.renderPass())) {
       throw std::runtime_error("Failed to initialize UI Context");
     }
+
+    // Load persisted settings BEFORE WindowManager initializes so the showXxx
+    // booleans reflect the user's last session.
+    auto settingsPath = util::Settings::defaultPath();
+    auto settings = util::Settings::load(settingsPath);
+    std::fprintf(stderr, "[BTQuant] loaded settings from %s\n",
+                 settingsPath.c_str());
+
     windowManager.initialize();
+    windowManager.showOrderBook       = settings.showOrderBook;
+    windowManager.showOrderBookDepth  = settings.showOrderBookDepth;
+    windowManager.showFootprint       = settings.showFootprint;
+    windowManager.showVPVR            = settings.showVPVR;
+    windowManager.showMultiVWAP       = settings.showMultiVWAP;
+    windowManager.showRiskPanel       = settings.showRiskPanel;
+    windowManager.showDOM             = settings.showDOM;
+    windowManager.showTrades          = settings.showTrades;
+    windowManager.showTPO             = settings.showTPO;
+    windowManager.fpsLimit            = settings.fpsLimit;
+    windowManager.heatmapDensity      = settings.heatmapDensity;
+    glfwSwapInterval(windowManager.fpsLimit > 0 ? 1 : 0);
   }
 
   void initData() {
@@ -169,6 +194,7 @@ private:
       uiContext.newFrame();
       ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
                                    ImGuiDockNodeFlags_PassthruCentralNode);
+      windowManager.applyInitialDockLayoutIfNeeded();
       windowManager.showMainMenu();
       windowManager.showOrderBookWindow();
       windowManager.showOrderBookDepthWindow();
@@ -179,6 +205,7 @@ private:
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
+      windowManager.showSettingsWindow();
       heatmapWidget.render();
 
       VkClearValue clearColor = {{{0.031f, 0.035f, 0.039f, 1.0f}}};  // #08090a
@@ -200,6 +227,24 @@ private:
   }
 
   void cleanup() {
+    // Persist user-visible state on shutdown.
+    auto settingsPath = util::Settings::defaultPath();
+    util::Settings s;
+    s.showOrderBook       = windowManager.showOrderBook;
+    s.showOrderBookDepth  = windowManager.showOrderBookDepth;
+    s.showFootprint       = windowManager.showFootprint;
+    s.showVPVR            = windowManager.showVPVR;
+    s.showMultiVWAP       = windowManager.showMultiVWAP;
+    s.showRiskPanel       = windowManager.showRiskPanel;
+    s.showDOM             = windowManager.showDOM;
+    s.showTrades          = windowManager.showTrades;
+    s.showTPO             = windowManager.showTPO;
+    s.fpsLimit            = windowManager.fpsLimit;
+    s.heatmapDensity      = windowManager.heatmapDensity;
+    s.save(settingsPath);
+    std::fprintf(stderr, "[BTQuant] saved settings to %s\n",
+                 settingsPath.c_str());
+
     heatmapCompute.shutdown();
     marketData.stop();
     if (window) {

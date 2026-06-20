@@ -61,6 +61,7 @@ set(SOURCES
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
     src/widgets/heatmap_widget.cpp
+    src/util/settings.cpp
 )
 
 set(HEADERS
@@ -86,6 +87,7 @@ set(HEADERS
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp
     src/widgets/heatmap_widget.hpp
+    src/util/settings.hpp
 )
 
 add_executable(btquant_vulkan ${SOURCES} ${HEADERS}

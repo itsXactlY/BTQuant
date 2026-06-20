@@ -1,6 +1,7 @@
 #include "window_manager.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>   // DockBuilder*
 
 #include "../widgets/order_book_widget.hpp"
 #include "../widgets/order_book_depth_widget.hpp"
@@ -13,6 +14,15 @@
 #include "../widgets/tpo_widget.hpp"
 
 #include "../data/market_data_processor.hpp"
+
+// Static slider bounds (file-local) for the Settings window. SliderScalar
+// needs typed pointers; using static const values avoids allocating per-frame.
+namespace {
+const long kZero = 0;
+const long kFps240 = 240;
+const long kHeatmapMin = 64;
+const long kHeatmapMax = 512;
+} // namespace
 
 namespace btquant::ui {
 
@@ -48,8 +58,75 @@ void WindowManager::shutdown() {
     m_initialized = false;
 }
 
-void WindowManager::beginFrame() {}
-void WindowManager::endFrame() {}
+void WindowManager::buildDockLayout() {
+    // Anchor the layout on the main dockspace (ID 0 = root dockspace created
+    // by DockSpaceOverViewport in main.cpp).
+    const ImGuiID dockspaceId = 0;
+    ImGui::DockBuilderRemoveNode(dockspaceId);
+    ImGuiID root = ImGui::DockBuilderAddNode(dockspaceId,
+                                             ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(root, ImGui::GetMainViewport()->Size);
+
+    // Split horizontal first: [ LEFT (OrderBook) | CENTER (DOM) | RIGHT (VWAP/VPVR/Footprint) ]
+    ImGuiID left = 0, center = 0, right = 0;
+    ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.22f, &left, &center);
+    ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, &right, &center);
+
+    // LEFT: split vertically → OrderBook (top), OrderBookDepth (bottom).
+    ImGuiID ob_top = 0, ob_bot = 0;
+    ImGui::DockBuilderSplitNode(left, ImGuiDir_Up, 0.55f, &ob_top, &ob_bot);
+
+    // RIGHT: split vertically → MultiVWAP (top), VPVR (mid), Footprint (bottom).
+    ImGuiID r_top = 0, r_mid_bot = 0;
+    ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, 0.40f, &r_top, &r_mid_bot);
+    ImGuiID r_mid = 0, r_bot = 0;
+    ImGui::DockBuilderSplitNode(r_mid_bot, ImGuiDir_Up, 0.50f, &r_mid, &r_bot);
+
+    // CENTER (DOM): split horizontally → Trades (top), DOM (mid), RiskPanel + TPO (bottom).
+    ImGuiID c_top = 0, c_mid_bot = 0;
+    ImGui::DockBuilderSplitNode(center, ImGuiDir_Up, 0.20f, &c_top, &c_mid_bot);
+    ImGuiID c_mid = 0, c_bot = 0;
+    ImGui::DockBuilderSplitNode(c_mid_bot, ImGuiDir_Up, 0.65f, &c_mid, &c_bot);
+    ImGuiID c_bot_l = 0, c_bot_r = 0;
+    ImGui::DockBuilderSplitNode(c_bot, ImGuiDir_Left, 0.50f, &c_bot_l, &c_bot_r);
+
+    // Bind windows to nodes.
+    ImGui::DockBuilderDockWindow("Order Book",         ob_top);
+    ImGui::DockBuilderDockWindow("Order Book Depth",  ob_bot);
+    ImGui::DockBuilderDockWindow("Multi VWAP",        r_top);
+    ImGui::DockBuilderDockWindow("VPVR",              r_mid);
+    ImGui::DockBuilderDockWindow("Footprint",         r_bot);
+    ImGui::DockBuilderDockWindow("Trades",            c_top);
+    ImGui::DockBuilderDockWindow("DOM",               c_mid);
+    ImGui::DockBuilderDockWindow("Risk Panel",        c_bot_l);
+    ImGui::DockBuilderDockWindow("TPO",               c_bot_r);
+    ImGui::DockBuilderDockWindow("Heatmap",           root);  // heatmap as floating overlay
+
+    ImGui::DockBuilderFinish(root);
+}
+
+void WindowManager::applyInitialDockLayoutIfNeeded() {
+    if (m_layoutResetRequested) {
+        m_layoutResetRequested = false;
+        m_layoutApplied = false;
+    }
+    if (m_layoutApplied) return;
+
+    // Only build on first frame after at least one widget has been rendered
+    // (ImGui needs a frame to register the DockSpace ID).
+    const ImGuiID dockspaceId = 0;
+    if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
+        // DockSpaceOverViewport hasn't run yet — wait one frame.
+        return;
+    }
+
+    buildDockLayout();
+    m_layoutApplied = true;
+}
+
+void WindowManager::requestDockLayoutReset() {
+    m_layoutResetRequested = true;
+}
 
 void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_orderBookWidget) m_orderBookWidget->setMarketData(data);
@@ -111,10 +188,21 @@ void WindowManager::showTPOWindow() {
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Order Book", nullptr, &showOrderBook);
-            ImGui::MenuItem("DOM", nullptr, &showDOM);
-            ImGui::MenuItem("Trades", nullptr, &showTrades);
-            ImGui::MenuItem("TPO", nullptr, &showTPO);
+            ImGui::MenuItem("Order Book",        nullptr, &showOrderBook);
+            ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth);
+            ImGui::MenuItem("DOM",               nullptr, &showDOM);
+            ImGui::MenuItem("Trades",            nullptr, &showTrades);
+            ImGui::MenuItem("TPO",               nullptr, &showTPO);
+            ImGui::MenuItem("Footprint",         nullptr, &showFootprint);
+            ImGui::MenuItem("VPVR",              nullptr, &showVPVR);
+            ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP);
+            ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel);
+            ImGui::Separator();
+            ImGui::MenuItem("Settings…",         nullptr, &showSettings);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Reset Layout")) {
+                requestDockLayoutReset();
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
@@ -123,6 +211,44 @@ void WindowManager::showMainMenu() {
         }
         ImGui::EndMainMenuBar();
     }
+}
+
+void WindowManager::showSettingsWindow() {
+    if (!showSettings) return;
+    ImGui::SetNextWindowSize(ImVec2(420, 260), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Settings", &showSettings)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Rendering");
+    ImGui::SliderScalar("FPS limit (0 = uncapped)", ImGuiDataType_S64,
+                        &fpsLimit, &kZero, &kFps240, "%ld");
+    ImGui::SliderScalar("Heatmap density", ImGuiDataType_S64,
+                        &heatmapDensity, &kHeatmapMin, &kHeatmapMax, "%ld");
+
+    ImGui::Separator();
+    ImGui::Text("Visible widgets");
+    ImGui::MenuItem("Order Book",        nullptr, &showOrderBook);
+    ImGui::MenuItem("Order Book Depth",  nullptr, &showOrderBookDepth);
+    ImGui::MenuItem("DOM",               nullptr, &showDOM);
+    ImGui::MenuItem("Trades",            nullptr, &showTrades);
+    ImGui::MenuItem("TPO",               nullptr, &showTPO);
+    ImGui::MenuItem("Footprint",         nullptr, &showFootprint);
+    ImGui::MenuItem("VPVR",              nullptr, &showVPVR);
+    ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP);
+    ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel);
+
+    ImGui::Separator();
+    if (ImGui::Button("Reset Layout")) {
+        requestDockLayoutReset();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Close")) {
+        showSettings = false;
+    }
+
+    ImGui::End();
 }
 
 } // namespace btquant::ui

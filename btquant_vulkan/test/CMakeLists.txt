@@ -54,6 +54,7 @@ target_sources(test_integration PRIVATE
     ../src/data/ring_buffer.cpp
     ../src/core/vulkan_utils.cpp
     ../src/core/vulkan_context.cpp
+    ../src/util/settings.cpp
 )
 
 # Set C++ standard

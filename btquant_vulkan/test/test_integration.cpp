@@ -4,8 +4,10 @@
 #include "../src/ui/ui_context.hpp"
 #include "../src/ui/window_manager.hpp"
 #include "../src/data/market_data.hpp"
+#include "../src/util/settings.hpp"
 #include <iostream>
 #include <cassert>
+#include <filesystem>
 
 int main() {
     std::cout << "Starting btquant_vulkan integration test..." << std::endl;
@@ -172,6 +174,65 @@ int main() {
         } else {
             std::cout << "✗ Pruning failed — candles=" << agg.candles().size() << std::endl;
         }
+    }
+
+    // Test 6: Settings load/save roundtrip.
+    std::cout << "\nTest 6: Testing settings load/save roundtrip..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_settings";
+        fs::create_directories(tmpDir);
+        fs::path tmpFile = tmpDir / "state.ini";
+
+        // Clean slate.
+        std::error_code ec;
+        fs::remove(tmpFile, ec);
+
+        // Default load on missing file → all true / 60 / 128.
+        auto def = btquant::util::Settings::load(tmpFile);
+        if (def.showOrderBook && def.fpsLimit == 60 && def.heatmapDensity == 128) {
+            std::cout << "✓ Defaults loaded on missing file" << std::endl;
+        } else {
+            std::cout << "✗ Defaults wrong (ob=" << def.showOrderBook
+                      << " fps=" << def.fpsLimit
+                      << " density=" << def.heatmapDensity << ")" << std::endl;
+        }
+
+        // Write a non-default state, read back.
+        btquant::util::Settings s;
+        s.showOrderBook       = false;
+        s.showOrderBookDepth  = true;
+        s.showFootprint       = false;
+        s.showVPVR            = true;
+        s.showMultiVWAP       = false;
+        s.showRiskPanel       = true;
+        s.showDOM             = true;
+        s.showTrades          = false;
+        s.showTPO             = true;
+        s.fpsLimit            = 144;
+        s.heatmapDensity      = 256;
+        s.tradeWindowSeconds  = 30.0;
+        s.save(tmpFile);
+
+        auto loaded = btquant::util::Settings::load(tmpFile);
+        bool ok = !loaded.showOrderBook && loaded.showOrderBookDepth &&
+                  !loaded.showFootprint && loaded.showVPVR &&
+                  !loaded.showMultiVWAP && loaded.showRiskPanel &&
+                  loaded.showDOM && !loaded.showTrades && loaded.showTPO &&
+                  loaded.fpsLimit == 144 && loaded.heatmapDensity == 256 &&
+                  loaded.tradeWindowSeconds > 29.9 && loaded.tradeWindowSeconds < 30.1;
+        if (ok) {
+            std::cout << "✓ Roundtrip preserved all 12 fields" << std::endl;
+        } else {
+            std::cout << "✗ Roundtrip lost data (ob=" << loaded.showOrderBook
+                      << " fps=" << loaded.fpsLimit
+                      << " density=" << loaded.heatmapDensity
+                      << " tw=" << loaded.tradeWindowSeconds << ")" << std::endl;
+        }
+
+        // Cleanup.
+        fs::remove(tmpFile, ec);
+        fs::remove(tmpDir, ec);
     }
 
     return 0;

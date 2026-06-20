@@ -9581,5 +9581,459 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 85: Comprehensive overview test (Sprint #90).
+    //
+    // Single shared fixture, exercises ALL 10 TradeJournal methods
+    // and asserts cross-method consistency invariants. Catches
+    // drift between methods if one is updated without updating
+    // the others (e.g., a per-symbol aggregation that forgot to
+    // include open fills).
+    //
+    // Fixture: 6 trading days, 3 symbols × 3 tags, mix of W/L/O.
+    //   Day -6: BTC scalp +$100
+    //   Day -5: ETH scalp -$50, ETH arb +$30
+    //   Day -4: SOL scalp -$20
+    //   Day -3: BTC manual +$200
+    //   Day -2: ETH manual -$80, SOL arb +$40
+    //   Day -1: BTC scalp -$30, BTC arb +$120, SOL manual +$60
+    //
+    //   Totals (per symbol): BTC +$290, ETH -$100, SOL +$80
+    //   Totals (per tag):    scalp +$0, arb +$190, manual +$180
+    //   Totals (per day):    +100, -20, -20, +200, -40, +150 = +$370
+    //
+    //   Round-trips: 10 fills (no opens).
+    //   Wins: BTC+100, arb+30, manual+200, arb+40, arb+120, manual+60 = 6
+    //   Losses: scalp-50, scalp-20, manual-80, scalp-30 = 4
+    //   Win rate = 60%, grossWin=$550, grossLoss=-$180
+    //   PF = 550/180 ≈ 3.056, expectancy = (550-180)/10 = $37
+    std::cout << "\nTest 85: Comprehensive overview (all 10 methods)..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test85_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          const std::string& tag, int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        fs::path p = tmpDir / "overview.jsonl";
+        TradeJournal j(p.string());
+
+        // Day -6: BTC scalp +$100
+        j.append(mkFill("BTCUSDT",  100, "scalp", 6, 10));
+        // Day -5: ETH scalp -$50, ETH arb +$30
+        j.append(mkFill("ETHUSDT",  -50, "scalp", 5, 11));
+        j.append(mkFill("ETHUSDT",   30, "arb",   5, 14));
+        // Day -4: SOL scalp -$20
+        j.append(mkFill("SOLUSDT",  -20, "scalp", 4, 9));
+        // Day -3: BTC manual +$200
+        j.append(mkFill("BTCUSDT",  200, "manual", 3, 13));
+        // Day -2: ETH manual -$80, SOL arb +$40
+        j.append(mkFill("ETHUSDT",  -80, "manual", 2, 10));
+        j.append(mkFill("SOLUSDT",   40, "arb",    2, 15));
+        // Day -1: BTC scalp -$30, BTC arb +$120, SOL manual +$60
+        j.append(mkFill("BTCUSDT",  -30, "scalp",  1, 12));
+        j.append(mkFill("BTCUSDT",  120, "arb",    1, 14));
+        j.append(mkFill("SOLUSDT",   60, "manual", 1, 16));
+
+        // ---- Run every method and cache the result ----
+        double total       = j.totalRealized();
+        auto   bySym       = j.realizedBySymbol();
+        auto   byTag       = j.realizedByTag();          // skip untagged
+        auto   byDay       = j.realizedByDay();
+        auto   stats       = j.stats();
+        auto   dd          = j.maxDrawdown();
+        auto   sk          = j.streaks();
+        auto   sh          = j.sharpe();
+        auto   ps          = j.perSymbolStats();
+        auto   pt          = j.perTagStats();            // skip untagged
+
+        int pass = 0, totalChecks = 0;
+
+        // ---- Invariant 1: total == sum(perSymbol.realized) ----
+        // Verified by recomputing the sum from the cached struct.
+        {
+            double sum = 0.0;
+            for (const auto& s : ps) sum += s.realized;
+            totalChecks++;
+            if (std::fabs(sum - total) < 1e-9) {
+                std::cout << "✓ sum(perSymbol.realized) == total ($"
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(perSymbol)=" << sum
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 2: total == sum(perTag.realized) ----
+        {
+            double sum = 0.0;
+            for (const auto& t : pt) sum += t.realized;
+            totalChecks++;
+            if (std::fabs(sum - total) < 1e-9) {
+                std::cout << "✓ sum(perTag.realized) == total ($"
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(perTag)=" << sum
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 3: total == sum(daily.realized) ----
+        {
+            double sum = 0.0;
+            for (const auto& d : byDay) sum += d.second;
+            totalChecks++;
+            if (std::fabs(sum - total) < 1e-9) {
+                std::cout << "✓ sum(daily.realized) == total ($"
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(daily)=" << sum
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 4: stats().winCount == sum(perSymbol.winCount) ----
+        {
+            size_t sum = 0;
+            for (const auto& s : ps) sum += s.winCount;
+            totalChecks++;
+            if (sum == stats.winCount) {
+                std::cout << "✓ sum(perSymbol.winCount) == stats.winCount ("
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(perSymbol.W)=" << sum
+                          << " stats.W=" << stats.winCount << std::endl;
+            }
+        }
+
+        // ---- Invariant 5: stats().lossCount == sum(perSymbol.lossCount) ----
+        {
+            size_t sum = 0;
+            for (const auto& s : ps) sum += s.lossCount;
+            totalChecks++;
+            if (sum == stats.lossCount) {
+                std::cout << "✓ sum(perSymbol.lossCount) == stats.lossCount ("
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(perSymbol.L)=" << sum
+                          << " stats.L=" << stats.lossCount << std::endl;
+            }
+        }
+
+        // ---- Invariant 6: stats().winCount == sum(perTag.winCount) ----
+        {
+            size_t sum = 0;
+            for (const auto& t : pt) sum += t.winCount;
+            totalChecks++;
+            if (sum == stats.winCount) {
+                std::cout << "✓ sum(perTag.winCount) == stats.winCount ("
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(perTag.W)=" << sum
+                          << " stats.W=" << stats.winCount << std::endl;
+            }
+        }
+
+        // ---- Invariant 7: stats().winRate matches stats.winCount/roundTrips ----
+        {
+            double expected = static_cast<double>(stats.winCount) /
+                              static_cast<double>(stats.roundTripCount);
+            totalChecks++;
+            if (std::fabs(stats.winRate - expected) < 1e-9) {
+                std::cout << "✓ stats.winRate = winCount/roundTrips ("
+                          << stats.winRate * 100 << "%)" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ winRate=" << stats.winRate
+                          << " expected=" << expected << std::endl;
+            }
+        }
+
+        // ---- Invariant 8: stats.netRealized == totalRealized() ----
+        {
+            totalChecks++;
+            if (std::fabs(stats.netRealized - total) < 1e-9) {
+                std::cout << "✓ stats.netRealized == totalRealized ($"
+                          << stats.netRealized << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ stats.netRealized=" << stats.netRealized
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 9: bySym sum == totalRealized() ----
+        {
+            double sum = 0.0;
+            for (const auto& kv : bySym) sum += kv.second;
+            totalChecks++;
+            if (std::fabs(sum - total) < 1e-9) {
+                std::cout << "✓ sum(realizedBySymbol) == total ($"
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(bySym)=" << sum
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 10: byTag sum == totalRealized() ----
+        {
+            double sum = 0.0;
+            for (const auto& kv : byTag) sum += kv.second;
+            totalChecks++;
+            if (std::fabs(sum - total) < 1e-9) {
+                std::cout << "✓ sum(realizedByTag) == total ($"
+                          << sum << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sum(byTag)=" << sum
+                          << " total=" << total << std::endl;
+            }
+        }
+
+        // ---- Invariant 11: perSymbol[sym].realized == realizedBySymbol[sym] ----
+        {
+            bool ok = (bySym.size() == ps.size());
+            for (size_t i = 0; ok && i < bySym.size(); ++i) {
+                if (bySym[i].first != ps[i].symbol ||
+                    std::fabs(bySym[i].second - ps[i].realized) > 1e-9) {
+                    ok = false;
+                }
+            }
+            totalChecks++;
+            if (ok) {
+                std::cout << "✓ perSymbol[].realized matches "
+                             "realizedBySymbol[] (1:1 field equality)"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ perSymbol vs realizedBySymbol mismatch"
+                          << std::endl;
+            }
+        }
+
+        // ---- Invariant 12: perTag[tag].realized == realizedByTag[tag] ----
+        {
+            bool ok = (byTag.size() == pt.size());
+            for (size_t i = 0; ok && i < byTag.size(); ++i) {
+                if (byTag[i].first != pt[i].tag ||
+                    std::fabs(byTag[i].second - pt[i].realized) > 1e-9) {
+                    ok = false;
+                }
+            }
+            totalChecks++;
+            if (ok) {
+                std::cout << "✓ perTag[].realized matches realizedByTag[]"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ perTag vs realizedByTag mismatch" << std::endl;
+            }
+        }
+
+        // ---- Invariant 13: maxDrawdown calculation verified ----
+        // Fixture equity curve (cumulative per-day):
+        //   Day -6 (06-14): +100 → 100
+        //   Day -5 (06-15): -20  → 80   (DD 20)
+        //   Day -4 (06-16): -20  → 60   (DD 40 — FIRST peak→trough)
+        //   Day -3 (06-17): +200 → 260  (DD 0, new peak)
+        //   Day -2 (06-18): -40  → 220  (DD 40 — second peak→trough)
+        //   Day -1 (06-19): +150 → 370  (DD 0, new peak)
+        //
+        // maxDD = 40. Implementation captures the FIRST occurrence
+        // (peakDate = day of the high that started the worst
+        // drawdown; troughDate = the day of the low that ended
+        // it). So peak = 2026-06-14, trough = 2026-06-16. The
+        // second 40-DD on day -2 ties but doesn't replace the
+        // recorded pair — first-wins semantics. currentDD = 0
+        // (we recovered on day -1).
+        {
+            std::time_t day_d6 = today - 6 * 86400;
+            std::time_t day_d4 = today - 4 * 86400;
+            auto fmt = [](std::time_t t) -> std::string {
+                std::tm tm_out{};
+#if defined(_WIN32)
+                localtime_s(&tm_out, &t);
+#else
+                localtime_r(&t, &tm_out);
+#endif
+                char buf[16]; std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm_out);
+                return std::string(buf);
+            };
+            std::string peakExpect   = fmt(day_d6);
+            std::string troughExpect = fmt(day_d4);
+
+            totalChecks++;
+            if (std::fabs(dd.maxDrawdown - 40.0) < 1e-9 &&
+                std::fabs(dd.currentDD  -  0.0) < 1e-9 &&
+                dd.peakDate == peakExpect &&
+                dd.troughDate == troughExpect) {
+                std::cout << "✓ maxDrawdown $40 (first peak→trough: "
+                          << dd.peakDate << " → "
+                          << dd.troughDate
+                          << "), currentDD $0 (recovered)" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ maxDD=" << dd.maxDrawdown
+                          << " currentDD=" << dd.currentDD
+                          << " peak='" << dd.peakDate
+                          << "' (want '" << peakExpect << "')"
+                          << " trough='" << dd.troughDate
+                          << "' (want '" << troughExpect << "')"
+                          << std::endl;
+            }
+        }
+
+        // ---- Invariant 14: sharpe() on positive series > 0 ----
+        // All 6 daily returns are positive (+370 total), so mean >
+        // 0 and Sharpe > 0.
+        {
+            totalChecks++;
+            if (sh.dailySharpe > 0.0 && sh.annualizedSharpe > 0.0 &&
+                sh.sampleSize == 6) {
+                std::cout << "✓ sharpe on positive series: daily="
+                          << sh.dailySharpe
+                          << " annualized=" << sh.annualizedSharpe
+                          << " (N=" << sh.sampleSize << ")" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ sharpe wrong: daily=" << sh.dailySharpe
+                          << " ann=" << sh.annualizedSharpe
+                          << " N=" << sh.sampleSize << std::endl;
+            }
+        }
+
+        // ---- Invariant 15: streaks() — last two fills both wins ----
+        // The 10 fills end with BTC arb +$120 then SOL manual +$60.
+        // Current run: 2 consecutive wins ending at the most recent
+        // fill. longestWinStreak >= 2 (the last run); longestLossStreak
+        // is at least 1 (the SOL scalp -$20 on day -4).
+        {
+            totalChecks++;
+            if (sk.currentWinStreak == 2 && sk.currentLossStreak == 0 &&
+                sk.longestWinStreak >= 2 && sk.longestLossStreak >= 1) {
+                std::cout << "✓ streaks: last 2 fills were wins → curW=2"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ streaks wrong: curW=" << sk.currentWinStreak
+                          << " curL=" << sk.currentLossStreak
+                          << " longW=" << sk.longestWinStreak
+                          << " longL=" << sk.longestLossStreak << std::endl;
+            }
+        }
+
+        // ---- Invariant 16: by-day table has exactly 6 buckets ----
+        // 6 trading days, one bucket per day.
+        {
+            totalChecks++;
+            if (byDay.size() == 6) {
+                std::cout << "✓ byDay has 6 buckets (one per trading day)"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ byDay size=" << byDay.size()
+                          << " (expected 6)" << std::endl;
+            }
+        }
+
+        // ---- Invariant 17: bySymbol/perSymbolStats have 3 entries ----
+        // 3 distinct symbols: BTC, ETH, SOL.
+        {
+            totalChecks++;
+            if (bySym.size() == 3 && ps.size() == 3) {
+                std::cout << "✓ 3 distinct symbols (BTC/ETH/SOL) "
+                             "in both lists" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ symbol count: bySym=" << bySym.size()
+                          << " ps=" << ps.size() << std::endl;
+            }
+        }
+
+        // ---- Invariant 18: byTag/perTagStats have 3 entries ----
+        // 3 distinct tags: scalp, arb, manual. No untagged fills.
+        {
+            totalChecks++;
+            if (byTag.size() == 3 && pt.size() == 3) {
+                std::cout << "✓ 3 distinct tags (scalp/arb/manual) "
+                             "in both lists" << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ tag count: byTag=" << byTag.size()
+                          << " pt=" << pt.size() << std::endl;
+            }
+        }
+
+        // ---- Invariant 19: PF = grossWin / |grossLoss|, not avgW / |avgL| ----
+        // Verify the formula is sum-based (cross-check via
+        // stats().profitFactor). PF = sumWins / sumLosses. avgW/|avgL|
+        // would be wrong because it doesn't account for the
+        // different number of wins vs losses.
+        {
+            bool ok = (std::fabs(stats.profitFactor -
+                                 (550.0 / 180.0)) < 1e-9);
+            totalChecks++;
+            if (ok) {
+                std::cout << "✓ stats.PF = 550/180 ≈ "
+                          << stats.profitFactor
+                          << " (sum-based, not avg-based)"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ stats.PF=" << stats.profitFactor
+                          << " (expected " << (550.0/180.0) << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Invariant 20: total == +$370 (sanity) ----
+        {
+            totalChecks++;
+            if (std::fabs(total - 370.0) < 1e-9) {
+                std::cout << "✓ total P&L = $370 (sanity check)"
+                          << std::endl;
+                pass++;
+            } else {
+                std::cout << "✗ total=" << total << " (expected 370)"
+                          << std::endl;
+            }
+        }
+
+        std::cout << "  ─── " << pass << "/" << totalChecks
+                  << " cross-method invariants verified" << std::endl;
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

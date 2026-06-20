@@ -15796,5 +15796,196 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 116: pnlDistribution() / pnlDistributionBySymbol()
+    //   / pnlDistributionByTag() (Sprint #128).
+    //
+    // P&L distribution percentiles. Tests:
+    //   - Empty: all zeros.
+    //   - 1 fill: count=1, min=max=mean=p10=...=that value.
+    //   - 5 fills: p10, p50, p90 at expected positions.
+    //   - Mixed W/L: median should be near zero or positive.
+    //   - Per-symbol/per-tag filtering.
+    std::cout << "\nTest 116: P&L distribution percentiles..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test116_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto d = j.pnlDistribution();
+            if (d.count == 0 &&
+                d.min == 0.0 &&
+                d.max == 0.0 &&
+                d.mean == 0.0 &&
+                d.stddev == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: count="
+                          << d.count << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill ----
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            j.append(mkFill("BTC", 50.0, "",
+                            1774000000000000ULL));
+            auto d = j.pnlDistribution();
+            if (d.count == 1 &&
+                std::fabs(d.min - 50.0) < 1e-9 &&
+                std::fabs(d.max - 50.0) < 1e-9 &&
+                std::fabs(d.mean - 50.0) < 1e-9 &&
+                std::fabs(d.p50 - 50.0) < 1e-9) {
+                std::cout << "✓ single: min=max=mean=p50=50"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: count="
+                          << d.count << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills: 1, 2, 3, 4, 5 → sorted → p10=1.4, p50=3, p90=4.6 ----
+        // rank = p/100 * (N-1)
+        // p10: rank=0.4 → between idx 0 (1) and idx 1 (2). frac=0.4. = 1*0.6 + 2*0.4 = 1.4.
+        // p50: rank=2 → idx 2 (3). = 3.
+        // p90: rank=3.6 → between 3 (4) and 4 (5). frac=0.6. = 4*0.4 + 5*0.6 = 4.6.
+        {
+            TradeJournal j((tmpDir / "five.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", static_cast<double>(i + 1),
+                                "", t0 + i));
+            }
+            auto d = j.pnlDistribution();
+            if (d.count == 5 &&
+                std::fabs(d.min - 1.0) < 1e-9 &&
+                std::fabs(d.max - 5.0) < 1e-9 &&
+                std::fabs(d.mean - 3.0) < 1e-9 &&
+                std::fabs(d.p10 - 1.4) < 1e-9 &&
+                std::fabs(d.p50 - 3.0) < 1e-9 &&
+                std::fabs(d.p90 - 4.6) < 1e-9) {
+                std::cout << "✓ 5 fills [1,2,3,4,5]: "
+                          << "p10=1.4, p50=3, p90=4.6, "
+                          << "mean=3"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ five wrong: p10=" << d.p10
+                          << " p50=" << d.p50
+                          << " p90=" << d.p90
+                          << " mean=" << d.mean
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Mixed W/L: 100, -50, 200, -100, 75 ----
+        // sorted: -100, -50, 75, 100, 200.
+        // p10: rank=0.4 → -100*0.6 + -50*0.4 = -60-20 = -80.
+        // p50: rank=2 → 75.
+        // p90: rank=3.6 → 100*0.4 + 200*0.6 = 40+120 = 160.
+        // mean: (100-50+200-100+75)/5 = 225/5 = 45.
+        {
+            TradeJournal j((tmpDir / "mix.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 1));
+            j.append(mkFill("BTC",  200.0, "",
+                             t0 + 2));
+            j.append(mkFill("BTC", -100.0, "",
+                             t0 + 3));
+            j.append(mkFill("BTC",   75.0, "",
+                             t0 + 4));
+            auto d = j.pnlDistribution();
+            if (d.count == 5 &&
+                std::fabs(d.min + 100.0) < 1e-9 &&
+                std::fabs(d.max - 200.0) < 1e-9 &&
+                std::fabs(d.mean - 45.0) < 1e-9 &&
+                std::fabs(d.p10 + 80.0) < 1e-9 &&
+                std::fabs(d.p50 - 75.0) < 1e-9 &&
+                std::fabs(d.p90 - 160.0) < 1e-9) {
+                std::cout << "✓ mixed W/L: p10=-80, p50=75, "
+                          << "p90=160, mean=45"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ mix wrong: p10=" << d.p10
+                          << " p50=" << d.p50
+                          << " p90=" << d.p90
+                          << " mean=" << d.mean
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: BTC only ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 1));
+            j.append(mkFill("ETH",  200.0, "", t0 + 2));  // excluded
+            j.append(mkFill("BTC",   75.0, "", t0 + 3));
+            auto dBTC = j.pnlDistributionBySymbol("BTC");
+            auto dETH = j.pnlDistributionBySymbol("ETH");
+            // BTC: [100, -50, 75] sorted [-50, 75, 100].
+            //   p10: rank=0.2 → -50*0.8 + 75*0.2 = -25.
+            //   p50: rank=1 → 75.
+            //   p90: rank=1.8 → 75*0.2 + 100*0.8 = 95.
+            //   mean: (100-50+75)/3 = 41.667.
+            if (dBTC.count == 3 &&
+                std::fabs(dBTC.p10 + 25.0) < 1e-9 &&
+                std::fabs(dBTC.p50 - 75.0) < 1e-9 &&
+                std::fabs(dBTC.p90 - 95.0) < 1e-9 &&
+                dETH.count == 1 &&
+                std::fabs(dETH.mean - 200.0) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC p10=-25 p50=75 "
+                          << "p90=95, ETH=1 fill"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: BTC p10="
+                          << dBTC.p10 << " p50=" << dBTC.p50
+                          << " p90=" << dBTC.p90
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " pnl-distribution tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

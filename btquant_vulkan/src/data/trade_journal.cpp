@@ -2826,6 +2826,95 @@ TradeJournal::dailyStreakStatsByTag(
 }
 
 namespace {
+// Sprint #128 — shared P&L distribution builder. Returns
+// percentiles + mean/stddev of the round-trip realizedDelta
+// values (ties excluded).
+template <typename Pred>
+TradeJournal::PnLDistribution
+buildPnLDistribution(const std::vector<JournalFill>& fills,
+                     Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    // Keep only round-trips.
+    std::vector<double> rt;
+    rt.reserve(filtered.size());
+    for (const auto& f : filtered) {
+        if (std::fabs(f.realizedDelta) > 1e-9) {
+            rt.push_back(f.realizedDelta);
+        }
+    }
+    TradeJournal::PnLDistribution out;
+    if (rt.empty()) return out;
+    std::sort(rt.begin(), rt.end());
+    out.count = rt.size();
+    out.min   = rt.front();
+    out.max   = rt.back();
+    double sum = 0.0;
+    for (double x : rt) sum += x;
+    out.mean = sum / static_cast<double>(rt.size());
+    double var = 0.0;
+    for (double x : rt) {
+        double d = x - out.mean;
+        var += d * d;
+    }
+    if (rt.size() > 1) {
+        out.stddev = std::sqrt(var /
+            static_cast<double>(rt.size() - 1));
+    } else {
+        out.stddev = 0.0;
+    }
+    // Linear-interpolation percentile. For N sorted values,
+    // the p-th percentile sits at index (p/100) * (N-1),
+    // interpolated between the two neighbors.
+    auto pctile = [&](double p) {
+        double rank = (p / 100.0) *
+                      static_cast<double>(rt.size() - 1);
+        size_t lo = static_cast<size_t>(std::floor(rank));
+        size_t hi = static_cast<size_t>(std::ceil(rank));
+        if (lo == hi) return rt[lo];
+        double frac = rank - static_cast<double>(lo);
+        return rt[lo] * (1.0 - frac) + rt[hi] * frac;
+    };
+    out.p10 = pctile(10);
+    out.p25 = pctile(25);
+    out.p50 = pctile(50);
+    out.p75 = pctile(75);
+    out.p90 = pctile(90);
+    return out;
+}
+}  // namespace
+
+TradeJournal::PnLDistribution
+TradeJournal::pnlDistribution() const {
+    return buildPnLDistribution(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::PnLDistribution
+TradeJournal::pnlDistributionBySymbol(
+    const std::string& symbol) const {
+    return buildPnLDistribution(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::PnLDistribution
+TradeJournal::pnlDistributionByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildPnLDistribution(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

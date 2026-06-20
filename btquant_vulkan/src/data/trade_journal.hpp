@@ -1012,6 +1012,34 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Realized P&L distribution stats (Sprint #128).
+    // Returns the percentiles + min/max/mean/stddev of the
+    // round-trip realizedDelta distribution. Ties (==0) are
+    // excluded (they're not round-trips).
+    //
+    // Useful for understanding the SHAPE of the P&L
+    // distribution: "is my median win > |median loss|?"
+    // (it should be), "what's my worst 10% outcome?" (the
+    // p10), "how fat are my tails?" (p90-p50 vs p50-p10).
+    struct PnLDistribution {
+        size_t count     = 0;
+        double min       = 0.0;
+        double max       = 0.0;
+        double mean      = 0.0;
+        double stddev    = 0.0;
+        double p10       = 0.0;   // 10th percentile
+        double p25       = 0.0;   // 25th percentile
+        double p50       = 0.0;   // median
+        double p75       = 0.0;   // 75th percentile
+        double p90       = 0.0;   // 90th percentile
+    };
+    PnLDistribution pnlDistribution() const;
+    PnLDistribution pnlDistributionBySymbol(
+        const std::string& symbol) const;
+    PnLDistribution pnlDistributionByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

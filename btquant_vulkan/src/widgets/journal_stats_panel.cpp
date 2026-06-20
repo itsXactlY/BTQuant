@@ -503,6 +503,158 @@ void JournalStatsPanel::render() {
                 }
             }
         }
+
+        // ---- Sprint #118 — Best / Worst trading sessions ----
+        // Two side-by-side tables: top 5 sessions by realized
+        // DESC (best) and bottom 5 by realized ASC (worst).
+        // Each row shows start, realized, fills, win rate, maxDD.
+        //
+        // gapMinutes defaulted to 30 min (same as the method's
+        // default). The trader can rebuild sessions on demand
+        // by changing the gap via a SliderInt below.
+        static int s_gapMinutes = 30;
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::SliderInt("Session gap (min)##jsp",
+                             &s_gapMinutes, 5, 240)) {
+            // Live-update; values read inline below.
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Max gap between consecutive fills to consider "
+                "them part of the same trading session. "
+                "Default 30 min matches the conventional "
+                "lunch-break cut-off.");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Refresh sessions##jsr")) {
+            // Slider change already triggers rebuild; this is
+            // a no-op visual cue so the trader can re-trigger.
+        }
+        ImGui::Spacing();
+        auto sessions = m_journal->sessions(s_gapMinutes);
+        if (sessions.empty()) {
+            ImGui::TextDisabled("(no sessions yet)");
+        } else {
+            // Sort copy by realized DESC for "best", ASC for
+            // "worst". Don't mutate the source order.
+            std::vector<btquant::TradeJournal::TradingSession>
+                best = sessions, worst = sessions;
+            std::sort(best.begin(), best.end(),
+                [](const auto& a, const auto& b) {
+                    return a.realized > b.realized;
+                });
+            std::sort(worst.begin(), worst.end(),
+                [](const auto& a, const auto& b) {
+                    return a.realized < b.realized;
+                });
+            // Format helper: ts → "YYYY-MM-DD HH:MM"
+            auto fmtTs = [](uint64_t ts) {
+                std::time_t s = static_cast<std::time_t>(
+                    ts / 1000000ULL);
+                std::tm tm{};
+                localtime_r(&s, &tm);
+                char b[32];
+                std::strftime(b, sizeof(b),
+                              "%Y-%m-%d %H:%M", &tm);
+                return std::string(b);
+            };
+            size_t showN = std::min<size_t>(5, sessions.size());
+
+            // Best sessions (left col).
+            if (ImGui::BeginTable(
+                    "##BestSessions", 5,
+                    ImGuiTableFlags_Borders |
+                    ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("Start (best)");
+                ImGui::TableSetupColumn("Realized");
+                ImGui::TableSetupColumn("Fills");
+                ImGui::TableSetupColumn("Win%");
+                ImGui::TableSetupColumn("MaxDD");
+                ImGui::TableHeadersRow();
+                for (size_t i = 0; i < showN; ++i) {
+                    const auto& s = best[i];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s",
+                                fmtTs(s.start_ts).c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    if (s.realized > 1e-9) {
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotLines]);
+                        ImGui::Text("%+.2f", s.realized);
+                        ImGui::PopStyleColor();
+                    } else {
+                        ImGui::Text("%+.2f", s.realized);
+                    }
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%zu", s.fillCount);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%.0f%%",
+                                s.winRate * 100.0);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%.2f", s.maxDD);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
+            // Worst sessions (left col).
+            if (ImGui::BeginTable(
+                    "##WorstSessions", 5,
+                    ImGuiTableFlags_Borders |
+                    ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("Start (worst)");
+                ImGui::TableSetupColumn("Realized");
+                ImGui::TableSetupColumn("Fills");
+                ImGui::TableSetupColumn("Win%");
+                ImGui::TableSetupColumn("MaxDD");
+                ImGui::TableHeadersRow();
+                for (size_t i = 0; i < showN; ++i) {
+                    const auto& s = worst[i];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s",
+                                fmtTs(s.start_ts).c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    if (s.realized < -1e-9) {
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotHistogram]);
+                        ImGui::Text("%+.2f", s.realized);
+                        ImGui::PopStyleColor();
+                    } else {
+                        ImGui::Text("%+.2f", s.realized);
+                    }
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%zu", s.fillCount);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%.0f%%",
+                                s.winRate * 100.0);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%.2f", s.maxDD);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
+            ImGui::TextDisabled(
+                "Avg: %.2f realized / %zu fills / %s active · "
+                "Total: %.2f realized across %zu sessions",
+                TradeJournal::avgRealized(sessions),
+                static_cast<size_t>(
+                    TradeJournal::avgFillCount(sessions)),
+                TradeJournal::avgActiveUs(sessions) == 0
+                    ? "0s"
+                    : (TradeJournal::avgActiveUs(sessions) >=
+                           3600000000ULL
+                       ? "?"
+                       : "?"),
+                TradeJournal::totalRealized(sessions),
+                sessions.size());
+        }
     }
 
     // ---- Streaks mini-section (Sprint #83 + Sprint #105) ----

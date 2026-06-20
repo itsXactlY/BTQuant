@@ -22243,5 +22243,67 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 192: allSegmentBestDayOfWeek (Sprint #206).
+    //
+    // Bulk best day of week. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 192: all-seg best day of week..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test192_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t wed = 1704283200ULL * 1000000ULL;  // Wed
+            const uint64_t fri = 1704456000ULL * 1000000ULL;  // Fri
+            TradeJournal j((tmpDir / "w.jsonl").string());
+            j.append(mkFill("BTC", 100.0, wed));
+            j.append(mkFill("ETH", 200.0, fri));
+            auto v = j.allSegmentBestDayOfWeek();
+            if (v.size() == 2 &&
+                v[0].segment == "ETH" &&
+                v[0].bestMeanPnL > v[1].bestMeanPnL) {
+                std::cout << "✓ 2 syms DESC: top="
+                          << v[0].segment
+                          << " mean="
+                          << v[0].bestMeanPnL
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top="
+                          << (v.size() > 0
+                              ? v[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-best-day tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

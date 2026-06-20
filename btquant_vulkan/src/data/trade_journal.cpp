@@ -8785,4 +8785,47 @@ TradeJournal::bestDayOfWeekByTag(
     return b;
 }
 
+std::vector<TradeJournal::BestDayOfWeek>
+TradeJournal::allSegmentBestDayOfWeek() const {
+    // Sprint #206. Bulk per-symbol best day of week
+    // sorted DESC by bestMeanPnL.
+    std::vector<BestDayOfWeek> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(bestDayOfWeekBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestDayOfWeek& a, const BestDayOfWeek& b) {
+            return a.bestMeanPnL > b.bestMeanPnL;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::BestDayOfWeek>
+TradeJournal::allSegmentBestDayOfWeekByTag(
+    bool includeUntagged) const {
+    std::vector<BestDayOfWeek> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(bestDayOfWeekByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestDayOfWeek& a, const BestDayOfWeek& b) {
+            return a.bestMeanPnL > b.bestMeanPnL;
+        });
+    return out;
+}
+
 } // namespace btquant

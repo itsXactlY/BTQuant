@@ -2188,6 +2188,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment Best-Day-of-Week bulk (Sprint #206).
+    // Returns BestDayOfWeek for every segment, sorted
+    // DESC by bestMeanPnL.
+    std::vector<BestDayOfWeek>
+    allSegmentBestDayOfWeek() const;
+    std::vector<BestDayOfWeek>
+    allSegmentBestDayOfWeekByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -183,6 +183,26 @@ TradeJournal::realizedBySymbol() const {
     return out;
 }
 
+std::vector<std::pair<std::string, double>>
+TradeJournal::realizedByTag(bool includeUntagged) const {
+    std::vector<JournalFill> fills = loadAll();
+    std::unordered_map<std::string, double> agg;
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        agg[key] += f.realizedDelta;
+    }
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(agg.size());
+    for (auto& kv : agg) out.emplace_back(std::move(kv.first), kv.second);
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<std::string, double>& a,
+                 const std::pair<std::string, double>& b) {
+                  return std::fabs(a.second) > std::fabs(b.second);
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

@@ -7725,5 +7725,172 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 75: TradeJournal.realizedByTag() (Sprint #73).
+    // Per-tag all-time realized from the persisted journal. Sorted
+    // by absolute contribution DESCENDING. Mirrors
+    // realizedBySymbol() (#72) but groups by JournalFill::tag —
+    // answers "is my scalper-1 strategy net positive over 6 months?"
+    // without exporting to CSV.
+    //
+    // Default behavior: skip untagged fills (empty tag → no bucket).
+    // includeUntagged=true → roll them under "__untagged__" so the
+    // trader sees the full P&L picture including un-attributed fills.
+    std::cout << "\nTest 75: Testing TradeJournal.realizedByTag()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test75_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        fs::path journalPath = tmpDir / "journal.jsonl";
+        TradeJournal j(journalPath.string());
+
+        // empty journal → empty breakdown (default: skip untagged).
+        auto empty = j.realizedByTag();
+        if (empty.empty()) {
+            std::cout << "✓ empty journal: empty breakdown" << std::endl;
+        } else {
+            std::cout << "✗ empty journal: expected empty, got "
+                      << empty.size() << std::endl;
+        }
+
+        // 4 fills, 3 tags:
+        //   scalper-1: +$500
+        //   arb:      +$250 + -$400 = -$150
+        //   untagged: +$100 (excluded by default)
+        JournalFill f1; f1.symbol = "BTCUSDT"; f1.isLong = false;
+        f1.realizedDelta = 500.0; f1.tag = "scalper-1";
+        j.append(f1);
+        JournalFill f2; f2.symbol = "ETHUSDT"; f2.isLong = false;
+        f2.realizedDelta = 250.0; f2.tag = "arb";
+        j.append(f2);
+        JournalFill f3; f3.symbol = "SOLUSDT"; f3.isLong = true;
+        f3.realizedDelta = -400.0; f3.tag = "arb";
+        j.append(f3);
+        JournalFill f4; f4.symbol = "XRPUSDT"; f4.isLong = false;
+        f4.realizedDelta = 100.0; f4.tag = "";  // untagged
+        j.append(f4);
+
+        // default (skip untagged): 2 buckets.
+        auto def = j.realizedByTag();
+        bool defOk = (def.size() == 2) &&
+                     (def[0].first == "scalper-1" && def[0].second == 500.0) &&
+                     (def[1].first == "arb" && def[1].second == -150.0);
+        if (defOk) {
+            std::cout << "✓ default skip-untagged: scalper-1 +$500, arb -$150"
+                      << std::endl;
+        } else {
+            std::cout << "✗ default skip-untagged wrong: size=" << def.size();
+            for (const auto& kv : def)
+                std::cout << " (" << kv.first << " " << kv.second << ")";
+            std::cout << std::endl;
+        }
+
+        // includeUntagged=true: 3 buckets, untagged rolled under
+        // "__untagged__". Sorted by abs DESC: scalper-1 (500) >
+        // arb (150) > __untagged__ (100).
+        auto inc = j.realizedByTag(true);
+        bool incOk = (inc.size() == 3) &&
+                     (inc[0].first == "scalper-1" && inc[0].second == 500.0) &&
+                     (inc[1].first == "arb" && inc[1].second == -150.0) &&
+                     (inc[2].first == "__untagged__" && inc[2].second == 100.0);
+        if (incOk) {
+            std::cout << "✓ includeUntagged rolls under '__untagged__' ($100)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ includeUntagged wrong: size=" << inc.size();
+            for (const auto& kv : inc)
+                std::cout << " (" << kv.first << " " << kv.second << ")";
+            std::cout << std::endl;
+        }
+
+        // Sum of per-tag rows (includeUntagged=true) ==
+        // totalRealized() (consistency invariant — same numbers,
+        // same journal).
+        double sumTag = 0.0;
+        for (const auto& kv : inc) sumTag += kv.second;
+        double total = j.totalRealized();
+        bool sumOk = std::fabs(sumTag - total) < 1e-9 &&
+                     std::fabs(total - 450.0) < 1e-9;  // 500-150+100
+        if (sumOk) {
+            std::cout << "✓ sum-of-tags ($450) == totalRealized ($450)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ sum-of-tags=" << sumTag
+                      << " totalRealized=" << total << std::endl;
+        }
+
+        // Abs-DESC ordering: adding a fat loser to a fresh journal
+        // should push it to the front.
+        fs::path journalPath2 = tmpDir / "journal2.jsonl";
+        TradeJournal j2(journalPath2.string());
+        JournalFill a; a.symbol = "BTCUSDT"; a.realizedDelta = 50.0;
+        a.tag = "small-win"; j2.append(a);
+        JournalFill b; b.symbol = "ETHUSDT"; b.realizedDelta = -2000.0;
+        b.tag = "fat-loss"; j2.append(b);
+        JournalFill c; c.symbol = "XRPUSDT"; c.realizedDelta = 500.0;
+        c.tag = "medium-win"; j2.append(c);
+        auto ord = j2.realizedByTag();
+        bool ordOk = (ord.size() == 3) &&
+                     (ord[0].first == "fat-loss") &&
+                     (ord[1].first == "medium-win") &&
+                     (ord[2].first == "small-win");
+        if (ordOk) {
+            std::cout << "✓ abs-DESC ordering: fat-loss > medium-win > small-win"
+                      << std::endl;
+        } else {
+            std::cout << "✗ abs-DESC ordering wrong" << std::endl;
+            for (const auto& kv : ord)
+                std::cout << "  " << kv.first << " " << kv.second << std::endl;
+        }
+
+        // All-untagged journal with default = empty result (skip).
+        fs::path journalPath3 = tmpDir / "journal3.jsonl";
+        TradeJournal j3(journalPath3.string());
+        JournalFill u1; u1.symbol = "BTCUSDT"; u1.realizedDelta = 100.0;
+        u1.tag = ""; j3.append(u1);
+        JournalFill u2; u2.symbol = "ETHUSDT"; u2.realizedDelta = -50.0;
+        u2.tag = ""; j3.append(u2);
+        auto allUntagged = j3.realizedByTag();
+        bool auOk = allUntagged.empty();
+        if (auOk) {
+            std::cout << "✓ all-untagged journal + default → empty breakdown"
+                      << std::endl;
+        } else {
+            std::cout << "✗ all-untagged default: expected empty, got "
+                      << allUntagged.size() << std::endl;
+        }
+
+        // includeUntagged on all-untagged: 1 bucket __untagged__ = $50.
+        auto allUntaggedInc = j3.realizedByTag(true);
+        bool auiOk = (allUntaggedInc.size() == 1) &&
+                     (allUntaggedInc[0].first == "__untagged__") &&
+                     std::fabs(allUntaggedInc[0].second - 50.0) < 1e-9;
+        if (auiOk) {
+            std::cout << "✓ all-untagged + includeUntagged: '__untagged__' = $50"
+                      << std::endl;
+        } else {
+            std::cout << "✗ all-untagged + includeUntagged wrong" << std::endl;
+        }
+
+        // Reload-after-clear: clearing the journal must zero the
+        // breakdown. Same code path as realizedBySymbol() (#72) but
+        // worth pinning here too so realizedByTag doesn't regress
+        // when the file path is touched.
+        j.clear();
+        auto cleared = j.realizedByTag(true);
+        if (cleared.empty()) {
+            std::cout << "✓ cleared journal: empty breakdown" << std::endl;
+        } else {
+            std::cout << "✗ cleared journal: expected empty, got "
+                      << cleared.size() << std::endl;
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

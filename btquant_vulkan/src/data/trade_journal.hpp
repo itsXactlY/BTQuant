@@ -59,6 +59,20 @@ public:
     std::vector<std::pair<std::string, double>>
     realizedBySymbol() const;
 
+    // Per-tag all-time realized (Sprint #73). Sorted by absolute
+    // contribution DESCENDING so the biggest gainers/losers surface
+    // first. Mirrors realizedBySymbol() but groups by JournalFill::tag
+    // instead of symbol — answers "is my scalper-1 strategy net
+    // positive over 6 months?" without exporting to CSV.
+    //
+    // When `includeUntagged=true`, fills with empty tag are aggregated
+    // under the synthetic key "__untagged__". When false (default),
+    // empty-tag fills are skipped entirely — a trader who never tags
+    // anything gets an empty breakdown rather than a misleading
+    // 100%-of-P&L entry.
+    std::vector<std::pair<std::string, double>>
+    realizedByTag(bool includeUntagged = false) const;
+
     // Delete the journal file. Returns true if removed or never existed.
     bool clear();
 

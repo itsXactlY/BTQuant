@@ -2915,6 +2915,68 @@ TradeJournal::pnlDistributionByTag(
 }
 
 namespace {
+// Sprint #129 — shared DD-recovery-time distribution
+// builder. Buckets each completed drawdown's recovery_us
+// into bands.
+template <typename Container>
+TradeJournal::DDRecoveryDistribution
+buildDDRecoveryDistribution(const Container& events) {
+    TradeJournal::DDRecoveryDistribution out;
+    if (events.empty()) return out;
+    constexpr uint64_t kMin  = 60ULL * 1000000ULL;        // 1 min
+    constexpr uint64_t kHr   = 60ULL * kMin;               // 1 hr
+    constexpr uint64_t kDay  = 24ULL * kHr;                // 1 day
+    constexpr uint64_t kWk   = 7ULL * kDay;                // 1 week
+    constexpr uint64_t kMo   = 30ULL * kDay;               // 1 month
+    uint64_t totalRecUs = 0;
+    for (const auto& ev : events) {
+        // Only count RECOVERED drawdowns — those with a
+        // recovery_us > 0 (i.e. the trader climbed back
+        // out). Unrecovered DDs have recovery_us == 0.
+        if (ev.recovery_us == 0) continue;
+        out.totalDrawdowns++;
+        totalRecUs += ev.recovery_us;
+        if (ev.recovery_us > out.maxRecoveryUs) {
+            out.maxRecoveryUs = ev.recovery_us;
+        }
+        if (ev.recovery_us < kMin)        ++out.sameMinute;
+        else if (ev.recovery_us < kHr)    ++out.under1h;
+        else if (ev.recovery_us < kDay)   ++out.under1d;
+        else if (ev.recovery_us < kWk)    ++out.under1w;
+        else if (ev.recovery_us < kMo)    ++out.under1mo;
+        else                              ++out.over1mo;
+    }
+    if (out.totalDrawdowns > 0) {
+        double avgUs = static_cast<double>(totalRecUs) /
+                       static_cast<double>(out.totalDrawdowns);
+        out.avgRecoveryDays = avgUs /
+            static_cast<double>(kDay);
+    }
+    return out;
+}
+}  // namespace
+
+TradeJournal::DDRecoveryDistribution
+TradeJournal::ddRecoveryDistribution() const {
+    return buildDDRecoveryDistribution(drawdownRecoveries());
+}
+
+TradeJournal::DDRecoveryDistribution
+TradeJournal::ddRecoveryDistributionBySymbol(
+    const std::string& symbol) const {
+    return buildDDRecoveryDistribution(
+        drawdownRecoveriesBySymbol(symbol));
+}
+
+TradeJournal::DDRecoveryDistribution
+TradeJournal::ddRecoveryDistributionByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildDDRecoveryDistribution(
+        drawdownRecoveriesByTag(tag, includeUntagged));
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

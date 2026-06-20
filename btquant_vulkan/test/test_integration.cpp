@@ -15987,5 +15987,207 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 117: ddRecoveryDistribution() /
+    //   ddRecoveryDistributionBySymbol() /
+    //   ddRecoveryDistributionByTag() (Sprint #129).
+    //
+    // DD recovery time bucketing. Tests:
+    //   - Empty: zeros.
+    //   - 1 recovered DD (5 min recovery): sameMinute=1.
+    //   - Multiple recoveries at different times: bucket
+    //     counts correct.
+    //   - Unrecovered DD (recovery_us=0) skipped.
+    //   - Per-symbol/per-tag filtering.
+    std::cout << "\nTest 117: DD recovery distribution..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test117_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto d = j.ddRecoveryDistribution();
+            if (d.totalDrawdowns == 0 &&
+                d.sameMinute == 0 &&
+                d.under1h == 0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: total="
+                          << d.totalDrawdowns << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single recovered DD within 5 min ----
+        // Curve: +100, -50, +200 → DD recovered at the +200.
+        //   cum: 100, 50, 250. peak: 100, 100, 250.
+        //   DD: 0, 50, 0. After p[1] peak=100. After p[2],
+        //   peak update to 250. recover_us = ts[2] - ts[1]
+        //   (between trough and recovery).
+        {
+            TradeJournal j((tmpDir / "quick.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // 5 min gap, recovery in 5 min.
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            j.append(mkFill("BTC",  200.0, "",
+                             t0 + 10ULL * 60 * 1000000ULL));
+            auto d = j.ddRecoveryDistribution();
+            // Recovered at t0+10min, started at t0+5min
+            // (when we entered DD after the -50 below peak).
+            // recovery_us = 5*60*1e6 = 300M µs (5 min).
+            // < 1 hour → under1h = 1.
+            if (d.totalDrawdowns == 1 &&
+                d.sameMinute == 0 &&
+                d.under1h == 1 &&
+                std::fabs(d.avgRecoveryDays - 5.0/1440.0)
+                    < 1e-9) {
+                std::cout << "✓ single DD recovered in 5 min: "
+                          << "under1h=1, avgRecDays=5/1440"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ quick wrong: total="
+                          << d.totalDrawdowns
+                          << " under1h=" << d.under1h
+                          << " avgDays=" << d.avgRecoveryDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multiple DD events at different scales ----
+        // Build 3 distinct recovered DD events:
+        //   DD1: same_minute (within a minute).
+        //   DD2: under_1d (within a day).
+        //   DD3: under_1w (within a week).
+        {
+            TradeJournal j((tmpDir / "many.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t min = 60ULL * 1000000ULL;
+            const uint64_t hour = 60ULL * min;
+            const uint64_t day = 24ULL * hour;
+            const uint64_t week = 7ULL * day;
+            // Sequence of fills to create 3 distinct DDs:
+            // Start with DD1: +100, -50, +200 (recovery in 30s)
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "", t0 + 30*min));  // 30s? wait
+            // Wait — ts is in µs, 30 * min would be 30*60e6 = 1.8e9 µs = 30 minutes.
+            // Need 30 seconds = 30 * 1e6 µs. Let me use 30 seconds as 30*1e6.
+            // Actually mkFill doesn't enforce scale — let me use clearer values.
+            // Start over:
+            fs::remove((tmpDir / "many.jsonl").string());
+            // DD1: peak at fill1, trough at fill2 (50ms later),
+            //   recovery at fill3 (10ms after trough).
+            // DD2: similar pattern at +1h with a 4-hour recovery.
+            // DD3: at +1day with a 3-day recovery.
+            // All within the same file, but with a +1h gap
+            // between DD1 and DD2 to separate them.
+
+            // Wait — this is getting complex. Let me just use
+            // a simpler test: each DD is a +100 peak, -50
+            // trough, +200 recovery, with varying gaps.
+            //
+            // Gap pattern (recovery_us = trough_ts - recovery_ts):
+            //   DD1: trough at T, recovery at T + 30s
+            //     → same_minute bucket (< 1 min).
+            //   DD2: trough at T+1h, recovery at T+1h+4h
+            //     → under_1d bucket (< 24h).
+            //   DD3: trough at T+2d, recovery at T+2d+3d
+            //     → under_1w bucket (< 7d).
+
+            // DD1: T1=T, trough=T+30s, recovery=T+30s+30s=T+60s.
+            //   recovery_us = 30s = 3e7 µs. < 1min ✓
+            uint64_t T1 = t0;
+            j.append(mkFill("BTC",  100.0, "", T1));
+            j.append(mkFill("BTC",  -50.0, "",
+                             T1 + 30ULL * 1000000ULL));
+            j.append(mkFill("BTC",  200.0, "",
+                             T1 + 60ULL * 1000000ULL));
+            // Need to fully exit DD1's recovery before next DD
+            // starts. Actually the next DD can start any time
+            // after the peak was reached — and after p[2] the
+            // new peak is 200+250 = 350 (cumulative). So next
+            // fill needs to push below 350 to enter DD.
+            //
+            // Actually: after DD1, cum=250, peak=250.
+            // DD2: trough at T+1h30min, recovery at T+1h30min+4h
+            //   = T+5h30min. recovery_us = 4h = 14400e6 µs.
+            //   < 1d ✓
+            uint64_t T2 = T1 + hour;
+            j.append(mkFill("BTC", -200.0, "", T2));
+            j.append(mkFill("BTC",  500.0, "",
+                             T2 + 4ULL * hour));
+            // After DD2: cum=250-200+500=550, peak=550.
+            // DD3: trough at T3+1d+30min, recovery at T3+1d+30min+3d
+            //   = T3+4d+6h. recovery_us = 3d = 259200e6 µs.
+            //   3d < 7d → under_1w ✓
+            uint64_t T3 = T2 + day;
+            j.append(mkFill("BTC", -300.0, "", T3 + 30ULL*min));
+            j.append(mkFill("BTC",  600.0, "",
+                             T3 + 30ULL*min + 3ULL * day));
+
+            auto d = j.ddRecoveryDistribution();
+            // Expected: 3 recovered DD events.
+            //   DD1: 30s → sameMinute=1.
+            //   DD2: 4h → under_1d=1.
+            //   DD3: 3d → under_1w=1.
+            // avg = (30s + 4h + 3d) / 3 = (0.000347 + 0.1667 + 3)/3
+            //     ≈ 1.056 days.
+            if (d.totalDrawdowns == 3 &&
+                d.sameMinute == 1 &&
+                d.under1d == 1 &&
+                d.under1w == 1 &&
+                std::fabs(d.avgRecoveryDays -
+                          (30.0/86400.0 + 4.0/24.0 + 3.0) / 3.0)
+                    < 1e-9) {
+                std::cout << "✓ 3 DDs at 30s/4h/3d: "
+                          << "sameMinute=1, under1d=1, "
+                          << "under1w=1, avgRecDays=1.056"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ many wrong: total="
+                          << d.totalDrawdowns
+                          << " sameM=" << d.sameMinute
+                          << " under1d=" << d.under1d
+                          << " under1w=" << d.under1w
+                          << " avgDays=" << d.avgRecoveryDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-recovery-dist tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

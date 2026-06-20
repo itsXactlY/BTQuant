@@ -1040,6 +1040,41 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Drawdown recovery-time distribution (Sprint #129).
+    // For every completed drawdown, bucket its recovery
+    // duration into bands and count. Useful for "how long
+    // does it usually take me to recover?" — a key piece of
+    // risk-of-ruin intuition.
+    //
+    // Buckets (in microseconds):
+    //   <  1 min        same_minute
+    //   <  1 hour       under_1h
+    //   <  1 day        under_1d
+    //   <  1 week       under_1w
+    //   <  1 month      under_1mo
+    //   >= 1 month      over_1mo
+    //
+    // Also returns totalDrawdowns (count of all recovered DD
+    // events) and avgRecoveryDays (mean recovery time in
+    // days, only over recovered events).
+    struct DDRecoveryDistribution {
+        size_t totalDrawdowns = 0;
+        size_t sameMinute     = 0;
+        size_t under1h        = 0;
+        size_t under1d        = 0;
+        size_t under1w        = 0;
+        size_t under1mo       = 0;
+        size_t over1mo        = 0;
+        double avgRecoveryDays = 0.0;
+        uint64_t maxRecoveryUs = 0;
+    };
+    DDRecoveryDistribution ddRecoveryDistribution() const;
+    DDRecoveryDistribution ddRecoveryDistributionBySymbol(
+        const std::string& symbol) const;
+    DDRecoveryDistribution ddRecoveryDistributionByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

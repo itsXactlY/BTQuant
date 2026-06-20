@@ -249,7 +249,7 @@ WindowManager::WindowManager() {
         }
         // Pre-trade risk check — reject before mutating the book.
         if (m_riskGuard) {
-            auto reject = m_riskGuard->checkOrder(qty, price, isBuy);
+            auto reject = m_riskGuard->checkOrder(qty, price, isBuy, sym);
             if (reject.has_value()) {
                 BTQ_LOG_WARN("OrderTicket REJECTED: %s", reject->c_str());
                 return;

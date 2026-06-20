@@ -48,6 +48,18 @@ public:
     std::optional<std::string>
     checkOrder(double qty, double price, bool isLong) const;
 
+    // Symbol-aware overload. Same checks as the 3-arg form, plus an
+    // optional per-symbol notional cap. When a per-symbol cap has been
+    // registered via setMaxOrderNotionalUSDForSymbol(), the order's
+    // notional is also tested against that cap. When no per-symbol
+    // override exists, the global maxPositionSizeUSD is the only
+    // notional limit (3-arg behaviour).
+    //
+    // Empty symbol = same as 3-arg form (no per-symbol check).
+    std::optional<std::string>
+    checkOrder(double qty, double price, bool isLong,
+               const std::string& symbol) const;
+
     // Session P&L tracking. Add a realized delta (positive for wins,
     // negative for losses). The kill switch trips when the cumulative
     // session realized drops to or below -killOnDailyLossUSD.
@@ -101,6 +113,31 @@ public:
         // Widen/tighten the kill threshold silently — caller's call.
     }
 
+    // ---- Per-symbol notional caps ----
+    //
+    // Override the global maxPositionSizeUSD for a single symbol.
+    // Typical use: cap BTCUSDT at $250k but leave the rest of the
+    // book at the global $100k. usd <= 0 clears the override.
+    // Overrides survive setConfig() (changing the global cap does
+    // not touch the symbol-specific overrides — they're independent
+    // levers). Pass usd <= 0 (or use clearMaxOrderNotionalUSDForSymbol)
+    // to drop back to the global cap.
+    void setMaxOrderNotionalUSDForSymbol(const std::string& sym, double usd);
+    void clearMaxOrderNotionalUSDForSymbol(const std::string& sym);
+
+    // Returns the override if one exists, otherwise the global
+    // maxPositionSizeUSD. Callers that want to distinguish "no
+    // override" from "explicit zero" should use hasMaxOrderNotionalUSDForSymbol.
+    double maxOrderNotionalUSDForSymbol(const std::string& sym) const;
+
+    bool hasMaxOrderNotionalUSDForSymbol(const std::string& sym) const;
+
+    // Snapshot of {symbol, cap} pairs, sorted alphabetically by symbol
+    // for stable UI rendering. Caps ≤ 0 are not included — those are
+    // functionally equivalent to "no override".
+    std::vector<std::pair<std::string, double>>
+    maxOrderNotionalBySymbol() const;
+
     // ---- Pure math (test surface) ----
 
     // Compute effective leverage for a given notional. Returns
@@ -120,6 +157,13 @@ private:
     // panel can render a stable layout.
     std::unordered_map<std::string, double> m_sessionRealizedBySymbol;
     std::vector<std::string>                m_symbolOrder;
+
+    // Per-symbol notional caps. Keyed by symbol; value is the override
+    // for maxPositionSizeUSD when checking that symbol's orders.
+    // Absent key = fall back to global cap. setConfig() doesn't touch
+    // this map (per-symbol overrides are a separate lever from the
+    // global notional cap).
+    std::unordered_map<std::string, double> m_maxOrderNotionalBySymbol;
 };
 
 } // namespace btquant

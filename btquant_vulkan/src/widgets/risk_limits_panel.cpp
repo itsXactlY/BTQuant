@@ -228,6 +228,111 @@ void RiskLimitsPanel::render() {
         if (m_persistFn) m_persistFn(*m_guard);
     }
 
+    ImGui::Separator();
+
+    // ---- Per-symbol order notional caps ----
+    //
+    // The global maxPositionSizeUSD applies to every order, but some
+    // traders want tighter (or looser) caps on specific symbols —
+    // e.g. cap BTCUSDT at $250k while leaving smaller coins at the
+    // global $100k. This section lets the trader add / edit / clear
+    // per-symbol overrides that the RiskGuard enforces at order
+    // entry. Empty override = fall back to global cap.
+    ImGui::Text("Per-symbol order caps (USD notional):");
+    auto overrides = m_guard->maxOrderNotionalBySymbol();
+    if (overrides.empty()) {
+        ImGui::TextDisabled("(no per-symbol overrides — all symbols use "
+                            "the global cap)");
+    } else {
+        // Resize edit buffers to match the current override count
+        // (preserves any in-flight edits across re-renders).
+        if (m_perSymbolEdit.size() != overrides.size())
+            m_perSymbolEdit.resize(overrides.size());
+        if (ImGui::BeginTable("PerSymbolCaps",
+                              3,
+                              ImGuiTableFlags_BordersInnerH |
+                              ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Symbol",  ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Cap (USD)", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < overrides.size(); ++i) {
+                const auto& kv = overrides[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%s", kv.first.c_str());
+                ImGui::TableSetColumnIndex(1);
+                // Edit buffer: if empty (first frame after rebuild),
+                // seed it with the current cap so the trader can edit
+                // in place. After they touch it, the buffer diverges
+                // and only an Apply commits it.
+                if (m_perSymbolEdit[i].empty()) {
+                    char buf[32];
+                    std::snprintf(buf, sizeof(buf), "%.2f", kv.second);
+                    m_perSymbolEdit[i] = buf;
+                }
+                char editBuf[32];
+                std::snprintf(editBuf, sizeof(editBuf), "%s",
+                              m_perSymbolEdit[i].c_str());
+                ImGui::PushItemWidth(120);
+                if (ImGui::InputText(("##cap_" + kv.first).c_str(),
+                                     editBuf, sizeof(editBuf))) {
+                    m_perSymbolEdit[i] = editBuf;
+                }
+                ImGui::PopItemWidth();
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID(("apply_cap_" + kv.first).c_str());
+                if (ImGui::SmallButton("Apply")) {
+                    double v = parseOrZero(m_perSymbolEdit[i].c_str());
+                    m_guard->setMaxOrderNotionalUSDForSymbol(kv.first, v);
+                    BTQ_LOG_INFO("RiskLimits: %s cap set to $%.2f",
+                                 kv.first.c_str(), v);
+                    if (m_persistFn) m_persistFn(*m_guard);
+                    m_perSymbolEdit[i].clear();  // re-seed next frame
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
+                ImGui::PushID(("clear_cap_" + kv.first).c_str());
+                if (ImGui::SmallButton("Clear")) {
+                    m_guard->clearMaxOrderNotionalUSDForSymbol(kv.first);
+                    BTQ_LOG_INFO("RiskLimits: %s per-symbol cap cleared",
+                                 kv.first.c_str());
+                    if (m_persistFn) m_persistFn(*m_guard);
+                    m_perSymbolEdit[i].clear();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+    }
+    // Add-row inputs at the bottom. Trader types symbol + cap,
+    // hits Add. Empty symbol is ignored (prevents accidental
+    // empty-key entries). Cap ≤ 0 also ignored.
+    ImGui::Text("Add per-symbol override:");
+    ImGui::PushItemWidth(140);
+    ImGui::InputText("Symbol##addsym",  m_pendingAddSymbol, sizeof(m_pendingAddSymbol));
+    ImGui::SameLine();
+    ImGui::InputText("Cap USD##addcap", m_pendingAddCapUSD,  sizeof(m_pendingAddCapUSD));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Add##addcap")) {
+        std::string sym = m_pendingAddSymbol;
+        double v = parseOrZero(m_pendingAddCapUSD);
+        if (!sym.empty() && v > 0.0) {
+            m_guard->setMaxOrderNotionalUSDForSymbol(sym, v);
+            BTQ_LOG_INFO("RiskLimits: %s per-symbol cap set to $%.2f",
+                         sym.c_str(), v);
+            if (m_persistFn) m_persistFn(*m_guard);
+            m_pendingAddSymbol[0] = '\0';
+            m_pendingAddCapUSD[0] = '\0';
+        } else {
+            BTQ_LOG_WARN("RiskLimits: per-symbol add ignored "
+                         "(symbol empty or cap <= 0)");
+        }
+    }
+    ImGui::TextDisabled("(empty symbol or cap ≤ 0 is silently ignored; "
+                        "Clear removes an existing override)");
+
     ImGui::End();
 }
 

@@ -5496,5 +5496,169 @@ int main() {
         }
     }
 
+    // Test 60: RiskGuard — per-symbol notional caps.
+    // Adds a 4-arg checkOrder overload that respects per-symbol
+    // notional caps when set. The trader can tighten (or loosen)
+    // the notional cap for a single symbol without affecting the
+    // global cap. Per-symbol caps override the global cap when
+    // stricter (most common case); when looser, the global already
+    // covers it and the per-symbol check is skipped.
+    std::cout << "\nTest 60: Testing RiskGuard per-symbol notional caps..."
+              << std::endl;
+    {
+        using btquant::RiskGuard;
+        using btquant::RiskConfig;
+
+        // 1) No per-symbol override → maxOrderNotionalUSDForSymbol
+        //    returns the global cap.
+        {
+            RiskGuard g;  // conservative: $100k global
+            if (g.maxOrderNotionalUSDForSymbol("BTCUSDT") == 100000.0 &&
+                !g.hasMaxOrderNotionalUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ no override: returns global, "
+                             "has()=false" << std::endl;
+            } else {
+                std::cout << "✗ no-override default broke" << std::endl;
+            }
+        }
+
+        // 2) Set an override → maxOrderNotionalUSDForSymbol returns it.
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 250000.0);
+            if (g.maxOrderNotionalUSDForSymbol("BTCUSDT") == 250000.0 &&
+                g.hasMaxOrderNotionalUSDForSymbol("BTCUSDT") &&
+                g.maxOrderNotionalUSDForSymbol("ETHUSDT") == 100000.0 &&
+                !g.hasMaxOrderNotionalUSDForSymbol("ETHUSDT")) {
+                std::cout << "✓ override isolated per-symbol" << std::endl;
+            } else {
+                std::cout << "✗ override isolation broke" << std::endl;
+            }
+        }
+
+        // 3) 4-arg checkOrder enforces per-symbol cap when stricter.
+        {
+            RiskGuard g;  // global cap $100k
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 50000.0);
+            // 1 BTC @ $60k = $60k — passes global ($100k), fails BTC ($50k).
+            auto r = g.checkOrder(1.0, 60000.0, true, "BTCUSDT");
+            if (r.has_value() &&
+                r->find("per-symbol notional cap") != std::string::npos &&
+                r->find("BTCUSDT") != std::string::npos) {
+                std::cout << "✓ per-symbol cap enforced (reject msg: "
+                          << r->c_str() << ")" << std::endl;
+            } else {
+                std::cout << "✗ per-symbol cap not enforced: "
+                          << (r ? r->c_str() : "no rejection") << std::endl;
+            }
+        }
+
+        // 4) 4-arg checkOrder without override falls through to global.
+        {
+            RiskGuard g;
+            // 1 BTC @ $60k = $60k — under $100k global cap.
+            auto r = g.checkOrder(1.0, 60000.0, true, "ETHUSDT");
+            if (!r.has_value()) {
+                std::cout << "✓ no override: falls through to global"
+                          << std::endl;
+            } else {
+                std::cout << "✗ unexpected reject: "
+                          << r->c_str() << std::endl;
+            }
+        }
+
+        // 5) Per-symbol cap wider than global → global still applies.
+        {
+            RiskGuard g;  // global $100k
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 500000.0);
+            // 2 BTC @ $60k = $120k — exceeds global $100k.
+            auto r = g.checkOrder(2.0, 60000.0, true, "BTCUSDT");
+            if (r.has_value() &&
+                r->find("maxPositionSizeUSD") != std::string::npos) {
+                std::cout << "✓ wide per-symbol override: global still "
+                             "applies (msg: " << r->c_str() << ")"
+                          << std::endl;
+            } else {
+                std::cout << "✗ global fallback broke" << std::endl;
+            }
+        }
+
+        // 6) setMaxOrderNotionalUSDForSymbol with usd <= 0 clears.
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 50000.0);
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", -1.0);  // clear
+            if (!g.hasMaxOrderNotionalUSDForSymbol("BTCUSDT") &&
+                g.maxOrderNotionalUSDForSymbol("BTCUSDT") == 100000.0) {
+                std::cout << "✓ usd <= 0 clears the override" << std::endl;
+            } else {
+                std::cout << "✗ clear-via-zero failed" << std::endl;
+            }
+        }
+
+        // 7) clearMaxOrderNotionalUSDForSymbol explicit removal.
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 50000.0);
+            g.setMaxOrderNotionalUSDForSymbol("ETHUSDT", 75000.0);
+            g.clearMaxOrderNotionalUSDForSymbol("BTCUSDT");
+            if (!g.hasMaxOrderNotionalUSDForSymbol("BTCUSDT") &&
+                g.hasMaxOrderNotionalUSDForSymbol("ETHUSDT")) {
+                std::cout << "✓ explicit clear targets one symbol"
+                          << std::endl;
+            } else {
+                std::cout << "✗ explicit clear collateral damage"
+                          << std::endl;
+            }
+        }
+
+        // 8) maxOrderNotionalBySymbol sorted alphabetically.
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("SOLUSDT", 30000.0);
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 250000.0);
+            g.setMaxOrderNotionalUSDForSymbol("ETHUSDT", 80000.0);
+            auto caps = g.maxOrderNotionalBySymbol();
+            if (caps.size() == 3 &&
+                caps[0].first == "BTCUSDT" &&
+                caps[1].first == "ETHUSDT" &&
+                caps[2].first == "SOLUSDT") {
+                std::cout << "✓ per-symbol caps sorted alphabetically"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sort order wrong" << std::endl;
+            }
+        }
+
+        // 9) setConfig preserves per-symbol overrides (independent
+        //    lever from the global cap).
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("BTCUSDT", 50000.0);
+            RiskConfig c = g.config();
+            c.maxPositionSizeUSD = 250000.0;  // bump global
+            g.setConfig(c);
+            if (g.maxOrderNotionalUSDForSymbol("BTCUSDT") == 50000.0 &&
+                g.hasMaxOrderNotionalUSDForSymbol("BTCUSDT")) {
+                std::cout << "✓ setConfig preserves per-symbol overrides"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setConfig wiped override" << std::endl;
+            }
+        }
+
+        // 10) Empty symbol ignored on set.
+        {
+            RiskGuard g;
+            g.setMaxOrderNotionalUSDForSymbol("", 50000.0);
+            if (!g.hasMaxOrderNotionalUSDForSymbol("")) {
+                std::cout << "✓ empty symbol silently ignored on set"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty symbol created entry" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

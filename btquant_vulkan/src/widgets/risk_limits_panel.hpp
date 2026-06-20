@@ -2,6 +2,8 @@
 #define BTQUANT_RISK_LIMITS_PANEL_HPP
 
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace btquant { class RiskGuard; }
 namespace btquant { class PositionBook; }
@@ -63,6 +65,20 @@ private:
     // default buffer's parsed value (5000.0) so a freshly-constructed
     // panel with the conservative config reads as clean.
     double m_lastAppliedKillUSD = 5000.0;
+
+    // ---- Per-symbol cap UI state ----
+    //
+    // The "add row" inputs at the bottom of the per-symbol section.
+    // Buffers stay char[] for ImGui InputText round-tripping.
+    // m_pendingAddSymbol is what the trader is typing for the next
+    // symbol name; m_pendingAddCapUSD is the cap value they're
+    // entering. Both are committed together on Add.
+    char m_pendingAddSymbol[32] = "";
+    char m_pendingAddCapUSD[32] = "";
+    // Per-row edit buffer keyed by symbol. Lets the trader tweak a
+    // cap inline without removing-and-readding. When empty, that row
+    // renders the current value from the guard.
+    std::vector<std::string> m_perSymbolEdit;
 
 public:
     // True when the edit buffer differs from the last applied value.

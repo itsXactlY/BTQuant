@@ -25,6 +25,12 @@ std::string RiskGuard::killReason(double sessionRealized,
 
 std::optional<std::string>
 RiskGuard::checkOrder(double qty, double price, bool /*isLong*/) const {
+    return checkOrder(qty, price, false, std::string{});
+}
+
+std::optional<std::string>
+RiskGuard::checkOrder(double qty, double price, bool /*isLong*/,
+                      const std::string& symbol) const {
     if (qty <= 0.0 || price <= 0.0) {
         return std::string("invalid order: qty and price must be positive");
     }
@@ -32,16 +38,39 @@ RiskGuard::checkOrder(double qty, double price, bool /*isLong*/) const {
         return killReason(m_sessionRealized, m_cfg.killOnDailyLossUSD);
     }
     double notional = qty * price;
+    // Global notional cap first. The per-symbol check below only
+    // fires if the order's notional ALSO exceeds the (possibly
+    // tighter) per-symbol override.
     if (notional > m_cfg.maxPositionSizeUSD) {
-        char buf[160];
+        char buf[200];
         std::snprintf(buf, sizeof(buf),
             "notional cap: $%.2f exceeds maxPositionSizeUSD $%.2f",
             notional, m_cfg.maxPositionSizeUSD);
         return std::string(buf);
     }
+    // Per-symbol override — only when the symbol is non-empty AND
+    // an override exists AND it's stricter than the global cap
+    // (which it usually is). If the override is wider than the
+    // global cap, the global already covers it and we don't
+    // double-warn.
+    if (!symbol.empty()) {
+        auto it = m_maxOrderNotionalBySymbol.find(symbol);
+        if (it != m_maxOrderNotionalBySymbol.end() &&
+            it->second > 0.0 &&
+            it->second < m_cfg.maxPositionSizeUSD &&
+            notional > it->second) {
+            char buf[240];
+            std::snprintf(buf, sizeof(buf),
+                "per-symbol notional cap: $%.2f exceeds %s cap $%.2f "
+                "(global cap $%.2f)",
+                notional, symbol.c_str(),
+                it->second, m_cfg.maxPositionSizeUSD);
+            return std::string(buf);
+        }
+    }
     double lev = effectiveLeverage(notional, m_cfg.equityUSD);
     if (lev > m_cfg.maxLeverage) {
-        char buf[160];
+        char buf[200];
         std::snprintf(buf, sizeof(buf),
             "leverage cap: %.2fx exceeds maxLeverage %.2fx "
             "(equity $%.2f)",
@@ -49,6 +78,56 @@ RiskGuard::checkOrder(double qty, double price, bool /*isLong*/) const {
         return std::string(buf);
     }
     return std::nullopt;
+}
+
+void RiskGuard::setMaxOrderNotionalUSDForSymbol(const std::string& sym,
+                                                 double usd) {
+    if (sym.empty()) return;  // empty key is never meaningful
+    if (usd <= 0.0) {
+        // ≤0 = "clear the override". Equivalent to calling
+        // clearMaxOrderNotionalUSDForSymbol(sym) but lets the caller
+        // chain symmetrically: "set this cap" without first asking
+        // whether it already exists.
+        m_maxOrderNotionalBySymbol.erase(sym);
+        return;
+    }
+    m_maxOrderNotionalBySymbol[sym] = usd;
+}
+
+void RiskGuard::clearMaxOrderNotionalUSDForSymbol(const std::string& sym) {
+    m_maxOrderNotionalBySymbol.erase(sym);
+}
+
+double RiskGuard::maxOrderNotionalUSDForSymbol(const std::string& sym) const {
+    auto it = m_maxOrderNotionalBySymbol.find(sym);
+    if (it == m_maxOrderNotionalBySymbol.end() || it->second <= 0.0)
+        return m_cfg.maxPositionSizeUSD;
+    return it->second;
+}
+
+bool RiskGuard::hasMaxOrderNotionalUSDForSymbol(const std::string& sym) const {
+    auto it = m_maxOrderNotionalBySymbol.find(sym);
+    return it != m_maxOrderNotionalBySymbol.end() && it->second > 0.0;
+}
+
+std::vector<std::pair<std::string, double>>
+RiskGuard::maxOrderNotionalBySymbol() const {
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(m_maxOrderNotionalBySymbol.size());
+    for (const auto& kv : m_maxOrderNotionalBySymbol) {
+        if (kv.second > 0.0) out.emplace_back(kv.first, kv.second);
+    }
+    // Alphabetical for stable panel layout (B, E, S → BTCUSDT,
+    // ETHUSDT, SOLUSDT) — unlike the per-symbol P&L breakdown
+    // (where |contribution| DESC is the useful sort because the
+    // bleeder should be first), here the user wants to FIND a
+    // specific symbol, not see the worst one.
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<std::string, double>& a,
+                 const std::pair<std::string, double>& b) {
+                  return a.first < b.first;
+              });
+    return out;
 }
 
 void RiskGuard::addRealized(double delta) {

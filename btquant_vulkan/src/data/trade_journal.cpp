@@ -3560,6 +3560,52 @@ TradeJournal::symbolConcentration() const {
 }
 
 namespace {
+// Sprint #137 — Herfindahl-Hirschman Index (HHI) helper.
+// Generic: takes any keyFn that buckets fills, returns
+// sum of squared shares over |realized|.
+double computeHHI(const std::vector<JournalFill>& fills,
+                  std::function<std::string(const JournalFill&)> keyFn,
+                  bool includeUntagged) {
+    std::map<std::string, double> totals;
+    double grandAbs = 0.0;
+    for (const auto& f : fills) {
+        std::string key = keyFn(f);
+        if (key.empty()) continue;
+        totals[key] += f.realizedDelta;
+        grandAbs += std::fabs(f.realizedDelta);
+    }
+    if (grandAbs < 1e-9) return 0.0;
+    double hhi = 0.0;
+    for (const auto& kv : totals) {
+        double share = std::fabs(kv.second) / grandAbs;
+        hhi += share * share;
+    }
+    return hhi;
+}
+}  // namespace
+
+double TradeJournal::concentrationHHI() const {
+    // Sprint #137. HHI over symbols. Standard
+    // market-concentration metric. 1/N = perfectly equal,
+    // 1.0 = single symbol.
+    return computeHHI(loadAll(),
+        [](const JournalFill& f) { return f.symbol; },
+        false);
+}
+
+double TradeJournal::concentrationHHIByTag(
+    bool includeUntagged) const {
+    return computeHHI(loadAll(),
+        [includeUntagged](const JournalFill& f) -> std::string {
+            if (f.tag.empty()) {
+                return includeUntagged ? "__untagged__" : "";
+            }
+            return f.tag;
+        },
+        includeUntagged);
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

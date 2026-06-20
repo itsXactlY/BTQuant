@@ -1239,6 +1239,21 @@ public:
     };
     std::vector<SymbolShare> symbolConcentration() const;
 
+    // Herfindahl-Hirschman Index (Sprint #137). Single
+    // 0-1 number summarizing concentration. = sum of
+    // squared shares (where shares are over |realized|).
+    //
+    // Interpretation:
+    //   0.0  — perfectly diversified (infinite symbols)
+    //   0.25 — moderate concentration (4 equal symbols)
+    //   0.5  — high concentration (2 equal symbols)
+    //   1.0  — single-symbol dependency
+    //
+    // Per-symbol and per-tag variants — same metric on
+    // different categorical axes.
+    double concentrationHHI() const;
+    double concentrationHHIByTag(bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

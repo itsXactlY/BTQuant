@@ -16959,5 +16959,141 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 124: concentrationHHI() / ByTag (Sprint #137).
+    //
+    // HHI = sum of squared shares. Tests:
+    //   - Empty: 0.
+    //   - 4 equal symbols: HHI = 0.25.
+    //   - Single symbol: HHI = 1.0.
+    //   - 2 equal symbols: HHI = 0.5.
+    //   - Per-tag (different keys).
+    std::cout << "\nTest 124: concentration HHI..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test124_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            if (j.concentrationHHI() == 0.0) {
+                std::cout << "✓ empty: 0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << j.concentrationHHI() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 4 equal symbols (each +100): HHI = 0.25 ----
+        {
+            TradeJournal j((tmpDir / "four.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 4; ++i) {
+                j.append(mkFill("SYM" +
+                    std::to_string(i), 100.0,
+                    "", t0 + i));
+            }
+            double hhi = j.concentrationHHI();
+            if (std::fabs(hhi - 0.25) < 1e-9) {
+                std::cout << "✓ 4 equal: HHI=0.25"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ four wrong: HHI="
+                          << hhi << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single symbol (all +100): HHI = 1.0 ----
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 100.0,
+                                "", t0 + i));
+            }
+            double hhi = j.concentrationHHI();
+            if (std::fabs(hhi - 1.0) < 1e-9) {
+                std::cout << "✓ 1 symbol: HHI=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ one wrong: HHI="
+                          << hhi << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 equal symbols (each +100): HHI = 0.5 ----
+        {
+            TradeJournal j((tmpDir / "two.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("ETH", 100.0, "", t0 + 1));
+            double hhi = j.concentrationHHI();
+            if (std::fabs(hhi - 0.5) < 1e-9) {
+                std::cout << "✓ 2 equal: HHI=0.5"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two wrong: HHI="
+                          << hhi << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag: 3 tags equal → HHI = 1/3 ≈ 0.333 ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("SOL", 100.0, "swing",
+                             t0 + 2));
+            double hhi = j.concentrationHHIByTag();
+            if (std::fabs(hhi - 1.0/3.0) < 1e-9) {
+                std::cout << "✓ per-tag (3 equal): "
+                          << "HHI=0.333"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: HHI="
+                          << hhi << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " hhi tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

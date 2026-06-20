@@ -15473,5 +15473,111 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 114: tagSummary(tag, includeUntagged) (Sprint #126).
+    //
+    // Per-tag snapshot — same shape as symbolSummary (#125)
+    // but keyed by tag.
+    std::cout << "\nTest 114: per-tag summary snapshot..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test114_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- scalp: 3 fills (2W 1L) ----
+        // +200 (day1), -50 (day2), +75 (day2).
+        // wins=2 (200, 75), losses=1 (-50).
+        // wr=0.667. avgW=137.5, avgL=-50.
+        // PF = 275/50 = 5.5. realized=225.
+        {
+            TradeJournal j((tmpDir / "ts.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            const uint64_t day2 = day1 + 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  200.0, "scalp", day1));
+            j.append(mkFill("BTC",  -50.0, "scalp", day2));
+            j.append(mkFill("BTC",   75.0, "scalp", day2));
+            // Untagged that should NOT appear in scalp summary.
+            j.append(mkFill("BTC", -10.0, "", day1));
+            auto s = j.tagSummary("scalp", false);
+            if (s.tag == "scalp" &&
+                s.roundTripCount == 3 &&
+                s.winCount == 2 &&
+                s.lossCount == 1 &&
+                std::fabs(s.winRate - 2.0/3.0) < 1e-9 &&
+                std::fabs(s.avgWinner - 137.5) < 1e-9 &&
+                std::fabs(s.avgLoser + 50.0) < 1e-9 &&
+                std::fabs(s.profitFactor - 5.5) < 1e-9 &&
+                std::fabs(s.realized - 225.0) < 1e-9 &&
+                s.activeDays == 2 &&
+                std::isinf(s.recoveryFactor) &&
+                s.recoveryFactor > 0) {
+                std::cout << "✓ scalp summary: 3 RT, "
+                          << "WR=0.667, PF=5.5, realized=225, "
+                          << "days=2, RF=+inf"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ scalp wrong: rt="
+                          << s.roundTripCount
+                          << " pf=" << s.profitFactor
+                          << " rf=" << s.recoveryFactor
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- untagged bucket ----
+        {
+            TradeJournal j((tmpDir / "u.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            j.append(mkFill("BTC", -10.0, "", day1));
+            j.append(mkFill("BTC",  -5.0, "",
+                             day1 + 86400ULL * 1000000ULL));
+            auto s = j.tagSummary("__untagged__", false);
+            if (s.tag == "__untagged__" &&
+                s.roundTripCount == 2 &&
+                s.lossCount == 2 &&
+                s.winCount == 0 &&
+                std::fabs(s.realized + 15.0) < 1e-9 &&
+                s.kellyFraction == 0.0 &&
+                s.profitFactor == 0.0) {
+                std::cout << "✓ __untagged__: 2 RT, "
+                          << "all-loss, K=0, PF=0, realized=-15"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ untagged wrong: rt="
+                          << s.roundTripCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " tag-summary tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

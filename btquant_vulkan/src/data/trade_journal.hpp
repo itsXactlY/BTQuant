@@ -947,6 +947,42 @@ public:
     };
     SymbolSummary symbolSummary(const std::string& symbol) const;
 
+    // Per-tag summary snapshot (Sprint #126). Mirror of
+    // symbolSummary() (#125) but keyed by tag. Same shape
+    // (TagSummary); one call gives the UI all key per-tag
+    // metrics without 10+ separate method calls.
+    struct TagSummary {
+        std::string tag;
+        // From perTagStats.
+        double realized         = 0.0;
+        size_t roundTripCount   = 0;
+        size_t winCount         = 0;
+        size_t lossCount        = 0;
+        double winRate          = 0.0;
+        double avgWinner        = 0.0;
+        double avgLoser         = 0.0;
+        double profitFactor     = 0.0;
+        double expectancy       = 0.0;
+        // From perTagDrawdown (single entry, looked up).
+        double maxDrawdown      = 0.0;
+        std::string recoveryDate;
+        size_t      recoveryDays = 0;
+        double currentDD        = 0.0;
+        // From perTagRecoveryFactor (Sprint #119).
+        double recoveryFactor   = 0.0;
+        // From perTagKellyFraction (Sprint #121).
+        double kellyFraction    = 0.0;
+        // From activeTradingDaysByTag + tradesPerDayByTag.
+        size_t activeDays       = 0;
+        double tradesPerDay     = 0.0;
+        uint64_t firstFillUs    = 0;
+        uint64_t lastFillUs     = 0;
+        // From perTagSharpe (Sprint #91).
+        double annualizedSharpe = 0.0;
+    };
+    TagSummary tagSummary(const std::string& tag,
+                          bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

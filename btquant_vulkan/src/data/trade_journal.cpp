@@ -2636,6 +2636,97 @@ TradeJournal::symbolSummary(const std::string& symbol) const {
     return s;
 }
 
+TradeJournal::TagSummary
+TradeJournal::tagSummary(const std::string& tag,
+                         bool includeUntagged) const {
+    // Sprint #126. Mirror of symbolSummary() (#125) for tags.
+    // Same shape; loads fills once, filters once, looks up
+    // drawdown/sharpe from vectors.
+    TagSummary s;
+    s.tag = tag;
+
+    auto fills = loadAll();
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (f.tag.empty()) sub.push_back(f);
+        } else {
+            if (includeUntagged && f.tag.empty()) continue;
+            if (f.tag == tag) sub.push_back(f);
+        }
+    }
+
+    constexpr double kEps = 1e-9;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    double sumRTpnl = 0.0;
+    for (const auto& f : sub) {
+        s.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        s.roundTripCount++;
+        sumRTpnl += f.realizedDelta;
+        if (f.realizedDelta > 0) {
+            s.winCount++;
+            grossWin += f.realizedDelta;
+        } else {
+            s.lossCount++;
+            grossLoss += f.realizedDelta;
+        }
+    }
+    s.winRate      = s.roundTripCount > 0
+                     ? static_cast<double>(s.winCount) /
+                       static_cast<double>(s.roundTripCount)
+                     : 0.0;
+    s.avgWinner    = s.winCount > 0
+                     ? grossWin / static_cast<double>(s.winCount)
+                     : 0.0;
+    s.avgLoser     = s.lossCount > 0
+                     ? grossLoss / static_cast<double>(s.lossCount)
+                     : 0.0;
+    s.profitFactor = std::fabs(grossLoss) < kEps
+                     ? (grossWin > kEps
+                          ? std::numeric_limits<double>::infinity()
+                          : 0.0)
+                     : grossWin / std::fabs(grossLoss);
+    s.expectancy   = s.roundTripCount > 0
+                     ? sumRTpnl /
+                       static_cast<double>(s.roundTripCount)
+                     : 0.0;
+
+    for (const auto& ptd : perTagDrawdown(includeUntagged)) {
+        if (ptd.tag == tag) {
+            s.maxDrawdown   = ptd.maxDrawdown;
+            s.recoveryDate  = ptd.recoveryDate;
+            s.recoveryDays  = ptd.recoveryDays;
+            s.currentDD     = ptd.currentDD;
+            break;
+        }
+    }
+
+    s.recoveryFactor = recoveryFactor(s.realized, s.maxDrawdown);
+    s.kellyFraction  = kellyFraction(
+        s.winCount, s.lossCount,
+        s.avgWinner, s.avgLoser);
+
+    s.activeDays    = activeTradingDaysByTag(tag, includeUntagged);
+    s.tradesPerDay  = s.activeDays > 0
+                      ? static_cast<double>(s.roundTripCount) /
+                        static_cast<double>(s.activeDays)
+                      : 0.0;
+    s.firstFillUs   = firstFillUsByTag(tag, includeUntagged);
+    s.lastFillUs    = lastFillUsByTag(tag, includeUntagged);
+
+    for (const auto& pts : perTagSharpe(includeUntagged)) {
+        if (pts.tag == tag) {
+            s.annualizedSharpe = pts.annualizedSharpe;
+            break;
+        }
+    }
+
+    return s;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

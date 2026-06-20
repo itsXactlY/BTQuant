@@ -8828,4 +8828,67 @@ TradeJournal::allSegmentBestDayOfWeekByTag(
     return out;
 }
 
+namespace {
+// Sprint #207 — Best-Hour-of-Day builder.
+template <typename Pred>
+TradeJournal::BestHourOfDay
+buildBestHourOfDayBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::BestHourOfDay b;
+    std::array<double, 24> sum{};
+    std::array<size_t, 24> cnt{};
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int h = tm.tm_hour;  // 0..23
+        sum[h] += f.realizedDelta;
+        cnt[h]++;
+    }
+    int best = -1;
+    double bestMean = -1e18;
+    size_t bestCnt = 0;
+    for (int i = 0; i < 24; ++i) {
+        if (cnt[i] == 0) continue;
+        double mean = sum[i] / static_cast<double>(cnt[i]);
+        if (mean > bestMean) {
+            bestMean = mean;
+            best = i;
+            bestCnt = cnt[i];
+        }
+    }
+    b.bestHour = best;
+    b.bestMeanPnL = (best >= 0) ? bestMean : 0.0;
+    b.bestHourFills = bestCnt;
+    return b;
+}
+}  // namespace
+
+TradeJournal::BestHourOfDay
+TradeJournal::bestHourOfDayBySymbol(
+    const std::string& symbol) const {
+    auto b = buildBestHourOfDayBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    b.segment = symbol;
+    return b;
+}
+
+TradeJournal::BestHourOfDay
+TradeJournal::bestHourOfDayByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto b = buildBestHourOfDayBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    b.segment = tag;
+    return b;
+}
+
 } // namespace btquant

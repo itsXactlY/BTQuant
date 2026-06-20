@@ -2197,6 +2197,21 @@ public:
     allSegmentBestDayOfWeekByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment Best-Hour-of-Day (Sprint #207). For
+    // each segment, identify the hour (0..23) with the
+    // highest mean realized.
+    struct BestHourOfDay {
+        std::string segment;
+        int         bestHour      = -1;  // 0..23
+        double      bestMeanPnL   = 0.0;
+        size_t      bestHourFills = 0;
+    };
+    BestHourOfDay bestHourOfDayBySymbol(
+        const std::string& symbol) const;
+    BestHourOfDay bestHourOfDayByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

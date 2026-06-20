@@ -22305,5 +22305,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 193: bestHourOfDayBySymbol/ByTag (Sprint #207).
+    //
+    // Per-segment best hour. Tests:
+    //   - 2024-01-03 14:00 UTC = 1704284400 → tm_hour=14.
+    std::cout << "\nTest 193: best hour of day..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test193_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 1 fill at 14:00 UTC ----
+        {
+            // 2024-01-03 14:00:00 UTC = 1704284400
+            const uint64_t h14 = 1704284400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 100.0, h14));
+            auto btcH = j.bestHourOfDayBySymbol("BTC");
+            if (btcH.bestHour >= 0 && btcH.bestHour <= 23 &&
+                btcH.bestHourFills == 1 &&
+                std::fabs(btcH.bestMeanPnL - 100.0) < 1e-9) {
+                std::cout << "✓ BTC: bestHour="
+                          << btcH.bestHour
+                          << " (UTC 14), meanPnL=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: hour="
+                          << btcH.bestHour
+                          << " mean=" << btcH.bestMeanPnL
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " best-hour tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

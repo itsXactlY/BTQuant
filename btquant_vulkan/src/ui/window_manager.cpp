@@ -18,6 +18,9 @@
 #include "stats_overlay.hpp"
 #include "../widgets/alerts_panel.hpp"
 #include "../widgets/watchlist_widget.hpp"
+#include "../widgets/log_panel.hpp"
+
+using btquant::ui::LogPanel;
 
 // GLFW direct key access for hotkeys. Used because ImGui's keyboard input goes
 // through imgui_impl_glfw and we want hotkeys to work even when no widget has
@@ -79,6 +82,7 @@ WindowManager::WindowManager() {
     m_alertsPanel = new AlertsPanel();
     m_watchlistWidget = new WatchlistWidget();
     m_watchlistWidget->setSymbols({"BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"});
+    m_logPanel = &LogPanel::instance();
 }
 
 WindowManager::~WindowManager() {
@@ -93,6 +97,7 @@ WindowManager::~WindowManager() {
     delete m_tpoWidget;
     delete m_alertsPanel;
     delete m_watchlistWidget;
+    // m_logPanel is a singleton — do not delete.
 }
 
 void WindowManager::initialize() {
@@ -327,6 +332,11 @@ void WindowManager::updateWatchlist(const std::string& sym, double p, double s,
     if (m_watchlistWidget) m_watchlistWidget->update(sym, p, s, b, ts);
 }
 
+void WindowManager::showLogWindow() {
+    if (!showLog) return;
+    if (m_logPanel) m_logPanel->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -341,6 +351,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel))       markSettingsDirty();
             if (ImGui::MenuItem("Alerts",            nullptr, &showAlerts))          markSettingsDirty();
             if (ImGui::MenuItem("Watchlist",         nullptr, &showWatchlist))       markSettingsDirty();
+            if (ImGui::MenuItem("Log Panel",         nullptr, &showLog))             markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

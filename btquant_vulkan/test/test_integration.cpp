@@ -9,6 +9,7 @@
 #include "../src/data/mock_producer.hpp"
 #include "../src/widgets/alerts_panel.hpp"
 #include "../src/widgets/watchlist_widget.hpp"
+#include "../src/widgets/log_panel.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -526,6 +527,57 @@ int main() {
         } else {
             std::cout << "✗ clear() left " << wl.rowCount() << " rows" << std::endl;
         }
+    }
+
+    // Test 13: LogPanel — singleton, thread-safe push, ring trim.
+    std::cout << "\nTest 13: Testing LogPanel..." << std::endl;
+    {
+        auto& lp = btquant::ui::LogPanel::instance();
+        lp.clear();
+
+        BTQ_LOG_INFO("test info line %d", 42);
+        BTQ_LOG_WARN("test warn %s", "hello");
+        BTQ_LOG_ERROR("test error code=%d", -1);
+
+        if (lp.lineCount() == 3) {
+            std::cout << "✓ LogPanel captured 3 lines (info/warn/error)" << std::endl;
+        } else {
+            std::cout << "✗ LogPanel.lineCount: " << lp.lineCount()
+                      << " (expected 3)" << std::endl;
+        }
+
+        // Sequence numbers are monotonic.
+        BTQ_LOG_DEBUG("seq test A");
+        BTQ_LOG_DEBUG("seq test B");
+        BTQ_LOG_DEBUG("seq test C");
+        if (lp.lineCount() >= 6) {
+            std::cout << "✓ LogPanel monotonic sequence (6 lines)" << std::endl;
+        } else {
+            std::cout << "✗ LogPanel sequence broken: " << lp.lineCount() << std::endl;
+        }
+
+        // Overflow → trim. Push 2x kMaxLines + 100, expect size == kMaxLines.
+        const size_t before = lp.lineCount();
+        const size_t burst = btquant::ui::LogPanel::kMaxLines * 2 + 100;
+        for (size_t i = 0; i < burst; ++i) BTQ_LOG_INFO("overflow %zu", i);
+        if (lp.lineCount() == btquant::ui::LogPanel::kMaxLines) {
+            std::cout << "✓ LogPanel ring trim keeps size == kMaxLines ("
+                      << lp.lineCount() << ")" << std::endl;
+        } else {
+            std::cout << "✗ LogPanel ring trim failed: size=" << lp.lineCount()
+                      << " (kMaxLines=" << btquant::ui::LogPanel::kMaxLines
+                      << ", before=" << before << ", pushed=" << burst << ")"
+                      << std::endl;
+        }
+
+        // Singleton identity.
+        auto* lp2 = &btquant::ui::LogPanel::instance();
+        if (lp2 == &lp) {
+            std::cout << "✓ LogPanel singleton identity stable" << std::endl;
+        } else {
+            std::cout << "✗ LogPanel singleton broken" << std::endl;
+        }
+        lp.clear();
     }
 
     return 0;

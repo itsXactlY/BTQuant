@@ -20,6 +20,7 @@
 #include "data/mock_producer.hpp"
 #include "renderer/heatmap_compute.hpp"
 #include "widgets/heatmap_widget.hpp"
+#include "widgets/log_panel.hpp"
 
 using namespace btquant;
 using btquant::renderer::HeatmapConfig;
@@ -111,6 +112,7 @@ private:
     auto settings = util::Settings::load(settingsPath);
     std::fprintf(stderr, "[BTQuant] loaded settings from %s\n",
                  settingsPath.c_str());
+    BTQ_LOG_INFO("loaded settings from %s", settingsPath.c_str());
 
     if (!uiContext.initialize(window, vkContext.instance(),
                               vkContext.physicalDevice(), vkContext.device(),
@@ -288,6 +290,7 @@ private:
       windowManager.showTPOWindow();
       windowManager.showAlertsWindow();
       windowManager.showWatchlistWindow();
+      windowManager.showLogWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

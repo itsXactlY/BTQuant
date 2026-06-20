@@ -127,6 +127,32 @@ public:
     };
     Drawdown maxDrawdown() const;
 
+    // Streak stats (Sprint #82) — consecutive winning/losing
+    // round-trips in the persisted history. Walks every fill in
+    // loadAll() order, treating each round-trip (realizedDelta
+    // != 0) as W/L based on sign. Open fills (realized == 0)
+    // don't break or extend a streak.
+    //
+    // Fields:
+    //   currentWinStreak  — number of consecutive wins ending at
+    //                       the most recent round-trip. 0 if the
+    //                       most recent round-trip was a loss.
+    //   currentLossStreak — number of consecutive losses ending at
+    //                       the most recent round-trip. 0 if the
+    //                       most recent round-trip was a win.
+    //   longestWinStreak  — longest run of consecutive wins seen.
+    //   longestLossStreak — longest run of consecutive losses seen.
+    //
+    // Both current* fields can't be > 0 simultaneously — exactly
+    // one of them tracks the current state.
+    struct Streaks {
+        size_t currentWinStreak  = 0;
+        size_t currentLossStreak = 0;
+        size_t longestWinStreak  = 0;
+        size_t longestLossStreak = 0;
+    };
+    Streaks streaks() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

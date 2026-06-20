@@ -397,6 +397,40 @@ TradeJournal::Drawdown TradeJournal::maxDrawdown() const {
     return dd;
 }
 
+TradeJournal::Streaks TradeJournal::streaks() const {
+    // Same epsilon as stats() — swallow float-json round-trip
+    // noise without classifying a true zero as a win/loss.
+    constexpr double kEps = 1e-9;
+
+    Streaks s;
+    std::vector<JournalFill> fills = loadAll();
+
+    size_t runWin  = 0;
+    size_t runLoss = 0;
+
+    for (const auto& f : fills) {
+        // Open fills (realized == 0) neither break nor extend a
+        // streak — they don't represent a decision outcome. Skip
+        // them in the run counters.
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        if (f.realizedDelta > kEps) {
+            runWin++;
+            runLoss = 0;
+            if (runWin > s.longestWinStreak) s.longestWinStreak = runWin;
+        } else {
+            runLoss++;
+            runWin = 0;
+            if (runLoss > s.longestLossStreak) s.longestLossStreak = runLoss;
+        }
+    }
+    // The current streak is whichever run is still open at the
+    // end of the walk — exactly one of these will be > 0 if
+    // there's been at least one round-trip.
+    s.currentWinStreak  = runWin;
+    s.currentLossStreak = runLoss;
+    return s;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

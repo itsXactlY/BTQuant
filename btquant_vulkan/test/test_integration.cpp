@@ -8655,5 +8655,270 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 81: TradeJournal.streaks() (Sprint #82).
+    // Consecutive winning/losing round-trips in the persisted
+    // history. Walks every fill in loadAll() order; open fills
+    // (realized == 0) don't break or extend a streak.
+    std::cout << "\nTest 81: Testing TradeJournal.streaks()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test81_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        // mkFill helper — same as Test 80 but using today's
+        // midnight so the timestamps are sane (streaks() doesn't
+        // care about date, but loadAll must succeed cleanly).
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t base = std::mktime(&tm_now);
+
+        auto mkFill = [](const std::string& sym, double realized,
+                         std::time_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false; f.realizedDelta = realized;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // Build a sequence of fills with controlled realized values.
+        // Each call appends one fill at base + N seconds.
+        auto appendSeq = [&](TradeJournal& j,
+                             const std::vector<double>& realized) {
+            for (size_t i = 0; i < realized.size(); ++i) {
+                j.append(mkFill("X", realized[i], base + (std::time_t)i));
+            }
+        };
+
+        auto allZero = [](const TradeJournal::Streaks& s) {
+            return s.currentWinStreak  == 0 &&
+                   s.currentLossStreak == 0 &&
+                   s.longestWinStreak  == 0 &&
+                   s.longestLossStreak == 0;
+        };
+
+        // ---- Scenario 1: empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto s = j.streaks();
+            if (allZero(s)) {
+                std::cout << "✓ empty journal: all-zero streaks"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 2: single win ----
+        {
+            fs::path p = tmpDir / "singleW.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100.0 });
+            auto s = j.streaks();
+            bool ok = s.currentWinStreak == 1 && s.longestWinStreak == 1 &&
+                      s.currentLossStreak == 0 && s.longestLossStreak == 0;
+            if (ok) {
+                std::cout << "✓ single win: cur=1, long=1, loss=0/0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ singleW wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 3: single loss ----
+        {
+            fs::path p = tmpDir / "singleL.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { -100.0 });
+            auto s = j.streaks();
+            bool ok = s.currentLossStreak == 1 && s.longestLossStreak == 1 &&
+                      s.currentWinStreak == 0 && s.longestWinStreak == 0;
+            if (ok) {
+                std::cout << "✓ single loss: cur=1, long=1, win=0/0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ singleL wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 4: alternating W,L,W,L,W ----
+        // Each streak length = 1. currentWin=1 (last is W).
+        {
+            fs::path p = tmpDir / "alt.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100, -50, 100, -50, 100 });
+            auto s = j.streaks();
+            bool ok = s.currentWinStreak == 1 && s.longestWinStreak == 1 &&
+                      s.currentLossStreak == 0 && s.longestLossStreak == 1;
+            if (ok) {
+                std::cout << "✓ alternating W/L: longest=1/1, currentW=1"
+                          << std::endl;
+            } else {
+                std::cout << "✗ alt wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 5: 5 wins, then 3 losses ----
+        // longestWin=5, longestLoss=3, currentLoss=3.
+        {
+            fs::path p = tmpDir / "w5l3.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100, 200, 50, 75, 25,    // 5 wins
+                          -50, -75, -100 });        // 3 losses
+            auto s = j.streaks();
+            bool ok = s.longestWinStreak == 5 && s.longestLossStreak == 3 &&
+                      s.currentLossStreak == 3 && s.currentWinStreak == 0;
+            if (ok) {
+                std::cout << "✓ 5W then 3L: longest=5/3, currentL=3"
+                          << std::endl;
+            } else {
+                std::cout << "✗ w5l3 wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 6: W,W,W,L,L,W,W (current=2W, longest=3W) ----
+        {
+            fs::path p = tmpDir / "wwlw.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100, 100, 100, -50, -50, 100, 100 });
+            auto s = j.streaks();
+            bool ok = s.longestWinStreak == 3 && s.longestLossStreak == 2 &&
+                      s.currentWinStreak == 2 && s.currentLossStreak == 0;
+            if (ok) {
+                std::cout << "✓ WWW-LL-WW: longest=3/2, currentW=2"
+                          << std::endl;
+            } else {
+                std::cout << "✗ wwlw wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 7: open fills interspersed ----
+        // W,O,W,O,W (O = open = realized 0) — opens shouldn't
+        // break the streak. Current and longest both 3 wins.
+        {
+            fs::path p = tmpDir / "opens.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100,    // W
+                            0,    // O
+                          100,    // W
+                            0,    // O
+                          100 });  // W
+            auto s = j.streaks();
+            bool ok = s.longestWinStreak == 3 && s.currentWinStreak == 3 &&
+                      s.longestLossStreak == 0 && s.currentLossStreak == 0;
+            if (ok) {
+                std::cout << "✓ opens interspersed: still 3-win streak"
+                          << std::endl;
+            } else {
+                std::cout << "✗ opens wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 8: only opens (no round-trips) ----
+        // All-zero — opens don't constitute W/L.
+        {
+            fs::path p = tmpDir / "oponly.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 0, 0, 0 });
+            auto s = j.streaks();
+            if (allZero(s)) {
+                std::cout << "✓ only opens: all-zero (no W/L yet)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ oponly wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 9: stability across reload ----
+        {
+            fs::path p = tmpDir / "stable.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100, 100, -50, 100, 100, 100, -50 });
+            auto s1 = j.streaks();
+            TradeJournal j2(p.string());  // fresh load
+            auto s2 = j2.streaks();
+            bool ok = s1.currentWinStreak  == s2.currentWinStreak &&
+                      s1.currentLossStreak == s2.currentLossStreak &&
+                      s1.longestWinStreak  == s2.longestWinStreak &&
+                      s1.longestLossStreak == s2.longestLossStreak;
+            if (ok) {
+                std::cout << "✓ streaks stable across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ drifted: a=(" << s1.currentWinStreak
+                          << "," << s1.currentLossStreak
+                          << "," << s1.longestWinStreak
+                          << "," << s1.longestLossStreak << ") b=("
+                          << s2.currentWinStreak
+                          << "," << s2.currentLossStreak
+                          << "," << s2.longestWinStreak
+                          << "," << s2.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 10: long streak takes priority ----
+        // W,L,W,W,W,W,W,L — longestWin=5 (the second run),
+        // not 1 (the first). Run resets must propagate.
+        {
+            fs::path p = tmpDir / "long.jsonl";
+            TradeJournal j(p.string());
+            appendSeq(j, { 100,    // W (run=1)
+                          -50,    // L (run=0)
+                          100, 100, 100, 100, 100,  // W x5 (run=5)
+                          -50 });  // L (final)
+            auto s = j.streaks();
+            bool ok = s.longestWinStreak == 5 && s.currentLossStreak == 1 &&
+                      s.currentWinStreak == 0 && s.longestLossStreak == 1;
+            if (ok) {
+                std::cout << "✓ long run takes priority: longestW=5"
+                          << std::endl;
+            } else {
+                std::cout << "✗ long wrong: (" << s.currentWinStreak
+                          << "," << s.currentLossStreak
+                          << "," << s.longestWinStreak
+                          << "," << s.longestLossStreak << ")"
+                          << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

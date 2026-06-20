@@ -2382,5 +2382,187 @@ int main() {
         }
     }
 
+    // Test 32: PositionBook::replay() — rehydrate from TradeJournal.
+    std::cout << "\nTest 32: Testing journal replay → PositionBook..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+
+        // 1) Empty journal → empty PositionBook, no crash.
+        {
+            fs::path tmpJournal = fs::temp_directory_path() /
+                                  "btquant_test_replay_empty" / "journal.jsonl";
+            fs::create_directories(tmpJournal.parent_path());
+            std::ofstream(tmpJournal).close();  // touch empty
+            ::btquant::TradeJournal j(tmpJournal.string());
+            ::btquant::PositionBook b;
+            size_t n = b.replay(j);
+            if (n == 0 && !b.hasPosition() &&
+                b.realizedPnL() == 0.0 && b.fillCount() == 0) {
+                std::cout << "✓ empty journal → empty book" << std::endl;
+            } else {
+                std::cout << "✗ empty journal left residue (n="
+                          << n << " hasPos=" << b.hasPosition()
+                          << " realized=" << b.realizedPnL() << ")" << std::endl;
+            }
+        }
+
+        // 2) Open a long, then a partial close — replay reproduces state.
+        {
+            fs::path tmpJournal = fs::temp_directory_path() /
+                                  "btquant_test_replay_long" / "journal.jsonl";
+            fs::create_directories(tmpJournal.parent_path());
+            {
+                ::btquant::TradeJournal j(tmpJournal.string());
+                ::btquant::JournalFill f1;
+                f1.timestamp_us = 1000;
+                f1.symbol = "BTC/USDT";
+                f1.isLong = true;          // BUY
+                f1.qty = 1.0;
+                f1.price = 50000.0;
+                f1.realizedDelta = 0.0;
+                j.append(f1);
+                ::btquant::JournalFill f2;
+                f2.timestamp_us = 2000;
+                f2.symbol = "BTC/USDT";
+                f2.isLong = false;         // SELL 0.4 (close)
+                f2.qty = 0.4;
+                f2.price = 60000.0;
+                f2.realizedDelta = (60000.0 - 50000.0) * 0.4;
+                j.append(f2);
+            }
+            ::btquant::TradeJournal j(tmpJournal.string());
+            ::btquant::PositionBook b;
+            double lastPx = 0.0;
+            size_t n = b.replay(j, &lastPx);
+            // After: size = 0.6, avg = 50000, realized = +4000, lastPx = 60000
+            if (n == 2 &&
+                b.position().isLong &&
+                std::fabs(b.position().size - 0.6) < 1e-9 &&
+                std::fabs(b.position().avgEntry - 50000.0) < 1e-9 &&
+                std::fabs(b.realizedPnL() - 4000.0) < 1e-9 &&
+                std::fabs(lastPx - 60000.0) < 1e-9) {
+                std::cout << "✓ long open + partial close replays correctly"
+                          << std::endl;
+            } else {
+                std::cout << "✗ long replay wrong (n=" << n
+                          << " isLong=" << b.position().isLong
+                          << " size=" << b.position().size
+                          << " avg=" << b.position().avgEntry
+                          << " realized=" << b.realizedPnL()
+                          << " lastPx=" << lastPx << ")" << std::endl;
+            }
+        }
+
+        // 3) Full close via opposite side — flat book, realized P&L.
+        {
+            fs::path tmpJournal = fs::temp_directory_path() /
+                                  "btquant_test_replay_flat" / "journal.jsonl";
+            fs::create_directories(tmpJournal.parent_path());
+            {
+                ::btquant::TradeJournal j(tmpJournal.string());
+                ::btquant::JournalFill open;
+                open.timestamp_us = 1000;
+                open.symbol = "ETH/USDT";
+                open.isLong = true;
+                open.qty = 10.0;
+                open.price = 3000.0;
+                j.append(open);
+                ::btquant::JournalFill close;
+                close.timestamp_us = 2000;
+                close.symbol = "ETH/USDT";
+                close.isLong = false;        // SELL 10 (full close)
+                close.qty = 10.0;
+                close.price = 3100.0;
+                close.realizedDelta = 1000.0;
+                j.append(close);
+            }
+            ::btquant::TradeJournal j(tmpJournal.string());
+            ::btquant::PositionBook b;
+            size_t n = b.replay(j);
+            if (n == 2 && !b.hasPosition() &&
+                std::fabs(b.realizedPnL() - 1000.0) < 1e-9) {
+                std::cout << "✓ full close → flat book, P&L realized"
+                          << std::endl;
+            } else {
+                std::cout << "✗ full close wrong (n=" << n
+                          << " hasPos=" << b.hasPosition()
+                          << " realized=" << b.realizedPnL() << ")" << std::endl;
+            }
+        }
+
+        // 4) markToMarket after replay sets unrealizedPnL correctly.
+        {
+            fs::path tmpJournal = fs::temp_directory_path() /
+                                  "btquant_test_replay_mark" / "journal.jsonl";
+            fs::create_directories(tmpJournal.parent_path());
+            {
+                ::btquant::TradeJournal j(tmpJournal.string());
+                ::btquant::JournalFill open;
+                open.timestamp_us = 1000;
+                open.symbol = "BTC/USDT";
+                open.isLong = true;
+                open.qty = 0.5;
+                open.price = 50000.0;
+                j.append(open);
+            }
+            ::btquant::TradeJournal j(tmpJournal.string());
+            ::btquant::PositionBook b;
+            double lastPx = 0.0;
+            b.replay(j, &lastPx);
+            if (b.hasPosition()) {
+                b.markToMarket(55000.0);
+                double expected = 0.5 * (55000.0 - 50000.0);  // +2500
+                if (std::fabs(b.unrealizedPnL() - expected) < 1e-9) {
+                    std::cout << "✓ markToMarket after replay (uPnL="
+                              << b.unrealizedPnL() << ")" << std::endl;
+                } else {
+                    std::cout << "✗ markToMarket wrong (uPnL="
+                              << b.unrealizedPnL() << " expected="
+                              << expected << ")" << std::endl;
+                }
+            } else {
+                std::cout << "✗ replay didn't open position" << std::endl;
+            }
+        }
+
+        // 5) Multiple symbols — only the last survives (PositionBook is
+        //    single-symbol by design).
+        {
+            fs::path tmpJournal = fs::temp_directory_path() /
+                                  "btquant_test_replay_multi" / "journal.jsonl";
+            fs::create_directories(tmpJournal.parent_path());
+            {
+                ::btquant::TradeJournal j(tmpJournal.string());
+                ::btquant::JournalFill a;
+                a.timestamp_us = 1000;
+                a.symbol = "BTC/USDT";
+                a.isLong = true;
+                a.qty = 1.0;
+                a.price = 50000.0;
+                j.append(a);
+                ::btquant::JournalFill b2;
+                b2.timestamp_us = 2000;
+                b2.symbol = "ETH/USDT";
+                b2.isLong = true;
+                b2.qty = 5.0;
+                b2.price = 3000.0;
+                j.append(b2);
+            }
+            ::btquant::TradeJournal j(tmpJournal.string());
+            ::btquant::PositionBook bk;
+            bk.replay(j);
+            // Last fill wins; position.symbol = "ETH/USDT", size = 5.
+            if (bk.position().symbol == "ETH/USDT" &&
+                std::fabs(bk.position().size - 5.0) < 1e-9) {
+                std::cout << "✓ multi-symbol → last-fill-wins semantics"
+                          << std::endl;
+            } else {
+                std::cout << "✗ multi-symbol wrong (sym="
+                          << bk.position().symbol
+                          << " size=" << bk.position().size << ")" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

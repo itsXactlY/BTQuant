@@ -45,6 +45,27 @@ public:
     // symbol swap. Realizes any remaining open P&L into realizedPnL.
     double flatten(double price);
 
+    // Replay fills from a TradeJournal in chronological order. Returns
+    // the number of fills applied. Used on startup to rehydrate the
+    // open position + session realized P&L from the persistent journal.
+    //
+    // Implementation: clears the current Position then walks every
+    // JournalFill, calling fill(symbol, isLong, qty, price) where
+    // isLong is the *fill's* direction (isLong=true means BUY). Note
+    // that the journal's `isLong` flag is set when the closing fill is
+    // recorded (it's the OPPOSITE side of the opening fill) — see the
+    // close-fill logic in OrderTicket's submit callback. Replay treats
+    // each row as the live fill that the live system recorded, so the
+    // direction matches and averaging/closing math works.
+    //
+    // Realized P&L accumulates through fill() exactly as it did in the
+    // live session, so post-replay realizedPnL() == session P&L at
+    // process exit. UnrealizedPnL is recomputed by markToMarket() if
+    // a price is supplied; otherwise it's left at 0 (live ticks will
+    // update it within the first few frames).
+    template <typename JournalT>
+    size_t replay(const JournalT& journal, double* lastPrice = nullptr);
+
     // ---- Accessors ----
     bool   hasPosition() const { return m_pos.size > 0.0; }
     const Position& position() const { return m_pos; }

@@ -177,6 +177,19 @@ WindowManager::WindowManager() {
         auto history  = m_tradeJournal->loadAll(&skipped);
         BTQ_LOG_INFO("TradeJournal: %zu fills on disk at %s (skipped %d)",
                      onDisk, journalPath.c_str(), skipped);
+        // Rehydrate the PositionBook from the persistent journal so the
+        // open position + session realized P&L survive restart. Without
+        // this, every launch starts from empty even though the journal
+        // has the complete fill history.
+        if (m_positionBook && m_tradeJournal && onDisk > 0) {
+            double lastPx = 0.0;
+            size_t applied = m_positionBook->replay(*m_tradeJournal, &lastPx);
+            BTQ_LOG_INFO("PositionBook: replayed %zu/%zu fills (last price %.2f)",
+                         applied, onDisk, lastPx);
+            if (m_positionBook->hasPosition() && lastPx > 0.0) {
+                m_positionBook->markToMarket(lastPx);
+            }
+        }
     }
 
     // HotkeyMap — load user customizations from hotkeys.ini; fall back

@@ -1,5 +1,6 @@
 #include "position_book.hpp"
 
+#include "trade_journal.hpp"
 #include <cmath>
 
 namespace btquant {
@@ -105,5 +106,25 @@ double PositionBook::flatten(double price) {
     m_pos.unrealizedPnL = 0.0;
     return realizedDelta;
 }
+
+// Template definition kept here (not in the header) because the
+// template parameter would otherwise force every translation unit that
+// uses PositionBook to pull in TradeJournal's full definition.
+template <typename JournalT>
+size_t PositionBook::replay(const JournalT& journal, double* lastPrice) {
+    m_pos = Position{};
+    auto fills = journal.loadAll(nullptr);
+    for (const auto& f : fills) {
+        if (f.qty <= 0.0 || f.price <= 0.0) continue;
+        fill(f.symbol, f.isLong, f.qty, f.price);
+        if (lastPrice) *lastPrice = f.price;
+    }
+    return fills.size();
+}
+
+// Explicit instantiations for the journals we expect callers to use.
+// Add new instantiations here if a different journal type is needed.
+template size_t PositionBook::replay<TradeJournal>(
+    const TradeJournal& journal, double* lastPrice);
 
 } // namespace btquant

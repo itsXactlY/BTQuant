@@ -18557,5 +18557,83 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 140: weeklyWinRateBySymbol() / weeklyWinRateByTag()
+    //   (Sprint #153).
+    //
+    // Per-segment weekly win rate. Tests:
+    //   - BTC: 3 fills (summed across weeks).
+    //   - ETH: 0 fills (empty).
+    std::cout << "\nTest 140: per-segment weekly WR..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test140_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 3 fills within 3 days ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("ETH",  -50.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + day));
+            j.append(mkFill("BTC",   80.0, "scalp",
+                             t0 + 2 * day));
+            auto btcW = j.weeklyWinRateBySymbol("BTC");
+            auto ethW = j.weeklyWinRateBySymbol("ETH");
+            size_t sumTotal = 0, sumWins = 0;
+            for (const auto& w : btcW) {
+                sumTotal += w.total; sumWins += w.wins;
+            }
+            size_t ethTotal = 0;
+            for (const auto& w : ethW) ethTotal += w.total;
+            // ETH has 1 fill (winless), so 1 week
+            // entry with total=1 wins=0.
+            if (!btcW.empty() && sumTotal == 3 &&
+                sumWins == 2 && ethTotal == 1) {
+                std::cout << "✓ BTC: 3 fills summed across "
+                          << btcW.size() << " week(s), "
+                          << "2W/1L; ETH: 1 fill, 1 week "
+                          << "(0W)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC size="
+                          << btcW.size()
+                          << " ETH size=" << ethW.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg weekly tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

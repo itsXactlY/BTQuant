@@ -1499,6 +1499,15 @@ public:
     };
     std::vector<WeeklyWinRate> weeklyWinRate() const;
 
+    // Per-segment weekly win rate (Sprint #153). Same
+    // shape as weeklyWinRate() (#152) but filtered to a
+    // single symbol or tag.
+    std::vector<WeeklyWinRate> weeklyWinRateBySymbol(
+        const std::string& symbol) const;
+    std::vector<WeeklyWinRate> weeklyWinRateByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

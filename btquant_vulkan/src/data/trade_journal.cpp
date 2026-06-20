@@ -5575,4 +5575,67 @@ TradeJournal::weeklyWinRate() const {
     return out;
 }
 
+namespace {
+// Sprint #153 — per-segment weekly win rate builder.
+template <typename Pred>
+std::vector<TradeJournal::WeeklyWinRate>
+buildWeeklyWinRateBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::vector<TradeJournal::WeeklyWinRate> out;
+    std::map<std::pair<int, int>,
+             std::pair<size_t,
+                       std::pair<size_t, double>>> buckets;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t s = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&s, &tm);
+        int year = 1900 + tm.tm_year;
+        int week = ((tm.tm_yday - tm.tm_wday + 7) / 7) + 1;
+        auto key = std::make_pair(year, week);
+        auto& b = buckets[key];
+        b.first++;
+        if (f.realizedDelta > 0) b.second.first++;
+        b.second.second += f.realizedDelta;
+    }
+    for (auto& kv : buckets) {
+        TradeJournal::WeeklyWinRate w;
+        w.year = kv.first.first;
+        w.week = kv.first.second;
+        w.total = kv.second.first;
+        w.wins = kv.second.second.first;
+        w.realized = kv.second.second.second;
+        w.winRate = w.total > 0
+            ? static_cast<double>(w.wins) /
+              static_cast<double>(w.total)
+            : 0.0;
+        out.push_back(w);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::WeeklyWinRate>
+TradeJournal::weeklyWinRateBySymbol(
+    const std::string& symbol) const {
+    return buildWeeklyWinRateBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::WeeklyWinRate>
+TradeJournal::weeklyWinRateByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildWeeklyWinRateBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

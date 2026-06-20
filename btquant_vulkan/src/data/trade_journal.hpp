@@ -1615,6 +1615,33 @@ public:
     };
     std::vector<MonthlyMaxDD> monthlyMaxDrawdown() const;
 
+    // Symbol leaderboard (Sprint #161). For each symbol,
+    // compute a key performance metric and sort symbols
+    // by it DESC. Single method that returns the
+    // leaderboard view.
+    enum class LeaderboardMetric {
+        Realized,        // total net P&L
+        Sharpe,          // annual Sharpe ratio
+        WinRate,         // win rate %
+        ProfitFactor,    // grossWin / |grossLoss|
+        RecoveryFactor,  // net / maxDD
+        RiskScore        // composite 0-100 score (#135)
+    };
+    struct LeaderboardEntry {
+        std::string symbol;
+        double      metricValue = 0.0;
+        size_t      totalFills = 0;
+        double      realized   = 0.0;
+    };
+    std::vector<LeaderboardEntry>
+    symbolLeaderboard(LeaderboardMetric metric =
+                      LeaderboardMetric::Realized) const;
+    // Per-tag version.
+    std::vector<LeaderboardEntry>
+    tagLeaderboard(LeaderboardMetric metric =
+                    LeaderboardMetric::Realized,
+                    bool includeUntagged = true) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

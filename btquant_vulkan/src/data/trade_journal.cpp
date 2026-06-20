@@ -6134,4 +6134,112 @@ TradeJournal::monthlyMaxDrawdown() const {
     return out;
 }
 
+std::vector<TradeJournal::LeaderboardEntry>
+TradeJournal::symbolLeaderboard(
+    LeaderboardMetric metric) const {
+    // Sprint #161. Single call that ranks all symbols
+    // by the chosen metric.
+    std::vector<LeaderboardEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        auto ss = symbolSummary(s);
+        LeaderboardEntry e;
+        e.symbol = s;
+        e.realized = ss.realized;
+        e.totalFills = ss.roundTripCount;
+        switch (metric) {
+        case LeaderboardMetric::Realized:
+            e.metricValue = ss.realized;
+            break;
+        case LeaderboardMetric::Sharpe:
+            // Inline Sharpe from per-symbol summary:
+            // use avgWinner/avgLoser as a proxy (simple).
+            e.metricValue = (ss.winRate > 0 && ss.winRate < 1)
+                ? (ss.expectancy /
+                   std::max(0.01, std::fabs(ss.avgLoser)))
+                : 0.0;
+            break;
+        case LeaderboardMetric::WinRate:
+            e.metricValue = ss.winRate;
+            break;
+        case LeaderboardMetric::ProfitFactor:
+            e.metricValue = ss.profitFactor;
+            break;
+        case LeaderboardMetric::RecoveryFactor:
+            e.metricValue = ss.recoveryFactor;
+            break;
+        case LeaderboardMetric::RiskScore:
+            // No per-symbol riskScore method — use
+            // recoveryFactor as proxy.
+            e.metricValue = ss.recoveryFactor;
+            break;
+        }
+        out.push_back(e);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LeaderboardEntry& a,
+           const LeaderboardEntry& b) {
+            return a.metricValue > b.metricValue;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::LeaderboardEntry>
+TradeJournal::tagLeaderboard(
+    LeaderboardMetric metric,
+    bool includeUntagged) const {
+    // Sprint #161. Same as symbolLeaderboard but for tags.
+    std::vector<LeaderboardEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        auto ts = tagSummary(t, includeUntagged);
+        LeaderboardEntry e;
+        e.symbol = t;  // reuse 'symbol' field for the key
+        e.realized = ts.realized;
+        e.totalFills = ts.roundTripCount;
+        switch (metric) {
+        case LeaderboardMetric::Realized:
+            e.metricValue = ts.realized;
+            break;
+        case LeaderboardMetric::Sharpe:
+            e.metricValue = (ts.winRate > 0 && ts.winRate < 1)
+                ? (ts.expectancy /
+                   std::max(0.01, std::fabs(ts.avgLoser)))
+                : 0.0;
+            break;
+        case LeaderboardMetric::WinRate:
+            e.metricValue = ts.winRate;
+            break;
+        case LeaderboardMetric::ProfitFactor:
+            e.metricValue = ts.profitFactor;
+            break;
+        case LeaderboardMetric::RecoveryFactor:
+            e.metricValue = ts.recoveryFactor;
+            break;
+        case LeaderboardMetric::RiskScore:
+            e.metricValue = ts.recoveryFactor;  // proxy
+            break;
+        }
+        out.push_back(e);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LeaderboardEntry& a,
+           const LeaderboardEntry& b) {
+            return a.metricValue > b.metricValue;
+        });
+    return out;
+}
+
 } // namespace btquant

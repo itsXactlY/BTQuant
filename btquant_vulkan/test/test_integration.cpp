@@ -19196,5 +19196,95 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 148: symbolLeaderboard() / tagLeaderboard()
+    //   (Sprint #161).
+    //
+    // Rank segments by chosen metric. Tests:
+    //   - 3 symbols sorted by Realized DESC.
+    //   - 2 tags sorted by Realized DESC.
+    std::cout << "\nTest 148: leaderboard..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test148_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 symbols sorted by Realized DESC ----
+        {
+            TradeJournal j((tmpDir / "lb.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH", 300.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("SOL", 200.0, "scalp",
+                             t0 + 2));
+            auto v = j.symbolLeaderboard(
+                TradeJournal::LeaderboardMetric::Realized);
+            if (v.size() == 3 &&
+                v[0].symbol == "ETH" &&
+                v[1].symbol == "SOL" &&
+                v[2].symbol == "BTC") {
+                std::cout << "✓ 3 symbols sorted DESC: "
+                          << "ETH(300), SOL(200), BTC(100)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ lb wrong: top="
+                          << (v.size() > 0 ? v[0].symbol : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 tags sorted by Realized DESC ----
+        {
+            TradeJournal j((tmpDir / "lb.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH", 300.0, "arb",
+                             t0 + 1));
+            auto v = j.tagLeaderboard(
+                TradeJournal::LeaderboardMetric::Realized);
+            if (v.size() == 2 &&
+                v[0].symbol == "arb" &&
+                v[1].symbol == "scalp") {
+                std::cout << "✓ 2 tags sorted DESC: "
+                          << "arb(300), scalp(100)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: top="
+                          << (v.size() > 0 ? v[0].symbol : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " leaderboard tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

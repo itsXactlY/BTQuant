@@ -22121,5 +22121,68 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 190: allSegmentSharpeTrend (Sprint #204).
+    //
+    // Bulk Sharpe trend. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 190: all-seg Sharpe trend..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test190_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + 1));
+            j.append(mkFill("BTC",  200.0, t0 + 2));
+            j.append(mkFill("BTC",  100.0, t0 + 3));
+            j.append(mkFill("ETH",   50.0, t0));
+            j.append(mkFill("ETH",  -25.0, t0 + 1));
+            j.append(mkFill("ETH",   30.0, t0 + 2));
+            j.append(mkFill("ETH",   20.0, t0 + 3));
+            auto v = j.allSegmentSharpeTrend(2, 3);
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC by slope: top="
+                          << v[0].segment
+                          << " slope="
+                          << v[0].slope
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-trend tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

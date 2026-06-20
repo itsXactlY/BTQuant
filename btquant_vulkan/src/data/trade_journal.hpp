@@ -2161,6 +2161,18 @@ public:
         size_t window = 30,
         size_t lastN = 30) const;
 
+    // All-segment Sharpe trend bulk (Sprint #204).
+    // Returns SharpeTrend for every segment, sorted
+    // DESC by slope (best improving-edge first).
+    std::vector<SharpeTrend>
+    allSegmentSharpeTrend(size_t window = 30,
+                          size_t lastN = 30) const;
+    std::vector<SharpeTrend>
+    allSegmentSharpeTrendByTag(
+        bool includeUntagged = true,
+        size_t window = 30,
+        size_t lastN = 30) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

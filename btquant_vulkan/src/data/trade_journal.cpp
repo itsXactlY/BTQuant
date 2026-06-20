@@ -8678,4 +8678,48 @@ TradeJournal::sharpeTrendByTag(
     return buildSharpeTrend(tag, series, lastN);
 }
 
+std::vector<TradeJournal::SharpeTrend>
+TradeJournal::allSegmentSharpeTrend(size_t window, size_t lastN) const {
+    // Sprint #204. Bulk per-symbol Sharpe trend
+    // sorted DESC by slope.
+    std::vector<SharpeTrend> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(sharpeTrendBySymbol(s, window, lastN));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SharpeTrend& a, const SharpeTrend& b) {
+            return a.slope > b.slope;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SharpeTrend>
+TradeJournal::allSegmentSharpeTrendByTag(
+    bool includeUntagged, size_t window, size_t lastN) const {
+    std::vector<SharpeTrend> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(sharpeTrendByTag(t, includeUntagged,
+            window, lastN));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SharpeTrend& a, const SharpeTrend& b) {
+            return a.slope > b.slope;
+        });
+    return out;
+}
+
 } // namespace btquant

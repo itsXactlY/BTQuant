@@ -7540,4 +7540,49 @@ TradeJournal::equityCurveByTag(
     return out;
 }
 
+std::vector<TradeJournal::WinRatePoint>
+TradeJournal::rollingWinRateByTag(
+    const std::string& tag, bool includeUntagged, size_t window) const {
+    // Sprint #181. Filter to tag, compute rolling win rate.
+    auto fills = loadAll();
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (f.tag.empty()) sub.push_back(f);
+        } else if (includeUntagged && f.tag.empty()) {
+            // skip
+        } else if (f.tag == tag) {
+            sub.push_back(f);
+        }
+    }
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    if (sub.size() < window) return {};
+    std::vector<WinRatePoint> out;
+    size_t wins = 0;
+    for (size_t i = 0; i < window; ++i) {
+        if (sub[i].realizedDelta > 0) wins++;
+    }
+    WinRatePoint p0;
+    p0.timestamp_us = sub[window - 1].timestamp_us;
+    p0.winRate = static_cast<double>(wins) /
+                 static_cast<double>(window);
+    p0.count = window;
+    out.push_back(p0);
+    for (size_t i = window; i < sub.size(); ++i) {
+        if (sub[i - window].realizedDelta > 0) wins--;
+        if (sub[i].realizedDelta > 0) wins++;
+        WinRatePoint p;
+        p.timestamp_us = sub[i].timestamp_us;
+        p.winRate = static_cast<double>(wins) /
+                    static_cast<double>(window);
+        p.count = window;
+        out.push_back(p);
+    }
+    return out;
+}
+
 } // namespace btquant

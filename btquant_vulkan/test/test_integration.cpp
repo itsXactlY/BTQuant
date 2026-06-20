@@ -20684,5 +20684,78 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 168: rollingWinRateByTag (Sprint #181).
+    //
+    // Per-tag rolling win rate. Tests:
+    //   - scalp: 4 fills [+100, -50, +200, +100] window=2.
+    //     After fill 2: 1W/1L=0.5. After fill 3: 1W/1L=0.5.
+    //     After fill 4: 2W/0L=1.0.
+    std::cout << "\nTest 168: rolling win rate by tag..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test168_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- scalp 4 fills window=2 ----
+        {
+            TradeJournal j((tmpDir / "r.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC", 200.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC", 100.0, "scalp",
+                             t0 + 3));
+            auto v = j.rollingWinRateByTag("scalp",
+                false, 2);
+            // 3 points: [0.5, 0.5, 1.0]
+            if (v.size() == 3 &&
+                std::fabs(v[0].winRate - 0.5) < 1e-9 &&
+                std::fabs(v[1].winRate - 0.5) < 1e-9 &&
+                std::fabs(v[2].winRate - 1.0) < 1e-9) {
+                std::cout << "✓ 4 fills window=2: "
+                          << "[0.5, 0.5, 1.0]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size()
+                          << " v[0]=" << (v.size() > 0
+                              ? v[0].winRate : 0.0)
+                          << " v[2]=" << (v.size() > 2
+                              ? v[2].winRate : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " rolling-wr-by-tag tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -6,8 +6,10 @@
 #include "../src/data/market_data.hpp"
 #include "../src/util/settings.hpp"
 #include "../src/ui/stats_overlay.hpp"
+#include "../src/data/mock_producer.hpp"
 #include <iostream>
 #include <cassert>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -320,6 +322,57 @@ int main() {
         } else {
             std::cout << "✗ clearSettingsDirty() didn't reset" << std::endl;
         }
+    }
+
+    // Test 9: MockProducer writes a valid header and increments sequence.
+    std::cout << "\nTest 9: Testing MockProducer..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_mock";
+        fs::create_directories(tmpDir);
+        fs::path tmpFile = tmpDir / "hotspine.bin";
+        std::error_code ec;
+        fs::remove(tmpFile, ec);
+
+        btquant::data::MockProducer mp(tmpFile.string(),
+                                        "BTC/USDT", "binance",
+                                        1000.0, 20 /* 20 ms tick */);
+        if (auto err = mp.start()) {
+            std::cout << "✗ MockProducer.start failed: " << *err << std::endl;
+        } else {
+            // Let it run ~250 ms (≈12 ticks).
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            mp.stop();
+
+            // Verify header magic.
+            std::ifstream in(tmpFile, std::ios::binary);
+            char magic[4] = {};
+            in.read(magic, 4);
+            bool headerOk = (std::memcmp(magic, "UQTB", 4) == 0);
+
+            // Verify sequence advanced past 5 ticks (50 ms @ 20 ms each).
+            uint64_t seq = mp.sequence();
+            bool seqOk = (seq >= 5);
+
+            // Verify file size matches expected layout (header 4KB + 1×128B record).
+            auto sz = fs::file_size(tmpFile, ec);
+            bool sizeOk = (sz == 0x1000 + 128);
+
+            if (headerOk && seqOk && sizeOk) {
+                std::cout << "✓ MockProducer wrote UQTB header + "
+                          << seq << " ticks (file=" << sz << " bytes)" << std::endl;
+            } else {
+                std::cout << "✗ MockProducer check failed "
+                          << "(header=" << headerOk
+                          << " seq=" << seqOk << "(" << seq << ")"
+                          << " size=" << sizeOk << "(" << sz << ")"
+                          << ")" << std::endl;
+            }
+        }
+
+        // Cleanup.
+        fs::remove(tmpFile, ec);
+        fs::remove(tmpDir, ec);
     }
 
     return 0;

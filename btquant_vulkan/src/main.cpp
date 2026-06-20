@@ -2,6 +2,7 @@
 #include <iostream>
 #include <filesystem>
 #include <stdexcept>
+#include <sys/stat.h>
 
 #ifdef BTQUANT_USE_GLFW
 #define GLFW_INCLUDE_VULKAN
@@ -16,6 +17,7 @@
 #include "util/settings.hpp"
 
 #include "data/market_data_processor.hpp"
+#include "data/mock_producer.hpp"
 #include "renderer/heatmap_compute.hpp"
 #include "widgets/heatmap_widget.hpp"
 
@@ -42,6 +44,10 @@ private:
 
   // Real-time data pipeline (subscribes to /dev/shm/btquant_hotspine).
   MarketDataProcessor marketData;
+
+  // In-process mock data writer. Started by initData() when no external
+  // producer (scripts/mock_producer.py) is detected, OR when BTQUANT_DEMO=1.
+  data::MockProducer mockProducer;
 
   // GPU compute pipeline for the heatmap texture.
   renderer::HeatmapCompute heatmapCompute;
@@ -137,6 +143,24 @@ private:
   }
 
   void initData() {
+    // Decide whether to start the in-process mock producer. We start it when:
+    //   1. BTQUANT_DEMO=1 is set explicitly, OR
+    //   2. /dev/shm/btquant_hotspine doesn't exist (no external producer running).
+    // The in-process producer uses the same binary format as scripts/mock_producer.py
+    // so MarketDataProcessor can read from it transparently.
+    const char* demoEnv = std::getenv("BTQUANT_DEMO");
+    bool wantDemo = (demoEnv && demoEnv[0] == '1');
+
+    struct stat shmStat{};
+    bool shmExists = (::stat("/dev/shm/btquant_hotspine", &shmStat) == 0);
+
+    if (wantDemo || !shmExists) {
+      if (auto err = mockProducer.start()) {
+        std::fprintf(stderr, "[BTQuant] MockProducer start failed: %s\n",
+                     err->c_str());
+      }
+    }
+
     // Try /dev/shm/btquant_hotspine first; MarketDataProcessor falls back to
     // a synthetic generator if the spine can't be opened (mock producer not
     // running yet).
@@ -334,6 +358,7 @@ private:
     // UIContext::shutdown() also flushes imgui.ini to disk.
     heatmapCompute.shutdown();
     marketData.stop();
+    mockProducer.stop();
     if (window) {
       glfwDestroyWindow(window);
       window = nullptr;

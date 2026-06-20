@@ -63,6 +63,7 @@ set(SOURCES
     src/widgets/heatmap_widget.cpp
     src/util/settings.cpp
     src/ui/stats_overlay.cpp
+    src/data/mock_producer.cpp
 )
 
 set(HEADERS
@@ -90,6 +91,7 @@ set(HEADERS
     src/widgets/heatmap_widget.hpp
     src/util/settings.hpp
     src/ui/stats_overlay.hpp
+    src/data/mock_producer.hpp
 )
 
 add_executable(btquant_vulkan ${SOURCES} ${HEADERS}

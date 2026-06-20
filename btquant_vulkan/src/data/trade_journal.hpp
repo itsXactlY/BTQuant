@@ -1725,6 +1725,18 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment risk-adjusted bundle (Sprint #170).
+    // Bulk variant of riskAdjustedBundle (#169).
+    struct SegmentBundleEntry {
+        std::string     segment;
+        RiskAdjustedBundle bundle;
+    };
+    std::vector<SegmentBundleEntry>
+    allSegmentRiskAdjustedBundle() const;
+    std::vector<SegmentBundleEntry>
+    allSegmentRiskAdjustedBundleByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

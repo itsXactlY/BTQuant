@@ -6804,4 +6804,45 @@ TradeJournal::riskAdjustedBundleByTag(
         });
 }
 
+std::vector<TradeJournal::SegmentBundleEntry>
+TradeJournal::allSegmentRiskAdjustedBundle() const {
+    // Sprint #170. Bulk per-symbol bundle.
+    std::vector<SegmentBundleEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        SegmentBundleEntry e;
+        e.segment = s;
+        e.bundle = riskAdjustedBundleBySymbol(s);
+        out.push_back(e);
+    }
+    return out;
+}
+
+std::vector<TradeJournal::SegmentBundleEntry>
+TradeJournal::allSegmentRiskAdjustedBundleByTag(
+    bool includeUntagged) const {
+    // Sprint #170. Bulk per-tag bundle.
+    std::vector<SegmentBundleEntry> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        SegmentBundleEntry e;
+        e.segment = t;
+        e.bundle = riskAdjustedBundleByTag(t, includeUntagged);
+        out.push_back(e);
+    }
+    return out;
+}
+
 } // namespace btquant

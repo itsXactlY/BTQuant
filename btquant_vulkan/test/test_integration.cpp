@@ -19869,5 +19869,76 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 157: allSegmentRiskAdjustedBundle() /
+    //   allSegmentRiskAdjustedBundleByTag() (Sprint #170).
+    //
+    // Bulk bundle per segment. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 157: all-seg bundles..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test157_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols + 2 tags ----
+        {
+            TradeJournal j((tmpDir / "all.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  50.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("ETH",  30.0, "arb",
+                             t0 + 2));
+            j.append(mkFill("ETH", -30.0, "arb",
+                             t0 + 3));
+            auto symV = j.allSegmentRiskAdjustedBundle();
+            auto tagV = j.allSegmentRiskAdjustedBundleByTag();
+            if (symV.size() == 2 &&
+                tagV.size() == 2 &&
+                !symV[0].segment.empty() &&
+                symV[0].bundle.returns >= 2) {
+                std::cout << "✓ 2 syms + 2 tags: "
+                          << "BTC returns="
+                          << symV[0].bundle.returns
+                          << " ETH returns="
+                          << symV[1].bundle.returns
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: sym="
+                          << symV.size()
+                          << " tag=" << tagV.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-bundle tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

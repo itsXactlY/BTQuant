@@ -32,6 +32,14 @@ void DOMWidget::render() {
         if (ImGui::Selectable("Right")) m_alignment = "Right";
         ImGui::EndCombo();
     }
+    // Heatmap toggle — swaps the bar-chart renderer for a heat-strip
+    // view (one row per price level, full-width cell, color intensity
+    // by size relative to the max). The user can flip between views at
+    // runtime without losing data binding.
+    ImGui::Checkbox("Heatmap view", &m_heatmapMode);
+    if (m_heatmapMode) {
+        ImGui::SliderFloat("Cell height (px)", &m_cellHeightPx, 1.0f, 16.0f, "%.1f");
+    }
 
     ImGui::Separator();
 
@@ -113,6 +121,71 @@ void DOMWidget::render() {
                           IM_COL32(255, 255, 255, 100));
     }
 
+    if (m_heatmapMode && book.bidCount > 0 && book.askCount > 0) {
+        // Heatmap branch — vertical heat strip. One row per price
+        // level, full canvas width, color intensity by size relative
+        // to the local max. Bid rows fade green→cyan, ask rows fade
+        // red→yellow. Largest level on each side gets a price label.
+        double centerPrice = (book.bids[book.bidCount - 1].price + book.asks[0].price) * 0.5;
+        double priceRange = book.bids[0].price - book.asks[book.askCount - 1].price;
+        if (priceRange <= 0) priceRange = m_priceGrouping * m_maxLevels;
+        float pixelsPerPrice = canvasSize.y / static_cast<float>(priceRange);
+        float cellH = std::max(1.0f, m_cellHeightPx);
+        int maxLabelLevel = std::max(1, m_maxLevels / 4);  // label only top quartile
+
+        // Bid rows (bottom-up: best bid at mid, lowest bid at bottom).
+        for (size_t i = 0; i < book.bidCount && i < static_cast<size_t>(m_maxLevels); ++i) {
+            const auto& level = book.bids[i];
+            float yPos = canvasPos.y + static_cast<float>(centerPrice - level.price) * pixelsPerPrice;
+            float intensity = std::min(1.0f, static_cast<float>(level.size / maxSize));
+            // Green base (0,200,80) lerp to cyan (0,255,255) by intensity.
+            ImU32 col = IM_COL32(
+                static_cast<int>(0 * intensity),
+                static_cast<int>(200 + 55 * intensity),
+                static_cast<int>(80 + 175 * intensity),
+                static_cast<int>(120 + 135 * intensity));
+            drawList->AddRectFilled(
+                ImVec2(canvasPos.x, yPos),
+                ImVec2(canvasPos.x + canvasSize.x, yPos + cellH),
+                col);
+            if (static_cast<int>(i) < maxLabelLevel) {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << level.price
+                   << "  " << static_cast<int>(level.size);
+                drawList->AddText(ImVec2(canvasPos.x + 4, yPos),
+                                  IM_COL32(255, 255, 255, 220), ss.str().c_str());
+            }
+        }
+        // Ask rows (top-down: best ask at mid, highest ask at top).
+        for (size_t i = 0; i < book.askCount && i < static_cast<size_t>(m_maxLevels); ++i) {
+            const auto& level = book.asks[i];
+            float yPos = canvasPos.y + static_cast<float>(centerPrice - level.price) * pixelsPerPrice;
+            float intensity = std::min(1.0f, static_cast<float>(level.size / maxSize));
+            // Red base (220,40,40) lerp to yellow (255,230,40) by intensity.
+            ImU32 col = IM_COL32(
+                static_cast<int>(220 + 35 * intensity),
+                static_cast<int>(40 + 190 * intensity),
+                static_cast<int>(40 + 0 * intensity),
+                static_cast<int>(120 + 135 * intensity));
+            drawList->AddRectFilled(
+                ImVec2(canvasPos.x, yPos),
+                ImVec2(canvasPos.x + canvasSize.x, yPos + cellH),
+                col);
+            if (static_cast<int>(i) < maxLabelLevel) {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << level.price
+                   << "  " << static_cast<int>(level.size);
+                drawList->AddText(ImVec2(canvasPos.x + canvasSize.x - 90, yPos),
+                                  IM_COL32(255, 255, 255, 220), ss.str().c_str());
+            }
+        }
+        // Mid line on top.
+        float midY = canvasPos.y;
+        drawList->AddLine(ImVec2(canvasPos.x, midY),
+                          ImVec2(canvasPos.x + canvasSize.x, midY),
+                          IM_COL32(255, 255, 255, 200));
+    }
+
     ImGui::Separator();
 
     if (isLive && book.bidCount > 0 && book.askCount > 0) {
@@ -139,6 +212,10 @@ void DOMWidget::setMaxLevels(int levels) {
 
 void DOMWidget::setAlignment(const char* mode) {
     m_alignment = mode;
+}
+
+void DOMWidget::setHeatmapMode(bool on) {
+    m_heatmapMode = on;
 }
 
 }  // namespace btquant::ui

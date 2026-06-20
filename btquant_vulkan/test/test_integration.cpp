@@ -22,6 +22,7 @@
 #include "../src/widgets/position_calculator.hpp"
 #include "../src/widgets/order_ticket.hpp"
 #include "../src/widgets/position_panel.hpp"
+#include "../src/widgets/dom_widget.hpp"
 #include "../src/widgets/risk_limits_panel.hpp"
 #include "../src/widgets/mini_price_chart.hpp"
 #include "../src/widgets/hotkey_editor.hpp"
@@ -2911,6 +2912,59 @@ int main() {
         } else {
             std::cout << "✗ pendingDockLayout clobbered before dockspace existed"
                       << std::endl;
+        }
+    }
+
+    // Test 36: DOMWidget heatmap mode plumbing. The render path uses
+    // m_heatmapMode + m_cellHeightPx; we exercise setters/getters and
+    // confirm the defaults are sane (mode off, 6px cells). The actual
+    // draw calls are exercised by the live UI; tests assert state.
+    {
+        std::cout << "\nTest 36: Testing DOMWidget heatmap plumbing..."
+                  << std::endl;
+
+        btquant::ui::DOMWidget dom;
+
+        // 1) Defaults: heatmap off, 6px cells.
+        if (!dom.heatmapMode() && dom.cellHeightPx() == 6.0f) {
+            std::cout << "✓ defaults: heatmap=off, cellHeight=6px" << std::endl;
+        } else {
+            std::cout << "✗ defaults wrong (mode="
+                      << dom.heatmapMode() << " cellH=" << dom.cellHeightPx() << ")"
+                      << std::endl;
+        }
+
+        // 2) Enable heatmap → getter reflects it.
+        dom.setHeatmapMode(true);
+        if (dom.heatmapMode()) {
+            std::cout << "✓ setHeatmapMode(true) → heatmapMode() == true"
+                      << std::endl;
+        } else {
+            std::cout << "✗ setHeatmapMode(true) didn't flip state" << std::endl;
+        }
+
+        // 3) Disable → false again (toggle is reversible).
+        dom.setHeatmapMode(false);
+        if (!dom.heatmapMode()) {
+            std::cout << "✓ setHeatmapMode(false) reverts" << std::endl;
+        } else {
+            std::cout << "✗ setHeatmapMode(false) didn't revert" << std::endl;
+        }
+
+        // 4) Custom cell height (1.5px dense / 16px chunky).
+        dom.setCellHeightPx(1.5f);
+        if (dom.cellHeightPx() == 1.5f) {
+            std::cout << "✓ setCellHeightPx(1.5) stored" << std::endl;
+        } else {
+            std::cout << "✗ cellHeight not stored (got "
+                      << dom.cellHeightPx() << ")" << std::endl;
+        }
+        dom.setCellHeightPx(16.0f);
+        if (dom.cellHeightPx() == 16.0f) {
+            std::cout << "✓ setCellHeightPx(16) stored" << std::endl;
+        } else {
+            std::cout << "✗ cellHeight not stored (got "
+                      << dom.cellHeightPx() << ")" << std::endl;
         }
     }
 

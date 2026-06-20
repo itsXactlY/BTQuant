@@ -338,4 +338,68 @@ bool TradeJournal::exportCSV(const std::string& path) const {
     }
 }
 
+std::vector<JournalFill> TradeJournal::loadByTag(
+        const std::string& tag, bool includeUntagged) const {
+    auto all = loadAll(nullptr);
+    std::vector<JournalFill> out;
+    out.reserve(all.size());
+    // Semantic edge case: an empty filter tag + includeUntagged=true
+    // means "show me everything" — the trader is using the untagged
+    // bucket as a wildcard. An empty filter tag WITHOUT the flag
+    // means "show me only the untagged bucket" (which is the
+    // direct read of fills with empty tag, no special-casing).
+    const bool emptyTagIsAll = tag.empty() && includeUntagged;
+    for (const auto& f : all) {
+        if (emptyTagIsAll) {
+            out.push_back(f);
+        } else if (f.tag == tag) {
+            out.push_back(f);
+        } else if (includeUntagged && f.tag.empty()) {
+            out.push_back(f);
+        }
+    }
+    return out;
+}
+
+std::string TradeJournal::formatFillsCSVByTag(
+        const std::vector<JournalFill>& fills,
+        const std::string& tag,
+        bool includeUntagged) {
+    // Build the filtered subset first, then hand off to the existing
+    // formatter. Splitting this way keeps formatFillsCSV single-purpose
+    // (it's already covered by Test 50) and makes the filter the only
+    // new code path to test.
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    const bool emptyTagIsAll = tag.empty() && includeUntagged;
+    for (const auto& f : fills) {
+        if (emptyTagIsAll) {
+            filtered.push_back(f);
+        } else if (f.tag == tag) {
+            filtered.push_back(f);
+        } else if (includeUntagged && f.tag.empty()) {
+            filtered.push_back(f);
+        }
+    }
+    return formatFillsCSV(filtered);
+}
+
+bool TradeJournal::exportCSVByTag(const std::string& path,
+                                   const std::string& tag,
+                                   bool includeUntagged) const {
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) {
+            fs::create_directories(p.parent_path());
+        }
+        std::ofstream out(path, std::ios::trunc);
+        if (!out.is_open()) return false;
+        out << formatFillsCSVByTag(loadAll(nullptr), tag, includeUntagged);
+        return out.good();
+    } catch (...) {
+        return false;
+    }
+}
+
 } // namespace btquant

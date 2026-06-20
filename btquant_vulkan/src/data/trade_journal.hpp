@@ -66,10 +66,35 @@ public:
     // extensions like user-supplied tags).
     static std::string formatFillsCSV(const std::vector<JournalFill>& fills);
 
+    // Serialize a tag-filtered subset of fills to a CSV string. Only
+    // fills whose tag matches `tag` (or, when `includeUntagged=true`,
+    // fills with an empty tag) are included. When `tag` is empty and
+    // `includeUntagged=true`, the result equals formatFillsCSV(fills).
+    // Static, pure, and easy to test.
+    static std::string formatFillsCSVByTag(
+        const std::vector<JournalFill>& fills,
+        const std::string& tag,
+        bool includeUntagged = false);
+
     // Write every persisted fill to `path` as CSV. Returns true on
     // success, false on any I/O error (and logs the reason). Existing
     // files are overwritten — CSV export is one-shot, not append.
     bool exportCSV(const std::string& path) const;
+
+    // Write a tag-filtered subset of persisted fills to `path` as
+    // CSV. `tag` selects the bucket; `includeUntagged` controls
+    // whether empty-tag fills are written alongside. Returns true
+    // on success, false on I/O error. Existing files overwritten.
+    bool exportCSVByTag(const std::string& path,
+                        const std::string& tag,
+                        bool includeUntagged = false) const;
+
+    // Return the subset of fills whose tag matches `tag` (or whose
+    // tag is empty, when `includeUntagged=true`). Loads from disk,
+    // filters in-memory — no streaming yet because the journal is
+    // expected to fit in RAM.
+    std::vector<JournalFill> loadByTag(const std::string& tag,
+                                        bool includeUntagged = false) const;
 
 private:
     std::string m_path;

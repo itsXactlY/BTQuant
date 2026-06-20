@@ -5049,5 +5049,207 @@ int main() {
         }
     }
 
+    // Test 57: TradeJournal — tag-filtered load / CSV / export. Builds
+    // on Sprint #49 (per-fill tag) and Sprint #50 (ticket input).
+    // Three new public surfaces: loadByTag(), formatFillsCSVByTag(),
+    // exportCSVByTag(). Verifies: filter is exact-match, untagged
+    // fills are excluded by default, the includeUntagged flag
+    // pulls them in, the filtered CSV has the right row count, and
+    // exportCSVByTag writes a real file.
+    std::cout << "\nTest 57: Testing TradeJournal tag-filtered export..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+        namespace fs = std::filesystem;
+
+        fs::path tmpDir  = fs::temp_directory_path() /
+                           ("btquant_test_journal_filt_" +
+                            std::to_string(::getpid()));
+        fs::path jPath   = tmpDir / "journal.jsonl";
+        fs::path csvPath = tmpDir / "scalper.csv";
+        std::error_code ec;
+        fs::remove_all(tmpDir, ec);
+        fs::create_directories(tmpDir);
+
+        TradeJournal j(jPath.string());
+        // 3 scalper fills, 2 arb fills, 1 untagged fill.
+        for (int i = 0; i < 3; ++i) {
+            JournalFill f; f.timestamp_us = 1700000000000000ULL + i*1000000ULL;
+                           f.symbol = "BTC/USDT";
+                           f.isLong = (i % 2 == 0);
+                           f.qty = 0.1 * (i + 1);
+                           f.price = 42000.0 + i;
+                           f.tag = "scalper-1";
+            j.append(f);
+        }
+        for (int i = 0; i < 2; ++i) {
+            JournalFill f; f.timestamp_us = 1700001000000000ULL + i*1000000ULL;
+                           f.symbol = "ETH/USDT"; f.isLong = true;
+                           f.qty = 4.0; f.price = 2400.0;
+                           f.tag = "arb-cross";
+            j.append(f);
+        }
+        JournalFill u; u.timestamp_us = 1700002000000000ULL;
+                       u.symbol = "BTC/USDT"; u.isLong = true;
+                       u.qty = 0.05; u.price = 42000.0;
+                       // u.tag stays empty
+        j.append(u);
+
+        // 1) loadByTag("scalper-1") returns the 3 scalper fills, in
+        //    their original order (loadAll returns oldest first).
+        auto scalpers = j.loadByTag("scalper-1");
+        if (scalpers.size() == 3 &&
+            scalpers[0].tag == "scalper-1" &&
+            scalpers[1].tag == "scalper-1" &&
+            scalpers[2].tag == "scalper-1") {
+            std::cout << "✓ loadByTag(\"scalper-1\") → 3 fills, all tagged"
+                      << std::endl;
+        } else {
+            std::cout << "✗ loadByTag(scalper-1) wrong: " << scalpers.size()
+                      << " fills" << std::endl;
+        }
+
+        // 2) loadByTag with no match returns an empty vector (not a
+        //    nullopt — it's a definite "nothing here" answer).
+        auto empty = j.loadByTag("nonexistent-strategy");
+        if (empty.empty()) {
+            std::cout << "✓ loadByTag(\"nonexistent\") → empty" << std::endl;
+        } else {
+            std::cout << "✗ loadByTag(nonexistent) returned "
+                      << empty.size() << " fills" << std::endl;
+        }
+
+        // 3) loadByTag with includeUntagged=true returns the
+        //    matching tag + the one untagged fill.
+        auto scalperPlus = j.loadByTag("scalper-1", /*includeUntagged=*/true);
+        if (scalperPlus.size() == 4 && scalperPlus[3].tag.empty()) {
+            std::cout << "✓ loadByTag(scalper-1, includeUntagged=true) "
+                      << "→ 3 tagged + 1 untagged" << std::endl;
+        } else {
+            std::cout << "✗ loadByTag includeUntagged wrong: "
+                      << scalperPlus.size() << " fills" << std::endl;
+        }
+
+        // 4) formatFillsCSVByTag — pure serializer, returns a CSV
+        //    with exactly the matching rows.
+        auto all = j.loadAll();
+        std::string scalperCsv = TradeJournal::formatFillsCSVByTag(
+            all, "scalper-1");
+        int scalperRows = 0;
+        for (char c : scalperCsv) if (c == '\n') ++scalperRows;
+        if (scalperRows == 4 /*header + 3 rows*/) {
+            std::cout << "✓ formatFillsCSVByTag(scalper-1) → 3 data rows"
+                      << std::endl;
+        } else {
+            std::cout << "✗ formatFillsCSVByTag row count wrong: "
+                      << scalperRows << " newlines" << std::endl;
+        }
+
+        // 5) Filtered CSV contains only the scalper tag, never arb.
+        if (scalperCsv.find("scalper-1") != std::string::npos &&
+            scalperCsv.find("arb-cross") == std::string::npos) {
+            std::cout << "✓ formatFillsCSVByTag excludes other tags"
+                      << std::endl;
+        } else {
+            std::cout << "✗ formatFillsCSVByTag leaked other tag" << std::endl;
+        }
+
+        // 6) formatFillsCSVByTag(..., includeUntagged=true) returns
+        //    the 3 scalper rows + the 1 untagged row.
+        std::string scalperPlusCsv = TradeJournal::formatFillsCSVByTag(
+            all, "scalper-1", /*includeUntagged=*/true);
+        int scalperPlusRows = 0;
+        for (char c : scalperPlusCsv) if (c == '\n') ++scalperPlusRows;
+        if (scalperPlusRows == 5 /*header + 4 rows*/) {
+            std::cout << "✓ formatFillsCSVByTag(includeUntagged) → 4 data rows"
+                      << std::endl;
+        } else {
+            std::cout << "✗ includeUntagged row count wrong: "
+                      << scalperPlusRows << " newlines" << std::endl;
+        }
+
+        // 7) formatFillsCSVByTag with empty tag + includeUntagged=true
+        //    returns the same as formatFillsCSV (everything).
+        std::string allCsv = TradeJournal::formatFillsCSVByTag(
+            all, "", /*includeUntagged=*/true);
+        std::string fullCsv = TradeJournal::formatFillsCSV(all);
+        if (allCsv == fullCsv) {
+            std::cout << "✓ empty tag + includeUntagged == full CSV"
+                      << std::endl;
+        } else {
+            std::cout << "✗ empty-tag/full CSV mismatch" << std::endl;
+        }
+
+        // 8) exportCSVByTag writes a real file with the right rows.
+        if (j.exportCSVByTag(csvPath.string(), "scalper-1") &&
+            fs::exists(csvPath)) {
+            std::ifstream in(csvPath);
+            std::stringstream ss; ss << in.rdbuf();
+            std::string onDisk = ss.str();
+            int newlines = 0;
+            for (char c : onDisk) if (c == '\n') ++newlines;
+            if (newlines == 4 /*header + 3 rows*/ &&
+                onDisk.find("scalper-1") != std::string::npos &&
+                onDisk.find("arb-cross") == std::string::npos) {
+                std::cout << "✓ exportCSVByTag wrote 3 scalper rows only"
+                          << std::endl;
+            } else {
+                std::cout << "✗ on-disk filter wrong: " << newlines
+                          << " newlines" << std::endl;
+            }
+        } else {
+            std::cout << "✗ exportCSVByTag didn't write file" << std::endl;
+        }
+
+        // 9) The untagged fill is excluded by default even when
+        //    filtering for a different (existing) tag.
+        auto arbOnly = j.loadByTag("arb-cross");
+        bool noUntagged = true;
+        for (const auto& f : arbOnly) {
+            if (f.tag.empty()) { noUntagged = false; break; }
+        }
+        if (arbOnly.size() == 2 && noUntagged) {
+            std::cout << "✓ loadByTag(arb-cross) excludes the untagged fill"
+                      << std::endl;
+        } else {
+            std::cout << "✗ loadByTag leaked an untagged fill: "
+                      << arbOnly.size() << " fills" << std::endl;
+        }
+
+        // 10) Filter result with includeUntagged=true on a journal
+        //     that has NO untagged siblings returns the same as
+        //     without the flag. Build a fresh journal where every
+        //     fill is tagged.
+        namespace fs2 = std::filesystem;
+        fs2::path tmpDir2 = fs2::temp_directory_path() /
+                            ("btquant_test_journal_alltagged_" +
+                             std::to_string(::getpid()));
+        fs2::path jPath2 = tmpDir2 / "journal.jsonl";
+        std::error_code ec2;
+        fs2::remove_all(tmpDir2, ec2);
+        fs2::create_directories(tmpDir2);
+        TradeJournal jAllTag(jPath2.string());
+        for (int i = 0; i < 2; ++i) {
+            JournalFill f; f.timestamp_us = 1700000000000000ULL + i*1000000ULL;
+                           f.symbol = "BTC/USDT"; f.isLong = true;
+                           f.qty = 0.1; f.price = 42000.0;
+                           f.tag = "scalper-1";
+            jAllTag.append(f);
+        }
+        auto arbStrict = jAllTag.loadByTag("scalper-1");
+        auto arbLoose  = jAllTag.loadByTag("scalper-1", true);
+        if (arbStrict.size() == arbLoose.size() && arbStrict.size() == 2) {
+            std::cout << "✓ includeUntagged is a no-op when no untagged "
+                      << "fills exist on disk" << std::endl;
+        } else {
+            std::cout << "✗ includeUntagged changed the count unexpectedly"
+                      << std::endl;
+        }
+        fs2::remove_all(tmpDir2, ec2);
+
+        fs::remove_all(tmpDir, ec);
+    }
+
     return 0;
 }

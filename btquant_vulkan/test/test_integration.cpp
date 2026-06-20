@@ -22738,5 +22738,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 200: allSegmentExpectancy (Sprint #214).
+    //
+    // Bulk expectancy. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 200: all-seg expectancy..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test200_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "e.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC", 100.0, t0 + 1));
+            j.append(mkFill("BTC",  -50.0, t0 + 2));
+            j.append(mkFill("ETH",  10.0, t0));
+            j.append(mkFill("ETH",  -8.0, t0 + 1));
+            auto v = j.allSegmentExpectancy();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC by E: top="
+                          << v[0].segment
+                          << " E=" << v[0].expectancy
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-E tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

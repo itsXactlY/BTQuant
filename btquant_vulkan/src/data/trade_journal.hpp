@@ -2290,6 +2290,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment expectancy bulk (Sprint #214).
+    // Returns Expectancy for every segment, sorted
+    // DESC by expectancy (best EV first).
+    std::vector<Expectancy>
+    allSegmentExpectancy() const;
+    std::vector<Expectancy>
+    allSegmentExpectancyByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -9196,4 +9196,47 @@ TradeJournal::expectancyByTag(
     return e;
 }
 
+std::vector<TradeJournal::Expectancy>
+TradeJournal::allSegmentExpectancy() const {
+    // Sprint #214. Bulk per-symbol expectancy
+    // sorted DESC by expectancy.
+    std::vector<Expectancy> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(expectancyBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const Expectancy& a, const Expectancy& b) {
+            return a.expectancy > b.expectancy;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::Expectancy>
+TradeJournal::allSegmentExpectancyByTag(
+    bool includeUntagged) const {
+    std::vector<Expectancy> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(expectancyByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const Expectancy& a, const Expectancy& b) {
+            return a.expectancy > b.expectancy;
+        });
+    return out;
+}
+
 } // namespace btquant

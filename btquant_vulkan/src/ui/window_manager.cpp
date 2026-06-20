@@ -29,6 +29,7 @@
 #include "../widgets/order_ticket.hpp"
 #include "../widgets/position_panel.hpp"
 #include "../data/position_book.hpp"
+#include "../data/risk_guard.hpp"
 #include "../data/market_data.hpp"
 
 using btquant::ui::LogPanel;
@@ -129,6 +130,7 @@ WindowManager::WindowManager() {
     m_positionBook  = new ::btquant::PositionBook();
     m_positionPanel = new PositionPanel();
     m_positionPanel->setPositionBook(m_positionBook);
+    m_riskGuard     = new ::btquant::RiskGuard();
 
     // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
     // size (positive for buy, negative for sell) is what feeds the book;
@@ -155,7 +157,24 @@ WindowManager::WindowManager() {
                          qty, price);
             return;
         }
+        // Pre-trade risk check — reject before mutating the book.
+        if (m_riskGuard) {
+            auto reject = m_riskGuard->checkOrder(qty, price, isBuy);
+            if (reject.has_value()) {
+                BTQ_LOG_WARN("OrderTicket REJECTED: %s", reject->c_str());
+                return;
+            }
+        }
         double realized = m_positionBook->fill(sym, isBuy, qty, price);
+        if (m_riskGuard && std::fabs(realized) > 0.0) {
+            m_riskGuard->addRealized(realized);
+            if (m_riskGuard->isKillTripped()) {
+                BTQ_LOG_ERROR("RiskGuard: %s",
+                    ::btquant::RiskGuard::killReason(
+                        m_riskGuard->sessionRealized(),
+                        m_riskGuard->config().killOnDailyLossUSD).c_str());
+            }
+        }
         if (m_positionPanel) {
             PositionPanel::FillRecord r;
             r.symbol         = sym;
@@ -193,6 +212,7 @@ WindowManager::~WindowManager() {
     delete m_orderTicket;
     delete m_positionPanel;
     delete m_positionBook;
+    delete m_riskGuard;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -437,6 +457,45 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         markSettingsDirty();
     }
     prevCtrlB = currCtrlB;
+
+    // Ctrl+K — manual kill switch: flatten open position at next
+    // snapshot price. Edge-triggered so it fires once per press.
+    static bool prevCtrlK = false;
+    bool currCtrlK = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_K) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlK && !prevCtrlK) {
+        if (m_positionBook && m_positionBook->hasPosition()) {
+            // Use the latest snapshot price (or fall back to mid).
+            double px = 0.0;
+            if (m_marketData) {
+                auto snap = m_marketData->snapshot(1, 0);
+                if (!snap.recent_trades.empty()) {
+                    px = snap.recent_trades.front().price;
+                } else if (snap.order_book.midPrice > 0.0) {
+                    px = snap.order_book.midPrice;
+                }
+            }
+            if (px <= 0.0) {
+                BTQ_LOG_WARN("Ctrl+K ignored: no live price available");
+            } else {
+                double realized = m_positionBook->flatten(px);
+                if (m_riskGuard) m_riskGuard->addRealized(realized);
+                BTQ_LOG_WARN("KILL SWITCH (Ctrl+K): flattened %s at $%.2f, "
+                             "realized %s$%.2f, session P&L %s$%.2f",
+                             m_positionBook->position().symbol.c_str(),
+                             px,
+                             realized >= 0 ? "+" : "", realized,
+                             (m_riskGuard ? m_riskGuard->sessionRealized() : 0.0)
+                                >= 0 ? "+" : "",
+                             m_riskGuard ? m_riskGuard->sessionRealized() : 0.0);
+            }
+        } else {
+            BTQ_LOG_INFO("Ctrl+K: no open position to flatten");
+        }
+    }
+    prevCtrlK = currCtrlK;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -675,6 +734,7 @@ void WindowManager::showHotkeyHelpWindow() {
         row("Ctrl+T",   "Open Theme Editor");
         row("Ctrl+Enter", "Toggle Order Ticket");
         row("Ctrl+B",   "Toggle Position Panel");
+        row("Ctrl+K",   "Kill switch — flatten open position at market");
         row("ESC",      "Close topmost popup / window");
 
         ImGui::EndTable();

@@ -20,6 +20,7 @@
 #include "../src/widgets/order_ticket.hpp"
 #include "../src/widgets/position_panel.hpp"
 #include "../src/data/position_book.hpp"
+#include "../src/data/risk_guard.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -1486,6 +1487,167 @@ int main() {
         } else {
             std::cout << "✗ cap not enforced: " << pp.historySize()
                       << std::endl;
+        }
+    }
+
+    // Test 24: RiskGuard — pre-trade checks + session P&L + kill switch.
+    std::cout << "\nTest 24: Testing RiskGuard..." << std::endl;
+    {
+        using btquant::RiskGuard;
+        using btquant::RiskConfig;
+
+        // Default config (conservative).
+        RiskGuard g;
+        if (std::abs(g.config().maxPositionSizeUSD - 100000.0) < 1e-6 &&
+            std::abs(g.config().maxLeverage - 10.0) < 1e-6 &&
+            std::abs(g.config().killOnDailyLossUSD - 5000.0) < 1e-6) {
+            std::cout << "✓ default config: $100k cap, 10x lev, $5k kill"
+                      << std::endl;
+        } else {
+            std::cout << "✗ default config wrong" << std::endl;
+        }
+
+        // 1) Accept small order: 0.5 BTC @ $67000 = $33500 → 3.35x lev.
+        auto r1 = g.checkOrder(0.5, 67000.0, true);
+        if (!r1.has_value()) {
+            std::cout << "✓ accept: 0.5 BTC @ $67000 = $33500 (3.35x)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ unexpectedly rejected: " << *r1 << std::endl;
+        }
+
+        // 2) Reject oversized order: 5.0 BTC @ $67000 = $335000 > $100k.
+        auto r2 = g.checkOrder(5.0, 67000.0, true);
+        if (r2.has_value() && r2->find("notional cap") != std::string::npos) {
+            std::cout << "✓ reject: 5 BTC @ $67000 notional cap"
+                      << std::endl;
+        } else {
+            std::cout << "✗ should reject notional cap: "
+                      << (r2.has_value() ? *r2 : "(accepted)") << std::endl;
+        }
+
+        // 3) Reject over-leverage: 0.5 BTC @ $30000 = $15000 with
+        //    equity $1000 → 15x > 10x cap.
+        RiskConfig tight;
+        tight.maxPositionSizeUSD = 100000.0;
+        tight.maxLeverage        = 10.0;
+        tight.killOnDailyLossUSD = 5000.0;
+        tight.equityUSD          = 1000.0;
+        RiskGuard gt(tight);
+        auto r3 = gt.checkOrder(0.5, 30000.0, true);
+        if (r3.has_value() && r3->find("leverage cap") != std::string::npos) {
+            std::cout << "✓ reject: 0.5 BTC @ $30k on $1k eq = 15x > 10x"
+                      << std::endl;
+        } else {
+            std::cout << "✗ should reject leverage: "
+                      << (r3.has_value() ? *r3 : "(accepted)") << std::endl;
+        }
+
+        // 4) Reject invalid input.
+        if (g.checkOrder(0.0, 67000.0, true).has_value() &&
+            g.checkOrder(0.5, 0.0, true).has_value()) {
+            std::cout << "✓ reject: qty=0 or price=0" << std::endl;
+        } else {
+            std::cout << "✗ invalid input not rejected" << std::endl;
+        }
+
+        // 5) Session P&L tracking + kill trip.
+        if (std::abs(g.sessionRealized()) < 1e-9 && !g.isKillTripped()) {
+            std::cout << "✓ session starts at 0 (not tripped)" << std::endl;
+        } else {
+            std::cout << "✗ initial session state wrong" << std::endl;
+        }
+        g.addRealized(-100.0);
+        g.addRealized(-200.0);
+        if (std::abs(g.sessionRealized() - (-300.0)) < 1e-9 &&
+            !g.isKillTripped()) {
+            std::cout << "✓ session realized = -$300 (still alive, "
+                         "kill limit $5000)" << std::endl;
+        } else {
+            std::cout << "✗ session tracking wrong: " << g.sessionRealized()
+                      << " tripped=" << g.isKillTripped() << std::endl;
+        }
+        // Push past kill limit.
+        g.addRealized(-4800.0);
+        if (g.isKillTripped() &&
+            std::abs(g.sessionRealized() - (-5100.0)) < 1e-9) {
+            std::cout << "✓ kill tripped at -$5100 (limit -$5000)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ kill not tripped: " << g.sessionRealized()
+                      << " tripped=" << g.isKillTripped() << std::endl;
+        }
+
+        // 6) Post-trip, orders rejected with kill reason.
+        auto r6 = g.checkOrder(0.1, 67000.0, true);
+        if (r6.has_value() && r6->find("kill switch") != std::string::npos) {
+            std::cout << "✓ post-kill orders rejected with reason"
+                      << std::endl;
+        } else {
+            std::cout << "✗ post-kill check should reject: "
+                      << (r6.has_value() ? *r6 : "(accepted)") << std::endl;
+        }
+
+        // 7) resetSession clears state.
+        g.resetSession();
+        if (std::abs(g.sessionRealized()) < 1e-9 && !g.isKillTripped()) {
+            std::cout << "✓ resetSession clears state" << std::endl;
+        } else {
+            std::cout << "✗ resetSession failed" << std::endl;
+        }
+
+        // 8) Pure math: effectiveLeverage.
+        if (std::abs(RiskGuard::effectiveLeverage(33500.0, 10000.0) - 3.35)
+                < 1e-6 &&
+            RiskGuard::effectiveLeverage(1000.0, 0.0) == 0.0) {
+            std::cout << "✓ effectiveLeverage math" << std::endl;
+        } else {
+            std::cout << "✗ effectiveLeverage wrong" << std::endl;
+        }
+
+        // 9) killReason format.
+        auto reason = RiskGuard::killReason(-5100.0, 5000.0);
+        if (reason.find("kill switch") != std::string::npos &&
+            reason.find("-5100") != std::string::npos &&
+            reason.find("5000") != std::string::npos) {
+            std::cout << "✓ killReason formats: \"" << reason << "\""
+                      << std::endl;
+        } else {
+            std::cout << "✗ killReason format wrong: " << reason
+                      << std::endl;
+        }
+
+        // 10) Aggressive preset.
+        auto agg = RiskConfig::aggressive();
+        if (agg.maxLeverage == 50.0 && agg.maxPositionSizeUSD == 1'000'000.0) {
+            std::cout << "✓ aggressive preset: $1M cap, 50x lev" << std::endl;
+        } else {
+            std::cout << "✗ aggressive preset wrong" << std::endl;
+        }
+        // Aggressive accepts 5 BTC @ $67000 = $335k.
+        RiskGuard ga(agg);
+        auto r10 = ga.checkOrder(5.0, 67000.0, true);
+        if (!r10.has_value()) {
+            std::cout << "✓ aggressive accepts $335k order (under $1M)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ aggressive rejected: " << *r10 << std::endl;
+        }
+
+        // 11) remainingLossBudget tracks session state.
+        RiskGuard gb;  // defaults: killOnDailyLossUSD = 5000
+        if (std::abs(gb.remainingLossBudget() - 5000.0) < 1e-9) {
+            std::cout << "✓ remainingLossBudget = $5000 fresh" << std::endl;
+        } else {
+            std::cout << "✗ remainingLossBudget: "
+                      << gb.remainingLossBudget() << std::endl;
+        }
+        gb.addRealized(-1500.0);
+        if (std::abs(gb.remainingLossBudget() - 3500.0) < 1e-9) {
+            std::cout << "✓ after -$1500 → remaining $3500" << std::endl;
+        } else {
+            std::cout << "✗ remaining after loss: "
+                      << gb.remainingLossBudget() << std::endl;
         }
     }
 

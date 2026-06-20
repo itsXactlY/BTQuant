@@ -94,6 +94,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/order_ticket.cpp
     ../src/widgets/position_panel.cpp
     ../src/data/position_book.cpp
+    ../src/data/risk_guard.cpp
 )
 
 # Set C++ standard

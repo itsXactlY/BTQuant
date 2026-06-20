@@ -12,6 +12,7 @@
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
 namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
+namespace btquant { class RiskGuard; }
 
 namespace btquant::ui {
 
@@ -186,6 +187,8 @@ private:
     // Cached PositionBook — owns the open position. OrderTicket submits
     // apply fills here; main loop drives markToMarket each frame.
     ::btquant::PositionBook*       m_positionBook   = nullptr;
+    // RiskGuard — pre-trade checks + session P&L + kill switch.
+    ::btquant::RiskGuard*          m_riskGuard      = nullptr;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

@@ -123,6 +123,8 @@ public:
         double maxDrawdown = 0.0;
         std::string peakDate;     // YYYY-MM-DD or ""
         std::string troughDate;   // YYYY-MM-DD or ""
+        std::string recoveryDate; // YYYY-MM-DD or "" (Sprint #95)
+        size_t      recoveryDays = 0;   // days from trough → ATH or 0 (Sprint #95)
         double currentDD = 0.0;
     };
     Drawdown maxDrawdown() const;
@@ -313,6 +315,33 @@ public:
     };
     std::vector<PerTagSharpe> perTagSharpe(
         bool includeUntagged = false) const;
+
+    // Risk-adjusted return normalized by worst drawdown (Sprint
+    // #95). Calmar ratio = annualized return / |max drawdown|.
+    // Tells the trader "how much return do I get per unit of
+    // worst peak-to-trough drop?" — Sharpe penalizes volatility
+    // indiscriminately, Calmar only penalizes the bad kind
+    // (drawdowns).
+    //
+    // Annualized return is computed as meanDailyReturn × 252,
+    // matching sharpe()'s convention. Max drawdown sourced from
+    // maxDrawdown().
+    //
+    //   annualizedReturn  — mean(daily realized) × 252.
+    //                       Same convention as annualized Sharpe.
+    //   maxDrawdown       — maxDrawdown().maxDrawdown (positive).
+    //   calmarRatio       — annualizedReturn / maxDrawdown.
+    //                       Sentinel: 0 when maxDrawdown is 0
+    //                       (no DD yet) so the panel can render
+    //                       "—" without special-casing.
+    //                       Negative when annualizedReturn < 0
+    //                       (losing year) and DD > 0.
+    struct Calmar {
+        double annualizedReturn = 0.0;
+        double maxDrawdown      = 0.0;
+        double calmarRatio      = 0.0;
+    };
+    Calmar calmar() const;
 
     // Per-symbol risk-adjusted return (Sprint #91). For each
     // symbol, Sharpe on the daily series — same algorithm as

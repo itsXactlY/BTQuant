@@ -10777,5 +10777,310 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 90: maxDrawdown() recovery date + recovery days (Sprint
+    // #95).
+    //
+    // The new Drawdown fields (recoveryDate, recoveryDays) answer
+    // "how long did my worst drawdown take to recover?". Tests:
+    //   - Empty journal → recoveryDate empty, recoveryDays 0.
+    //   - Monotonic rise → no recovery fields set (no DD).
+    //   - Single peak→trough→recovery: 100 then -50 then +20
+    //     → maxDD=50, trough at day -1, recovery at day -0
+    //     (1 trading day after trough).
+    //   - Unrecovered DD: peak→trough→stay-below → recoveryDate
+    //     empty, recoveryDays 0.
+    //   - Two DDs: smaller then bigger; the bigger one's recovery
+    //     is what's reported (we track the WORST DD's recovery).
+    std::cout << "\nTest 90: maxDrawdown() recovery date + days..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test90_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](double realized, int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = "X"; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto dd = j.maxDrawdown();
+            if (dd.recoveryDate.empty() && dd.recoveryDays == 0) {
+                std::cout << "✓ empty journal: recovery fields unset"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal recovery: date='"
+                          << dd.recoveryDate << "' days="
+                          << dd.recoveryDays << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Monotonic rise → no DD, no recovery ----
+        {
+            fs::path p = tmpDir / "rise.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 50.0, 2, 10));
+            j.append(mkFill( 30.0, 1, 10));
+            j.append(mkFill( 80.0, 0, 10));
+            auto dd = j.maxDrawdown();
+            if (dd.maxDrawdown < 1e-9 && dd.recoveryDate.empty() &&
+                dd.recoveryDays == 0) {
+                std::cout << "✓ monotonic rise: no recovery fields"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ monotonic rise wrong: maxDD="
+                          << dd.maxDrawdown
+                          << " recovery='" << dd.recoveryDate
+                          << "'" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Peak → trough → recovery (1 trading day) ----
+        // Day -2: +100 (peak 100)
+        // Day -1: -50  (trough 50, maxDD = 50)
+        // Day  0: +60  (equity 110, recovered past 100 — but we
+        //                measure recovery to 100, so first day
+        //                where eq >= 100 since the trough)
+        //                eq from trough = 60 ≥ 100? No, 60 < 100.
+        //                Actually need: trough was 50, peak was
+        //                100. To recover we need +50 from trough.
+        //                Day 0 contributes +60 → eq = 110 ≥ 100.
+        //                Recovery on day 0 = 1 trading day from
+        //                trough.
+        {
+            fs::path p = tmpDir / "recover.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 100.0, 2, 10));
+            j.append(mkFill( -50.0, 1, 10));
+            j.append(mkFill(  60.0, 0, 10));
+            auto dd = j.maxDrawdown();
+            if (std::fabs(dd.maxDrawdown - 50.0) < 1e-9 &&
+                !dd.recoveryDate.empty() &&
+                dd.recoveryDays == 1) {
+                std::cout << "✓ peak→trough→recover: maxDD=$50, "
+                          << "recovered in " << dd.recoveryDays
+                          << " trading day on " << dd.recoveryDate
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ peak→trough→recover wrong: maxDD="
+                          << dd.maxDrawdown
+                          << " recoveryDate='" << dd.recoveryDate
+                          << "' recoveryDays=" << dd.recoveryDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Unrecovered DD: peak→trough→stay-below ----
+        // Day -2: +100 (peak 100)
+        // Day -1: -80  (trough 20, maxDD = 80)
+        // Day  0: +5   (still 25, never reaches 100 again)
+        // Recovery fields should stay empty/0.
+        {
+            fs::path p = tmpDir / "unrecovered.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 100.0, 2, 10));
+            j.append(mkFill( -80.0, 1, 10));
+            j.append(mkFill(   5.0, 0, 10));
+            auto dd = j.maxDrawdown();
+            if (std::fabs(dd.maxDrawdown - 80.0) < 1e-9 &&
+                dd.recoveryDate.empty() && dd.recoveryDays == 0) {
+                std::cout << "✓ unrecovered DD: recovery fields "
+                          << "stay empty/0 (sentinel for 'not "
+                          << "recovered yet')" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ unrecovered DD wrong: recovery='"
+                          << dd.recoveryDate << "' days="
+                          << dd.recoveryDays << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " recovery-date tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
+    // Test 91: TradeJournal.calmar() (Sprint #95).
+    //
+    // Calmar = annualized return / max DD. Tests:
+    //   - Empty journal → all zeros.
+    //   - Monotonic rise: maxDD == 0 → calmarRatio = 0 (sentinel).
+    //   - Steady gain with small DD: known values, verify exact
+    //     ratio.
+    //   - Losing year: annualizedReturn < 0, maxDD > 0 →
+    //     calmarRatio < 0 (stay-away signal).
+    std::cout << "\nTest 91: Testing TradeJournal.calmar()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test91_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](double realized, int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = "X"; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto c = j.calmar();
+            if (c.calmarRatio == 0.0 && c.annualizedReturn == 0.0 &&
+                c.maxDrawdown == 0.0) {
+                std::cout << "✓ empty journal: all zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal wrong: ratio="
+                          << c.calmarRatio << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Monotonic rise: no DD → calmarRatio = 0 sentinel ----
+        {
+            fs::path p = tmpDir / "rise.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill(50.0, 2, 10));
+            j.append(mkFill(30.0, 1, 10));
+            j.append(mkFill(80.0, 0, 10));
+            auto c = j.calmar();
+            if (c.maxDrawdown < 1e-9 && c.calmarRatio == 0.0 &&
+                std::fabs(c.annualizedReturn - 160.0 * 252.0 / 3.0) <
+                    1e-6) {
+                // mean daily = 160/3, annualized = that × 252
+                std::cout << "✓ monotonic rise: calmarRatio=0 "
+                          << "(no DD), annualized="
+                          << c.annualizedReturn << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ monotonic rise wrong: ratio="
+                          << c.calmarRatio << " annRet="
+                          << c.annualizedReturn << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Known fixture: verify exact ratio ----
+        // Day -3: +100 (equity 100, peak 100)
+        // Day -2: -40  (equity 60,  DD = 40)
+        // Day -1: +60  (equity 120, recovered)
+        // mean daily = 120/3 = 40
+        // annualized return = 40 × 252 = 10080
+        // maxDD = 40
+        // Calmar = 10080 / 40 = 252
+        {
+            fs::path p = tmpDir / "known.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill(100.0, 3, 10));
+            j.append(mkFill(-40.0, 2, 10));
+            j.append(mkFill( 60.0, 1, 10));
+            auto c = j.calmar();
+            if (std::fabs(c.maxDrawdown - 40.0) < 1e-9 &&
+                std::fabs(c.annualizedReturn - 10080.0) < 1e-6 &&
+                std::fabs(c.calmarRatio - 252.0) < 1e-6) {
+                std::cout << "✓ known fixture: annRet=$10080, "
+                          << "maxDD=$40, Calmar=252" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ known fixture wrong: annRet="
+                          << c.annualizedReturn
+                          << " maxDD=" << c.maxDrawdown
+                          << " calmar=" << c.calmarRatio
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Losing year: ratio negative ----
+        // Day -2: +50 (peak 50), Day -1: -100 (trough -50).
+        // maxDD = peak - trough = 50 - (-50) = 100 (NOT 50).
+        // mean daily = (-50)/2 = -25, annRet = -6300.
+        // Calmar = -6300 / 100 = -63.
+        {
+            fs::path p = tmpDir / "loser.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill(  50.0, 2, 10));
+            j.append(mkFill(-100.0, 1, 10));
+            auto c = j.calmar();
+            if (std::fabs(c.maxDrawdown - 100.0) < 1e-9 &&
+                std::fabs(c.annualizedReturn - (-6300.0)) < 1e-6 &&
+                std::fabs(c.calmarRatio - (-63.0)) < 1e-6) {
+                std::cout << "✓ losing year: annRet=-$6300, "
+                          << "maxDD=$100, Calmar=-63 (stay-away)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ losing year wrong: annRet="
+                          << c.annualizedReturn
+                          << " maxDD=" << c.maxDrawdown
+                          << " calmar=" << c.calmarRatio
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " calmar tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

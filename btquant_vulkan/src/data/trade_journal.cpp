@@ -322,6 +322,13 @@ namespace {
 //     anchored it (i.e. the most recent peak anchor at the time
 //     the trough occurred).
 //   - currentDD is the drawdown as of the last equity point.
+//   - recoveryDate + recoveryDays (Sprint #95): after a drawdown
+//     bottoms, walk forward until equity returns to the peak that
+//     started the worstDD. The first date that meets or exceeds
+//     that peak is the recovery date. Days = recoveryDate -
+//     troughDate (in calendar days). Stays empty/0 when the
+//     drawdown hasn't been recovered yet, or when there's no
+//     drawdown at all.
 TradeJournal::Drawdown computeDrawdownFromSeries(
     const std::vector<std::pair<std::string, double>>& daily) {
     TradeJournal::Drawdown dd;
@@ -329,6 +336,7 @@ TradeJournal::Drawdown computeDrawdownFromSeries(
     double equity = 0.0;
     double peak   = 0.0;
     double worstDD = 0.0;
+    double worstDDPeak = 0.0;   // peak value that started the worst DD
     std::string peakDate;          // date of running peak
     std::string peakDateAtWorst;   // peakDate captured at worstDD
     std::string troughDateAtWorst; // date of worst trough
@@ -341,6 +349,7 @@ TradeJournal::Drawdown computeDrawdownFromSeries(
         double curDD = peak - equity;  // >= 0
         if (curDD > worstDD + 1e-9) {
             worstDD = curDD;
+            worstDDPeak = peak;        // remember the peak we dropped from
             troughDateAtWorst = kv.first;
             peakDateAtWorst = peakDate;
         }
@@ -349,6 +358,43 @@ TradeJournal::Drawdown computeDrawdownFromSeries(
     if (worstDD > 1e-9) {
         dd.peakDate = peakDateAtWorst;
         dd.troughDate = troughDateAtWorst;
+        // Sprint #95: walk forward from the trough to find when
+        // equity recovered to the peak that started the worst DD.
+        // Track cumulative equity from the start of the series,
+        // but only consider dates after the trough. The first
+        // such date where cumulative equity reaches the peak that
+        // started the worstDD is the recovery date.
+        // daysFromTrough counts the number of distinct trading
+        // days between trough and recovery. When equity never
+        // reaches worstDDPeak again, recoveryDate/recoveryDays
+        // stay empty/0.
+        if (worstDDPeak > 1e-9) {
+            bool seenTrough = false;
+            double cum = 0.0;
+            int  daysFromTrough = 0;
+            for (const auto& kv : daily) {
+                cum += kv.second;
+                if (!seenTrough) {
+                    if (kv.first == troughDateAtWorst) {
+                        seenTrough = true;
+                        // Don't count the trough itself as a
+                        // recovery day — recovery is the *next*
+                        // day equity reaches the peak.
+                    }
+                    continue;
+                }
+                daysFromTrough++;
+                if (cum >= worstDDPeak - 1e-9) {
+                    dd.recoveryDate = kv.first;
+                    dd.recoveryDays = static_cast<size_t>(
+                        daysFromTrough);
+                    break;
+                }
+            }
+            // Empty recoveryDate + 0 recoveryDays is the
+            // documented sentinel when the DD hasn't been
+            // recovered yet.
+        }
     }
     dd.currentDD = peak - equity;
     return dd;
@@ -817,6 +863,35 @@ TradeJournal::perTagSharpe(bool includeUntagged) const {
                       return a.meanDailyReturn > b.meanDailyReturn;
                   return a.tag < b.tag;
               });
+    return out;
+}
+
+TradeJournal::Calmar TradeJournal::calmar() const {
+    // Sprint #95. Calmar = annualized return / |max DD|.
+    //
+    // Two-pass: get sharpe() to read the mean daily return, then
+    // get maxDrawdown() for the worst drop. Cost: O(N) over fills
+    // twice — the journal is small enough that this is fine, and
+    // reusing the existing helpers keeps the contract simple.
+    //
+    // Edge cases:
+    //   - maxDrawdown == 0 → calmarRatio = 0 (sentinel; trader
+    //     hasn't seen a drop yet, so the metric is undefined).
+    //   - annualizedReturn < 0 → calmarRatio < 0 (losing year
+    //     over a non-trivial DD). Negative Calmar is meaningful
+    //     — it's a "stay away" signal.
+    //   - sharpe() returns zero mean when sampleSize < 1, so a
+    //     one-day journal gives calmarRatio = 0 / maxDD = 0.
+    Calmar out;
+    auto sh = sharpe();
+    auto dd = maxDrawdown();
+    out.annualizedReturn = sh.meanDailyReturn * 252.0;
+    out.maxDrawdown      = dd.maxDrawdown;
+    if (dd.maxDrawdown > 1e-9) {
+        out.calmarRatio = out.annualizedReturn / dd.maxDrawdown;
+    } else {
+        out.calmarRatio = 0.0;
+    }
     return out;
 }
 

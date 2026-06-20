@@ -61,6 +61,7 @@ set(SOURCES
     src/widgets/trades_widget.cpp
     src/widgets/tpo_widget.cpp
     src/widgets/heatmap_widget.cpp
+    src/widgets/alerts_panel.cpp
     src/util/settings.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
@@ -89,6 +90,7 @@ set(HEADERS
     src/widgets/trades_widget.hpp
     src/widgets/tpo_widget.hpp
     src/widgets/heatmap_widget.hpp
+    src/widgets/alerts_panel.hpp
     src/util/settings.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp

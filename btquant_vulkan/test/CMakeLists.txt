@@ -82,6 +82,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/tpo_widget.cpp
     ../src/data/market_data_processor.cpp
     ../src/data/mock_producer.cpp
+    ../src/widgets/alerts_panel.cpp
 )
 
 # Set C++ standard

@@ -16,6 +16,7 @@
 #include "../data/market_data_processor.hpp"
 #include "../util/settings.hpp"
 #include "stats_overlay.hpp"
+#include "../widgets/alerts_panel.hpp"
 
 // GLFW direct key access for hotkeys. Used because ImGui's keyboard input goes
 // through imgui_impl_glfw and we want hotkeys to work even when no widget has
@@ -53,7 +54,7 @@ constexpr HotkeyBinding kHotkeys[] = {
     { GLFW_KEY_F6,  &WindowManager::showTPO,            "TPO"               },
     { GLFW_KEY_F7,  &WindowManager::showFootprint,      "Footprint"         },
     { GLFW_KEY_F8,  &WindowManager::showVPVR,           "VPVR"              },
-    // F9 is taken by ImGui's default for "show demo window" — we skip it.
+    { GLFW_KEY_F9,  &WindowManager::showAlerts,         "Alerts"            },
     { GLFW_KEY_F10, &WindowManager::showMultiVWAP,      "Multi VWAP"        },
     { GLFW_KEY_F11, &WindowManager::showRiskPanel,      "Risk Panel"        },
     { GLFW_KEY_F12, &WindowManager::showSettings,       "Settings"          },
@@ -74,6 +75,7 @@ WindowManager::WindowManager() {
     m_domWidget = new DOMWidget();
     m_tradesWidget = new TradesWidget();
     m_tpoWidget = new TPOWidget();
+    m_alertsPanel = new AlertsPanel();
 }
 
 WindowManager::~WindowManager() {
@@ -86,6 +88,7 @@ WindowManager::~WindowManager() {
     delete m_domWidget;
     delete m_tradesWidget;
     delete m_tpoWidget;
+    delete m_alertsPanel;
 }
 
 void WindowManager::initialize() {
@@ -257,6 +260,7 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_domWidget) m_domWidget->setMarketData(data);
     if (m_tradesWidget) m_tradesWidget->setMarketData(data);
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);
+    if (m_alertsPanel) m_alertsPanel->setMarketData(data);
 }
 
 void WindowManager::showOrderBookWindow() {
@@ -304,6 +308,11 @@ void WindowManager::showTPOWindow() {
     m_tpoWidget->render();
 }
 
+void WindowManager::showAlertsWindow() {
+    if (!showAlerts) return;
+    m_alertsPanel->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -316,6 +325,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("VPVR",              nullptr, &showVPVR))            markSettingsDirty();
             if (ImGui::MenuItem("Multi VWAP",        nullptr, &showMultiVWAP))       markSettingsDirty();
             if (ImGui::MenuItem("Risk Panel",        nullptr, &showRiskPanel))       markSettingsDirty();
+            if (ImGui::MenuItem("Alerts",            nullptr, &showAlerts))          markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();
@@ -383,6 +393,7 @@ void WindowManager::showHotkeyHelpWindow() {
         row("F6",       "Toggle TPO");
         row("F7",       "Toggle Footprint");
         row("F8",       "Toggle VPVR");
+        row("F9",       "Toggle Alerts");
         row("F10",      "Toggle Multi VWAP");
         row("F11",      "Toggle Risk Panel");
         row("F12",      "Toggle Settings window");

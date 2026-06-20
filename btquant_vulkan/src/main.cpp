@@ -278,6 +278,7 @@ private:
       windowManager.showDOMWindow();
       windowManager.showTradesWindow();
       windowManager.showTPOWindow();
+      windowManager.showAlertsWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

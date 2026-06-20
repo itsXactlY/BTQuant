@@ -46,6 +46,9 @@ public:
 
     bool showSettings = false;
 
+    // Alerts panel toggle.
+    bool showAlerts = true;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -94,6 +97,7 @@ public:
     void showDOMWindow();
     void showTradesWindow();
     void showTPOWindow();
+    void showAlertsWindow();
     void showMainMenu();
 
     // Bind the live data source to all 4 trading widgets. Passing nullptr
@@ -123,6 +127,7 @@ private:
     class DOMWidget* m_domWidget = nullptr;
     class TradesWidget* m_tradesWidget = nullptr;
     class TPOWidget* m_tpoWidget = nullptr;
+    class AlertsPanel* m_alertsPanel = nullptr;
     StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;

@@ -7,6 +7,8 @@
 #include "../src/util/settings.hpp"
 #include "../src/ui/stats_overlay.hpp"
 #include "../src/data/mock_producer.hpp"
+#include "../src/widgets/alerts_panel.hpp"
+#include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -438,6 +440,33 @@ int main() {
         std::error_code ec;
         fs::remove(profileFile, ec);
         fs::remove(tmpDir, ec);
+    }
+
+    // Test 11: AlertsPanel — constructible + accessor sanity.
+    std::cout << "\nTest 11: Testing AlertsPanel..." << std::endl;
+    {
+        btquant::ui::AlertsPanel ap;
+        ap.priceMovePctThreshold = 1.0;
+        ap.volumeSpikeMultiplier = 3.0;
+        ap.soundEnabled = false;
+        ap.showInStatusBar = false;
+        ap.clearAlerts();
+
+        if (ap.alerts().empty()) {
+            std::cout << "✓ AlertsPanel: constructible, clearAlerts works"
+                      << std::endl;
+        } else {
+            std::cout << "✗ AlertsPanel.clearAlerts didn't empty the deque"
+                      << std::endl;
+        }
+
+        btquant::MarketDataProcessor mdp;
+        if (auto err = mdp.start("/nonexistent_test_path", 100)) {
+            std::cout << "  (mdp.start returned: " << *err << ")" << std::endl;
+        }
+        ap.setMarketData(&mdp);
+        mdp.stop();
+        std::cout << "✓ AlertsPanel.setMarketData() accepts a processor" << std::endl;
     }
 
     return 0;

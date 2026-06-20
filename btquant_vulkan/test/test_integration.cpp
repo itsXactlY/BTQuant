@@ -14703,5 +14703,194 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 110: streakStatsBySymbol() / streakStatsByTag()
+    //   (Sprint #122).
+    //
+    // Filter-wrapped streak stats. Tests:
+    //   - Empty: zeros across the board.
+    //   - Single symbol only: streakStats match that
+    //     symbol's local W/L sequence.
+    //   - Two symbols, different streak shapes: each symbol's
+    //     streak stats reflect only its fills.
+    //   - Per-tag (incl. untagged): both buckets.
+    std::cout << "\nTest 110: per-symbol/per-tag streak stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test110_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto sBTC = j.streakStatsBySymbol("BTC");
+            auto sJ   = j.streakStats();
+            if (sBTC.maxWinStreak == 0 &&
+                sBTC.maxLossStreak == 0 &&
+                sBTC.totalStreaks == 0 &&
+                sJ.maxWinStreak == 0) {
+                std::cout << "✓ empty: zeros across both"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Two symbols with different streak shapes ----
+        // BTC: W W L W L L L → maxW=2, maxL=3, totalStreaks=6
+        // ETH: L W W W L     → maxW=3, maxL=1, totalStreaks=3
+        // Journal (in order of append): all 8 fills.
+        //   Sequence: W W L W L W W W L L L L
+        //   Wait, in append order:
+        //     BTC +100 (W)
+        //     BTC +50  (W)
+        //     BTC -30  (L)
+        //     ETH -10  (L)
+        //     BTC +20  (W)
+        //     BTC -15  (L)
+        //     ETH +200 (W)
+        //     ETH +100 (W)
+        //     ETH +50  (W)
+        //     ETH -75  (L)
+        //     BTC -10  (L)
+        //     BTC -25  (L)
+        //   Then by timestamp (we append in ts order):
+        //     t1: BTC +100 (W)
+        //     t2: BTC +50  (W)
+        //     t3: BTC -30  (L)
+        //     t4: ETH -10  (L)
+        //     t5: BTC +20  (W)
+        //     t6: BTC -15  (L)
+        //     t7: ETH +200 (W)
+        //     t8: ETH +100 (W)
+        //     t9: ETH +50  (W)
+        //     t10: ETH -75 (L)
+        //     t11: BTC -10 (L)
+        //     t12: BTC -25 (L)
+        //   Journal-wide: W W L L W L W W W L L L
+        //     Streaks: WW(2), LL(2), W(1), L(1), WWW(3),
+        //              LLL(3)  → maxW=3, maxL=3.
+        //   BTC-only (sorted by ts): +100, +50, -30, +20,
+        //     -15, -10, -25 → W W L W L L L.
+        //     Streaks: WW(2), L(1), W(1), LLL(3) → maxW=2,
+        //     maxL=3.
+        //   ETH-only: -10, +200, +100, +50, -75 →
+        //     L W W W L → maxW=3, maxL=1.
+        {
+            TradeJournal j((tmpDir / "ss.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",   50.0, "", t0 + 1*hour));
+            j.append(mkFill("BTC",  -30.0, "", t0 + 2*hour));
+            j.append(mkFill("ETH",  -10.0, "", t0 + 3*hour));
+            j.append(mkFill("BTC",   20.0, "", t0 + 4*hour));
+            j.append(mkFill("BTC",  -15.0, "", t0 + 5*hour));
+            j.append(mkFill("ETH",  200.0, "", t0 + 6*hour));
+            j.append(mkFill("ETH",  100.0, "", t0 + 7*hour));
+            j.append(mkFill("ETH",   50.0, "", t0 + 8*hour));
+            j.append(mkFill("ETH",  -75.0, "", t0 + 9*hour));
+            j.append(mkFill("BTC",  -10.0, "", t0 + 10*hour));
+            j.append(mkFill("BTC",  -25.0, "", t0 + 11*hour));
+            auto sJ   = j.streakStats();
+            auto sBTC = j.streakStatsBySymbol("BTC");
+            auto sETH = j.streakStatsBySymbol("ETH");
+            if (sBTC.maxWinStreak  == 2 &&
+                sBTC.maxLossStreak == 3 &&
+                sBTC.totalStreaks  == 4 &&
+                sETH.maxWinStreak  == 3 &&
+                sETH.maxLossStreak == 1 &&
+                sETH.totalStreaks  == 3 &&
+                sJ.maxWinStreak    == 3 &&
+                sJ.maxLossStreak   == 3) {
+                std::cout << "✓ per-symbol: BTC maxW=2 maxL=3, "
+                          << "ETH maxW=3 maxL=1, "
+                          << "journal maxW=3 maxL=3"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: BTC=" << sBTC.maxWinStreak
+                          << "/" << sBTC.maxLossStreak
+                          << "/" << sBTC.totalStreaks
+                          << " ETH=" << sETH.maxWinStreak
+                          << "/" << sETH.maxLossStreak
+                          << "/" << sETH.totalStreaks
+                          << " J=" << sJ.maxWinStreak
+                          << "/" << sJ.maxLossStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag ----
+        // scalp: W W L W → maxW=2, maxL=1, total=3.
+        // untagged: L L → maxL=2, total=1.
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",   50.0, "scalp",
+                             t0 + 1*hour));
+            j.append(mkFill("BTC",  -30.0, "scalp",
+                             t0 + 2*hour));
+            j.append(mkFill("BTC",   20.0, "scalp",
+                             t0 + 3*hour));
+            j.append(mkFill("BTC",  -10.0, "",
+                             t0 + 4*hour));
+            j.append(mkFill("BTC",  -25.0, "",
+                             t0 + 5*hour));
+            auto sScalp = j.streakStatsByTag("scalp", false);
+            auto sUntag = j.streakStatsByTag(
+                "__untagged__", false);
+            if (sScalp.maxWinStreak  == 2 &&
+                sScalp.maxLossStreak == 1 &&
+                sScalp.totalStreaks  == 3 &&
+                sUntag.maxLossStreak == 2 &&
+                sUntag.maxWinStreak  == 0 &&
+                sUntag.totalStreaks  == 1) {
+                std::cout << "✓ per-tag: scalp maxW=2 maxL=1, "
+                          << "__untagged__ maxL=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: scalp="
+                          << sScalp.maxWinStreak << "/"
+                          << sScalp.maxLossStreak << "/"
+                          << sScalp.totalStreaks
+                          << " untag=" << sUntag.maxLossStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg streak tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -2248,53 +2248,52 @@ TradeJournal::monthlyReturnsByTag(
         });
 }
 
+namespace {
+// Sprint #122 — shared streak walker. Templated on the
+// filter predicate so journal-wide + per-symbol + per-tag
+// share one tested core. The filter may return true for
+// any subset of fills; the walker processes them in
+// timestamp order.
+template <typename Pred>
 TradeJournal::StreakStats
-TradeJournal::streakStats() const {
-    // Sprint #105. Walk round-trips in chronological order,
-    // group consecutive Ws and Ls into runs. A round-trip is a
-    // fill with realizedDelta != 0; ties (==0, FP noise) are
-    // skipped (no streak assignment).
-    //
-    // Algorithm: single pass, O(N).
-    //   - For each fill: if realizedDelta>0 → win; if <0 → loss;
-    //     ==0 → skip (no fill counted, no streak change).
-    //   - When the win/loss type changes vs the previous run,
-    //     close the previous run and start a new one.
-    //   - Track current, max-W, max-L; record each completed run
-    //     (and the in-flight run) into recentStreaks (cap at 20
-    //     most recent).
-    auto fills = loadAll();
-    std::sort(fills.begin(), fills.end(),
+buildStreakStats(const std::vector<JournalFill>& fills,
+                 Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    std::sort(filtered.begin(), filtered.end(),
               [](const JournalFill& a, const JournalFill& b) {
                   return a.timestamp_us < b.timestamp_us;
               });
-    StreakStats out;
+    TradeJournal::StreakStats out;
     constexpr double kEps = 1e-9;
     bool   inRun         = false;
     bool   runIsWin      = false;
     size_t runLen        = 0;
-    // recentStreaks is built most-recent-first. We push the
-    // closing run onto a temp vector at end-of-run time, then
-    // reverse at the end. The in-flight run (if any) goes last.
-    std::vector<StreakStats::RecentStreak> closedRuns;
+    std::vector<TradeJournal::StreakStats::RecentStreak>
+        closedRuns;
     auto closeRun = [&]() {
         if (!inRun) return;
-        StreakStats::RecentStreak r;
+        TradeJournal::StreakStats::RecentStreak r;
         r.length = runLen;
         r.isWin  = runIsWin;
         closedRuns.push_back(r);
         out.totalStreaks++;
         if (runIsWin) {
             out.totalWinStreaks++;
-            if (runLen > out.maxWinStreak) out.maxWinStreak = runLen;
+            if (runLen > out.maxWinStreak)
+                out.maxWinStreak = runLen;
         } else {
             out.totalLossStreaks++;
-            if (runLen > out.maxLossStreak) out.maxLossStreak = runLen;
+            if (runLen > out.maxLossStreak)
+                out.maxLossStreak = runLen;
         }
         inRun = false;
         runLen = 0;
     };
-    for (const auto& f : fills) {
+    for (const auto& f : filtered) {
         if (std::fabs(f.realizedDelta) <= kEps) continue;
         bool fillIsWin = (f.realizedDelta > kEps);
         if (inRun && fillIsWin != runIsWin) closeRun();
@@ -2306,32 +2305,59 @@ TradeJournal::streakStats() const {
             runLen++;
         }
     }
-    // The most recent run is the in-flight one — its type is the
-    // current streak type, and its length is the current streak.
+    // The most recent run is the in-flight one.
     if (inRun) {
         if (runIsWin) out.currentWinStreak = runLen;
         else          out.currentLossStreak = runLen;
-        // Add to recentStreaks too (most recent first → front).
-        StreakStats::RecentStreak r;
+        TradeJournal::StreakStats::RecentStreak r;
         r.length = runLen;
         r.isWin  = runIsWin;
-        closedRuns.push_back(r);  // in-flight is the last closed one
+        closedRuns.push_back(r);
         out.totalStreaks++;
         if (runIsWin) {
             out.totalWinStreaks++;
-            if (runLen > out.maxWinStreak) out.maxWinStreak = runLen;
+            if (runLen > out.maxWinStreak)
+                out.maxWinStreak = runLen;
         } else {
             out.totalLossStreaks++;
-            if (runLen > out.maxLossStreak) out.maxLossStreak = runLen;
+            if (runLen > out.maxLossStreak)
+                out.maxLossStreak = runLen;
         }
     }
-    // Reverse to newest-first, cap at 20.
     std::reverse(closedRuns.begin(), closedRuns.end());
     if (closedRuns.size() > 20) {
         closedRuns.resize(20);
     }
     out.recentStreaks = std::move(closedRuns);
     return out;
+}
+}  // namespace
+
+TradeJournal::StreakStats
+TradeJournal::streakStats() const {
+    return buildStreakStats(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::StreakStats
+TradeJournal::streakStatsBySymbol(
+    const std::string& symbol) const {
+    return buildStreakStats(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::StreakStats
+TradeJournal::streakStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildStreakStats(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
 }
 
 namespace {

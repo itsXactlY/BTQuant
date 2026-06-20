@@ -840,6 +840,17 @@ public:
     };
     StreakStats streakStats() const;
 
+    // Per-symbol / per-tag streak stats (Sprint #122). The
+    // same StreakStats struct, but each streak is built only
+    // from fills of that symbol/tag. Helps answer "what's my
+    // worst losing streak on BTC?" vs "what's my worst on
+    // ETH?" — useful when one symbol has much sharper runs
+    // than another.
+    StreakStats streakStatsBySymbol(const std::string& symbol) const;
+    StreakStats streakStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

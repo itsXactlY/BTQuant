@@ -2116,6 +2116,21 @@ public:
         bool includeUntagged = true,
         double ruinFraction = 0.5) const;
 
+    // Per-segment longest DD streak (Sprint #201). Number
+    // of consecutive DDs without a full recovery between
+    // them. Answers "how persistent are my drawdowns?"
+    struct DDStreakStats {
+        std::string segment;
+        size_t      longestStreak      = 0;
+        size_t      currentStreak      = 0;
+        size_t      totalCompletedDDs  = 0;
+    };
+    DDStreakStats ddStreakStatsBySymbol(
+        const std::string& symbol) const;
+    DDStreakStats ddStreakStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

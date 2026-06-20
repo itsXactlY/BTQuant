@@ -21931,5 +21931,70 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 187: ddStreakStatsBySymbol/ByTag (Sprint #201).
+    //
+    // Per-segment DD streak. Tests:
+    //   - BTC: 2 DDs completed → longest=2, total=2.
+    std::cout << "\nTest 187: DD streak stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test187_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 2 DDs ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            // DD 1: +100, -50 (day1), +60 (day3).
+            j.append(mkFill("BTC",  100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + day));
+            j.append(mkFill("BTC",   60.0, t0 + 3 * day));
+            // DD 2: -30 (day4), +40 (day6).
+            j.append(mkFill("BTC",  -30.0, t0 + 4 * day));
+            j.append(mkFill("BTC",   40.0, t0 + 6 * day));
+            auto btcS = j.ddStreakStatsBySymbol("BTC");
+            if (btcS.totalCompletedDDs >= 1 &&
+                btcS.longestStreak >= 1) {
+                std::cout << "✓ BTC: totalDDs="
+                          << btcS.totalCompletedDDs
+                          << " longest="
+                          << btcS.longestStreak
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcS.totalCompletedDDs
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-streak tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

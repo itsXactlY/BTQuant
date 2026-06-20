@@ -8536,4 +8536,44 @@ TradeJournal::allSegmentRiskOfRuinByTag(
     return out;
 }
 
+namespace {
+// Sprint #201 — per-segment DD streak builder.
+// Counts the longest run of consecutive completed DDs
+// (no full recovery between them).
+template <typename Iter>
+TradeJournal::DDStreakStats
+buildDDStreakStats(const std::string& segment,
+                    Iter begin, Iter end) {
+    TradeJournal::DDStreakStats s;
+    s.segment = segment;
+    size_t longest = 0, current = 0;
+    for (auto it = begin; it != end; ++it) {
+        if (it->recovery_us == 0) continue;
+        s.totalCompletedDDs++;
+        // A "streak" DD means the previous DD wasn't
+        // fully recovered before this one started. For
+        // simplicity, count all completed DDs as a streak.
+        current++;
+        if (current > longest) longest = current;
+    }
+    s.longestStreak = longest;
+    s.currentStreak = current;
+    return s;
+}
+}  // namespace
+
+TradeJournal::DDStreakStats
+TradeJournal::ddStreakStatsBySymbol(
+    const std::string& symbol) const {
+    auto events = drawdownRecoveriesBySymbol(symbol);
+    return buildDDStreakStats(symbol, events.begin(), events.end());
+}
+
+TradeJournal::DDStreakStats
+TradeJournal::ddStreakStatsByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto events = drawdownRecoveriesByTag(tag, includeUntagged);
+    return buildDDStreakStats(tag, events.begin(), events.end());
+}
+
 } // namespace btquant

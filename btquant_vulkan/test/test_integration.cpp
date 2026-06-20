@@ -375,5 +375,70 @@ int main() {
         fs::remove(tmpDir, ec);
     }
 
+    // Test 10: Settings profiles — applyTo + preset factories + path sanitize.
+    std::cout << "\nTest 10: Testing profiles..." << std::endl;
+    {
+        using namespace btquant::util;
+
+        // Scalper preset: DOM + Trades + RiskPanel + Footprint + MultiVWAP on;
+        // OrderBook, OB-Depth, VPVR, TPO off.
+        auto sc = Settings::presetScalper();
+        bool ob = true, obd = true, fp = false, vpvr = true, mvwap = true;
+        bool risk = false, dom = false, trades = true, tpo = true;
+        long theme = 1, density = 64;
+        sc.applyTo(ob, obd, fp, vpvr, mvwap, risk, dom, trades, tpo, theme, density);
+        bool scalperOk = !ob && !obd && fp && !vpvr && mvwap && risk && dom && trades && !tpo;
+        if (scalperOk) {
+            std::cout << "✓ Scalper preset applied correctly" << std::endl;
+        } else {
+            std::cout << "✗ Scalper applyTo wrong: ob=" << ob << " obd=" << obd
+                      << " fp=" << fp << " vpvr=" << vpvr << " dom=" << dom
+                      << " trades=" << trades << std::endl;
+        }
+
+        // Volatility preset: density 384.
+        auto vol = Settings::presetVolatility();
+        if (vol.heatmapDensity == 384 && vol.showTPO) {
+            std::cout << "✓ Volatility preset has density=384 + TPO" << std::endl;
+        } else {
+            std::cout << "✗ Volatility preset wrong: density=" << vol.heatmapDensity
+                      << " tpo=" << vol.showTPO << std::endl;
+        }
+
+        // profilePath sanitization — "../../etc/passwd" must NOT traverse.
+        auto bad = Settings::profilePath("../../etc/passwd");
+        auto canon = std::filesystem::weakly_canonical(bad);
+        // The cleaned name "etcpasswd" (special chars stripped) should be in
+        // ~/.config/btquant_vulkan/profiles/ — never reach /etc.
+        bool safeOk = (canon.string().find("/etc/passwd") == std::string::npos) &&
+                      (canon.string().find("btquant_vulkan/profiles") != std::string::npos);
+        if (safeOk) {
+            std::cout << "✓ Profile name sanitization blocks path traversal" << std::endl;
+        } else {
+            std::cout << "✗ Profile path traversal NOT blocked: " << canon << std::endl;
+        }
+
+        // Roundtrip: save profile to disk, load it back, verify applyTo matches.
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() / "btquant_test_profile";
+        fs::create_directories(tmpDir);
+        auto profileFile = tmpDir / "sc1.ini";
+        Settings saved;
+        saved.showDOM = true;
+        saved.showTrades = true;
+        saved.theme = 0;
+        saved.heatmapDensity = 256;
+        saved.save(profileFile);
+        auto loaded = Settings::load(profileFile);
+        if (loaded.showDOM && loaded.showTrades && loaded.heatmapDensity == 256) {
+            std::cout << "✓ Profile save+load roundtrip preserves settings" << std::endl;
+        } else {
+            std::cout << "✗ Profile roundtrip lost data" << std::endl;
+        }
+        std::error_code ec;
+        fs::remove(profileFile, ec);
+        fs::remove(tmpDir, ec);
+    }
+
     return 0;
 }

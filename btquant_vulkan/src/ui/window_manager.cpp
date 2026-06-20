@@ -14,6 +14,7 @@
 #include "../widgets/tpo_widget.hpp"
 
 #include "../data/market_data_processor.hpp"
+#include "../util/settings.hpp"
 #include "stats_overlay.hpp"
 
 // GLFW direct key access for hotkeys. Used because ImGui's keyboard input goes
@@ -163,6 +164,17 @@ void WindowManager::applyInitialDockLayoutIfNeeded() {
 
 void WindowManager::requestDockLayoutReset() {
     m_layoutResetRequested = true;
+}
+
+void WindowManager::applyPreset(const ::btquant::util::Settings& s) {
+    s.applyTo(showOrderBook, showOrderBookDepth, showFootprint, showVPVR,
+              showMultiVWAP, showRiskPanel, showDOM, showTrades, showTPO,
+              theme, heatmapDensity);
+    markSettingsDirty();
+    // The next applyInitialDockLayoutIfNeeded() call will rebuild the dock
+    // tree to match the new widget set. We request a reset so the layout
+    // re-applies cleanly even if the user just hid a window.
+    requestDockLayoutReset();
 }
 
 void WindowManager::processHotkeys(void* glfwWindow) {
@@ -315,6 +327,14 @@ void WindowManager::showMainMenu() {
                 if (ImGui::MenuItem("Light (off-white)",    nullptr, theme == 1 ? &kBoolTrue : &kBoolFalse)) {
                     theme = 1; markSettingsDirty();
                 }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Profiles")) {
+                if (ImGui::MenuItem("Scalper"))      { applyPreset(util::Settings::presetScalper());      }
+                if (ImGui::MenuItem("Market Maker")) { applyPreset(util::Settings::presetMarketMaker()); }
+                if (ImGui::MenuItem("Volatility"))   { applyPreset(util::Settings::presetVolatility());   }
+                if (ImGui::MenuItem("Fullscreen"))   { applyPreset(util::Settings::presetFullscreen());   }
                 ImGui::EndMenu();
             }
             ImGui::Separator();

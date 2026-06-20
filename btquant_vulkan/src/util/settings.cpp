@@ -116,4 +116,102 @@ void Settings::save(const std::filesystem::path& path) const {
     fs::rename(tmp, path, ec);  // best-effort; if rename fails we still have the tmp
 }
 
+std::filesystem::path Settings::profilePath(const std::string& name) {
+    // Sanitize: only [a-zA-Z0-9_-] allowed, max 64 chars. Stops path traversal.
+    std::string clean;
+    clean.reserve(name.size());
+    for (char c : name) {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_' || c == '-') {
+            clean.push_back(c);
+        }
+    }
+    if (clean.empty()) clean = "unnamed";
+    if (clean.size() > 64) clean.resize(64);
+    return defaultPath().parent_path() / "profiles" / (clean + ".ini");
+}
+
+void Settings::applyTo(bool& showOB, bool& showOBD, bool& showFootprint,
+                       bool& showVPVR, bool& showMVWAP, bool& showRisk,
+                       bool& showDOM, bool& showTrades, bool& showTPO,
+                       long& themeOut, long& densityOut) const {
+    // Use this-> to disambiguate from the parameter names (otherwise
+    // `showFootprint = showFootprint` would be a self-assign).
+    showOB       = this->showOrderBook;
+    showOBD      = this->showOrderBookDepth;
+    showFootprint = this->showFootprint;
+    showVPVR     = this->showVPVR;
+    showMVWAP    = this->showMultiVWAP;
+    showRisk     = this->showRiskPanel;
+    showDOM      = this->showDOM;
+    showTrades   = this->showTrades;
+    showTPO      = this->showTPO;
+    themeOut     = this->theme;
+    densityOut   = this->heatmapDensity;
+}
+
+Settings Settings::presetScalper() {
+    Settings s;
+    s.showOrderBook = false;
+    s.showOrderBookDepth = false;
+    s.showFootprint = true;
+    s.showVPVR = false;
+    s.showMultiVWAP = true;
+    s.showRiskPanel = true;
+    s.showDOM = true;       // order-flow scalper — DOM is king
+    s.showTrades = true;
+    s.showTPO = false;
+    s.theme = 0;
+    s.heatmapDensity = 256;
+    return s;
+}
+
+Settings Settings::presetMarketMaker() {
+    Settings s;
+    s.showOrderBook = true;
+    s.showOrderBookDepth = true;
+    s.showFootprint = false;
+    s.showVPVR = false;
+    s.showMultiVWAP = false;
+    s.showRiskPanel = true;
+    s.showDOM = true;
+    s.showTrades = false;
+    s.showTPO = false;
+    s.theme = 0;
+    s.heatmapDensity = 128;
+    return s;
+}
+
+Settings Settings::presetVolatility() {
+    Settings s;
+    s.showOrderBook = false;
+    s.showOrderBookDepth = false;
+    s.showFootprint = true;
+    s.showVPVR = true;
+    s.showMultiVWAP = true;
+    s.showRiskPanel = true;
+    s.showDOM = false;
+    s.showTrades = true;
+    s.showTPO = true;
+    s.theme = 0;
+    s.heatmapDensity = 384;
+    return s;
+}
+
+Settings Settings::presetFullscreen() {
+    Settings s;
+    s.showOrderBook = true;
+    s.showOrderBookDepth = true;
+    s.showFootprint = true;
+    s.showVPVR = true;
+    s.showMultiVWAP = true;
+    s.showRiskPanel = true;
+    s.showDOM = true;
+    s.showTrades = true;
+    s.showTPO = true;
+    s.theme = 0;
+    s.heatmapDensity = 512;
+    return s;
+}
+
 } // namespace btquant::util

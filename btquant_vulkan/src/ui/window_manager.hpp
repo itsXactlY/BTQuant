@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "stats_overlay.hpp"
+#include "../util/settings.hpp"
 
 // MarketDataProcessor is declared in btquant:: namespace (not btquant::ui).
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
@@ -111,6 +112,7 @@ public:
 
 private:
     void buildDockLayout();
+    void applyPreset(const ::btquant::util::Settings& s);
 
     class OrderBookWidget* m_orderBookWidget = nullptr;
     class OrderBookDepthWidget* m_orderBookDepthWidget = nullptr;

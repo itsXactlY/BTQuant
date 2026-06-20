@@ -57,6 +57,25 @@ struct Settings {
     // Save current state. Creates parent directories as needed. Always
     // overwrites the file — atomic rename to avoid corruption on crash.
     void save(const std::filesystem::path& path) const;
+
+    // ----- Named profiles (saved/loaded independently from the main settings)
+    // A profile captures widget visibility + theme + heatmap density so the
+    // user can switch between named layouts (e.g. "Scalper", "Market Maker")
+    // without manually toggling each widget. Each profile lives in its own
+    // file under ~/.config/btquant_vulkan/profiles/<name>.ini.
+    static std::filesystem::path profilePath(const std::string& name);
+
+    // Apply this profile to the supplied bool refs / longs. Used by the
+    // View → Profiles menu to switch the workspace in one click.
+    void applyTo(bool& showOB, bool& showOBD, bool& showFootprint, bool& showVPVR,
+                 bool& showMVWAP, bool& showRisk, bool& showDOM, bool& showTrades,
+                 bool& showTPO, long& themeOut, long& densityOut) const;
+
+    // Static factories for the built-in presets (returned by value).
+    static Settings presetScalper();
+    static Settings presetMarketMaker();
+    static Settings presetVolatility();
+    static Settings presetFullscreen();
 };
 
 } // namespace btquant::util

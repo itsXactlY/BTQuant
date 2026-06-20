@@ -161,6 +161,70 @@ void JournalStatsPanel::render() {
         }
     }
 
+    // ---- Risk mini-section (Sprint #81) ----
+    //
+    // Drawdown summary sourced from TradeJournal::maxDrawdown()
+    // (#80). Worst peak-to-trough decline + the dates that bracket
+    // it, plus the current drawdown (== 0 when equity is at ATH).
+    //
+    // Two columns: maxDD on the left (always red — by definition
+    // the worst), currentDD on the right (red when in DD, green
+    // when at ATH, dim at 0). Dates shown in compact "YYYY-MM-DD"
+    // format — same as the by-day table so the trader can read
+    // them in one glance.
+    auto dd = m_journal->maxDrawdown();
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Risk",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("JournalStatsRisk",
+                              2,
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Max drawdown");
+            ImGui::TableSetupColumn("Current drawdown");
+            ImGui::TableHeadersRow();
+            ImGui::TableNextRow();
+            // Max DD: always red (it's the worst by definition).
+            ImGui::TableSetColumnIndex(0);
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+            char buf[96];
+            if (dd.maxDrawdown > 1e-9) {
+                std::snprintf(buf, sizeof(buf),
+                              "-%.2f  (%s → %s)",
+                              dd.maxDrawdown,
+                              dd.peakDate.c_str(),
+                              dd.troughDate.c_str());
+            } else {
+                std::snprintf(buf, sizeof(buf), "0.00  (no drawdown yet)");
+            }
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+
+            // Current DD: red when > 0, dim when 0 (at ATH).
+            ImGui::TableSetColumnIndex(1);
+            if (dd.currentDD > 1e-9) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                std::snprintf(buf, sizeof(buf), "-%.2f", dd.currentDD);
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+                // Annotation when currently inside the worst DD.
+                if (std::fabs(dd.currentDD - dd.maxDrawdown) < 1e-9 &&
+                    !dd.troughDate.empty()) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(in worst DD)");
+                }
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                ImGui::TextUnformatted("0.00  (at ATH)");
+                ImGui::PopStyleColor();
+            }
+            ImGui::EndTable();
+        }
+    }
+
     ImGui::Separator();
 
     // ---- By-symbol table (Sprint #72) ----

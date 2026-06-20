@@ -8934,4 +8934,61 @@ TradeJournal::allSegmentBestHourOfDayByTag(
     return out;
 }
 
+namespace {
+// Sprint #209 — per-segment trade size stats builder.
+template <typename Pred>
+TradeJournal::TradeSizeStatsSeg
+buildTradeSizeStatsSegBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::TradeSizeStatsSeg s;
+    std::vector<double> sizes;
+    double sum = 0.0, mx = 0.0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        double sz = std::fabs(f.realizedDelta);
+        sizes.push_back(sz);
+        sum += sz;
+        if (sz > mx) mx = sz;
+    }
+    if (sizes.empty()) return s;
+    s.totalFills = sizes.size();
+    s.meanSize = sum / static_cast<double>(sizes.size());
+    s.maxSize = mx;
+    std::sort(sizes.begin(), sizes.end());
+    s.medianSize = sizes[sizes.size() / 2];
+    double var = 0.0;
+    for (double sz : sizes) {
+        var += (sz - s.meanSize) * (sz - s.meanSize);
+    }
+    var /= static_cast<double>(sizes.size());
+    s.stddevSize = std::sqrt(var);
+    return s;
+}
+}  // namespace
+
+TradeJournal::TradeSizeStatsSeg
+TradeJournal::tradeSizeStatsSegBySymbol(
+    const std::string& symbol) const {
+    auto s = buildTradeSizeStatsSegBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    s.segment = symbol;
+    return s;
+}
+
+TradeJournal::TradeSizeStatsSeg
+TradeJournal::tradeSizeStatsSegByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto s = buildTradeSizeStatsSegBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    s.segment = tag;
+    return s;
+}
+
 } // namespace btquant

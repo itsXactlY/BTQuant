@@ -2221,6 +2221,23 @@ public:
     allSegmentBestHourOfDayByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment trade size stats (Sprint #209). Trade
+    // size = |realizedDelta|. Answers "how big are my
+    // typical BTC trades?"
+    struct TradeSizeStatsSeg {
+        std::string segment;
+        double      meanSize   = 0.0;
+        double      medianSize = 0.0;
+        double      stddevSize = 0.0;
+        double      maxSize    = 0.0;
+        size_t      totalFills = 0;
+    };
+    TradeSizeStatsSeg tradeSizeStatsSegBySymbol(
+        const std::string& symbol) const;
+    TradeSizeStatsSeg tradeSizeStatsSegByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

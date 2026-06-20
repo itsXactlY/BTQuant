@@ -996,6 +996,152 @@ TradeJournal::perTagCalmar(bool includeUntagged) const {
     return out;
 }
 
+// Pure helper shared between the journal-wide sortino() (#99),
+// perSymbolSortino() (#99), and perTagSortino() (#99). Takes a
+// chronological daily series and computes Sortino using
+// downsideDeviation as the denominator.
+//
+// Formula (target = 0):
+//   downsideDeviation = sqrt(mean(min(0, r)²))
+//                     = RMS of negative returns
+//   dailySortino      = mean(r) / downsideDeviation
+//   annualizedSortino = dailySortino × sqrt(252)
+//
+// Edge cases:
+//   - sampleSize < 1: zeroed Sortino.
+//   - All returns >= 0 (no bad days): downsideDeviation = 0,
+//     Sortino = 0 (panel renders as "∞" via the same convention
+//     used for profit factor when there are no losses).
+//   - All returns equal (positive or negative): sampleSize >= 1
+//     is still fine, but downsideDeviation may still be 0 if
+//     mean > 0; the sentinel handles it.
+TradeJournal::Sortino computeSortinoFromSeries(
+    const std::vector<std::pair<std::string, double>>& daily) {
+    constexpr double kTradingDays = 252.0;
+    TradeJournal::Sortino out;
+    out.sampleSize = daily.size();
+    if (daily.empty()) return out;
+
+    // 1) Mean.
+    double sum = 0.0;
+    for (const auto& kv : daily) sum += kv.second;
+    out.meanDailyReturn = sum / static_cast<double>(daily.size());
+
+    // 2) Downside deviation = RMS of negative returns, with
+    //    target = 0. Equivalent to sqrt(mean(min(0, r)²)).
+    double negSqSum = 0.0;
+    for (const auto& kv : daily) {
+        if (kv.second < 0.0) negSqSum += kv.second * kv.second;
+    }
+    out.downsideDeviation = std::sqrt(negSqSum /
+                                      static_cast<double>(daily.size()));
+
+    // 3) Sortino = mean / downsideDeviation. Annualized.
+    if (out.downsideDeviation > 1e-9) {
+        out.dailySortino      = out.meanDailyReturn / out.downsideDeviation;
+        out.annualizedSortino = out.dailySortino * std::sqrt(kTradingDays);
+    } else {
+        // All-positive daily returns → no downside → Sortino
+        // undefined. Sentinel: 0 (panel renders as "∞").
+        out.dailySortino      = 0.0;
+        out.annualizedSortino = 0.0;
+    }
+    return out;
+}
+
+TradeJournal::Sortino TradeJournal::sortino() const {
+    // Sprint #99. Thin wrapper over the shared helper.
+    auto daily = realizedByDay();
+    return computeSortinoFromSeries(daily);
+}
+
+std::vector<TradeJournal::PerSymbolSortino>
+TradeJournal::perSymbolSortino() const {
+    // Per-symbol Sortino. Same shape as perSymbolSharpe() (#91)
+    // — group fills by symbol, bucketByLocalDay per group, feed
+    // into computeSortinoFromSeries(). Sorted by annualized
+    // Sortino DESCENDING.
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> bySymbol;
+    bySymbol.reserve(8);
+    for (const auto& f : fills) bySymbol[f.symbol].push_back(f);
+
+    std::vector<PerSymbolSortino> out;
+    out.reserve(bySymbol.size());
+    for (auto& kv : bySymbol) {
+        PerSymbolSortino e;
+        e.symbol = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto so = computeSortinoFromSeries(series);
+        e.dailySortino       = so.dailySortino;
+        e.annualizedSortino  = so.annualizedSortino;
+        e.meanDailyReturn    = so.meanDailyReturn;
+        e.downsideDeviation  = so.downsideDeviation;
+        e.sampleSize         = so.sampleSize;
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerSymbolSortino& a, const PerSymbolSortino& b) {
+                  if (a.annualizedSortino != b.annualizedSortino)
+                      return a.annualizedSortino > b.annualizedSortino;
+                  if (a.meanDailyReturn != b.meanDailyReturn)
+                      return a.meanDailyReturn > b.meanDailyReturn;
+                  return a.symbol < b.symbol;
+              });
+    return out;
+}
+
+std::vector<TradeJournal::PerTagSortino>
+TradeJournal::perTagSortino(bool includeUntagged) const {
+    // Per-tag Sortino. Same shape as perSymbolSortino() but
+    // grouped by tag. includeUntagged handling matches
+    // perTagStats() / perTagSharpe() / perTagCalmar().
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> byTag;
+    byTag.reserve(8);
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        byTag[key].push_back(f);
+    }
+
+    std::vector<PerTagSortino> out;
+    out.reserve(byTag.size());
+    for (auto& kv : byTag) {
+        PerTagSortino e;
+        e.tag = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto so = computeSortinoFromSeries(series);
+        e.dailySortino       = so.dailySortino;
+        e.annualizedSortino  = so.annualizedSortino;
+        e.meanDailyReturn    = so.meanDailyReturn;
+        e.downsideDeviation  = so.downsideDeviation;
+        e.sampleSize         = so.sampleSize;
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerTagSortino& a, const PerTagSortino& b) {
+                  if (a.annualizedSortino != b.annualizedSortino)
+                      return a.annualizedSortino > b.annualizedSortino;
+                  if (a.meanDailyReturn != b.meanDailyReturn)
+                      return a.meanDailyReturn > b.meanDailyReturn;
+                  return a.tag < b.tag;
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

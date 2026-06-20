@@ -379,6 +379,53 @@ public:
     std::vector<PerTagCalmar> perTagCalmar(
         bool includeUntagged = false) const;
 
+    // Sortino ratio (Sprint #99). Risk-adjusted return
+    // normalized by DOWNSIDE volatility — same idea as Sharpe
+    // (#84) but the denominator uses only negative returns, so
+    // upside volatility doesn't penalize the score. Sortino
+    // answers: "how much return do I get per unit of BAD vol?"
+    //
+    // Formula (target = 0):
+    //   downsideDeviation = sqrt(mean(min(0, r)²))
+    //   dailySortino      = mean(daily) / downsideDeviation
+    //   annualizedSortino = dailySortino × sqrt(252)
+    //
+    // Sentinel: when no daily return is negative (every day
+    // profitable), downsideDeviation = 0 and Sortino = 0 (panel
+    // renders as "∞" via the same convention used for profit
+    // factor — the trader reads "no bad days" intuitively).
+    struct Sortino {
+        double dailySortino       = 0.0;
+        double annualizedSortino  = 0.0;
+        double meanDailyReturn    = 0.0;
+        double downsideDeviation  = 0.0;
+        size_t sampleSize         = 0;
+    };
+    Sortino sortino() const;
+
+    // Per-symbol Sortino (Sprint #99). Per-symbol mirror.
+    struct PerSymbolSortino {
+        std::string symbol;
+        double dailySortino       = 0.0;
+        double annualizedSortino  = 0.0;
+        double meanDailyReturn    = 0.0;
+        double downsideDeviation  = 0.0;
+        size_t sampleSize         = 0;
+    };
+    std::vector<PerSymbolSortino> perSymbolSortino() const;
+
+    // Per-tag Sortino (Sprint #99). Per-tag mirror.
+    struct PerTagSortino {
+        std::string tag;
+        double dailySortino       = 0.0;
+        double annualizedSortino  = 0.0;
+        double meanDailyReturn    = 0.0;
+        double downsideDeviation  = 0.0;
+        size_t sampleSize         = 0;
+    };
+    std::vector<PerTagSortino> perTagSortino(
+        bool includeUntagged = false) const;
+
     // Per-symbol risk-adjusted return (Sprint #91). For each
     // symbol, Sharpe on the daily series — same algorithm as
     // sharpe() (#84) but applied to the symbol's own daily series.

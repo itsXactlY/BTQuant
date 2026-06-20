@@ -11361,5 +11361,155 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 94: TradeJournal.sortino() (Sprint #99).
+    //
+    // Sortino = mean(daily) / downsideDeviation × sqrt(252).
+    // Tests:
+    //   - Empty journal → all zeros.
+    //   - Single day → Sortino = 0 (no downside deviation).
+    //   - All-positive days → downsideDeviation = 0 → Sortino
+    //     = 0 sentinel.
+    //   - Mixed [+50, -100] → mean=-25, downsideDev=sqrt(50²)/sqrt(1)=50,
+    //     dailySortino=-0.5, annualized ≈ -7.94.
+    //   - Mixed [+100, -50] → mean=25, downsideDev=sqrt(25²)/sqrt(1)=25,
+    //     dailySortino=1, annualized = sqrt(252) ≈ 15.87.
+    std::cout << "\nTest 94: Testing TradeJournal.sortino()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test94_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](double realized, int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = "X"; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto s = j.sortino();
+            if (s.dailySortino == 0.0 && s.annualizedSortino == 0.0 &&
+                s.downsideDeviation == 0.0 && s.sampleSize == 0) {
+                std::cout << "✓ empty journal: zeroed Sortino"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: daily=" << s.dailySortino
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All-positive days → downsideDeviation = 0 → sentinel ----
+        {
+            fs::path p = tmpDir / "allpos.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 10.0, 2, 10));
+            j.append(mkFill( 20.0, 1, 10));
+            j.append(mkFill( 30.0, 0, 10));
+            auto s = j.sortino();
+            if (s.downsideDeviation < 1e-9 &&
+                s.dailySortino == 0.0 &&
+                s.annualizedSortino == 0.0 &&
+                std::fabs(s.meanDailyReturn - 20.0) < 1e-9 &&
+                s.sampleSize == 3) {
+                std::cout << "✓ all-positive days: Sortino=0 "
+                          << "sentinel (no downside), mean=$20"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ all-positive wrong: dd=" << s.dailySortino
+                          << " dev=" << s.downsideDeviation << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Known fixture [+100, -50] ----
+        // mean = 25, downsideDev = sqrt(50²/2) = 50/√2 = 35.355
+        // dailySortino = 25 / 35.355 ≈ 0.7071
+        // annualized    = 0.7071 × √252 ≈ 11.225
+        {
+            fs::path p = tmpDir / "known.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( 100.0, 1, 10));
+            j.append(mkFill( -50.0, 0, 10));
+            auto s = j.sortino();
+            double expectedDownside = 50.0 / std::sqrt(2.0);
+            double expectedDaily    = 25.0 / expectedDownside;
+            double expectedAnnual   = expectedDaily * std::sqrt(252.0);
+            if (std::fabs(s.meanDailyReturn - 25.0) < 1e-9 &&
+                std::fabs(s.downsideDeviation - expectedDownside) < 1e-9 &&
+                std::fabs(s.dailySortino - expectedDaily) < 1e-9 &&
+                std::fabs(s.annualizedSortino - expectedAnnual) < 1e-9 &&
+                s.sampleSize == 2) {
+                std::cout << "✓ [+100,-50]: mean=$25, dev=$"
+                          << expectedDownside << ", daily="
+                          << s.dailySortino << " annual="
+                          << s.annualizedSortino << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ known wrong: daily=" << s.dailySortino
+                          << " dev=" << s.downsideDeviation
+                          << " annual=" << s.annualizedSortino
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Losing fixture: dailySortino negative ----
+        // [-50, +10]: mean=-20, downsideDev=sqrt((50²+0)/2)=35.355
+        // dailySortino = -20/35.355 ≈ -0.5657
+        {
+            fs::path p = tmpDir / "loser.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill( -50.0, 1, 10));
+            j.append(mkFill(  10.0, 0, 10));
+            auto s = j.sortino();
+            double expectedDownside = 50.0 / std::sqrt(2.0);
+            double expectedDaily    = -20.0 / expectedDownside;
+            if (s.dailySortino < 0.0 &&
+                std::fabs(s.dailySortino - expectedDaily) < 1e-9 &&
+                std::fabs(s.downsideDeviation - expectedDownside) < 1e-9) {
+                std::cout << "✓ [-50,+10]: daily=" << s.dailySortino
+                          << " (negative, downside-penalized)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ loser wrong: daily=" << s.dailySortino
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " sortino tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

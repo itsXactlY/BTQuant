@@ -88,6 +88,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/connection_panel.cpp
     ../src/widgets/profile_manager.cpp
     ../src/widgets/symbol_picker.cpp
+    ../src/util/theme_io.cpp
     ../src/widgets/theme_editor.cpp
 )
 

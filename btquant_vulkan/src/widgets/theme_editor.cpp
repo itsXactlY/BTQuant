@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <imgui.h>
 
+#include "../util/theme_io.hpp"
+
 namespace btquant::ui {
 
 const char* ThemeEditor::colorName(int i) {
@@ -123,6 +125,11 @@ void ThemeEditor::render() {
     if (ImGui::Button("Reset to Dark")) ImGui::StyleColorsDark(&st);
     ImGui::SameLine();
     if (ImGui::Button("Reset to Light")) ImGui::StyleColorsLight(&st);
+    ImGui::SameLine();
+    if (ImGui::Button("Save to disk")) {
+        ThemeIO::save(ThemeIO::defaultPath(),
+                      ThemeEditor::capture(st));
+    }
 
     ImGui::EndPopup();
 }

@@ -23,6 +23,7 @@
 #include "../widgets/profile_manager.hpp"
 #include "../widgets/symbol_picker.hpp"
 #include "../widgets/theme_editor.hpp"
+#include "../util/theme_io.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -128,6 +129,31 @@ WindowManager::~WindowManager() {
 
 void WindowManager::initialize() {
     m_initialized = true;
+    applyPersistedTheme();
+}
+
+void WindowManager::applyPersistedTheme() {
+    if (!m_themeEditor) return;
+    auto snap = ThemeIO::load(ThemeIO::defaultPath());
+    if (!snap) {
+        BTQ_LOG_INFO("no persisted theme — using ImGui default (dark)");
+        return;
+    }
+    ThemeEditor::applySnapshot(ImGui::GetStyle(), *snap);
+    BTQ_LOG_INFO("applied persisted theme from %s",
+                 ThemeIO::defaultPath().string().c_str());
+}
+
+bool WindowManager::saveCurrentTheme() {
+    if (!m_themeEditor) return false;
+    auto snap = ThemeEditor::capture(ImGui::GetStyle());
+    auto path = ThemeIO::defaultPath();
+    if (!ThemeIO::save(path, snap)) {
+        BTQ_LOG_WARN("failed to save theme to %s", path.string().c_str());
+        return false;
+    }
+    BTQ_LOG_INFO("saved theme to %s", path.string().c_str());
+    return true;
 }
 
 void WindowManager::shutdown() {

@@ -69,6 +69,7 @@ set(SOURCES
     src/widgets/symbol_picker.cpp
     src/widgets/theme_editor.cpp
     src/util/settings.cpp
+    src/util/theme_io.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
 )
@@ -104,6 +105,7 @@ set(HEADERS
     src/widgets/symbol_picker.hpp
     src/widgets/theme_editor.hpp
     src/util/settings.hpp
+    src/util/theme_io.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp
 )

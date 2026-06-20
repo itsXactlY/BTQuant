@@ -123,6 +123,8 @@ public:
     void showProfileManagerWindow();
     void showSymbolPickerWindow();
     void showThemeEditorWindow();
+    void applyPersistedTheme();
+    bool saveCurrentTheme();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 

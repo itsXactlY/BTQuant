@@ -15,6 +15,7 @@
 #include "../src/widgets/profile_manager.hpp"
 #include "../src/widgets/symbol_picker.hpp"
 #include "../src/widgets/theme_editor.hpp"
+#include "../src/util/theme_io.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -962,6 +963,109 @@ int main() {
         } else {
             std::cout << "✗ some colorName() returned '?'" << std::endl;
         }
+    }
+
+    // Test 19: ThemeIO — save/load round-trip with full snapshot fidelity.
+    std::cout << "\nTest 19: Testing ThemeIO..." << std::endl;
+    {
+        namespace fs = std::filesystem;
+        fs::path tmpFile = fs::temp_directory_path() / "btquant_test_theme.ini";
+        std::error_code ec;
+        fs::remove(tmpFile, ec);
+
+        // Missing file → nullopt.
+        if (btquant::ui::ThemeIO::load(tmpFile) == std::nullopt) {
+            std::cout << "✓ load() of missing file → nullopt" << std::endl;
+        } else {
+            std::cout << "✗ load() of missing file should return nullopt" << std::endl;
+        }
+
+        // Build a snapshot with deterministic values.
+        btquant::ui::ThemeEditor::Snapshot orig{};
+        for (int i = 0; i < btquant::ui::ThemeEditor::kColorCount; ++i) {
+            for (int k = 0; k < 4; ++k) {
+                // Encode index+channel into a recognisable float.
+                orig.colors[i][k] = static_cast<float>(i * 4 + k) / 100.0f;
+            }
+        }
+        orig.windowPadding = 11.5f;
+        orig.framePadding  = 6.25f;
+        orig.rounding      = 4.0f;
+        orig.alpha         = 0.85f;
+        orig.dark          = false;
+
+        if (btquant::ui::ThemeIO::save(tmpFile, orig)) {
+            std::cout << "✓ save() wrote theme file" << std::endl;
+        } else {
+            std::cout << "✗ save() failed" << std::endl;
+        }
+        if (fs::exists(tmpFile)) {
+            std::cout << "✓ theme file exists on disk: "
+                      << fs::file_size(tmpFile) << " bytes" << std::endl;
+        } else {
+            std::cout << "✗ theme file missing" << std::endl;
+        }
+
+        // Round-trip.
+        auto loaded = btquant::ui::ThemeIO::load(tmpFile);
+        if (loaded.has_value()) {
+            std::cout << "✓ load() returned a snapshot" << std::endl;
+        } else {
+            std::cout << "✗ load() returned nullopt after save" << std::endl;
+            loaded = btquant::ui::ThemeEditor::Snapshot{};
+        }
+
+        // Bitwise round-trip via equals() (1e-4 tolerance).
+        if (btquant::ui::ThemeEditor::equals(orig, *loaded)) {
+            std::cout << "✓ equals(orig, loaded) → full fidelity (1e-4 tol)" << std::endl;
+        } else {
+            int bi = -1, bk = -1;
+            for (int i = 0; i < btquant::ui::ThemeEditor::kColorCount && bi < 0; ++i) {
+                for (int k = 0; k < 4; ++k) {
+                    if (std::abs(orig.colors[i][k] - loaded->colors[i][k]) > 1e-4f) {
+                        bi = i; bk = k; break;
+                    }
+                }
+            }
+            std::cout << "✗ round-trip drifted at color[" << bi << "][" << bk
+                      << "] orig=" << (bi>=0?orig.colors[bi][bk]:0)
+                      << " loaded=" << (bi>=0?loaded->colors[bi][bk]:0)
+                      << std::endl;
+        }
+
+        // Mutate, save again, reload → equality with the new version.
+        orig.windowPadding = 22.0f;
+        orig.alpha = 0.42f;
+        orig.colors[10][0] = 0.999f;
+        btquant::ui::ThemeIO::save(tmpFile, orig);
+        loaded = btquant::ui::ThemeIO::load(tmpFile);
+        if (loaded.has_value() &&
+            std::abs(loaded->windowPadding - 22.0f) < 1e-3 &&
+            std::abs(loaded->alpha         - 0.42f) < 1e-3 &&
+            std::abs(loaded->colors[10][0] - 0.999f) < 1e-3) {
+            std::cout << "✓ re-save / re-load picks up mutations" << std::endl;
+        } else {
+            std::cout << "✗ re-save / re-load broken" << std::endl;
+        }
+
+        // Malformed file → loader skips bad lines, returns what it can.
+        {
+            std::ofstream bad(tmpFile, std::ios::trunc);
+            bad << "not_a_valid_key=foo\n";
+            bad << "c3.1=0.7\n";   // valid
+            bad << "alpha=0.55\n";   // valid
+            bad << "### corrupted data ###\n";
+        }
+        auto partial = btquant::ui::ThemeIO::load(tmpFile);
+        if (partial.has_value() &&
+            std::abs(partial->alpha - 0.55f) < 1e-3 &&
+            std::abs(partial->colors[3][1] - 0.7f) < 1e-3) {
+            std::cout << "✓ loader skips malformed lines, keeps valid ones" << std::endl;
+        } else {
+            std::cout << "✗ malformed-file recovery failed" << std::endl;
+        }
+
+        fs::remove(tmpFile, ec);
     }
 
     return 0;

@@ -22058,5 +22058,68 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 189: sharpeTrendBySymbol/ByTag (Sprint #203).
+    //
+    // Sharpe trend slope. Tests:
+    //   - BTC 4 fills [+100, -50, +200, +100] window=2,
+    //     3 Sharpe points. Last N=3 → slope fit.
+    std::cout << "\nTest 189: Sharpe trend slope..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test189_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 4 fills ----
+        {
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + 1));
+            j.append(mkFill("BTC",  200.0, t0 + 2));
+            j.append(mkFill("BTC",  100.0, t0 + 3));
+            auto btcT = j.sharpeTrendBySymbol("BTC", 2, 3);
+            if (btcT.sampleCount == 3 &&
+                btcT.rSquared >= 0.0 && btcT.rSquared <= 1.0) {
+                std::cout << "✓ BTC: slope="
+                          << btcT.slope
+                          << " R²=" << btcT.rSquared
+                          << " samples="
+                          << btcT.sampleCount
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: count="
+                          << btcT.sampleCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " sharpe-trend tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

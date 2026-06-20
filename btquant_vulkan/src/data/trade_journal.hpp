@@ -2140,6 +2140,27 @@ public:
     allSegmentDDStreakStatsByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment Sharpe trend slope (Sprint #203). OLS
+    // slope of the rolling Sharpe series over its last N
+    // windows. Positive = edge improving, negative = edge
+    // declining. Answers "is my Sharpe trending up?"
+    struct SharpeTrend {
+        std::string segment;
+        double      slope       = 0.0;   // per-window Sharpe units
+        double      intercept   = 0.0;   // Sharpe at window 0
+        double      rSquared     = 0.0;  // 0..1 fit quality
+        size_t      sampleCount  = 0;
+    };
+    SharpeTrend sharpeTrendBySymbol(
+        const std::string& symbol,
+        size_t window = 30,
+        size_t lastN = 30) const;
+    SharpeTrend sharpeTrendByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t window = 30,
+        size_t lastN = 30) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

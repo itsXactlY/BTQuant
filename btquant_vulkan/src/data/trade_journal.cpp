@@ -8619,4 +8619,63 @@ TradeJournal::allSegmentDDStreakStatsByTag(
     return out;
 }
 
+namespace {
+// Sprint #203 — Sharpe trend slope via OLS.
+// Take last `lastN` points from rolling Sharpe series,
+// fit a line y = slope*x + intercept, return slope +
+// intercept + R².
+template <typename Series>
+TradeJournal::SharpeTrend
+buildSharpeTrend(const std::string& segment,
+                  const Series& series,
+                  size_t lastN) {
+    TradeJournal::SharpeTrend t;
+    t.segment = segment;
+    if (series.empty()) return t;
+    // Take the last lastN points.
+    size_t start = series.size() > lastN
+                  ? series.size() - lastN : 0;
+    size_t n = series.size() - start;
+    t.sampleCount = n;
+    if (n < 2) return t;
+    double meanX = 0.0, meanY = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        meanX += static_cast<double>(i);
+        meanY += series[start + i].sharpe;
+    }
+    meanX /= static_cast<double>(n);
+    meanY /= static_cast<double>(n);
+    double cov = 0.0, varX = 0.0, varY = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        double dx = static_cast<double>(i) - meanX;
+        double dy = series[start + i].sharpe - meanY;
+        cov += dx * dy;
+        varX += dx * dx;
+        varY += dy * dy;
+    }
+    if (varX < 1e-12) return t;
+    t.slope = cov / varX;
+    t.intercept = meanY - t.slope * meanX;
+    t.rSquared = (varY > 1e-12)
+        ? (cov * cov) / (varX * varY) : 0.0;
+    return t;
+}
+}  // namespace
+
+TradeJournal::SharpeTrend
+TradeJournal::sharpeTrendBySymbol(
+    const std::string& symbol, size_t window, size_t lastN) const {
+    auto series = rollingWindowSharpeBySymbol(symbol, window);
+    return buildSharpeTrend(symbol, series, lastN);
+}
+
+TradeJournal::SharpeTrend
+TradeJournal::sharpeTrendByTag(
+    const std::string& tag, bool includeUntagged,
+    size_t window, size_t lastN) const {
+    auto series = rollingWindowSharpeByTag(tag, includeUntagged,
+        window);
+    return buildSharpeTrend(tag, series, lastN);
+}
+
 } // namespace btquant

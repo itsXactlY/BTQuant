@@ -10,6 +10,8 @@
 
 // MarketDataProcessor is declared in btquant:: namespace (not btquant::ui).
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
+#include "../util/hotkey_config.hpp"
+
 namespace btquant { class MarketDataProcessor; }
 namespace btquant { class PositionBook; }
 namespace btquant { class RiskGuard; }
@@ -151,6 +153,10 @@ public:
     void showRiskLimitsWindow();
     void showMiniPriceChartWindow();
     void showHotkeyEditorWindow();
+    // Run the side-effect for a triggered action — single source of
+    // truth for non-toggle hotkeys (toggles go through the kHotkeys
+    // table member pointers).
+    void dispatchAction(::btquant::util::HotkeyAction a);
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 

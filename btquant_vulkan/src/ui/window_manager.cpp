@@ -425,27 +425,25 @@ void WindowManager::processHotkeys(void* glfwWindow) {
     ImGuiIO& io = ImGui::GetIO();
     bool textFieldFocus = io.WantCaptureKeyboard && io.WantTextInput;
 
-    // F2..F12 toggle widgets (key defaults; user can remap via
-    // ~/.config/btquant_vulkan/hotkeys.ini). Edge-triggered: fire only on
-    // the rising edge (key was up last frame, is down now) so holding the
-    // key down doesn't rapidly retoggle the widget.
-    constexpr size_t kNumHotkeys = sizeof(kHotkeys) / sizeof(kHotkeys[0]);
-    static bool prevPressed[kNumHotkeys] = {};
-    bool currPressed[kNumHotkeys];
+    // Live modifier snapshot — used by every per-action edge-trigger
+    // check below.
     bool ctrlDown  = glfwGetKey(win, GLFW_KEY_LEFT_CONTROL)  == GLFW_PRESS ||
                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
     bool shiftDown = glfwGetKey(win, GLFW_KEY_LEFT_SHIFT)    == GLFW_PRESS ||
                      glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT)   == GLFW_PRESS;
+
+    // F2..F12 toggle widgets — separate table because they toggle
+    // WindowManager member bools via pointer; consults the map so user
+    // remappings take effect.
+    constexpr size_t kNumHotkeys = sizeof(kHotkeys) / sizeof(kHotkeys[0]);
+    static bool prevPressed[kNumHotkeys] = {};
+    bool currPressed[kNumHotkeys];
     for (size_t i = 0; i < kNumHotkeys; ++i) {
         int boundKey = GLFW_KEY_UNKNOWN;
         if (m_hotkeyMap) {
             int k = m_hotkeyMap->get(kHotkeys[i].action).glfwKey;
             if (k >= 0) boundKey = k;
         }
-        // Skip Ctrl/Shift-required actions when only F-keys are checked —
-        // the table only contains toggle widgets which default to no
-        // modifier, so this branch only fires when the user has bound a
-        // Ctrl/Shift combination to a toggle.
         bool ctrlReq  = m_hotkeyMap && m_hotkeyMap->get(kHotkeys[i].action).ctrl;
         bool shiftReq = m_hotkeyMap && m_hotkeyMap->get(kHotkeys[i].action).shift;
         currPressed[i] = !textFieldFocus && boundKey != GLFW_KEY_UNKNOWN &&
@@ -458,18 +456,6 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         }
         prevPressed[i] = currPressed[i];
     }
-
-    // Ctrl+L — reset layout (also edge-triggered so it fires once).
-    static bool prevCtrlL = false;
-    bool currCtrlL = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_L) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlL && !prevCtrlL) {
-        requestDockLayoutReset();
-        markSettingsDirty();
-    }
-    prevCtrlL = currCtrlL;
 
     // Ctrl+H opens the HotkeyEditor. When the editor is in capture mode,
     // route the next non-modifier keypress to it instead of the regular
@@ -491,182 +477,144 @@ void WindowManager::processHotkeys(void* glfwWindow) {
     // GLFW_KEY_LAST slots so letter, digit, function, arrow and
     // punctuation keys all flow through the same path.
     if (m_hotkeyEditor && m_hotkeyEditor->isOpen()) {
-        // Capture is signalled by isOpen() returning true AND the
-        // editor's internal state. Since we already wired setHotkeyMap,
-        // we can rely on its public API.
         static bool prevCapturedKeys[512] = {};
         for (int key = 32; key < 512; ++key) {
             bool down = glfwGetKey(win, key) == GLFW_PRESS;
-            if (down && !prevCapturedKeys[key]) {
-                // While the editor's window has keyboard focus, only
-                // inject if ImGui isn't claiming the keystroke for a
-                // text field.
-                if (!textFieldFocus) {
-                    m_hotkeyEditor->injectCapture(
-                        key, ctrlDown, shiftDown);
-                    // Mark this key as "consumed" for one frame so we
-                    // don't also dispatch it via the regular path.
-                    prevCapturedKeys[key] = true;
-                    if (m_hotkeyMap) m_hotkeyMap->saveToFile(m_hotkeyPath);
-                    break;
-                }
+            if (down && !prevCapturedKeys[key] && !textFieldFocus) {
+                m_hotkeyEditor->injectCapture(key, ctrlDown, shiftDown);
+                prevCapturedKeys[key] = true;
+                if (m_hotkeyMap) m_hotkeyMap->saveToFile(m_hotkeyPath);
+                break;
             }
             prevCapturedKeys[key] = down;
         }
     }
 
-    // Shift+F1 toggles stats overlay.
-    static bool prevShiftF1 = false;
-    bool currShiftF1 = !textFieldFocus &&
-                       glfwGetKey(win, GLFW_KEY_F1) == GLFW_PRESS &&
-                       (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-                        glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
-    if (currShiftF1 && !prevShiftF1) {
-        showStatsOverlay = !showStatsOverlay;
-        m_statsOverlay.setEnabled(showStatsOverlay);
-        markSettingsDirty();
-    }
-    prevShiftF1 = currShiftF1;
-
-    // ? (Shift+/) toggles the hotkey reference overlay. Suppressed when user
-    // is typing into a text field so search filters work normally.
-    static bool prevQuestionMark = false;
-    bool currQuestionMark = !textFieldFocus &&
-                            glfwGetKey(win, GLFW_KEY_SLASH) == GLFW_PRESS &&
-                            (glfwGetKey(win, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-                             glfwGetKey(win, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
-    if (currQuestionMark && !prevQuestionMark) {
-        showHotkeyHelp = !showHotkeyHelp;
-        markSettingsDirty();
-    }
-    prevQuestionMark = currQuestionMark;
-
-    // Ctrl+P opens the symbol picker modal. Edge-triggered.
-    static bool prevCtrlP = false;
-    bool currCtrlP = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlP && !prevCtrlP) {
-        showSymbolPickerOpen = !showSymbolPickerOpen;
-        if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);
-    }
-    prevCtrlP = currCtrlP;
-
-    // Ctrl+T opens the theme editor modal. Edge-triggered.
-    static bool prevCtrlT = false;
-    bool currCtrlT = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_T) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlT && !prevCtrlT) {
-        showThemeEditorOpen = !showThemeEditorOpen;
-        if (m_themeEditor) m_themeEditor->setOpen(showThemeEditorOpen);
-    }
-    prevCtrlT = currCtrlT;
-
-    // Ctrl+Enter toggles the order ticket. Edge-triggered.
-    static bool prevCtrlEnter = false;
-    bool currCtrlEnter = !textFieldFocus &&
-                         glfwGetKey(win, GLFW_KEY_ENTER) == GLFW_PRESS &&
-                         (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                          glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlEnter && !prevCtrlEnter) {
-        showOrderTicket = !showOrderTicket;
-        if (m_orderTicket) m_orderTicket->setOpen(showOrderTicket);
-        markSettingsDirty();
-    }
-    prevCtrlEnter = currCtrlEnter;
-
-    // Ctrl+B toggles the position panel. Edge-triggered.
-    static bool prevCtrlB = false;
-    bool currCtrlB = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_B) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlB && !prevCtrlB) {
-        showPositionPanel = !showPositionPanel;
-        if (m_positionPanel) m_positionPanel->setOpen(showPositionPanel);
-        markSettingsDirty();
-    }
-    prevCtrlB = currCtrlB;
-
-    // Ctrl+K — manual kill switch: flatten open position at next
-    // snapshot price. Edge-triggered so it fires once per press.
-    static bool prevCtrlK = false;
-    bool currCtrlK = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_K) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlK && !prevCtrlK) {
-        if (m_positionBook && m_positionBook->hasPosition()) {
-            // Use the latest snapshot price (or fall back to mid).
-            double px = 0.0;
-            if (m_marketData) {
-                auto snap = m_marketData->snapshot(1, 0);
-                if (!snap.recent_trades.empty()) {
-                    px = snap.recent_trades.front().price;
-                } else if (snap.order_book.midPrice > 0.0) {
-                    px = snap.order_book.midPrice;
-                }
+    // Map-driven dispatch for everything outside the F-key toggle table
+    // (Ctrl-prefixed actions, Shift-prefixed actions, and any remapping
+    // the user has applied). One pass over the HotkeyMap → one dispatch.
+    // Edge-triggered per action via prevAction[].
+    if (m_hotkeyMap) {
+        using HA = ::btquant::util::HotkeyAction;
+        constexpr int kNumActions = static_cast<int>(HA::COUNT);
+        static bool prevAction[kNumActions] = {};
+        auto rows = m_hotkeyMap->enumerate();
+        for (size_t i = 0; i < rows.size(); ++i) {
+            HA action = rows[i].first;
+            const auto& b = rows[i].second;
+            if (b.glfwKey < 0) continue;     // unbound
+            int idx = static_cast<int>(action);
+            if (idx < 0 || idx >= kNumActions) continue;
+            bool curr = !textFieldFocus &&
+                        glfwGetKey(win, b.glfwKey) == GLFW_PRESS &&
+                        (b.ctrl  ? ctrlDown  : true) &&
+                        (b.shift ? shiftDown : true);
+            if (curr && !prevAction[idx]) {
+                dispatchAction(action);
             }
-            if (px <= 0.0) {
-                BTQ_LOG_WARN("Ctrl+K ignored: no live price available");
-            } else {
-                double realized = m_positionBook->flatten(px);
-                if (m_riskGuard) m_riskGuard->addRealized(realized);
-                if (m_tradeJournal) {
-                    ::btquant::JournalFill jf;
-                    jf.timestamp_us  = std::chrono::duration_cast<std::chrono::microseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
-                    jf.symbol        = m_positionBook->position().symbol;
-                    jf.isLong        = !m_positionBook->position().isLong;  // closing
-                    jf.qty           = m_positionBook->position().size;
-                    jf.price         = px;
-                    jf.realizedDelta = realized;
-                    m_tradeJournal->append(jf);
-                }
-                BTQ_LOG_WARN("KILL SWITCH (Ctrl+K): flattened %s at $%.2f, "
-                             "realized %s$%.2f, session P&L %s$%.2f",
-                             m_positionBook->position().symbol.c_str(),
-                             px,
-                             realized >= 0 ? "+" : "", realized,
-                             (m_riskGuard ? m_riskGuard->sessionRealized() : 0.0)
-                                >= 0 ? "+" : "",
-                             m_riskGuard ? m_riskGuard->sessionRealized() : 0.0);
-            }
-        } else {
-            BTQ_LOG_INFO("Ctrl+K: no open position to flatten");
+            prevAction[idx] = curr;
         }
     }
-    prevCtrlK = currCtrlK;
-
-    // Ctrl+R toggles the Risk Dashboard. Edge-triggered.
-    static bool prevCtrlR = false;
-    bool currCtrlR = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlR && !prevCtrlR) {
-        showRiskLimits = !showRiskLimits;
-        if (m_riskLimitsPanel) m_riskLimitsPanel->setOpen(showRiskLimits);
-        markSettingsDirty();
-    }
-    prevCtrlR = currCtrlR;
-
-    // Ctrl+M toggles the Mini Price Chart. Edge-triggered.
-    static bool prevCtrlM = false;
-    bool currCtrlM = !textFieldFocus &&
-                     glfwGetKey(win, GLFW_KEY_M) == GLFW_PRESS &&
-                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    if (currCtrlM && !prevCtrlM) {
-        showMiniPriceChart = !showMiniPriceChart;
-        if (m_miniPriceChart) m_miniPriceChart->setOpen(showMiniPriceChart);
-        markSettingsDirty();
-    }
-    prevCtrlM = currCtrlM;
 #endif // BTQUANT_USE_GLFW
+}
+
+void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
+    using HA = ::btquant::util::HotkeyAction;
+    switch (a) {
+        case HA::ResetLayout:
+            requestDockLayoutReset();
+            markSettingsDirty();
+            break;
+        case HA::OpenSymbolPicker:
+            showSymbolPickerOpen = !showSymbolPickerOpen;
+            if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);
+            markSettingsDirty();
+            break;
+        case HA::OpenThemeEditor:
+            showThemeEditorOpen = !showThemeEditorOpen;
+            if (m_themeEditor) m_themeEditor->setOpen(showThemeEditorOpen);
+            markSettingsDirty();
+            break;
+        case HA::ToggleOrderTicket:
+            showOrderTicket = !showOrderTicket;
+            if (m_orderTicket) m_orderTicket->setOpen(showOrderTicket);
+            markSettingsDirty();
+            break;
+        case HA::TogglePositionPanel:
+            showPositionPanel = !showPositionPanel;
+            if (m_positionPanel) m_positionPanel->setOpen(showPositionPanel);
+            markSettingsDirty();
+            break;
+        case HA::ToggleRiskLimits:
+            showRiskLimits = !showRiskLimits;
+            if (m_riskLimitsPanel) m_riskLimitsPanel->setOpen(showRiskLimits);
+            markSettingsDirty();
+            break;
+        case HA::ToggleMiniPriceChart:
+            showMiniPriceChart = !showMiniPriceChart;
+            if (m_miniPriceChart) m_miniPriceChart->setOpen(showMiniPriceChart);
+            markSettingsDirty();
+            break;
+        case HA::ToggleStats:
+            showStatsOverlay = !showStatsOverlay;
+            m_statsOverlay.setEnabled(showStatsOverlay);
+            markSettingsDirty();
+            break;
+        case HA::ToggleHotkeyHelp:
+            showHotkeyHelp = !showHotkeyHelp;
+            markSettingsDirty();
+            break;
+        case HA::ToggleHotkeyEditor:
+            if (m_hotkeyEditor) m_hotkeyEditor->toggleOpen();
+            if (m_hotkeyEditor) m_hotkeyEditorOpen = m_hotkeyEditor->isOpen();
+            markSettingsDirty();
+            break;
+        case HA::KillSwitch:
+            if (m_positionBook && m_positionBook->hasPosition()) {
+                double px = 0.0;
+                if (m_marketData) {
+                    auto snap = m_marketData->snapshot(1, 0);
+                    if (!snap.recent_trades.empty()) {
+                        px = snap.recent_trades.front().price;
+                    } else if (snap.order_book.midPrice > 0.0) {
+                        px = snap.order_book.midPrice;
+                    }
+                }
+                if (px <= 0.0) {
+                    BTQ_LOG_WARN("KillSwitch ignored: no live price available");
+                } else {
+                    double realized = m_positionBook->flatten(px);
+                    if (m_riskGuard) m_riskGuard->addRealized(realized);
+                    if (m_tradeJournal) {
+                        ::btquant::JournalFill jf;
+                        jf.timestamp_us  = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+                        jf.symbol        = m_positionBook->position().symbol;
+                        jf.isLong        = !m_positionBook->position().isLong;
+                        jf.qty           = m_positionBook->position().size;
+                        jf.price         = px;
+                        jf.realizedDelta = realized;
+                        m_tradeJournal->append(jf);
+                    }
+                    BTQ_LOG_WARN("KILL SWITCH: flattened %s at $%.2f, "
+                                 "realized %s$%.2f, session P&L %s$%.2f",
+                                 m_positionBook->position().symbol.c_str(),
+                                 px,
+                                 realized >= 0 ? "+" : "", realized,
+                                 (m_riskGuard ? m_riskGuard->sessionRealized() : 0.0)
+                                    >= 0 ? "+" : "",
+                                 m_riskGuard ? m_riskGuard->sessionRealized() : 0.0);
+                }
+            } else {
+                BTQ_LOG_INFO("KillSwitch: no open position to flatten");
+            }
+            break;
+        // F2..F12 toggle widgets are dispatched by the kHotkeys table
+        // loop (uses member pointers); dispatchAction is not called for
+        // those — they never reach here.
+        default:
+            break;
+    }
 }
 
 void WindowManager::renderStatsOverlay(uint64_t tradeQueueDepth,
@@ -905,7 +853,9 @@ void WindowManager::showHotkeyHelpWindow() {
     }
 
     ImGui::TextWrapped("Global shortcuts. Hotkeys are suppressed while typing into a "
-                       "text field so search bars stay usable.");
+                       "text field so search bars stay usable. The table reflects your "
+                       "current binding layout from ~/.config/btquant_vulkan/hotkeys.ini "
+                       "— open the Hotkey Editor (Ctrl+H) to remap.");
     ImGui::Separator();
 
     if (ImGui::BeginTable("hotkeys", 2, ImGuiTableFlags_RowBg)) {
@@ -913,39 +863,46 @@ void WindowManager::showHotkeyHelpWindow() {
         ImGui::TableSetupColumn("Action");
         ImGui::TableHeadersRow();
 
-        auto row = [](const char* key, const char* action) {
+        // Reflect the user's current binding map, not the hardcoded
+        // defaults — if they've remapped F2 → F3, the help window
+        // shows F3.
+        auto display = [&](::btquant::util::HotkeyAction a, const char* desc) {
+            std::string keyStr = "(unbound)";
+            if (m_hotkeyMap && m_hotkeyMap->has(a)) {
+                keyStr = m_hotkeyMap->get(a).label();
+            }
             ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(key);
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(action);
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(keyStr.c_str());
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(desc);
         };
-
-        row("F2",       "Toggle Order Book");
-        row("F3",       "Toggle Order Book Depth");
-        row("F4",       "Toggle DOM");
-        row("F5",       "Toggle Trades");
-        row("F6",       "Toggle TPO");
-        row("F7",       "Toggle Footprint");
-        row("F8",       "Toggle VPVR");
-        row("F9",       "Toggle Alerts");
-        row("F10",      "Toggle Multi VWAP");
-        row("F11",      "Toggle Risk Panel");
-        row("F12",      "Toggle Settings window");
-        row("Shift+F1", "Toggle Stats overlay");
-        row("?",        "Toggle this Hotkey Reference");
-        row("Ctrl+L",   "Reset docking layout");
-        row("Ctrl+P",   "Open Symbol Picker");
-        row("Ctrl+T",   "Open Theme Editor");
-        row("Ctrl+Enter", "Toggle Order Ticket");
-        row("Ctrl+B",   "Toggle Position Panel");
-        row("Ctrl+R",   "Toggle Risk Dashboard");
-        row("Ctrl+M",   "Toggle Mini Price Chart");
-        row("Ctrl+K",   "Kill switch — flatten open position at market");
-        row("ESC",      "Close topmost popup / window");
+        using HA = ::btquant::util::HotkeyAction;
+        display(HA::ToggleOrderBook,        "Toggle Order Book");
+        display(HA::ToggleOrderBookDepth,   "Toggle Order Book Depth");
+        display(HA::ToggleDOM,              "Toggle DOM");
+        display(HA::ToggleTrades,           "Toggle Trades");
+        display(HA::ToggleTPO,              "Toggle TPO");
+        display(HA::ToggleFootprint,        "Toggle Footprint");
+        display(HA::ToggleVPVR,             "Toggle VPVR");
+        display(HA::ToggleAlerts,           "Toggle Alerts");
+        display(HA::ToggleMultiVWAP,        "Toggle Multi VWAP");
+        display(HA::ToggleRiskPanel,        "Toggle Risk Panel");
+        display(HA::ToggleSettings,         "Toggle Settings window");
+        display(HA::ToggleStats,            "Toggle Stats overlay");
+        display(HA::ToggleHotkeyHelp,       "Toggle this Hotkey Reference");
+        display(HA::ResetLayout,            "Reset docking layout");
+        display(HA::OpenSymbolPicker,       "Open Symbol Picker");
+        display(HA::OpenThemeEditor,        "Open Theme Editor");
+        display(HA::ToggleOrderTicket,      "Toggle Order Ticket");
+        display(HA::TogglePositionPanel,    "Toggle Position Panel");
+        display(HA::ToggleRiskLimits,       "Toggle Risk Dashboard");
+        display(HA::ToggleMiniPriceChart,   "Toggle Mini Price Chart");
+        display(HA::ToggleHotkeyEditor,     "Open Hotkey Editor (remap bindings)");
+        display(HA::KillSwitch,             "Kill switch — flatten open position at market");
 
         ImGui::EndTable();
     }
-
     ImGui::Separator();
+    ImGui::TextDisabled("ESC: close topmost popup / window");
     if (ImGui::Button("Close")) showHotkeyHelp = false;
     ImGui::End();
 }

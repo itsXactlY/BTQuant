@@ -2221,5 +2221,79 @@ int main() {
         }
     }
 
+    // Test 30: Hotkey remap → re-loaded map has new bindings reflected.
+    std::cout << "\nTest 30: Testing hotkey remap propagation..." << std::endl;
+    {
+        using btquant::util::HotkeyMap;
+        using btquant::util::HotkeyAction;
+
+        // 1) Simulate the user opening the editor, remapping
+        //    ToggleOrderBook F2 → F3, then saving and reloading.
+        HotkeyMap live = HotkeyMap::defaults();
+        live.set(HotkeyAction::ToggleOrderBook, {GLFW_KEY_F3, false, false});
+
+        namespace fs = std::filesystem;
+        fs::path remapPath = fs::temp_directory_path() /
+                             "btquant_test_hotkey_remap" / "hotkeys.ini";
+        fs::create_directories(remapPath.parent_path());
+        if (live.saveToFile(remapPath.string())) {
+            std::cout << "✓ remap saved" << std::endl;
+        } else {
+            std::cout << "✗ save failed" << std::endl;
+        }
+        auto reloaded = HotkeyMap::loadFromFile(remapPath.string());
+        if (reloaded.has_value() &&
+            reloaded->get(HotkeyAction::ToggleOrderBook).glfwKey == GLFW_KEY_F3) {
+            std::cout << "✓ reloaded map reflects F2→F3 remap" << std::endl;
+        } else {
+            std::cout << "✗ reloaded map didn't pick up remap" << std::endl;
+        }
+
+        // 2) match() against the reloaded map returns ToggleOrderBook
+        //    for F3 (not F2).
+        if (reloaded.has_value() &&
+            reloaded->match(GLFW_KEY_F3, false, false) ==
+                HotkeyAction::ToggleOrderBook &&
+            reloaded->match(GLFW_KEY_F2, false, false) ==
+                HotkeyAction::COUNT /*no longer bound*/) {
+            std::cout << "✓ match() follows remap" << std::endl;
+        } else {
+            std::cout << "✗ match() didn't follow remap" << std::endl;
+        }
+
+        // 3) Ctrl+L still works on the reloaded map (unchanged).
+        if (reloaded.has_value() &&
+            reloaded->match(GLFW_KEY_L, true, false) ==
+                HotkeyAction::ResetLayout) {
+            std::cout << "✓ unchanged bindings survive reload"
+                      << std::endl;
+        } else {
+            std::cout << "✗ unchanged bindings lost" << std::endl;
+        }
+
+        // 4) Ctrl+K still binds to K+Ctrl even after a different
+        //    action was remapped.
+        if (reloaded.has_value() &&
+            reloaded->match(GLFW_KEY_K, true, false) ==
+                HotkeyAction::KillSwitch) {
+            std::cout << "✓ KillSwitch binding intact" << std::endl;
+        } else {
+            std::cout << "✗ KillSwitch binding corrupted" << std::endl;
+        }
+
+        // 5) Remap to a letter — Ctrl+Shift+P → Ctrl+Shift+K
+        live.set(HotkeyAction::OpenSymbolPicker,
+                 {GLFW_KEY_K, true, true});
+        live.saveToFile(remapPath.string());
+        auto after2 = HotkeyMap::loadFromFile(remapPath.string());
+        if (after2.has_value() &&
+            after2->get(HotkeyAction::OpenSymbolPicker) ==
+                ::btquant::util::HotkeyBinding{GLFW_KEY_K, true, true}) {
+            std::cout << "✓ remap to letter persists" << std::endl;
+        } else {
+            std::cout << "✗ remap to letter lost" << std::endl;
+        }
+    }
+
     return 0;
 }

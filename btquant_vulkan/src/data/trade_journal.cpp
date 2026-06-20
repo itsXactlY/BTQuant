@@ -155,6 +155,60 @@ bool TradeJournal::append(const JournalFill& r) {
     }
 }
 
+namespace {
+// Atomic rewrite of the journal. Writes every fill to
+// "<path>.tmp" then renames over the original. The rename is
+// atomic on POSIX (and on Windows with ReplaceFile semantics on
+// modern toolchains), so a crash mid-write leaves the original
+// file untouched.
+bool rewriteAll(const std::string& path,
+                const std::vector<JournalFill>& fills) {
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) fs::create_directories(p.parent_path());
+        std::string tmp = path + ".tmp";
+        {
+            std::ofstream out(tmp, std::ios::trunc);
+            if (!out.is_open()) return false;
+            for (const auto& f : fills) {
+                out << TradeJournal::toJsonLine(f) << "\n";
+            }
+            out.flush();
+            if (!out.good()) return false;
+        }
+        // atomic rename (overwrite existing file on POSIX)
+        fs::rename(tmp, path);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+}  // namespace
+
+bool TradeJournal::setTagAt(size_t index, const std::string& newTag) {
+    std::vector<JournalFill> fills = loadAll();
+    if (index >= fills.size()) return false;
+    fills[index].tag = newTag;
+    return rewriteAll(m_path, fills);
+}
+
+bool TradeJournal::setTagByTimestamp(uint64_t timestamp_us,
+                                      const std::string& symbol,
+                                      const std::string& newTag) {
+    std::vector<JournalFill> fills = loadAll();
+    bool found = false;
+    for (auto& f : fills) {
+        if (f.timestamp_us == timestamp_us && f.symbol == symbol) {
+            f.tag = newTag;
+            found = true;
+            break;
+        }
+    }
+    if (!found) return false;
+    return rewriteAll(m_path, fills);
+}
+
 std::string TradeJournal::toJsonLine(const JournalFill& r) {
     char buf[1024];
     // Booleans serialize as true/false barewords; numbers as JSON numbers.

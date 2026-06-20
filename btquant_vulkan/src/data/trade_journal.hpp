@@ -96,6 +96,32 @@ public:
     std::vector<JournalFill> loadByTag(const std::string& tag,
                                         bool includeUntagged = false) const;
 
+    // ---- Post-hoc fill editing (Sprint #62) ----
+    //
+    // The journal is conceptually append-only, but in practice the
+    // trader occasionally mistypes a tag (e.g. "scaler-1" instead
+    // of "scalper-1") and wants to correct it without losing the
+    // rest of the session. These methods rewrite the journal file
+    // atomically (write to .tmp, rename) so a crash mid-edit doesn't
+    // corrupt the file.
+    //
+    // setTagAt(index, newTag) — edit by 0-based index in loadAll()
+    //   order. Out-of-range indices return false; the file is left
+    //   untouched.
+    //
+    // setTagByTimestamp(ts, sym, newTag) — find the first fill
+    //   whose timestamp_us and symbol match, then edit. Returns
+    //   false if no match (caller logs / surfaces to UI).
+    //
+    // Both methods are O(N) — load + modify + rewrite. Fine for
+    // typical session sizes (hundreds to low-thousands of fills).
+
+    bool setTagAt(size_t index, const std::string& newTag);
+
+    bool setTagByTimestamp(uint64_t timestamp_us,
+                           const std::string& symbol,
+                           const std::string& newTag);
+
 private:
     std::string m_path;
 };

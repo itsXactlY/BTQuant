@@ -6361,5 +6361,214 @@ int main() {
         }
     }
 
+    // Test 66: TradeJournal — post-hoc tag editing (Sprint #62).
+    // The journal is conceptually append-only, but in practice the
+    // trader occasionally mistypes a tag (e.g. "scaler-1" instead
+    // of "scalper-1") and wants to correct it without losing the
+    // rest of the session. setTagAt() edits by index;
+    // setTagByTimestamp() finds the first matching fill and edits.
+    // Both rewrite the journal file atomically (write to .tmp, rename).
+    std::cout << "\nTest 66: Testing TradeJournal post-hoc tag editing..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_t66_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        std::string jPath = (tmpDir / "journal.jsonl").string();
+
+        // Helper: build a journal with N fills, distinct timestamps.
+        auto seedJournal = [&](int n) {
+            // Clear any leftover from previous sub-tests so each
+            // sub-test starts from a known-empty file.
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            fs::remove(jPath + ".tmp", ec);
+            TradeJournal j(jPath);
+            for (int i = 0; i < n; ++i) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + static_cast<uint64_t>(i);
+                f.symbol        = (i % 2 == 0) ? "BTCUSDT" : "ETHUSDT";
+                f.isLong        = (i % 3 == 0);
+                f.qty           = 0.1 * (i + 1);
+                f.price         = 100.0 + i;
+                f.realizedDelta = (i % 5 == 0) ? -10.0 : 5.0;
+                f.tag           = (i % 4 == 0) ? "scalper-1"
+                                                : "untagged";
+                j.append(f);
+            }
+            return j;
+        };
+
+        // 1) setTagAt on a fresh journal modifies the right line.
+        {
+            seedJournal(5);
+            TradeJournal j(jPath);
+            bool ok = j.setTagAt(2, "FIXED");
+            if (ok) {
+                auto all = j.loadAll();
+                if (all.size() == 5 && all[2].tag == "FIXED" &&
+                    all[0].tag == "scalper-1" && all[4].tag == "scalper-1") {
+                    std::cout << "✓ setTagAt(2) modifies only line 2"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ setTagAt(2) wrong edit"
+                              << std::endl;
+                }
+            } else {
+                std::cout << "✗ setTagAt(2) returned false" << std::endl;
+            }
+        }
+
+        // 2) setTagAt out-of-range returns false, file untouched.
+        {
+            seedJournal(3);
+            TradeJournal j(jPath);
+            // Snapshot before
+            auto before = j.loadAll();
+            bool ok = j.setTagAt(99, "BAD");
+            if (!ok) {
+                auto after = j.loadAll();
+                if (after.size() == before.size() &&
+                    after[0].tag == before[0].tag &&
+                    after[1].tag == before[1].tag &&
+                    after[2].tag == before[2].tag) {
+                    std::cout << "✓ out-of-range setTagAt returns "
+                                 "false, file untouched"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ out-of-range modified file"
+                              << std::endl;
+                }
+            } else {
+                std::cout << "✗ out-of-range returned true" << std::endl;
+            }
+        }
+
+        // 3) setTagByTimestamp finds by ts + symbol.
+        {
+            seedJournal(6);
+            TradeJournal j(jPath);
+            // Find the first ETHUSDT (i=1 in our seed loop → ts=1000001)
+            bool ok = j.setTagByTimestamp(1000001ULL, "ETHUSDT",
+                                          "ETH-strategy");
+            if (ok) {
+                auto all = j.loadAll();
+                // i=1 was ETHUSDT with tag "untagged"
+                if (all[1].tag == "ETH-strategy") {
+                    std::cout << "✓ setTagByTimestamp finds and "
+                                 "edits by ts+symbol"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ wrong row edited" << std::endl;
+                }
+            } else {
+                std::cout << "✗ setTagByTimestamp returned false"
+                          << std::endl;
+            }
+        }
+
+        // 4) setTagByTimestamp not-found returns false.
+        {
+            seedJournal(3);
+            TradeJournal j(jPath);
+            bool ok = j.setTagByTimestamp(9999999ULL, "BTCUSDT",
+                                          "WILL-NOT-WRITE");
+            if (!ok) {
+                auto all = j.loadAll();
+                bool clean = true;
+                for (const auto& f : all) {
+                    if (f.tag == "WILL-NOT-WRITE") clean = false;
+                }
+                if (clean) {
+                    std::cout << "✓ not-found returns false, file untouched"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ not-found polluted file" << std::endl;
+                }
+            } else {
+                std::cout << "✗ not-found returned true" << std::endl;
+            }
+        }
+
+        // 5) Atomic rewrite leaves no .tmp on success.
+        {
+            seedJournal(4);
+            TradeJournal j(jPath);
+            j.setTagAt(0, "ATOMIC");
+            std::string tmpPath = jPath + ".tmp";
+            if (!fs::exists(tmpPath)) {
+                std::cout << "✓ atomic rewrite: no .tmp leftover"
+                          << std::endl;
+            } else {
+                std::cout << "✗ .tmp leftover after success" << std::endl;
+                fs::remove(tmpPath);
+            }
+        }
+
+        // 6) Edits persist across reload (re-open the journal).
+        {
+            seedJournal(5);
+            {
+                TradeJournal j(jPath);
+                j.setTagAt(3, "PERSISTED");
+            }
+            // Re-open and verify the edit survived.
+            TradeJournal j2(jPath);
+            auto all = j2.loadAll();
+            if (all[3].tag == "PERSISTED") {
+                std::cout << "✓ edit persists across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ edit didn't persist" << std::endl;
+            }
+        }
+
+        // 7) Empty journal: setTagAt returns false, setTagByTimestamp
+        //    returns false.
+        {
+            // Build an empty journal (no appends). Use the helper
+            // with N=0 so the file is cleaned first.
+            seedJournal(0);
+            TradeJournal j(jPath);
+            bool ok1 = j.setTagAt(0, "X");
+            bool ok2 = j.setTagByTimestamp(0, "X", "Y");
+            if (!ok1 && !ok2) {
+                std::cout << "✓ empty journal: both edits return false"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty journal: ok1=" << ok1
+                          << " ok2=" << ok2 << std::endl;
+            }
+        }
+
+        // 8) Original fill fields preserved (only tag changes).
+        {
+            seedJournal(4);
+            TradeJournal j(jPath);
+            auto before = j.loadAll();
+            JournalFill snapshot = before[1];  // copy for comparison
+            j.setTagAt(1, "TAG-CHANGED");
+            auto after = j.loadAll();
+            if (after[1].timestamp_us == snapshot.timestamp_us &&
+                after[1].symbol       == snapshot.symbol &&
+                after[1].isLong       == snapshot.isLong &&
+                std::fabs(after[1].qty           - snapshot.qty)           < 1e-12 &&
+                std::fabs(after[1].price         - snapshot.price)         < 1e-12 &&
+                std::fabs(after[1].realizedDelta - snapshot.realizedDelta) < 1e-12 &&
+                after[1].tag          == "TAG-CHANGED") {
+                std::cout << "✓ only tag changes; other fields preserved"
+                          << std::endl;
+            } else {
+                std::cout << "✗ other fields changed" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

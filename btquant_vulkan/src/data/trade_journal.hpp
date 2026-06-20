@@ -2081,6 +2081,22 @@ public:
         bool includeUntagged = false,
         double ruinFraction = 0.5) const;
 
+    // Per-segment recovery-time stats (Sprint #198).
+    // For each segment, return max/avg/min DD recovery
+    // time in days across all completed drawdowns.
+    struct RecoveryTimeStats {
+        std::string segment;
+        double      maxRecoveryDays   = 0.0;
+        double      avgRecoveryDays   = 0.0;
+        double      minRecoveryDays   = 0.0;
+        size_t      completedDDCount = 0;
+    };
+    RecoveryTimeStats recoveryTimeStatsBySymbol(
+        const std::string& symbol) const;
+    RecoveryTimeStats recoveryTimeStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

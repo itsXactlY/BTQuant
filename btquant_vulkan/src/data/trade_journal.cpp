@@ -8391,4 +8391,60 @@ TradeJournal::riskOfRuinByTag(
     return r;
 }
 
+namespace {
+// Sprint #198 — per-segment recovery time stats builder.
+// For each completed DD, compute its recovery time
+// (in days) and aggregate max/avg/min.
+template <typename Pred>
+TradeJournal::RecoveryTimeStats
+buildRecoveryTimeStatsBySegment(
+    const std::vector<TradeJournal::DrawdownEvent>& events,
+    Pred pred) {
+    TradeJournal::RecoveryTimeStats s;
+    double sum = 0.0, mx = 0.0, mn = 1e18;
+    size_t count = 0;
+    for (const auto& e : events) {
+        if (!pred(e)) continue;
+        if (e.recovery_us == 0) continue;
+        double days = static_cast<double>(e.recovery_us) /
+                      (86400.0 * 1000000.0);
+        if (days > mx) mx = days;
+        if (days < mn) mn = days;
+        sum += days;
+        ++count;
+    }
+    if (count > 0) {
+        s.completedDDCount = count;
+        s.maxRecoveryDays = mx;
+        s.avgRecoveryDays = sum / static_cast<double>(count);
+        s.minRecoveryDays = mn;
+    }
+    return s;
+}
+}  // namespace
+
+TradeJournal::RecoveryTimeStats
+TradeJournal::recoveryTimeStatsBySymbol(
+    const std::string& symbol) const {
+    auto events = drawdownRecoveriesBySymbol(symbol);
+    auto s = buildRecoveryTimeStatsBySegment(events,
+        [](const TradeJournal::DrawdownEvent&) {
+            return true;
+        });
+    s.segment = symbol;
+    return s;
+}
+
+TradeJournal::RecoveryTimeStats
+TradeJournal::recoveryTimeStatsByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto events = drawdownRecoveriesByTag(tag, includeUntagged);
+    auto s = buildRecoveryTimeStatsBySegment(events,
+        [](const TradeJournal::DrawdownEvent&) {
+            return true;
+        });
+    s.segment = tag;
+    return s;
+}
+
 } // namespace btquant

@@ -179,6 +179,29 @@ void JournalStatsPanel::render() {
     // "∞" rather than "inf" to fit the visual style of the panel.
     auto st = m_journal->stats();
     ImGui::Separator();
+
+    // ---- Tabbed UI (Sprint #108) ----
+    //
+    // 4 tabs replace the flat list of CollapsingHeaders:
+    //   Overview  — meta stats (Stats / Risk / Streaks /
+    //               Risk-Adjusted). Answers "how am I doing?"
+    //   By Symbol — by-symbol + per-symbol risk + per-symbol
+    //               risk-adjusted. Answers "which symbols?"
+    //   By Tag    — by-tag + per-tag risk + per-tag
+    //               risk-adjusted. Answers "which strategies?"
+    //   Calendar  — by-day + "When I trade" tables (DOW +
+    //               HourOfDay). Answers "when do I trade?"
+    //
+    // Active tab persists across frames via m_activeTab so the
+    // trader's tab choice survives panel collapse + reopen.
+    if (ImGui::BeginTabBar("JournalStatsTabs",
+                           ImGuiTabBarFlags_None)) {
+        if (ImGui::BeginTabItem("Overview",
+                                nullptr,
+                                m_activeTab == Tab::Overview
+                                    ? ImGuiTabItemFlags_SetSelected
+                                    : ImGuiTabItemFlags_None)) {
+            m_activeTab = Tab::Overview;
     if (ImGui::CollapsingHeader("Stats",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
         if (st.roundTripCount == 0) {
@@ -715,6 +738,17 @@ void JournalStatsPanel::render() {
     }
 
     ImGui::Separator();
+    // End of Overview tab.
+    ImGui::EndTabItem();
+    }   // End Overview BeginTabItem
+
+        // ---- Tab 2: Breakdowns (per-axis + per-day tables) ----
+        if (ImGui::BeginTabItem("Breakdowns",
+                                nullptr,
+                                m_activeTab == Tab::BySymbol
+                                    ? ImGuiTabItemFlags_SetSelected
+                                    : ImGuiTabItemFlags_None)) {
+            m_activeTab = Tab::BySymbol;
 
     // ---- By-symbol table (Sprint #72 + Sprint #87) ----
     //
@@ -1745,6 +1779,38 @@ void JournalStatsPanel::render() {
         }
     }
 
+    ImGui::Separator();
+    // End of Breakdowns tab.
+    ImGui::EndTabItem();
+    }   // End Breakdowns BeginTabItem
+
+        // ---- Tab 3: When I trade (calendar analytics) ----
+        if (ImGui::BeginTabItem("When I trade",
+                                nullptr,
+                                m_activeTab == Tab::Calendar
+                                    ? ImGuiTabItemFlags_SetSelected
+                                    : ImGuiTabItemFlags_None)) {
+            m_activeTab = Tab::Calendar;
+
+            // Calendar tab mode toggle (Sprint #108) — symbol
+            // vs tag. Honors includeUntagged in tag mode.
+            if (ImGui::RadioButton("By symbol",
+                                   m_calendarMode ==
+                                   CalendarMode::Symbol)) {
+                m_calendarMode = CalendarMode::Symbol;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("By tag",
+                                   m_calendarMode ==
+                                   CalendarMode::Tag)) {
+                m_calendarMode = CalendarMode::Tag;
+            }
+            if (m_calendarMode == CalendarMode::Tag) {
+                ImGui::SameLine();
+                ImGui::Checkbox("Include untagged",
+                                &m_includeUntagged);
+            }
+
     // ---- When I trade — calendar analytics (Sprint #107) ----
     //
     // Renders perSymbolDayOfWeekStats() and
@@ -1757,167 +1823,173 @@ void JournalStatsPanel::render() {
     //   - Hour-of-day table: rows = symbols, cols = 0..23,
     //     same color treatment. Header abbreviated to "H0, H1,
     //     ... H23" so the column bar fits.
-    //
-    // Toggle mirrors the rest of the panel: perSymbol vs
-    // perTag. Honors includeUntagged (same checkbox as above).
-    ImGui::Separator();
-    if (ImGui::CollapsingHeader("When I trade",
+    if (ImGui::CollapsingHeader("Day of week",
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
-        renderCalendarTable(false /*bySymbol*/);
+        renderCalendarTable(true /*bySymbol=*/,
+                            0 /*kDayOfWeek*/);
     }
+    if (ImGui::CollapsingHeader("Hour of day",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        renderCalendarTable(false /*bySymbol=*/,
+                            1 /*kHourOfDay*/);
+    }
+
+        ImGui::EndTabItem();
+        }   // End Calendar BeginTabItem
+    }       // End BeginTabBar
 
     ImGui::End();
 }
 
-// Calendar-table renderer (Sprint #107).
+// Calendar-table renderer (Sprint #107 + Sprint #108).
 //
-// Extracted to a private helper so the same renderer is used
-// for both day-of-week and hour-of-day tables — they differ
-// only in the bucket count (7 vs 24) and the column header
-// labels. The caller passes which method-pair to use via the
-// internal calls below.
+// bySymbol=true  → use perSymbol* methods
+// bySymbol=false → use perTag* methods (honors includeUntagged)
+// kind=0         → day-of-week  (7 buckets, Sun..Sat)
+// kind=1         → hour-of-day  (24 buckets, H0..H23)
 //
-// Implementation detail: we use a single signature here that
-// takes nothing, and switch internally based on which method
-// to call. Kept simple — the table is read-only.
-void JournalStatsPanel::renderCalendarTable(bool bySymbol) {
+// The two paths differ only in which TradeJournal method is
+// called + which labels[] vector is iterated. The render loop
+// itself is shared.
+void JournalStatsPanel::renderCalendarTable(bool bySymbol, int kind) {
+    constexpr int kDayOfWeek = 0;
+    constexpr int kHourOfDay = 1;
+    const size_t kBuckets = (kind == kDayOfWeek) ? 7 : 24;
+    // Pull the right method's data.
+    std::vector<std::string> rowLabels;       // symbols or tags
+    // Store cells as flat arrays of (rt, w, l, realized). We
+    // pick from the right struct's grid.
+    struct Cell { size_t rt; size_t w; size_t l; double realized; };
+    std::vector<Cell> cells;
     if (bySymbol) {
-        // Day-of-week per symbol — 7 columns.
-        auto ps = m_journal->perSymbolDayOfWeekStats();
-        if (ps.symbols.empty()) {
-            ImGui::TextDisabled("(no symbols)");
-            return;
-        }
-        static const char* kWdayLabels[7] = {
-            "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-        };
-        if (ImGui::BeginTable("JournalStatsDOW", 8,
-                              ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersH)) {
-            ImGui::TableSetupColumn("Symbol");
-            for (int d = 0; d < 7; ++d)
-                ImGui::TableSetupColumn(kWdayLabels[d]);
-            ImGui::TableHeadersRow();
-            for (size_t si = 0; si < ps.symbols.size() &&
-                                 si < m_maxRows; ++si) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(ps.symbols[si].c_str());
-                for (int d = 0; d < 7; ++d) {
-                    ImGui::TableSetColumnIndex(d + 1);
-                    const auto& b =
-                        ps.grid[si * 7 + static_cast<size_t>(d)];
-                    if (b.roundTrips == 0) {
-                        ImGui::PushStyleColor(ImGuiCol_Text,
-                            ImGui::GetStyle().Colors[
-                                ImGuiCol_TextDisabled]);
-                        ImGui::TextUnformatted("·");
-                        ImGui::PopStyleColor();
-                    } else {
-                        // Color: green for positive, red for
-                        // negative, dim if <1 fill.
-                        if (b.realized >= 0.0) {
-                            ImGui::PushStyleColor(ImGuiCol_Text,
-                                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
-                        } else {
-                            ImGui::PushStyleColor(ImGuiCol_Text,
-                                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
-                        }
-                        char buf[32];
-                        std::snprintf(buf, sizeof(buf), "%+.0f",
-                                      b.realized);
-                        ImGui::TextUnformatted(buf);
-                        ImGui::PopStyleColor();
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip(
-                                "%s @ %s\n"
-                                "  round-trips: %zu  "
-                                "(W:%zu / L:%zu)\n"
-                                "  realized: %+.2f",
-                                ps.symbols[si].c_str(),
-                                kWdayLabels[d],
-                                b.roundTrips, b.wins, b.losses,
-                                b.realized);
-                        }
-                    }
-                }
+        if (kind == kDayOfWeek) {
+            auto r = m_journal->perSymbolDayOfWeekStats();
+            rowLabels = std::move(r.symbols);
+            cells.reserve(r.grid.size());
+            for (const auto& c : r.grid) {
+                cells.push_back({c.roundTrips, c.wins,
+                                 c.losses, c.realized});
             }
-            ImGui::EndTable();
-        }
-        if (ps.symbols.size() > m_maxRows) {
-            ImGui::TextDisabled("(%zu more not shown)",
-                                ps.symbols.size() - m_maxRows);
+        } else {
+            auto r = m_journal->perSymbolHourOfDayStats();
+            rowLabels = std::move(r.symbols);
+            cells.reserve(r.grid.size());
+            for (const auto& c : r.grid) {
+                cells.push_back({c.roundTrips, c.wins,
+                                 c.losses, c.realized});
+            }
         }
     } else {
-        // Hour-of-day per symbol — 24 columns. We render the
-        // table with a custom column header layout: rather
-        // than 24 column labels in a single header row (which
-        // would overflow any reasonable panel width), we use
-        // a compact "H0..H23" label rendered in 4-character
-        // cells. ImGui's column widths are auto-fit but we
-        // pad each header cell to keep things readable.
-        auto ph = m_journal->perSymbolHourOfDayStats();
-        if (ph.symbols.empty()) {
-            ImGui::TextDisabled("(no symbols)");
-            return;
+        if (kind == kDayOfWeek) {
+            auto r = m_journal->perTagDayOfWeekStats(
+                m_includeUntagged);
+            rowLabels = std::move(r.tags);
+            cells.reserve(r.grid.size());
+            for (const auto& c : r.grid) {
+                cells.push_back({c.roundTrips, c.wins,
+                                 c.losses, c.realized});
+            }
+        } else {
+            auto r = m_journal->perTagHourOfDayStats(
+                m_includeUntagged);
+            rowLabels = std::move(r.tags);
+            cells.reserve(r.grid.size());
+            for (const auto& c : r.grid) {
+                cells.push_back({c.roundTrips, c.wins,
+                                 c.losses, c.realized});
+            }
         }
-        if (ImGui::BeginTable("JournalStatsHourOfDay", 25,
-                              ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersH)) {
-            ImGui::TableSetupColumn("Symbol");
+    }
+    if (rowLabels.empty()) {
+        ImGui::TextDisabled("(no %s)",
+                            bySymbol ? "symbols" : "tags");
+        return;
+    }
+
+    // Column labels.
+    static const char* kWdayLabels[7] = {
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    };
+    int nCols = static_cast<int>(kBuckets) + 1;   // +1 for axis label
+    if (ImGui::BeginTable(bySymbol
+                              ? "JournalStatsCalSym"
+                              : "JournalStatsCalTag",
+                          nCols,
+                          ImGuiTableFlags_RowBg |
+                          ImGuiTableFlags_BordersH)) {
+        ImGui::TableSetupColumn(bySymbol ? "Symbol" : "Tag");
+        if (kind == kDayOfWeek) {
+            for (int d = 0; d < 7; ++d)
+                ImGui::TableSetupColumn(kWdayLabels[d]);
+        } else {
             for (int h = 0; h < 24; ++h) {
                 char hdr[8];
                 std::snprintf(hdr, sizeof(hdr), "H%d", h);
                 ImGui::TableSetupColumn(hdr);
             }
-            ImGui::TableHeadersRow();
-            for (size_t si = 0; si < ph.symbols.size() &&
-                                 si < m_maxRows; ++si) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(ph.symbols[si].c_str());
-                for (int h = 0; h < 24; ++h) {
-                    ImGui::TableSetColumnIndex(h + 1);
-                    const auto& b =
-                        ph.grid[si * 24 + static_cast<size_t>(h)];
-                    if (b.roundTrips == 0) {
+        }
+        ImGui::TableHeadersRow();
+        for (size_t ri = 0; ri < rowLabels.size() &&
+                             ri < m_maxRows; ++ri) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(rowLabels[ri].c_str());
+            for (size_t b = 0; b < kBuckets; ++b) {
+                ImGui::TableSetColumnIndex(
+                    static_cast<int>(b) + 1);
+                const Cell& cell = cells[ri * kBuckets + b];
+                if (cell.rt == 0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[
+                            ImGuiCol_TextDisabled]);
+                    ImGui::TextUnformatted("·");
+                    ImGui::PopStyleColor();
+                } else {
+                    if (cell.realized >= 0.0) {
                         ImGui::PushStyleColor(ImGuiCol_Text,
-                            ImGui::GetStyle().Colors[
-                                ImGuiCol_TextDisabled]);
-                        ImGui::TextUnformatted("·");
-                        ImGui::PopStyleColor();
+                            ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
                     } else {
-                        if (b.realized >= 0.0) {
-                            ImGui::PushStyleColor(ImGuiCol_Text,
-                                ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_Text,
+                            ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    }
+                    char buf[32];
+                    std::snprintf(buf, sizeof(buf), "%+.0f",
+                                  cell.realized);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                    if (ImGui::IsItemHovered()) {
+                        const char* colLabel =
+                            (kind == kDayOfWeek)
+                                ? kWdayLabels[b]
+                                : nullptr;
+                        char bucketLabel[16];
+                        if (colLabel) {
+                            std::snprintf(bucketLabel,
+                                          sizeof(bucketLabel),
+                                          "%s", colLabel);
                         } else {
-                            ImGui::PushStyleColor(ImGuiCol_Text,
-                                ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                            std::snprintf(bucketLabel,
+                                          sizeof(bucketLabel),
+                                          "%02zu:00", b);
                         }
-                        char buf[32];
-                        std::snprintf(buf, sizeof(buf), "%+.0f",
-                                      b.realized);
-                        ImGui::TextUnformatted(buf);
-                        ImGui::PopStyleColor();
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip(
-                                "%s @ %02d:00\n"
-                                "  round-trips: %zu  "
-                                "(W:%zu / L:%zu)\n"
-                                "  realized: %+.2f",
-                                ph.symbols[si].c_str(), h,
-                                b.roundTrips, b.wins, b.losses,
-                                b.realized);
-                        }
+                        ImGui::SetTooltip(
+                            "%s @ %s\n"
+                            "  round-trips: %zu  "
+                            "(W:%zu / L:%zu)\n"
+                            "  realized: %+.2f",
+                            rowLabels[ri].c_str(),
+                            bucketLabel,
+                            cell.rt, cell.w, cell.l,
+                            cell.realized);
                     }
                 }
             }
-            ImGui::EndTable();
         }
-        if (ph.symbols.size() > m_maxRows) {
-            ImGui::TextDisabled("(%zu more not shown)",
-                                ph.symbols.size() - m_maxRows);
-        }
+        ImGui::EndTable();
+    }
+    if (rowLabels.size() > m_maxRows) {
+        ImGui::TextDisabled("(%zu more not shown)",
+                            rowLabels.size() - m_maxRows);
     }
 }
 

@@ -60,11 +60,22 @@ public:
     bool showWindow = false;
 
 private:
-    // Calendar-table renderer (Sprint #107). Renders either the
-    // day-of-week or hour-of-day breakdown as a color-coded
-    // table (rows = symbols, cols = weekday/hour). Called from
-    // the "When I trade" section.
-    void renderCalendarTable(bool bySymbol);
+    // Calendar-table renderer (Sprint #107 + Sprint #108).
+    // Renders either day-of-week or hour-of-day breakdown as a
+    // color-coded table. The bySymbol flag selects symbol vs
+    // tag bucketing (Tag honors includeUntagged). The kind
+    // flag selects 7-bucket vs 24-bucket.
+    void renderCalendarTable(bool bySymbol, int kind);
+
+    // Sprint #108 — tabbed UI. Tab order matches the visual
+    // left-to-right order in the tab bar.
+    enum class Tab { Overview, BySymbol, ByTag, Calendar };
+    Tab m_activeTab = Tab::Overview;   // default open on Overview
+
+    // Calendar tab mode (Sprint #108). Symbol = perSymbol*
+    // methods; Tag = perTag* methods (honors includeUntagged).
+    enum class CalendarMode { Symbol, Tag };
+    CalendarMode m_calendarMode = CalendarMode::Symbol;
 
     ::btquant::TradeJournal* m_journal = nullptr;
     bool  m_includeUntagged  = true;

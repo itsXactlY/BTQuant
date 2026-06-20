@@ -188,8 +188,16 @@ WindowManager::WindowManager() {
         int skipped = 0;
         size_t onDisk = m_tradeJournal->count();
         auto history  = m_tradeJournal->loadAll(&skipped);
-        BTQ_LOG_INFO("TradeJournal: %zu fills on disk at %s (skipped %d)",
-                     onDisk, journalPath.c_str(), skipped);
+        // Sprint #67: also surface all-time realized P&L so the
+        // operator can see at a glance what the running session
+        // inherits from past fills. Skipped if the journal is
+        // empty (totalRealized returns 0.0 then).
+        double allTime = m_tradeJournal->totalRealized();
+        BTQ_LOG_INFO("TradeJournal: %zu fills on disk at %s "
+                     "(skipped %d, all-time P&L %s$%.2f)",
+                     onDisk, journalPath.c_str(), skipped,
+                     allTime >= 0 ? "+" : "-",
+                     std::fabs(allTime));
         // Rehydrate the PositionBook from the persistent journal so the
         // open position + session realized P&L survive restart. Without
         // this, every launch starts from empty even though the journal

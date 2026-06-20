@@ -4,6 +4,7 @@
 #include "../data/position_book.hpp"
 #include "log_panel.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -81,6 +82,16 @@ void RiskLimitsPanel::render() {
                       ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
+    }
+    // Sprint #71: surface session P&L in the header so the trader
+    // sees the running number while editing limits.
+    if (m_guard) {
+        double pnl = m_guard->sessionRealized();
+        ImVec4 col = pnl >= 0 ? ImVec4(0.30f, 0.85f, 0.40f, 1.0f)
+                              : ImVec4(0.95f, 0.40f, 0.40f, 1.0f);
+        ImGui::SameLine();
+        ImGui::TextColored(col, "  Session: %s$%.2f",
+                           pnl >= 0 ? "+" : "-", std::fabs(pnl));
     }
 
     if (!m_guard) {

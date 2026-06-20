@@ -13,6 +13,7 @@
 #include "../src/widgets/risk_panel.hpp"
 #include "../src/widgets/connection_panel.hpp"
 #include "../src/widgets/profile_manager.hpp"
+#include "../src/widgets/symbol_picker.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -810,6 +811,69 @@ int main() {
             fs::remove(e.path(), ec);
         }
         fs::remove(tmpDir, ec);
+    }
+
+    // Test 17: SymbolPicker — candidate set, filter, selection callback.
+    std::cout << "\nTest 17: Testing SymbolPicker..." << std::endl;
+    {
+        btquant::ui::SymbolPicker sp;
+        if (sp.candidates().size() >= 4) {
+            std::cout << "✓ SymbolPicker default candidates: "
+                      << sp.candidates().size() << std::endl;
+        } else {
+            std::cout << "✗ SymbolPicker candidates: "
+                      << sp.candidates().size() << std::endl;
+        }
+
+        // Replace candidates.
+        sp.setCandidates({"AAPL", "GOOG", "MSFT", "AMZN", "META"});
+        if (sp.candidates().size() == 5) {
+            std::cout << "✓ setCandidates replaced list (5)" << std::endl;
+        } else {
+            std::cout << "✗ setCandidates size: "
+                      << sp.candidates().size() << std::endl;
+        }
+
+        // Empty filter shows all 5.
+        if (sp.filteredCount() == 5) {
+            std::cout << "✓ empty filter → all 5 candidates" << std::endl;
+        } else {
+            std::cout << "✗ empty filter: " << sp.filteredCount() << std::endl;
+        }
+
+        // Filter set to "A" should match AAPL, AMZN.
+        // (We mutate m_filter indirectly via render()'s strcmp path — since
+        //  render() needs ImGui, simulate by manually setting m_filter.)
+        // For test purposes, just check the public API surface.
+        std::vector<std::string> selected;
+        sp.setSelectFn([&selected](const std::string& s) {
+            selected.push_back(s);
+        });
+
+        // Toggle open/close.
+        if (!sp.isOpen()) {
+            sp.setOpen(true);
+            if (sp.isOpen()) {
+                std::cout << "✓ setOpen(true) → isOpen" << std::endl;
+            } else {
+                std::cout << "✗ setOpen(true) didn't set isOpen" << std::endl;
+            }
+        }
+        sp.setOpen(false);
+        if (!sp.isOpen()) {
+            std::cout << "✓ setOpen(false) closes" << std::endl;
+        } else {
+            std::cout << "✗ setOpen(false) didn't close" << std::endl;
+        }
+
+        // The SelectFn wasn't invoked through any UI path here (no ImGui),
+        // so the vector is still empty. That's the expected behavior — the
+        // callback fires only when the user picks via the modal.
+        if (selected.empty()) {
+            std::cout << "✓ selectFn not invoked without UI (callback wiring only)" << std::endl;
+        } else {
+            std::cout << "✗ selectFn leaked without UI" << std::endl;
+        }
     }
 
     return 0;

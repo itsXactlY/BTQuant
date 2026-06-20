@@ -87,6 +87,7 @@ target_sources(test_integration PRIVATE
     ../src/widgets/log_panel.cpp
     ../src/widgets/connection_panel.cpp
     ../src/widgets/profile_manager.cpp
+    ../src/widgets/symbol_picker.cpp
 )
 
 # Set C++ standard

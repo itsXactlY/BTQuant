@@ -21,6 +21,7 @@
 #include "../widgets/log_panel.hpp"
 #include "../widgets/connection_panel.hpp"
 #include "../widgets/profile_manager.hpp"
+#include "../widgets/symbol_picker.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -93,6 +94,14 @@ WindowManager::WindowManager() {
         applyPreset(loaded);
         markSettingsDirty();
     });
+
+    m_symbolPicker = new SymbolPicker();
+    m_symbolPicker->setSelectFn([this](const std::string& sym) {
+        BTQ_LOG_INFO("SymbolPicker: selected %s", sym.c_str());
+        // Single-symbol MVP: log it. Multi-symbol wireup would update the
+        // MarketDataProcessor's symbol field here and switch the watchlist
+        // active row.
+    });
 }
 
 WindowManager::~WindowManager() {
@@ -109,6 +118,7 @@ WindowManager::~WindowManager() {
     delete m_watchlistWidget;
     delete m_connectionPanel;
     delete m_profileManager;
+    delete m_symbolPicker;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -278,6 +288,18 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         markSettingsDirty();
     }
     prevQuestionMark = currQuestionMark;
+
+    // Ctrl+P opens the symbol picker modal. Edge-triggered.
+    static bool prevCtrlP = false;
+    bool currCtrlP = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_P) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlP && !prevCtrlP) {
+        showSymbolPickerOpen = !showSymbolPickerOpen;
+        if (m_symbolPicker) m_symbolPicker->setOpen(showSymbolPickerOpen);
+    }
+    prevCtrlP = currCtrlP;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -378,6 +400,11 @@ void WindowManager::showProfileManagerWindow() {
     if (m_profileManager) m_profileManager->render();
 }
 
+void WindowManager::showSymbolPickerWindow() {
+    if (!showSymbolPickerOpen) return;
+    if (m_symbolPicker) m_symbolPicker->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -395,6 +422,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Log Panel",         nullptr, &showLog))             markSettingsDirty();
             if (ImGui::MenuItem("Connection",        nullptr, &showConnection))      markSettingsDirty();
             if (ImGui::MenuItem("Profile Manager…",  nullptr, &showProfileManager))  markSettingsDirty();
+            if (ImGui::MenuItem("Symbol Picker… (Ctrl+P)", nullptr, &showSymbolPickerOpen)) markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();

@@ -66,6 +66,7 @@ set(SOURCES
     src/widgets/log_panel.cpp
     src/widgets/connection_panel.cpp
     src/widgets/profile_manager.cpp
+    src/widgets/symbol_picker.cpp
     src/util/settings.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
@@ -99,6 +100,7 @@ set(HEADERS
     src/widgets/log_panel.hpp
     src/widgets/connection_panel.hpp
     src/widgets/profile_manager.hpp
+    src/widgets/symbol_picker.hpp
     src/util/settings.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp

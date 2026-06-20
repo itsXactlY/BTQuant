@@ -61,6 +61,9 @@ public:
     // Profile Manager toggle.
     bool showProfileManager = false;
 
+    // Symbol Picker toggle (modal — flips showSymbolPickerOpen).
+    bool showSymbolPickerOpen = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -115,6 +118,7 @@ public:
     void showLogWindow();
     void showConnectionWindow();
     void showProfileManagerWindow();
+    void showSymbolPickerWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -150,6 +154,7 @@ private:
     class LogPanel* m_logPanel = nullptr;
     class ConnectionPanel* m_connectionPanel = nullptr;
     class ProfileManager*  m_profileManager  = nullptr;
+    class SymbolPicker*    m_symbolPicker    = nullptr;
     StatsOverlay m_statsOverlay;
     bool m_initialized = false;
     bool m_layoutApplied = false;

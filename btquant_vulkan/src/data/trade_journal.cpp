@@ -5337,4 +5337,85 @@ TradeJournal::allSymbolCorrelations() const {
     return out;
 }
 
+namespace {
+// Sprint #150 — fill-interval stats builder.
+// Computes time gaps between consecutive matching fills,
+// then runs them through PnLDistribution (mean/median/
+// p90/max). Templated for filtering.
+template <typename Pred>
+TradeJournal::PnLDistribution
+buildFillIntervalStats(const std::vector<JournalFill>& fills,
+                        Pred pred) {
+    TradeJournal::PnLDistribution out;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) sub.push_back(f);
+    }
+    std::sort(sub.begin(), sub.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    if (sub.size() < 2) return out;
+    std::vector<double> gaps;
+    gaps.reserve(sub.size() - 1);
+    for (size_t i = 1; i < sub.size(); ++i) {
+        if (sub[i].timestamp_us > sub[i - 1].timestamp_us) {
+            gaps.push_back(static_cast<double>(
+                sub[i].timestamp_us - sub[i - 1].timestamp_us));
+        }
+    }
+    if (gaps.empty()) return out;
+    out.count = gaps.size();
+    double sum = 0.0, maxGap = 0.0;
+    for (double g : gaps) {
+        sum += g;
+        if (g > maxGap) maxGap = g;
+    }
+    out.mean = sum / static_cast<double>(gaps.size());
+    out.max  = maxGap;
+    std::sort(gaps.begin(), gaps.end());
+    auto pctile = [&](double p) {
+        double rank = (p / 100.0) *
+            static_cast<double>(gaps.size() - 1);
+        size_t lo = static_cast<size_t>(std::floor(rank));
+        size_t hi = static_cast<size_t>(std::ceil(rank));
+        if (lo == hi) return gaps[lo];
+        double frac = rank - static_cast<double>(lo);
+        return gaps[lo] * (1.0 - frac) +
+               gaps[hi] * frac;
+    };
+    out.p50 = pctile(50);
+    out.p90    = pctile(90);
+    return out;
+}
+}  // namespace
+
+TradeJournal::PnLDistribution
+TradeJournal::fillIntervalStats() const {
+    return buildFillIntervalStats(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::PnLDistribution
+TradeJournal::fillIntervalStatsBySymbol(
+    const std::string& symbol) const {
+    return buildFillIntervalStats(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::PnLDistribution
+TradeJournal::fillIntervalStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildFillIntervalStats(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

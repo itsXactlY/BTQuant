@@ -1460,6 +1460,23 @@ public:
     std::vector<CorrelationMatrixEntry>
     allSymbolCorrelations() const;
 
+    // Fill interval distribution (Sprint #150). For
+    // consecutive fills in the journal, compute the time
+    // gap between them. Returns a PnLDistribution-style
+    // summary (mean, median, p90, max) of the gaps in
+    // microseconds.
+    //
+    // Answers "is my trading fast or slow?" — small mean
+    // gap = high-frequency, large gap = patient.
+    //
+    // No-op (zeros) for fills.size() < 2.
+    PnLDistribution fillIntervalStats() const;
+    PnLDistribution fillIntervalStatsBySymbol(
+        const std::string& symbol) const;
+    PnLDistribution fillIntervalStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

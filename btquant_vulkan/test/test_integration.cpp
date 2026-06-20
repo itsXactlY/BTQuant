@@ -18278,5 +18278,90 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 137: fillIntervalStats() / BySymbol / ByTag
+    //   (Sprint #150).
+    //
+    // Time gaps between consecutive fills. Tests:
+    //   - Empty: zeros.
+    //   - 5 fills at 0,1h,2h,3h,4h: gaps = 1h each.
+    //       count=4, mean=1h, p50=1h, max=1h.
+    std::cout << "\nTest 137: fill interval stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test137_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.fillIntervalStats();
+            if (s.count == 0 &&
+                s.mean == 0.0 &&
+                s.max == 0.0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: count="
+                          << s.count << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 5 fills at 0,1h,2h,3h,4h ----
+        {
+            TradeJournal j((tmpDir / "reg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "",
+                                t0 + i * hour));
+            }
+            auto s = j.fillIntervalStats();
+            if (s.count == 4 &&
+                std::fabs(s.mean - double(hour)) < 1.0 &&
+                std::fabs(s.p50 - double(hour)) < 1.0 &&
+                std::fabs(s.max - double(hour)) < 1.0) {
+                std::cout << "✓ 5 fills @ 1h apart: "
+                          << "4 gaps, mean=p50=max=1h"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ interval wrong: count="
+                          << s.count
+                          << " mean=" << s.mean
+                          << " max=" << s.max
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " interval tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

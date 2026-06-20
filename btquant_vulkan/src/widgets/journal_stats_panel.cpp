@@ -799,6 +799,216 @@ void JournalStatsPanel::render() {
         }
     }
 
+    ImGui::Separator();
+
+    // ---- Per-symbol risk table (Sprint #92) ----
+    //
+    // Surfaces TradeJournal::perSymbolDrawdown() (#91) — worst
+    // peak-to-trough decline per symbol. Four columns:
+    //   symbol, max DD, peak→trough, current DD.
+    //
+    // Sort order from the method is worst-first (biggest maxDD
+    // first), so the trader reading the table top-to-bottom sees
+    // the symbol that hurt them most at the top.
+    //
+    // Color rules:
+    //   - Max DD: always red (it's the worst by definition).
+    //   - Current DD: red when > 0, dim when 0 (at symbol-ATH),
+    //     with an "(in worst DD)" annotation when the symbol is
+    //     still inside its worst drop (matches the journal-wide
+    //     Risk section, #81).
+    //   - Peak→trough dates: dim (informational — the trader reads
+    //     them as "when did this happen?" rather than a signal).
+    auto perSymDD = m_journal->perSymbolDrawdown();
+    size_t rowsDD = std::min(m_maxRows, perSymDD.size());
+    if (ImGui::CollapsingHeader("Per-symbol risk",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (perSymDD.empty()) {
+            ImGui::TextDisabled("(empty)");
+        } else if (ImGui::BeginTable("JournalStatsPerSymbolRisk",
+                                     4,
+                                     ImGuiTableFlags_RowBg |
+                                     ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Symbol");
+            ImGui::TableSetupColumn("Max DD");
+            ImGui::TableSetupColumn("Peak → Trough");
+            ImGui::TableSetupColumn("Current DD");
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < rowsDD; ++i) {
+                const auto& e = perSymDD[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(e.symbol.c_str());
+
+                // Max DD: always red (worst by definition).
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                char buf[96];
+                if (e.maxDrawdown > 1e-9) {
+                    std::snprintf(buf, sizeof(buf), "-%.2f",
+                                  e.maxDrawdown);
+                } else {
+                    std::snprintf(buf, sizeof(buf), "0.00");
+                }
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+
+                // Peak → Trough: dim informational. Format
+                // "YYYY-MM-DD → YYYY-MM-DD" or "-" when no DD yet.
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                if (e.maxDrawdown > 1e-9 && !e.peakDate.empty() &&
+                    !e.troughDate.empty()) {
+                    std::snprintf(buf, sizeof(buf), "%s → %s",
+                                  e.peakDate.c_str(),
+                                  e.troughDate.c_str());
+                } else {
+                    std::snprintf(buf, sizeof(buf), "—");
+                }
+                ImGui::TextUnformatted(buf);
+                ImGui::PopStyleColor();
+
+                // Current DD: red when > 0, dim when 0.
+                ImGui::TableSetColumnIndex(3);
+                if (e.currentDD > 1e-9) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "-%.2f",
+                                  e.currentDD);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                    if (std::fabs(e.currentDD - e.maxDrawdown) < 1e-9 &&
+                        !e.troughDate.empty()) {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(in worst DD)");
+                    }
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    ImGui::TextUnformatted("0.00 (at ATH)");
+                    ImGui::PopStyleColor();
+                }
+            }
+            ImGui::EndTable();
+        }
+        if (perSymDD.size() > rowsDD) {
+            ImGui::TextDisabled("(%zu more not shown)",
+                                perSymDD.size() - rowsDD);
+        }
+    }
+
+    // ---- Per-symbol risk-adjusted table (Sprint #92) ----
+    //
+    // Surfaces TradeJournal::perSymbolSharpe() (#91). Four
+    // columns:
+    //   symbol, mean / day, daily Sharpe, annualized Sharpe.
+    //
+    // Sort order from the method is best-first (highest
+    // annualized Sharpe first) — answers "which symbol gives me
+    // the best return per unit of risk?" at a glance.
+    //
+    // Color rules match the journal-wide Risk-Adjusted section
+    // (#85):
+    //   - Mean daily: green/red/dim (row convention).
+    //   - Daily / annualized Sharpe: green >= 1.0, red < 0,
+    //     dim otherwise. The classic threshold is Sharpe > 1 =
+    //     good, > 2 = very good, > 3 = excellent; negative
+    //     Sharpe is a losing strategy.
+    auto perSymSh = m_journal->perSymbolSharpe();
+    size_t rowsSh = std::min(m_maxRows, perSymSh.size());
+    if (ImGui::CollapsingHeader("Per-symbol risk-adjusted",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (perSymSh.empty()) {
+            ImGui::TextDisabled("(empty)");
+        } else if (ImGui::BeginTable("JournalStatsPerSymbolSharpe",
+                                     4,
+                                     ImGuiTableFlags_RowBg |
+                                     ImGuiTableFlags_BordersH)) {
+            ImGui::TableSetupColumn("Symbol");
+            ImGui::TableSetupColumn("Mean / day");
+            ImGui::TableSetupColumn("Daily Sharpe");
+            ImGui::TableSetupColumn("Annualized");
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < rowsSh; ++i) {
+                const auto& e = perSymSh[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(e.symbol.c_str());
+
+                // Mean daily: green/red/dim, with sample size
+                // annotation so the trader knows whether the
+                // number is meaningful (a Sharpe on 2 days is
+                // very different from one on 200 days).
+                ImGui::TableSetColumnIndex(1);
+                colorizeRow(e.meanDailyReturn);
+                char buf[64];
+                std::snprintf(buf, sizeof(buf), "%+.2f",
+                              e.meanDailyReturn);
+                ImGui::TextUnformatted(buf);
+                ImGui::SameLine();
+                ImGui::TextDisabled("(N=%zu)", e.sampleSize);
+                ImGui::PopStyleColor();
+
+                // Daily Sharpe: green >= 1, red < 0, dim otherwise.
+                ImGui::TableSetColumnIndex(2);
+                if (e.dailySharpe >= 1.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.dailySharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (e.dailySharpe < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.dailySharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.dailySharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+
+                // Annualized Sharpe: same threshold rules as daily.
+                ImGui::TableSetColumnIndex(3);
+                if (e.annualizedSharpe >= 1.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.30f, 0.85f, 0.40f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.annualizedSharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else if (e.annualizedSharpe < 0.0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(0.95f, 0.30f, 0.30f, 1.0f));
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.annualizedSharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+                    std::snprintf(buf, sizeof(buf), "%.2f",
+                                  e.annualizedSharpe);
+                    ImGui::TextUnformatted(buf);
+                    ImGui::PopStyleColor();
+                }
+            }
+            ImGui::EndTable();
+        }
+        if (perSymSh.size() > rowsSh) {
+            ImGui::TextDisabled("(%zu more not shown)",
+                                perSymSh.size() - rowsSh);
+        }
+    }
+
     ImGui::End();
 }
 

@@ -27,6 +27,10 @@ public:
     void  setHistoryN(size_t n) { m_historyN = n; }
     size_t historyN() const     { return m_historyN; }
 
+    enum class RenderMode { Line = 0, Candle = 1 };
+    void      setRenderMode(RenderMode m) { m_renderMode = m; }
+    RenderMode renderMode() const        { return m_renderMode; }
+
     // ---- Pure OHLC validation (test surface) ----
     //
     // A well-formed candle satisfies:
@@ -41,10 +45,25 @@ public:
     // candle, or -1 if all are valid.
     static int validateSeries(const std::vector<::btquant::data::Candle>& v);
 
+    // ---- Pure pixel geometry (test surface) ----
+    //
+    // Map a price value into a pixel Y coordinate inside the chart
+    // canvas. Higher price → smaller Y (screen coords). Pure: same
+    // inputs always produce the same output, no global state.
+    static float priceToPixelY(double price, double yMin, double yMax,
+                               float canvasY, float canvasH);
+
+    // Map a candle index into a pixel X coordinate (centered on the
+    // candle body) given the canvas width, candle count, and a body
+    // width fraction (0..1) of the slot. Pure.
+    static float indexToPixelX(int idx, int count, float canvasX,
+                               float canvasW, float bodyFrac);
+
 private:
     ::btquant::MarketDataProcessor* m_data = nullptr;
-    bool  m_open     = false;
-    size_t m_historyN = 60;   // last 60 finalized candles
+    bool    m_open       = false;
+    size_t  m_historyN   = 60;     // last 60 finalized candles
+    RenderMode m_renderMode = RenderMode::Candle;  // default = real candles
 };
 
 } // namespace btquant::ui

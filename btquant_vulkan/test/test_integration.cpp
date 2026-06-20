@@ -2968,5 +2968,92 @@ int main() {
         }
     }
 
+    // Test 37: MiniPriceChart candlestick mode + pixel geometry. The
+    // render path draws bodies + wicks via raw draw-list when
+    // m_renderMode == Candle; we exercise the helpers (priceToPixelY,
+    // indexToPixelX) and the mode toggle. The actual draw-list calls
+    // require a live ImGui context and are covered by smoke testing.
+    {
+        std::cout << "\nTest 37: Testing MiniPriceChart candlestick plumbing..."
+                  << std::endl;
+
+        using M = btquant::ui::MiniPriceChart;
+
+        // 1) Default mode is Candle (real OHLC bodies).
+        M chart;
+        if (chart.renderMode() == M::RenderMode::Candle) {
+            std::cout << "✓ default render mode is Candle" << std::endl;
+        } else {
+            std::cout << "✗ default mode wrong" << std::endl;
+        }
+
+        // 2) Toggle to Line and back.
+        chart.setRenderMode(M::RenderMode::Line);
+        if (chart.renderMode() == M::RenderMode::Line) {
+            std::cout << "✓ setRenderMode(Line) stored" << std::endl;
+        } else {
+            std::cout << "✗ setRenderMode(Line) failed" << std::endl;
+        }
+        chart.setRenderMode(M::RenderMode::Candle);
+        if (chart.renderMode() == M::RenderMode::Candle) {
+            std::cout << "✓ setRenderMode(Candle) round-trips" << std::endl;
+        } else {
+            std::cout << "✗ setRenderMode(Candle) failed" << std::endl;
+        }
+
+        // 3) priceToPixelY: higher price → smaller Y. yMax at canvasY,
+        //    yMin at canvasY + canvasH. Midpoint = canvasY + canvasH/2.
+        const float canvasY = 100.0f;
+        const float canvasH = 200.0f;
+        float yTop = M::priceToPixelY(120.0, 100.0, 120.0, canvasY, canvasH);
+        float yMid = M::priceToPixelY(110.0, 100.0, 120.0, canvasY, canvasH);
+        float yBot = M::priceToPixelY(100.0, 100.0, 120.0, canvasY, canvasH);
+        if (yTop < yMid && yMid < yBot &&
+            yTop == canvasY && yBot == canvasY + canvasH) {
+            std::cout << "✓ priceToPixelY: top < mid < bottom (Y inverted)"
+                      << std::endl;
+        } else {
+            std::cout << "✗ priceToPixelY wrong (top=" << yTop
+                      << " mid=" << yMid << " bot=" << yBot << ")" << std::endl;
+        }
+
+        // 4) priceToPixelY clamps out-of-range prices (no negative Y).
+        float yOver = M::priceToPixelY(150.0, 100.0, 120.0, canvasY, canvasH);
+        float yUnder= M::priceToPixelY(50.0,  100.0, 120.0, canvasY, canvasH);
+        if (yOver == canvasY && yUnder == canvasY + canvasH) {
+            std::cout << "✓ priceToPixelY clamps out-of-range" << std::endl;
+        } else {
+            std::cout << "✗ clamp wrong (over=" << yOver
+                      << " under=" << yUnder << ")" << std::endl;
+        }
+
+        // 5) indexToPixelX: candles laid out left→right, indexed slot
+        //    centers, body width = slotW * bodyFrac.
+        const float canvasX = 0.0f;
+        const float canvasW = 600.0f;
+        const int   count   = 10;
+        const float bodyFrac = 0.7f;
+        float x0    = M::indexToPixelX(0, count, canvasX, canvasW, bodyFrac);
+        float x4    = M::indexToPixelX(4, count, canvasX, canvasW, bodyFrac);
+        float x9    = M::indexToPixelX(9, count, canvasX, canvasW, bodyFrac);
+        float slotW = canvasW / static_cast<float>(count);
+        float expected0 = canvasX + slotW * 0.5f - slotW * bodyFrac * 0.5f;
+        float expected9 = canvasX + slotW * 9.5f - slotW * bodyFrac * 0.5f;
+        if (std::abs(x0 - expected0) < 1e-3f && std::abs(x9 - expected9) < 1e-3f) {
+            std::cout << "✓ indexToPixelX: first/last candles at expected X"
+                      << std::endl;
+        } else {
+            std::cout << "✗ indexToPixelX wrong (x0=" << x0
+                      << " expected=" << expected0
+                      << " x9=" << x9
+                      << " expected9=" << expected9 << ")" << std::endl;
+        }
+        if (x0 < x4 && x4 < x9) {
+            std::cout << "✓ indexToPixelX monotonic increasing" << std::endl;
+        } else {
+            std::cout << "✗ indexToPixelX not monotonic" << std::endl;
+        }
+    }
+
     return 0;
 }

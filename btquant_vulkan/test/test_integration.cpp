@@ -21800,5 +21800,69 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 185: allSegmentRecoveryTime (Sprint #199).
+    //
+    // Bulk recovery time. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 185: all-seg recovery time..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test185_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "r.jsonl").string());
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + day));
+            j.append(mkFill("BTC",   60.0,
+                             t0 + 3 * day));
+            j.append(mkFill("ETH",  50.0, t0));
+            j.append(mkFill("ETH", -25.0, t0 + day));
+            j.append(mkFill("ETH",  30.0,
+                             t0 + 2 * day));
+            auto v = j.allSegmentRecoveryTime();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms: top="
+                          << v[0].segment
+                          << " avgRec="
+                          << v[0].avgRecoveryDays
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-rec-time tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

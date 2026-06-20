@@ -8447,4 +8447,49 @@ TradeJournal::recoveryTimeStatsByTag(
     return s;
 }
 
+std::vector<TradeJournal::RecoveryTimeStats>
+TradeJournal::allSegmentRecoveryTime() const {
+    // Sprint #199. Bulk per-segment recovery time
+    // sorted DESC by avgRecoveryDays.
+    std::vector<RecoveryTimeStats> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(recoveryTimeStatsBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RecoveryTimeStats& a,
+           const RecoveryTimeStats& b) {
+            return a.avgRecoveryDays > b.avgRecoveryDays;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::RecoveryTimeStats>
+TradeJournal::allSegmentRecoveryTimeByTag(
+    bool includeUntagged) const {
+    std::vector<RecoveryTimeStats> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(recoveryTimeStatsByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const RecoveryTimeStats& a,
+           const RecoveryTimeStats& b) {
+            return a.avgRecoveryDays > b.avgRecoveryDays;
+        });
+    return out;
+}
+
 } // namespace btquant

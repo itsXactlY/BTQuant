@@ -2097,6 +2097,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment recovery time bulk (Sprint #199).
+    // Returns RecoveryTimeStats for every segment,
+    // sorted DESC by avgRecoveryDays.
+    std::vector<RecoveryTimeStats>
+    allSegmentRecoveryTime() const;
+    std::vector<RecoveryTimeStats>
+    allSegmentRecoveryTimeByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

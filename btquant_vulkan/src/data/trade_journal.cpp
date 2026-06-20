@@ -7400,4 +7400,90 @@ TradeJournal::worstTradeDaysByTag(
     return series;
 }
 
+namespace {
+// Sprint #179 — retention builder.
+// Computes grossWin, realized, retention for a segment.
+template <typename Pred>
+TradeJournal::Retention
+buildRetention(const std::vector<JournalFill>& fills,
+                 Pred pred) {
+    TradeJournal::Retention r;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            r.grossWin += f.realizedDelta;
+        }
+        r.realized += f.realizedDelta;
+    }
+    if (r.grossWin > 1e-9 && r.realized > 0) {
+        r.retention = r.realized / r.grossWin;
+    } else {
+        r.retention = 0.0;
+    }
+    return r;
+}
+}  // namespace
+
+TradeJournal::Retention
+TradeJournal::retentionBySymbol(
+    const std::string& symbol) const {
+    return buildRetention(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::Retention
+TradeJournal::retentionByTag(
+    const std::string& tag, bool includeUntagged) const {
+    return buildRetention(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+std::vector<TradeJournal::Retention>
+TradeJournal::allRetentionBySymbol() const {
+    std::vector<Retention> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(retentionBySymbol(s));
+        out.back().segment = s;
+    }
+    std::sort(out.begin(), out.end(),
+        [](const Retention& a, const Retention& b) {
+            return a.retention > b.retention;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::Retention>
+TradeJournal::allRetentionByTag(bool includeUntagged) const {
+    std::vector<Retention> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(retentionByTag(t, includeUntagged));
+        out.back().segment = t;
+    }
+    std::sort(out.begin(), out.end(),
+        [](const Retention& a, const Retention& b) {
+            return a.retention > b.retention;
+        });
+    return out;
+}
+
 } // namespace btquant

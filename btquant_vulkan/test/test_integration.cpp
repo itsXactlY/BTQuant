@@ -20540,5 +20540,80 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 166: retentionBySymbol/ByTag + allRetention
+    //   (Sprint #179).
+    //
+    // Profit retention = realized / grossWin.
+    // Tests:
+    //   - BTC: grossWin=200, realized=200-50=150, retention=0.75.
+    //   - ETH: grossWin=100, realized=100, retention=1.0.
+    std::cout << "\nTest 166: retention..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test166_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "r.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", 100.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 3));
+            auto btc = j.retentionBySymbol("BTC");
+            auto eth = j.retentionBySymbol("ETH");
+            auto all = j.allRetentionBySymbol();
+            if (std::fabs(btc.retention - 0.75) < 1e-9 &&
+                std::fabs(eth.retention - 1.0) < 1e-9 &&
+                all.size() == 2 &&
+                all[0].segment == "ETH" &&  // higher retention
+                std::fabs(all[0].retention - 1.0) < 1e-9) {
+                std::cout << "✓ BTC: ret=0.75; ETH: ret=1.0; "
+                          << "all sorted DESC"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: btc.ret="
+                          << btc.retention
+                          << " eth.ret=" << eth.retention
+                          << " all[0]="
+                          << (all.size() > 0
+                              ? all[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " retention tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

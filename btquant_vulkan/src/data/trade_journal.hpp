@@ -1861,6 +1861,27 @@ public:
                         bool includeUntagged = false,
                         size_t n = 10) const;
 
+    // Profit retention rate (Sprint #179). For each
+    // segment, the fraction of gross wins that survives
+    // after gross losses. Higher = better (more profit
+    // retained). 0.0 to 1.0+.
+    //   retention = max(0, realized) / grossWin
+    //   where grossWin = sum of all positive realizedDeltas.
+    // When grossWin = 0, retention is 0.
+    // When realized < 0 (net loss), retention is 0.
+    struct Retention {
+        std::string segment;
+        double      grossWin       = 0.0;
+        double      realized       = 0.0;
+        double      retention      = 0.0;
+    };
+    Retention retentionBySymbol(const std::string& symbol) const;
+    Retention retentionByTag(const std::string& tag,
+                             bool includeUntagged = false) const;
+    std::vector<Retention> allRetentionBySymbol() const;
+    std::vector<Retention> allRetentionByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

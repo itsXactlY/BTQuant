@@ -1039,6 +1039,17 @@ void WindowManager::showMainMenu() {
                     m_layoutLoadOpen = true;
                 }
                 ImGui::Separator();
+                // Export / import for moving profiles between machines.
+                // Export writes the current selection to an arbitrary
+                // path; import reads a .btqlayout from any path and
+                // installs it under profiles/ with a sanitized name.
+                if (ImGui::MenuItem("Export layout…")) {
+                    m_layoutExportOpen = true;
+                }
+                if (ImGui::MenuItem("Import layout…")) {
+                    m_layoutImportOpen = true;
+                }
+                ImGui::Separator();
                 // Quick-pick from existing .btqlayout files in profiles/.
                 auto profiles = util::LayoutIO::list();
                 if (profiles.empty()) {
@@ -1120,6 +1131,67 @@ void WindowManager::showMainMenu() {
         if (ImGui::Button("Close")) {
             ImGui::CloseCurrentPopup();
         }
+        ImGui::EndPopup();
+    }
+
+    // Export Layout popup — pick a profile (same list as Load) and a
+    // destination path. Calls LayoutIO::exportTo() which reads the
+    // named profile and writes it verbatim to the destination.
+    if (m_layoutExportOpen) {
+        ImGui::OpenPopup("Export Layout");
+        m_layoutExportOpen = false;
+    }
+    if (ImGui::BeginPopupModal("Export Layout", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Profile");
+        ImGui::SameLine();
+        ImGui::InputText("##exportname", m_layoutNameBuf,
+                         sizeof(m_layoutNameBuf));
+        ImGui::Text("Destination path");
+        ImGui::InputText("##exportpath", m_layoutExportBuf,
+                         sizeof(m_layoutExportBuf));
+        if (ImGui::Button("Export")) {
+            if (util::LayoutIO::exportTo(
+                    std::filesystem::path(m_layoutExportBuf),
+                    std::string(m_layoutNameBuf))) {
+                BTQ_LOG_INFO("exported layout '%s' to %s",
+                             m_layoutNameBuf, m_layoutExportBuf);
+                ImGui::CloseCurrentPopup();
+            } else {
+                BTQ_LOG_WARN("export failed: '%s' → %s",
+                             m_layoutNameBuf, m_layoutExportBuf);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    // Import Layout popup — pick a source path. Calls
+    // LayoutIO::importFrom() which loads + saves under profiles/
+    // with a sanitized name.
+    if (m_layoutImportOpen) {
+        ImGui::OpenPopup("Import Layout");
+        m_layoutImportOpen = false;
+    }
+    if (ImGui::BeginPopupModal("Import Layout", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Source .btqlayout path");
+        ImGui::InputText("##importpath", m_layoutImportBuf,
+                         sizeof(m_layoutImportBuf));
+        if (ImGui::Button("Import")) {
+            auto snap = util::LayoutIO::importFrom(
+                std::filesystem::path(m_layoutImportBuf));
+            if (snap.has_value()) {
+                BTQ_LOG_INFO("imported layout from %s as '%s'",
+                             m_layoutImportBuf, snap->name.c_str());
+                ImGui::CloseCurrentPopup();
+            } else {
+                BTQ_LOG_WARN("import failed: %s", m_layoutImportBuf);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }

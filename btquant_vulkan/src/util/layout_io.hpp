@@ -44,6 +44,23 @@ public:
                                             const LayoutSnapshot& snap);
     static std::optional<LayoutSnapshot> load(const std::filesystem::path& path);
 
+    // Export a named profile to an arbitrary path (e.g. for sharing
+    // between machines via scp/USB). Reads the named profile and writes
+    // it verbatim — same on-disk format, same version, same metadata.
+    // Returns true on success; false if the source profile doesn't
+    // exist or the destination can't be opened for writing.
+    static bool exportTo(const std::filesystem::path& destPath,
+                         const std::string& name);
+
+    // Import a .btqlayout file from an arbitrary path. Loads it,
+    // rewrites the name field to match the destination filename (so the
+    // file lists cleanly under profiles/), and saves it under the
+    // default layout dir. Returns true on success; nullopt on
+    // load failure. `destName` is derived from destPath's stem if empty.
+    static std::optional<LayoutSnapshot> importFrom(
+        const std::filesystem::path& srcPath,
+        const std::string& destName = "");
+
     // Build a snapshot from live state. Pure helper — caller supplies
     // the dockLayout string (typically from
     // ImGui::SaveDockBuilderToText(window->DockNode)).

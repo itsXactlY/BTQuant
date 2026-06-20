@@ -3367,5 +3367,136 @@ int main() {
                   << std::endl;
     }
 
+    // Test 41: LayoutIO::exportTo / importFrom — share .btqlayout
+    // files between machines. Reads via existing load(), writes via
+    // existing save(). importFrom derives the destination name from
+    // the source filename stem.
+    {
+        std::cout << "\nTest 41: Testing layout import/export..."
+                  << std::endl;
+        using LIO = ::btquant::util::LayoutIO;
+        using LS  = ::btquant::util::LayoutSnapshot;
+
+        // Isolate HOME so we don't touch the real profile dir.
+        std::string isoHome = "/tmp/btquant_test_export_" +
+                              std::to_string(::getpid());
+        std::filesystem::create_directories(isoHome);
+        setenv("HOME", isoHome.c_str(), 1);
+
+        // 1) exportTo on a non-existent profile → false.
+        if (!LIO::exportTo("/tmp/should_not_exist.btqlayout", "Nope")) {
+            std::cout << "✓ exportTo(missing profile) → false" << std::endl;
+        } else {
+            std::cout << "✗ exportTo returned true for missing profile"
+                      << std::endl;
+        }
+
+        // 2) Create a profile, export it, then import from the export.
+        LS src{};
+        src.name = "ExportTest";
+        src.settings.showOrderBook = false;
+        src.settings.theme = 1;
+        src.dockLayout = "{\"x\":1}";
+        src.settings.risk_maxLeverage = 7.5;
+        if (LIO::save(LIO::layoutPath("ExportTest"), src)) {
+            std::cout << "✓ seeded ExportTest profile" << std::endl;
+        } else {
+            std::cout << "✗ could not seed ExportTest" << std::endl;
+        }
+
+        // 3) exportTo writes the file to an arbitrary path.
+        std::string destPath = "/tmp/btquant_export_test_" +
+                               std::to_string(::getpid()) + ".btqlayout";
+        if (LIO::exportTo(destPath, "ExportTest")) {
+            std::cout << "✓ exportTo wrote " << destPath << std::endl;
+        } else {
+            std::cout << "✗ exportTo failed" << std::endl;
+        }
+
+        // 4) File on disk matches the original (same fields).
+        auto reloaded = LIO::load(destPath);
+        if (reloaded.has_value() &&
+            reloaded->settings.showOrderBook == false &&
+            reloaded->settings.theme == 1 &&
+            reloaded->settings.risk_maxLeverage == 7.5 &&
+            reloaded->dockLayout == "{\"x\":1}") {
+            std::cout << "✓ exported file matches original on round-trip"
+                      << std::endl;
+        } else {
+            std::cout << "✗ exported file diverged from original" << std::endl;
+        }
+
+        // 5) importFrom reads the file and installs it under profiles/.
+        //    Use a different destination name so it doesn't clobber
+        //    ExportTest.
+        auto imported = LIO::importFrom(destPath, "ImportedCopy");
+        if (imported.has_value() &&
+            imported->name == "ImportedCopy" &&
+            imported->settings.showOrderBook == false &&
+            imported->settings.theme == 1) {
+            std::cout << "✓ importFrom installed as 'ImportedCopy'"
+                      << std::endl;
+        } else {
+            std::cout << "✗ importFrom returned wrong snapshot" << std::endl;
+        }
+
+        // 6) The imported profile now exists in the default dir.
+        auto profiles = LIO::list();
+        bool found = false;
+        for (const auto& p : profiles) {
+            if (p.stem() == "ImportedCopy") { found = true; break; }
+        }
+        if (found) {
+            std::cout << "✓ imported profile visible in list()" << std::endl;
+        } else {
+            std::cout << "✗ imported profile not in list()" << std::endl;
+        }
+
+        // 7) importFrom derives name from stem when destName is empty.
+        std::string stemOnly = "/tmp/btquant_stem_only_" +
+                               std::to_string(::getpid()) + ".btqlayout";
+        // First write a known snapshot to stemOnly via exportTo.
+        LIO::exportTo(stemOnly, "ExportTest");
+        auto stemImport = LIO::importFrom(stemOnly);  // empty destName
+        if (stemImport.has_value() &&
+            stemImport->name == "btquant_stem_only_" +
+                                  std::to_string(::getpid())) {
+            std::cout << "✓ importFrom derives name from stem"
+                      << std::endl;
+        } else {
+            std::cout << "✗ stem-derived import wrong (got name='"
+                      << (stemImport.has_value() ? stemImport->name : "<nullopt>")
+                      << "')" << std::endl;
+        }
+
+        // 8) importFrom on a missing file → nullopt.
+        auto missing = LIO::importFrom("/nonexistent/path/foo.btqlayout");
+        if (!missing.has_value()) {
+            std::cout << "✓ importFrom(missing file) → nullopt" << std::endl;
+        } else {
+            std::cout << "✗ importFrom on missing file returned a snapshot"
+                      << std::endl;
+        }
+
+        // 9) exportTo to an unwritable path → false.
+        if (!LIO::exportTo("/nonexistent_dir_xyz/foo.btqlayout",
+                           "ExportTest")) {
+            std::cout << "✓ exportTo(unwritable path) → false" << std::endl;
+        } else {
+            std::cout << "✗ exportTo to unwritable path returned true"
+                      << std::endl;
+        }
+
+        // Cleanup.
+        std::filesystem::remove(destPath);
+        std::filesystem::remove(stemOnly);
+        std::filesystem::remove(LIO::layoutPath("ImportedCopy"));
+        // Best-effort: remove the stem-derived profile too.
+        std::filesystem::remove(LIO::layoutPath(
+            "btquant_stem_only_" + std::to_string(::getpid())));
+        unsetenv("HOME");
+        std::filesystem::remove_all(isoHome);
+    }
+
     return 0;
 }

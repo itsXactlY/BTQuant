@@ -262,9 +262,13 @@ private:
     bool   m_layoutSaveOpen  = false;
     bool   m_layoutLoadOpen  = false;
     char   m_layoutNameBuf[64] = "Custom";
+    char   m_layoutExportBuf[256] = "/tmp/export.btqlayout";
+    char   m_layoutImportBuf[256] = "/tmp/import.btqlayout";
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;
+    bool m_layoutExportOpen = false;
+    bool m_layoutImportOpen = false;
     bool m_hotkeyEditorOpen = false;
     bool m_settingsDirty = false;
 };

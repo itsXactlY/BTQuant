@@ -471,4 +471,37 @@ std::vector<std::filesystem::path> LayoutIO::list(
     return out;
 }
 
+bool LayoutIO::exportTo(const std::filesystem::path& destPath,
+                        const std::string& name) {
+    auto srcPath = layoutPath(name);
+    auto snap = load(srcPath);
+    if (!snap.has_value()) return false;
+    return save(destPath, *snap);
+}
+
+std::optional<LayoutSnapshot> LayoutIO::importFrom(
+        const std::filesystem::path& srcPath,
+        const std::string& destName) {
+    auto snap = load(srcPath);
+    if (!snap.has_value()) return std::nullopt;
+    // Derive the destination name from the file's stem if the caller
+    // didn't pass one explicitly. Strips any path components so the
+    // profile name matches what list() would display.
+    std::string finalName = destName;
+    if (finalName.empty()) {
+        finalName = srcPath.stem().string();
+    }
+    // Strip any directory components from a user-supplied name (defence
+    // in depth — the caller might pass "/foo/bar" instead of "bar").
+    auto slash = finalName.find_last_of("/\\");
+    if (slash != std::string::npos) {
+        finalName = finalName.substr(slash + 1);
+    }
+    if (finalName.empty()) return std::nullopt;
+    snap->name = finalName;
+    auto destPath = layoutPath(finalName);
+    if (!save(destPath, *snap)) return std::nullopt;
+    return snap;
+}
+
 } // namespace btquant::util

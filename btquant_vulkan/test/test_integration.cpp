@@ -21484,5 +21484,66 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 180: allSymbolWeeklyWinRate() (Sprint #194).
+    //
+    // Bulk weekly WR. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 180: all-sym weekly WR..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test180_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "w.jsonl").string());
+            for (int i = 0; i < 7; ++i) {
+                j.append(mkFill("BTC", 10.0,
+                                t0 + i * day));
+            }
+            j.append(mkFill("ETH", 10.0, t0));
+            auto v = j.allSymbolWeeklyWinRate();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms: top="
+                          << v[0].symbol
+                          << " meanWR="
+                          << v[0].meanWeeklyWinRate
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-sym-weekly tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -2023,6 +2023,18 @@ public:
     std::vector<TagSummary>
     allTagRecoveryFactor(bool includeUntagged = true) const;
 
+    // All-symbol weekly win rate bulk (Sprint #194).
+    // Returns aggregated per-symbol weekly win rate
+    // (mean of all weekly rates per symbol), sorted DESC.
+    struct SymbolWeeklyWR {
+        std::string symbol;
+        double      meanWeeklyWinRate = 0.0;
+        size_t      totalWeeks         = 0;
+        size_t      winningWeeks       = 0;
+    };
+    std::vector<SymbolWeeklyWR>
+    allSymbolWeeklyWinRate() const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

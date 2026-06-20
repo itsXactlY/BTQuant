@@ -8174,4 +8174,39 @@ TradeJournal::allTagRecoveryFactor(bool includeUntagged) const {
     return out;
 }
 
+std::vector<TradeJournal::SymbolWeeklyWR>
+TradeJournal::allSymbolWeeklyWinRate() const {
+    // Sprint #194. For each symbol, compute weekly win
+    // rate series, then aggregate mean across weeks.
+    std::vector<SymbolWeeklyWR> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        SymbolWeeklyWR w;
+        w.symbol = s;
+        auto weekly = weeklyWinRateBySymbol(s);
+        if (weekly.empty()) {
+            out.push_back(w);
+            continue;
+        }
+        double sum = 0.0;
+        for (const auto& ww : weekly) {
+            sum += ww.winRate;
+            if (ww.winRate >= 0.5) w.winningWeeks++;
+        }
+        w.totalWeeks = weekly.size();
+        w.meanWeeklyWinRate = sum /
+            static_cast<double>(weekly.size());
+        out.push_back(w);
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SymbolWeeklyWR& a, const SymbolWeeklyWR& b) {
+            return a.meanWeeklyWinRate >
+                   b.meanWeeklyWinRate;
+        });
+    return out;
+}
+
 } // namespace btquant

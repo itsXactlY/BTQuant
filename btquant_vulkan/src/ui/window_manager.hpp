@@ -11,6 +11,7 @@
 // MarketDataProcessor is declared in btquant:: namespace (not btquant::ui).
 // Forward-declare globally so the type is visible inside namespace btquant::ui.
 namespace btquant { class MarketDataProcessor; }
+namespace btquant { class PositionBook; }
 
 namespace btquant::ui {
 
@@ -73,6 +74,9 @@ public:
     // Order Ticket toggle (Ctrl+Enter).
     bool showOrderTicket = false;
 
+    // Position Panel toggle (Ctrl+B).
+    bool showPositionPanel = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -133,6 +137,7 @@ public:
     bool saveCurrentTheme();
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();
+    void showPositionPanelWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -172,11 +177,15 @@ private:
     class ThemeEditor*     m_themeEditor     = nullptr;
     class PositionCalculator* m_positionCalculator = nullptr;
     class OrderTicket*       m_orderTicket        = nullptr;
+    class PositionPanel*     m_positionPanel      = nullptr;
     StatsOverlay m_statsOverlay;
     // Cached MarketDataProcessor pointer — used by the SymbolPicker callback
     // to actually swap the active symbol on selection. Without this, the
     // picker would only log and the UI would still show the old symbol.
     ::btquant::MarketDataProcessor* m_marketData = nullptr;
+    // Cached PositionBook — owns the open position. OrderTicket submits
+    // apply fills here; main loop drives markToMarket each frame.
+    ::btquant::PositionBook*       m_positionBook   = nullptr;
     bool m_initialized = false;
     bool m_layoutApplied = false;
     bool m_layoutResetRequested = false;

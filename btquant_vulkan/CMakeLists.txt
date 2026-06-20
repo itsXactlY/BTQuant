@@ -72,6 +72,8 @@ set(SOURCES
     src/util/theme_io.cpp
     src/widgets/position_calculator.cpp
     src/widgets/order_ticket.cpp
+    src/widgets/position_panel.cpp
+    src/data/position_book.cpp
     src/ui/stats_overlay.cpp
     src/data/mock_producer.cpp
 )
@@ -110,6 +112,8 @@ set(HEADERS
     src/util/theme_io.hpp
     src/widgets/position_calculator.hpp
     src/widgets/order_ticket.hpp
+    src/widgets/position_panel.hpp
+    src/data/position_book.hpp
     src/ui/stats_overlay.hpp
     src/data/mock_producer.hpp
 )

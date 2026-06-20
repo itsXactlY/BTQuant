@@ -27,6 +27,9 @@
 #include "../util/theme_io.hpp"
 #include "../widgets/position_calculator.hpp"
 #include "../widgets/order_ticket.hpp"
+#include "../widgets/position_panel.hpp"
+#include "../data/position_book.hpp"
+#include "../data/market_data.hpp"
 
 using btquant::ui::LogPanel;
 
@@ -123,9 +126,50 @@ WindowManager::WindowManager() {
     m_themeEditor = new ThemeEditor();
     m_positionCalculator = new PositionCalculator();
     m_orderTicket = new OrderTicket();
-    m_orderTicket->setSubmitFn([](const std::string& summary) {
-        // Default submit: just log. Real exchange wiring would go here.
+    m_positionBook  = new ::btquant::PositionBook();
+    m_positionPanel = new PositionPanel();
+    m_positionPanel->setPositionBook(m_positionBook);
+
+    // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
+    // size (positive for buy, negative for sell) is what feeds the book;
+    // we split it into direction + magnitude for clarity.
+    m_orderTicket->setSubmitFn([this](const std::string& summary) {
         BTQ_LOG_INFO("OrderTicket.submit: %s", summary.c_str());
+        if (!m_orderTicket || !m_positionBook) return;
+        double qty    = m_orderTicket->quantity();
+        bool   isBuy  = m_orderTicket->isBuy();
+        // Use the most recent snapshot price as the fill reference when
+        // the live processor is connected; otherwise fall back to the
+        // ticket's limit-price input.
+        double price  = m_orderTicket->limitPrice();
+        std::string sym = m_marketData ? m_marketData->symbol()
+                                       : std::string("BTC/USDT");
+        if (m_marketData) {
+            auto snap = m_marketData->snapshot(1, 0);
+            if (!snap.recent_trades.empty()) {
+                price = snap.recent_trades.front().price;
+            }
+        }
+        if (qty <= 0.0 || price <= 0.0) {
+            BTQ_LOG_WARN("OrderTicket.submit ignored: qty=%.4f price=%.2f",
+                         qty, price);
+            return;
+        }
+        double realized = m_positionBook->fill(sym, isBuy, qty, price);
+        if (m_positionPanel) {
+            PositionPanel::FillRecord r;
+            r.symbol         = sym;
+            r.isLong         = isBuy;
+            r.qty            = qty;
+            r.price          = price;
+            r.realizedDelta  = realized;
+            m_positionPanel->recordFill(r);
+        }
+        if (std::fabs(realized) > 0.0) {
+            BTQ_LOG_INFO("PositionBook.fill: realized %s$%.4f on %s %s %.4f",
+                         realized >= 0 ? "+" : "", realized,
+                         sym.c_str(), isBuy ? "BUY" : "SELL", qty);
+        }
     });
 }
 
@@ -147,6 +191,8 @@ WindowManager::~WindowManager() {
     delete m_themeEditor;
     delete m_positionCalculator;
     delete m_orderTicket;
+    delete m_positionPanel;
+    delete m_positionBook;
     // m_logPanel is a singleton — do not delete.
 }
 
@@ -378,6 +424,19 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         markSettingsDirty();
     }
     prevCtrlEnter = currCtrlEnter;
+
+    // Ctrl+B toggles the position panel. Edge-triggered.
+    static bool prevCtrlB = false;
+    bool currCtrlB = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_B) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlB && !prevCtrlB) {
+        showPositionPanel = !showPositionPanel;
+        if (m_positionPanel) m_positionPanel->setOpen(showPositionPanel);
+        markSettingsDirty();
+    }
+    prevCtrlB = currCtrlB;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -500,6 +559,22 @@ void WindowManager::showOrderTicketWindow() {
     if (m_orderTicket) m_orderTicket->render();
 }
 
+void WindowManager::showPositionPanelWindow() {
+    if (!showPositionPanel) return;
+    // Drive mark-to-market off the latest snapshot mid price before render
+    // so the panel shows live unrealized P&L. Cheap — locks the snapshot
+    // mutex briefly then renders.
+    if (m_positionBook && m_positionBook->hasPosition() && m_marketData) {
+        auto snap = m_marketData->snapshot(1, 0);
+        if (!snap.recent_trades.empty()) {
+            m_positionBook->markToMarket(snap.recent_trades.front().price);
+        } else if (snap.order_book.midPrice > 0.0) {
+            m_positionBook->markToMarket(snap.order_book.midPrice);
+        }
+    }
+    if (m_positionPanel) m_positionPanel->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -521,6 +596,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Theme Editor… (Ctrl+T)",   nullptr, &showThemeEditorOpen))  markSettingsDirty();
             if (ImGui::MenuItem("Position Calculator",  nullptr, &showPositionCalculator)) markSettingsDirty();
             if (ImGui::MenuItem("Order Ticket (Ctrl+Enter)", nullptr, &showOrderTicket))  markSettingsDirty();
+            if (ImGui::MenuItem("Position Panel (Ctrl+B)",     nullptr, &showPositionPanel))markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();
@@ -598,6 +674,7 @@ void WindowManager::showHotkeyHelpWindow() {
         row("Ctrl+P",   "Open Symbol Picker");
         row("Ctrl+T",   "Open Theme Editor");
         row("Ctrl+Enter", "Toggle Order Ticket");
+        row("Ctrl+B",   "Toggle Position Panel");
         row("ESC",      "Close topmost popup / window");
 
         ImGui::EndTable();

@@ -18,6 +18,8 @@
 #include "../src/util/theme_io.hpp"
 #include "../src/widgets/position_calculator.hpp"
 #include "../src/widgets/order_ticket.hpp"
+#include "../src/widgets/position_panel.hpp"
+#include "../src/data/position_book.hpp"
 #include "../src/data/market_data_processor.hpp"
 #include <iostream>
 #include <cassert>
@@ -1324,6 +1326,166 @@ int main() {
             std::cout << "✓ setOpen(true) → isOpen" << std::endl;
         } else {
             std::cout << "✗ setOpen(true) failed" << std::endl;
+        }
+    }
+
+    // Test 23: PositionBook — fill math + mark-to-market + flatten.
+    std::cout << "\nTest 23: Testing PositionBook..." << std::endl;
+    {
+        using btquant::PositionBook;
+
+        PositionBook book;
+
+        // 1) Open long: 1.0 @ $67000 → size 1.0, avg $67000, no realized.
+        book.fill("BTC/USDT", true, 1.0, 67000.0);
+        if (book.hasPosition() &&
+            std::abs(book.position().size - 1.0) < 1e-9 &&
+            std::abs(book.position().avgEntry - 67000.0) < 1e-9 &&
+            book.realizedPnL() == 0.0) {
+            std::cout << "✓ open long 1.0 @ $67000 (size=1, avg=67000, "
+                         "realized=0)" << std::endl;
+        } else {
+            std::cout << "✗ open long: size=" << book.position().size
+                      << " avg=" << book.position().avgEntry
+                      << " realized=" << book.realizedPnL() << std::endl;
+        }
+
+        // 2) Average in: 1.0 @ $68000 → size 2.0, avg $67500.
+        book.fill("BTC/USDT", true, 1.0, 68000.0);
+        if (std::abs(book.position().size - 2.0) < 1e-9 &&
+            std::abs(book.position().avgEntry - 67500.0) < 1e-9) {
+            std::cout << "✓ average in → size=2.0, avg=$67500" << std::endl;
+        } else {
+            std::cout << "✗ avg-in: size=" << book.position().size
+                      << " avg=" << book.position().avgEntry << std::endl;
+        }
+
+        // 3) Mark to market at $69000 → unrealized = 2.0 * (69000 - 67500)
+        //    = $3000.
+        book.markToMarket(69000.0);
+        if (std::abs(book.unrealizedPnL() - 3000.0) < 1e-6) {
+            std::cout << "✓ markToMarket @ $69000 → unrealized=$3000"
+                      << std::endl;
+        } else {
+            std::cout << "✗ unrealized: " << book.unrealizedPnL() << std::endl;
+        }
+
+        // 4) Close half: SELL 1.0 @ $69000 → realized = 1 * (69000-67500)
+        //    = $1500, remaining size 1.0.
+        double realized = book.fill("BTC/USDT", false, 1.0, 69000.0);
+        if (std::abs(realized - 1500.0) < 1e-6 &&
+            std::abs(book.position().size - 1.0) < 1e-9 &&
+            std::abs(book.realizedPnL() - 1500.0) < 1e-6) {
+            std::cout << "✓ close half @ $69000 → realized=$1500, "
+                         "size=1.0 left" << std::endl;
+        } else {
+            std::cout << "✗ close half: realized=" << realized
+                      << " size=" << book.position().size
+                      << " cum=" << book.realizedPnL() << std::endl;
+        }
+
+        // 5) Flip: SELL 2.0 @ $69000 → close remaining 1.0 (realized +$1500
+        //    cumulative $3000), then short 1.0 @ $69000.
+        double realized2 = book.fill("BTC/USDT", false, 2.0, 69000.0);
+        if (std::abs(book.realizedPnL() - 3000.0) < 1e-6 &&
+            book.position().isLong == false &&
+            std::abs(book.position().size - 1.0) < 1e-9 &&
+            std::abs(book.position().avgEntry - 69000.0) < 1e-9) {
+            std::cout << "✓ flip to short 1.0 @ $69000 → cumulative "
+                         "realized=$3000" << std::endl;
+        } else {
+            std::cout << "✗ flip: realized2=" << realized2
+                      << " cum=" << book.realizedPnL()
+                      << " isLong=" << book.position().isLong
+                      << " size=" << book.position().size << std::endl;
+        }
+
+        // 6) Mark short at $68000 → unrealized = 1.0 * (69000 - 68000) =
+        //    $1000 (short profits when price falls).
+        book.markToMarket(68000.0);
+        if (std::abs(book.unrealizedPnL() - 1000.0) < 1e-6) {
+            std::cout << "✓ short markToMarket @ $68000 → unrealized=$1000"
+                      << std::endl;
+        } else {
+            std::cout << "✗ short unrealized: " << book.unrealizedPnL()
+                      << std::endl;
+        }
+
+        // 7) Flatten at $68000 → realize $1000 more (cum $4000), position 0.
+        double fl = book.flatten(68000.0);
+        if (std::abs(fl - 1000.0) < 1e-6 &&
+            !book.hasPosition() &&
+            std::abs(book.realizedPnL() - 4000.0) < 1e-6) {
+            std::cout << "✓ flatten @ $68000 → realized=$1000, cum=$4000, flat"
+                      << std::endl;
+        } else {
+            std::cout << "✗ flatten: delta=" << fl
+                      << " cum=" << book.realizedPnL()
+                      << " flat=" << (!book.hasPosition()) << std::endl;
+        }
+
+        // 8) Pure-math helper: averageEntry sanity.
+        double avg = PositionBook::averageEntry(2.0, 67000.0, 2.0, 68000.0);
+        if (std::abs(avg - 67500.0) < 1e-9) {
+            std::cout << "✓ averageEntry(2×67000 + 2×68000) = 67500"
+                      << std::endl;
+        } else {
+            std::cout << "✗ averageEntry: " << avg << std::endl;
+        }
+
+        // 9) Symbol switch with open position auto-flattens at the new
+        //    fill's price (no mark first). Long 1 BTC @ $67000 gets
+        //    flattened at $3500 (the ETH fill price) → realized −$63500,
+        //    then ETH opens fresh at 5.0 @ $3500 with no P&L.
+        book.clearAll();
+        book.fill("BTC/USDT", true, 1.0, 67000.0);
+        double switchRealized = book.fill("ETH/USDT", true, 5.0, 3500.0);
+        if (book.position().symbol == "ETH/USDT" &&
+            std::abs(book.position().size - 5.0) < 1e-9 &&
+            std::abs(switchRealized - (-63500.0)) < 1e-6 &&
+            std::abs(book.realizedPnL() - (-63500.0)) < 1e-6) {
+            std::cout << "✓ symbol switch: BTC flattened at $3500 "
+                         "(realized −$63500), ETH opened fresh" << std::endl;
+        } else {
+            std::cout << "✗ symbol switch: realized=" << switchRealized
+                      << " sym=" << book.position().symbol
+                      << " size=" << book.position().size << std::endl;
+        }
+
+        // 10) PositionPanel history ring buffer.
+        using btquant::ui::PositionPanel;
+        PositionPanel pp;
+        if (pp.historySize() == 0 && !pp.isOpen()) {
+            std::cout << "✓ PositionPanel starts empty/closed" << std::endl;
+        } else {
+            std::cout << "✗ PositionPanel default state" << std::endl;
+        }
+        for (int i = 0; i < 5; ++i) {
+            PositionPanel::FillRecord r;
+            r.symbol = "BTC/USDT";
+            r.isLong = (i % 2 == 0);
+            r.qty    = 0.1 * (i + 1);
+            r.price  = 67000.0 + i * 100;
+            r.realizedDelta = i * 5.0;
+            pp.recordFill(r);
+        }
+        if (pp.historySize() == 5) {
+            std::cout << "✓ recordFill accumulates 5 entries" << std::endl;
+        } else {
+            std::cout << "✗ history size: " << pp.historySize() << std::endl;
+        }
+        // Push past the cap.
+        for (int i = 0; i < PositionPanel::kMaxHistory + 10; ++i) {
+            PositionPanel::FillRecord r;
+            r.symbol = "ETH/USDT";
+            pp.recordFill(r);
+        }
+        if (pp.historySize() == PositionPanel::kMaxHistory) {
+            std::cout << "✓ history capped at kMaxHistory ("
+                      << PositionPanel::kMaxHistory << ")" << std::endl;
+        } else {
+            std::cout << "✗ cap not enforced: " << pp.historySize()
+                      << std::endl;
         }
     }
 

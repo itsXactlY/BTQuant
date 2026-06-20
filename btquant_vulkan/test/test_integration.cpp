@@ -5351,5 +5351,150 @@ int main() {
         }
     }
 
+    // Test 59: RiskGuard — per-symbol session realized.
+    // Adds two-arg addRealized(delta, symbol) overload that updates
+    // BOTH the aggregate total AND a per-symbol bucket. The trader
+    // (via RiskPanel) needs to see which symbol is eating the kill
+    // budget, not just the total. Sorting is |contribution| DESC so
+    // the biggest bleeder is at the top of the panel.
+    std::cout << "\nTest 59: Testing RiskGuard per-symbol session realized..."
+              << std::endl;
+    {
+        using btquant::RiskGuard;
+        using btquant::RiskConfig;
+
+        // 1) 1-arg form: back-compat, no per-symbol bucket created.
+        {
+            RiskGuard g;
+            g.addRealized(-100.0);
+            if (g.sessionRealized() == -100.0 &&
+                g.sessionRealizedBySymbol().empty()) {
+                std::cout << "✓ 1-arg addRealized: total updated, "
+                             "no symbol bucket" << std::endl;
+            } else {
+                std::cout << "✗ 1-arg addRealized broke" << std::endl;
+            }
+        }
+
+        // 2) 2-arg form: aggregate + bucket both update.
+        {
+            RiskGuard g;
+            g.addRealized(-50.0, std::string("BTCUSDT"));
+            g.addRealized(-200.0, std::string("ETHUSDT"));
+            if (g.sessionRealized() == -250.0 &&
+                g.sessionRealizedFor("BTCUSDT") == -50.0 &&
+                g.sessionRealizedFor("ETHUSDT") == -200.0) {
+                std::cout << "✓ 2-arg addRealized: total + per-symbol sync"
+                          << std::endl;
+            } else {
+                std::cout << "✗ 2-arg addRealized: total="
+                          << g.sessionRealized()
+                          << " BTC=" << g.sessionRealizedFor("BTCUSDT")
+                          << " ETH=" << g.sessionRealizedFor("ETHUSDT")
+                          << std::endl;
+            }
+        }
+
+        // 3) Repeat calls accumulate per-symbol without touching others.
+        {
+            RiskGuard g;
+            g.addRealized(-50.0, std::string("BTCUSDT"));
+            g.addRealized(-30.0, std::string("BTCUSDT"));
+            g.addRealized(-200.0, std::string("ETHUSDT"));
+            if (g.sessionRealized() == -280.0 &&
+                g.sessionRealizedFor("BTCUSDT") == -80.0 &&
+                g.sessionRealizedFor("ETHUSDT") == -200.0) {
+                std::cout << "✓ repeat calls accumulate per-symbol"
+                          << std::endl;
+            } else {
+                std::cout << "✗ accumulation broke: BTC="
+                          << g.sessionRealizedFor("BTCUSDT") << std::endl;
+            }
+        }
+
+        // 4) Unknown symbol returns 0 (never throws).
+        {
+            RiskGuard g;
+            g.addRealized(-50.0, std::string("BTCUSDT"));
+            if (g.sessionRealizedFor("UNKNOWN") == 0.0) {
+                std::cout << "✓ unknown symbol returns 0" << std::endl;
+            } else {
+                std::cout << "✗ unknown symbol did not return 0"
+                          << std::endl;
+            }
+        }
+
+        // 5) Sorted breakdown: |contribution| DESC.
+        {
+            RiskGuard g;
+            g.addRealized(-10.0,  std::string("AAA"));
+            g.addRealized(-500.0, std::string("BBB"));
+            g.addRealized(+25.0,  std::string("CCC"));
+            auto breakdown = g.sessionRealizedBySymbol();
+            if (breakdown.size() == 3 &&
+                breakdown[0].first == "BBB" &&
+                breakdown[1].first == "CCC" &&
+                breakdown[2].first == "AAA") {
+                std::cout << "✓ breakdown sorted by |contribution| DESC"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sort order wrong: ";
+                for (const auto& kv : breakdown)
+                    std::cout << kv.first << "=" << kv.second << " ";
+                std::cout << std::endl;
+            }
+        }
+
+        // 6) resetSession clears total AND map AND order.
+        {
+            RiskGuard g;
+            g.addRealized(-50.0,  std::string("BTCUSDT"));
+            g.addRealized(-200.0, std::string("ETHUSDT"));
+            g.resetSession();
+            if (g.sessionRealized() == 0.0 &&
+                g.sessionRealizedFor("BTCUSDT") == 0.0 &&
+                g.sessionRealizedFor("ETHUSDT") == 0.0 &&
+                g.sessionRealizedBySymbol().empty() &&
+                g.symbolsBookedThisSession().empty()) {
+                std::cout << "✓ resetSession clears total + map + order"
+                          << std::endl;
+            } else {
+                std::cout << "✗ resetSession left residual" << std::endl;
+            }
+        }
+
+        // 7) symbolsBookedThisSession preserves insertion order.
+        {
+            RiskGuard g;
+            g.addRealized(-50.0,  std::string("BTCUSDT"));
+            g.addRealized(-30.0,  std::string("BTCUSDT"));
+            g.addRealized(-200.0, std::string("ETHUSDT"));
+            g.addRealized(+10.0,  std::string("SOLUSDT"));
+            auto order = g.symbolsBookedThisSession();
+            if (order.size() == 3 &&
+                order[0] == "BTCUSDT" &&
+                order[1] == "ETHUSDT" &&
+                order[2] == "SOLUSDT") {
+                std::cout << "✓ insertion order preserved "
+                             "(first-write only)" << std::endl;
+            } else {
+                std::cout << "✗ insertion order broke" << std::endl;
+            }
+        }
+
+        // 8) Empty-symbol 2-arg call: same as 1-arg (no bucket created).
+        {
+            RiskGuard g;
+            g.addRealized(-75.0, std::string(""));
+            if (g.sessionRealized() == -75.0 &&
+                g.sessionRealizedBySymbol().empty()) {
+                std::cout << "✓ empty symbol: total-only, no bucket"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty symbol mis-handled" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

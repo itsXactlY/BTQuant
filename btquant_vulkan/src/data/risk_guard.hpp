@@ -3,6 +3,9 @@
 
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace btquant {
 
@@ -48,7 +51,21 @@ public:
     // Session P&L tracking. Add a realized delta (positive for wins,
     // negative for losses). The kill switch trips when the cumulative
     // session realized drops to or below -killOnDailyLossUSD.
+    //
+    // The 1-arg form (no symbol) updates only the aggregate total —
+    // useful for non-trade P&L (e.g. manual journal entries that
+    // pre-date the per-symbol feature, or synthetic bookkeeping). It
+    // is intentionally preserved for back-compat with the original
+    // API.
+    //
+    // The 2-arg form (with symbol) updates BOTH the aggregate total
+    // AND the per-symbol bucket. The aggregate always equals the sum
+    // of per-symbol buckets when only the 2-arg form has been used,
+    // so RiskPanel can display the per-symbol breakdown as the source
+    // of truth for which position is killing the kill budget.
     void addRealized(double delta);
+    void addRealized(double delta, const std::string& symbol);
+
     void resetSession();
 
     bool isKillTripped() const;
@@ -59,6 +76,24 @@ public:
     double remainingLossBudget() const {
         return m_cfg.killOnDailyLossUSD + m_sessionRealized;
     }
+
+    // Per-symbol session realized. Returns 0 for symbols that have
+    // not been booked against (we never throw — the panel must keep
+    // rendering even when one symbol has no contribution yet).
+    double sessionRealizedFor(const std::string& symbol) const;
+
+    // Per-symbol breakdown, sorted by absolute contribution DESCENDING
+    // so the biggest bleeders surface at the top of the RiskPanel
+    // readout. Each pair is {symbol, signed_pnl}. The vector is a
+    // snapshot copy — safe to iterate without holding a lock.
+    std::vector<std::pair<std::string, double>>
+    sessionRealizedBySymbol() const;
+
+    // Symbol names that have ever booked a delta this session, in
+    // insertion order (insertion = first delta for that symbol).
+    // Useful when the panel wants to display a stable column order
+    // rather than re-sort on every frame.
+    std::vector<std::string> symbolsBookedThisSession() const;
 
     const RiskConfig& config() const { return m_cfg; }
     void setConfig(const RiskConfig& c) {
@@ -79,6 +114,12 @@ public:
 private:
     RiskConfig m_cfg;
     double     m_sessionRealized = 0.0;
+    // Per-symbol session realized. Keyed by symbol; value is the
+    // signed running total of addRealized(delta, symbol) calls this
+    // session. Order is preserved separately in m_symbolOrder so the
+    // panel can render a stable layout.
+    std::unordered_map<std::string, double> m_sessionRealizedBySymbol;
+    std::vector<std::string>                m_symbolOrder;
 };
 
 } // namespace btquant

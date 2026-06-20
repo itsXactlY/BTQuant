@@ -1,5 +1,6 @@
 #include "risk_guard.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -54,8 +55,54 @@ void RiskGuard::addRealized(double delta) {
     m_sessionRealized += delta;
 }
 
+void RiskGuard::addRealized(double delta, const std::string& symbol) {
+    m_sessionRealized += delta;
+    if (symbol.empty()) return;  // empty key = 1-arg-style update only
+    auto it = m_sessionRealizedBySymbol.find(symbol);
+    if (it == m_sessionRealizedBySymbol.end()) {
+        m_sessionRealizedBySymbol.emplace(symbol, delta);
+        m_symbolOrder.push_back(symbol);
+    } else {
+        it->second += delta;
+    }
+}
+
 void RiskGuard::resetSession() {
     m_sessionRealized = 0.0;
+    m_sessionRealizedBySymbol.clear();
+    m_symbolOrder.clear();
+}
+
+double RiskGuard::sessionRealizedFor(const std::string& symbol) const {
+    auto it = m_sessionRealizedBySymbol.find(symbol);
+    if (it == m_sessionRealizedBySymbol.end()) return 0.0;
+    return it->second;
+}
+
+std::vector<std::pair<std::string, double>>
+RiskGuard::sessionRealizedBySymbol() const {
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(m_sessionRealizedBySymbol.size());
+    for (const auto& kv : m_sessionRealizedBySymbol) {
+        out.emplace_back(kv.first, kv.second);
+    }
+    // Sort by absolute contribution DESC so the biggest bleeder is
+    // first. Ties broken by symbol name (stable, deterministic for
+    // tests).
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<std::string, double>& a,
+                 const std::pair<std::string, double>& b) {
+                  double aa = std::fabs(a.second);
+                  double bb = std::fabs(b.second);
+                  if (aa != bb) return aa > bb;
+                  return a.first < b.first;
+              });
+    return out;
+}
+
+std::vector<std::string>
+RiskGuard::symbolsBookedThisSession() const {
+    return m_symbolOrder;
 }
 
 bool RiskGuard::isKillTripped() const {

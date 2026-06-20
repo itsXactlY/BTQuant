@@ -378,6 +378,66 @@ void RiskPanel::render() {
         ImGui::TextDisabled("(RiskGuard not bound — no daily-loss tracking)");
     }
 
+    // Per-symbol contribution breakdown. Only renders if the guard has
+    // seen at least one 2-arg addRealized call this session. Sort order
+    // is provided by the guard (|contribution| DESC), so the biggest
+    // bleeder is always at the top — the trader can see at a glance
+    // which symbol is eating the kill budget.
+    //
+    // We always render the section header even when empty (so the
+    // trader knows the feature is wired); just suppress the empty
+    // state text.
+    if (m_riskGuard) {
+        auto breakdown = m_riskGuard->sessionRealizedBySymbol();
+        if (!breakdown.empty()) {
+            ImGui::Separator();
+            ImGui::Text("Per-symbol contribution (session)");
+            // Two columns: symbol + signed P&L. Right-align the
+            // numbers so the eye can scan down the loss column.
+            if (ImGui::BeginTable("PerSymbolLoss",
+                                  3,
+                                  ImGuiTableFlags_BordersInnerH |
+                                  ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Symbol",  ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("P&L",     ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                ImGui::TableSetupColumn("Share",   ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                ImGui::TableHeadersRow();
+                // Total |loss| drives the share column — we want the
+                // worst-position's share, not absolute bar fraction.
+                double totalAbs = 0.0;
+                for (const auto& kv : breakdown) totalAbs += std::fabs(kv.second);
+                for (const auto& kv : breakdown) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", kv.first.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    if (kv.second > 0)
+                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 220, 120, 255));
+                    else if (kv.second < 0)
+                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 80, 80, 255));
+                    ImGui::Text("%s$%.2f",
+                                kv.second >= 0 ? "+" : "",
+                                kv.second);
+                    if (kv.second != 0) ImGui::PopStyleColor();
+                    ImGui::TableSetColumnIndex(2);
+                    if (totalAbs > 1e-12) {
+                        double pct = std::fabs(kv.second) / totalAbs * 100.0;
+                        ImGui::Text("%.0f%%", pct);
+                    } else {
+                        ImGui::TextUnformatted("—");
+                    }
+                }
+                ImGui::EndTable();
+            }
+            ImGui::TextDisabled("(sorted by |contribution| DESC — "
+                                "biggest bleeder first)");
+        } else {
+            ImGui::Separator();
+            ImGui::TextDisabled("(per-symbol breakdown: no symbol-booked "
+                                "fills this session yet)");
+        }
+    }
+
     ImGui::End();
 }
 

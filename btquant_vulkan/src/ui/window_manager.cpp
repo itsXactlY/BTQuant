@@ -257,7 +257,7 @@ WindowManager::WindowManager() {
         }
         double realized = m_positionBook->fill(sym, isBuy, qty, price);
         if (m_riskGuard && std::fabs(realized) > 0.0) {
-            m_riskGuard->addRealized(realized);
+            m_riskGuard->addRealized(realized, sym);
             if (m_riskGuard->isKillTripped()) {
                 BTQ_LOG_ERROR("RiskGuard: %s",
                     ::btquant::RiskGuard::killReason(
@@ -821,7 +821,8 @@ void WindowManager::dispatchAction(::btquant::util::HotkeyAction a) {
                     BTQ_LOG_WARN("KillSwitch ignored: no live price available");
                 } else {
                     double realized = m_positionBook->flatten(px);
-                    if (m_riskGuard) m_riskGuard->addRealized(realized);
+                    if (m_riskGuard) m_riskGuard->addRealized(
+                        realized, m_positionBook->position().symbol);
                     if (m_tradeJournal) {
                         ::btquant::JournalFill jf;
                         jf.timestamp_us  = std::chrono::duration_cast<std::chrono::microseconds>(

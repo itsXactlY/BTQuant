@@ -1531,6 +1531,21 @@ public:
         bool byFillCount = false,
         size_t fillCount = 30) const;
 
+    // Per-segment recent performance (Sprint #155). Same
+    // shape as recentPerformance (#154) but filtered to
+    // a single symbol or tag.
+    PerformanceSnapshot recentPerformanceBySymbol(
+        const std::string& symbol,
+        size_t lastDays = 30,
+        bool byFillCount = false,
+        size_t fillCount = 30) const;
+    PerformanceSnapshot recentPerformanceByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        size_t lastDays = 30,
+        bool byFillCount = false,
+        size_t fillCount = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

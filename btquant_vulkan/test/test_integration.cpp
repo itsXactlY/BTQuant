@@ -18721,5 +18721,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 142: recentPerformanceBySymbol/ByTag (Sprint #155).
+    //
+    // Per-segment recent performance. Tests:
+    //   - BTC: 4 fills [+100, -50, +200, -25], last 2
+    //     → wins=1, losses=1, realized=+175.
+    //   - ETH: 1 fill → empty window.
+    std::cout << "\nTest 142: per-segment recent perf..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test142_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC: 4 fills, last 2 ----
+        {
+            TradeJournal j((tmpDir / "seg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", t0));
+            j.append(mkFill("BTC",  -50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC",  200.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC",  -25.0, "scalp",
+                             t0 + 3));
+            j.append(mkFill("ETH",   50.0, "arb",
+                             t0 + 4));
+            auto s = j.recentPerformanceBySymbol("BTC",
+                30, true, 2);
+            // BTC last 2: +200, -25 → 1W, 1L, +175.
+            if (s.totalFills == 2 &&
+                s.wins == 1 && s.losses == 1 &&
+                std::fabs(s.realized - 175.0) < 1e-9) {
+                std::cout << "✓ BTC last 2: 1W/1L, +175"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: fills="
+                          << s.totalFills
+                          << " wins=" << s.wins
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg recent tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

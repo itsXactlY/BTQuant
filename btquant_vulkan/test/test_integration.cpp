@@ -22486,5 +22486,67 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 196: allSegmentTradeSizeStats (Sprint #210).
+    //
+    // Bulk trade size. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 196: all-seg trade size stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test196_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + 1));
+            j.append(mkFill("ETH",  10.0, t0));
+            auto v = j.allSegmentTradeSizeStats();
+            if (v.size() == 2 &&
+                v[0].segment == "BTC" &&
+                v[0].meanSize > v[1].meanSize) {
+                std::cout << "✓ 2 syms DESC: top="
+                          << v[0].segment
+                          << " meanSize="
+                          << v[0].meanSize
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top="
+                          << (v.size() > 0
+                              ? v[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-size tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

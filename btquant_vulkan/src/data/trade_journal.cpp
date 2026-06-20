@@ -8991,4 +8991,49 @@ TradeJournal::tradeSizeStatsSegByTag(
     return s;
 }
 
+std::vector<TradeJournal::TradeSizeStatsSeg>
+TradeJournal::allSegmentTradeSizeStats() const {
+    // Sprint #210. Bulk per-symbol trade size stats
+    // sorted DESC by meanSize.
+    std::vector<TradeSizeStatsSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(tradeSizeStatsSegBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TradeSizeStatsSeg& a,
+           const TradeSizeStatsSeg& b) {
+            return a.meanSize > b.meanSize;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::TradeSizeStatsSeg>
+TradeJournal::allSegmentTradeSizeStatsByTag(
+    bool includeUntagged) const {
+    std::vector<TradeSizeStatsSeg> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(tradeSizeStatsSegByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TradeSizeStatsSeg& a,
+           const TradeSizeStatsSeg& b) {
+            return a.meanSize > b.meanSize;
+        });
+    return out;
+}
+
 } // namespace btquant

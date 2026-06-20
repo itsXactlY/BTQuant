@@ -2238,6 +2238,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment trade size stats bulk (Sprint #210).
+    // Returns TradeSizeStatsSeg for every segment,
+    // sorted DESC by meanSize (largest avg trade first).
+    std::vector<TradeSizeStatsSeg>
+    allSegmentTradeSizeStats() const;
+    std::vector<TradeSizeStatsSeg>
+    allSegmentTradeSizeStatsByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -616,6 +616,30 @@ public:
     static double avgRecoveryRatio(
         const std::vector<DrawdownEvent>& events);
 
+    // Monthly returns — Sprint #115. Bucket journal fills by
+    // calendar month (year + month) and compute the realized
+    // P&L for each bucket. Mirrors perSymbolDayStats() (#95)
+    // in shape.
+    //
+    // Output is sorted by (year, month) ASC. Month is 1-12
+    // (1=Jan). The struct is also used by perSymbol- and
+    // perTag- monthly variants below.
+    struct MonthlyReturn {
+        int     year     = 0;     // e.g. 2026
+        int     month    = 0;     // 1-12 (Jan=1)
+        double  realized = 0.0;
+        size_t  count    = 0;
+        size_t  wins     = 0;
+        size_t  losses   = 0;
+        double  winRate  = 0.0;
+    };
+    std::vector<MonthlyReturn> monthlyReturns() const;
+    std::vector<MonthlyReturn> monthlyReturnsBySymbol(
+        const std::string& symbol) const;
+    std::vector<MonthlyReturn> monthlyReturnsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

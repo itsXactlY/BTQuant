@@ -1535,6 +1535,97 @@ double TradeJournal::avgRecoveryRatio(
     return std::exp(sum_log / static_cast<double>(n));
 }
 
+namespace {
+// Sprint #115 — shared monthly bucket builder. The three
+// monthlyReturns*() methods differ only in the filter predicate.
+struct MonthAcc {
+    double realized = 0.0;
+    size_t count    = 0;
+    size_t wins     = 0;
+    size_t losses   = 0;
+};
+// Key: year*100 + month (sortable as integer).
+using MonthKey = int;
+
+MonthKey yearMonthKey(const JournalFill& f) {
+    std::time_t secs =
+        static_cast<std::time_t>(f.timestamp_us / 1000000ULL);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &secs);
+#else
+    localtime_r(&secs, &tm);
+#endif
+    return (tm.tm_year + 1900) * 100 + (tm.tm_mon + 1);
+}
+
+int yearFromKey(MonthKey k) { return k / 100; }
+int monthFromKey(MonthKey k) { return k % 100; }
+
+template <typename Pred>
+std::vector<TradeJournal::MonthlyReturn>
+buildMonthlyReturns(const std::vector<JournalFill>& fills,
+                    Pred pred) {
+    constexpr double kEps = 1e-9;
+    std::map<MonthKey, MonthAcc> accs;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        MonthKey k = yearMonthKey(f);
+        MonthAcc& a = accs[k];
+        a.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        a.count++;
+        if (f.realizedDelta > kEps) a.wins++;
+        else if (f.realizedDelta < -kEps) a.losses++;
+    }
+    std::vector<TradeJournal::MonthlyReturn> out;
+    out.reserve(accs.size());
+    for (const auto& [k, a] : accs) {
+        TradeJournal::MonthlyReturn r;
+        r.year     = yearFromKey(k);
+        r.month    = monthFromKey(k);
+        r.realized = a.realized;
+        r.count    = a.count;
+        r.wins     = a.wins;
+        r.losses   = a.losses;
+        r.winRate  = a.count > 0
+                     ? static_cast<double>(a.wins) /
+                       static_cast<double>(a.count)
+                     : 0.0;
+        out.push_back(r);
+    }
+    // Already sorted by key (std::map).
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::MonthlyReturn>
+TradeJournal::monthlyReturns() const {
+    return buildMonthlyReturns(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::MonthlyReturn>
+TradeJournal::monthlyReturnsBySymbol(
+    const std::string& symbol) const {
+    return buildMonthlyReturns(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::MonthlyReturn>
+TradeJournal::monthlyReturnsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildMonthlyReturns(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 TradeJournal::StreakStats
 TradeJournal::streakStats() const {
     // Sprint #105. Walk round-trips in chronological order,

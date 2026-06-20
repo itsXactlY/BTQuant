@@ -1961,6 +1961,100 @@ void JournalStatsPanel::render() {
                             1 /*kHourOfDay*/);
     }
 
+    // ---- Sprint #115 — Monthly returns table ----
+    // Year × month grid showing realized P&L per calendar
+    // month. Shows the last 24 months by default — enough for
+    // year-over-year comparison without overwhelming the panel.
+    //
+    // Columns: Jan..Dec, plus an annual roll-up column on the
+    // right. Rows: years (most recent at top). Cells colored
+    // green/red/dim by sign.
+    if (ImGui::CollapsingHeader(
+            "Monthly returns (Sprint #115)",
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto months = m_journal->monthlyReturns();
+        if (months.empty()) {
+            ImGui::TextDisabled("(no fills yet)");
+        } else {
+            // Group by year, compute last 24 months for the
+            // default view.
+            std::map<int, std::array<double, 13>> grid;  // [year][1..12]
+            std::map<int, double> yearTotals;
+            for (const auto& m : months) {
+                if (m.month < 1 || m.month > 12) continue;
+                grid[m.year][m.month] = m.realized;
+                yearTotals[m.year] += m.realized;
+            }
+            // Render: 13 columns (Jan..Dec, Year).
+            if (ImGui::BeginTable(
+                    "##MonthlyReturns", 14,
+                    ImGuiTableFlags_Borders |
+                    ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("Year");
+                const char* mn[] = {"Jan", "Feb", "Mar",
+                                    "Apr", "May", "Jun",
+                                    "Jul", "Aug", "Sep",
+                                    "Oct", "Nov", "Dec"};
+                for (int i = 0; i < 12; ++i)
+                    ImGui::TableSetupColumn(mn[i]);
+                ImGui::TableSetupColumn("Y");
+                ImGui::TableHeadersRow();
+                // Years DESC (most recent on top).
+                std::vector<int> years;
+                for (const auto& [y, _] : grid) years.push_back(y);
+                std::sort(years.rbegin(), years.rend());
+                // Limit to last 5 years for readability.
+                if (years.size() > 5)
+                    years.erase(years.begin() + 5, years.end());
+                for (int y : years) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%d", y);
+                    for (int m = 1; m <= 12; ++m) {
+                        ImGui::TableSetColumnIndex(m);
+                        double v = grid[y][m];
+                        if (v > 1e-9) {
+                            ImGui::PushStyleColor(
+                                ImGuiCol_Text,
+                                ImGui::GetStyle().Colors[
+                                    ImGuiCol_PlotLines]);
+                            ImGui::Text("%+.0f", v);
+                            ImGui::PopStyleColor();
+                        } else if (v < -1e-9) {
+                            ImGui::PushStyleColor(
+                                ImGuiCol_Text,
+                                ImGui::GetStyle().Colors[
+                                    ImGuiCol_PlotHistogram]);
+                            ImGui::Text("%+.0f", v);
+                            ImGui::PopStyleColor();
+                        } else if (v != 0.0) {
+                            ImGui::TextDisabled("0");
+                        }
+                    }
+                    ImGui::TableSetColumnIndex(13);
+                    double yt = yearTotals[y];
+                    if (yt > 1e-9) {
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotLines]);
+                        ImGui::Text("%+.0f", yt);
+                        ImGui::PopStyleColor();
+                    } else if (yt < -1e-9) {
+                        ImGui::PushStyleColor(
+                            ImGuiCol_Text,
+                            ImGui::GetStyle().Colors[
+                                ImGuiCol_PlotHistogram]);
+                        ImGui::Text("%+.0f", yt);
+                        ImGui::PopStyleColor();
+                    }
+                }
+                ImGui::EndTable();
+            }
+        }
+    }
+
         ImGui::EndTabItem();
         }   // End Calendar BeginTabItem
     }       // End BeginTabBar

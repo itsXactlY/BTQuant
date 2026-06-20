@@ -13487,5 +13487,182 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 104: monthlyReturns() / monthlyReturnsBySymbol() /
+    //   monthlyReturnsByTag() (Sprint #115).
+    //
+    // Calendar-month buckets. Tests:
+    //   - Empty journal: empty vector.
+    //   - Single month: 1 bucket, correct realized/count.
+    //   - Multiple months: sorted (year, month) ASC.
+    //   - Win rate: 2 wins / 3 round-trips → 0.667.
+    //   - Per-symbol: only that symbol counts.
+    //   - Per-tag: untagged bucket + tagged bucket.
+    std::cout << "\nTest 104: monthlyReturns()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test104_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto m = j.monthlyReturns();
+            if (m.empty()) {
+                std::cout << "✓ empty: 0 months"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: " << m.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single month: 3 fills, 2W 1L, total=60 ----
+        // Use timestamps in current month.  ts_us is microseconds
+        // since epoch; pick 2026-03-15 noon UTC (~1.74e15).
+        {
+            TradeJournal j((tmpDir / "single.jsonl").string());
+            const uint64_t base = 1774000000000000ULL;   // 2026-03
+            j.append(mkFill("BTC", 100.0, "", base));
+            j.append(mkFill("BTC", -40.0, "", base + 86400ULL*1000000ULL));
+            j.append(mkFill("ETH",  10.0, "", base + 86400ULL*2000000ULL));
+            auto m = j.monthlyReturns();
+            if (m.size() == 1 &&
+                m[0].year == 2026 &&
+                m[0].month == 3 &&
+                std::fabs(m[0].realized - 70.0) < 1e-9 &&
+                m[0].count == 3 &&
+                m[0].wins == 2 &&
+                m[0].losses == 1 &&
+                std::fabs(m[0].winRate - 2.0/3.0) < 1e-9) {
+                std::cout << "✓ single month: 2026-03 realized=70 "
+                          << "count=3 wins=2 losses=1 wr=0.667"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: n=" << m.size()
+                          << " year=" << (m.empty() ? 0 : m[0].year)
+                          << " month=" << (m.empty() ? 0 : m[0].month)
+                          << " realized="
+                          << (m.empty() ? 0.0 : m[0].realized)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multiple months, sorted ASC ----
+        // Feb 2026: -50; Mar 2026: +100; Jan 2026: +25.
+        // Expected order: Jan, Feb, Mar (ASC by year,month).
+        {
+            TradeJournal j((tmpDir / "multi.jsonl").string());
+            // 2026-02-15
+            const uint64_t feb = 1771123200000000ULL;
+            // 2026-03-15
+            const uint64_t mar = 1774000000000000ULL;
+            // 2026-01-15
+            const uint64_t jan = 1768540800000000ULL;
+            j.append(mkFill("BTC", -50.0, "", feb));
+            j.append(mkFill("BTC", 100.0, "", mar));
+            j.append(mkFill("BTC",  25.0, "", jan));
+            auto m = j.monthlyReturns();
+            if (m.size() == 3 &&
+                m[0].year == 2026 && m[0].month == 1 &&
+                m[1].year == 2026 && m[1].month == 2 &&
+                m[2].year == 2026 && m[2].month == 3 &&
+                std::fabs(m[0].realized -  25.0) < 1e-9 &&
+                std::fabs(m[1].realized - -50.0) < 1e-9 &&
+                std::fabs(m[2].realized - 100.0) < 1e-9) {
+                std::cout << "✓ multi-month: Jan=+25 Feb=-50 "
+                          << "Mar=+100, sorted ASC"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi wrong: n=" << m.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol: only that symbol's fills bucket ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t mar = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", mar));
+            j.append(mkFill("ETH", -200.0, "", mar));
+            j.append(mkFill("BTC",   50.0, "", mar));
+            auto btcM = j.monthlyReturnsBySymbol("BTC");
+            auto ethM = j.monthlyReturnsBySymbol("ETH");
+            if (btcM.size() == 1 &&
+                std::fabs(btcM[0].realized - 150.0) < 1e-9 &&
+                ethM.size() == 1 &&
+                std::fabs(ethM[0].realized + 200.0) < 1e-9) {
+                std::cout << "✓ per-symbol: BTC=+150 (2 fills), "
+                          << "ETH=-200 (1 fill)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-symbol wrong: btc="
+                          << btcM.size()
+                          << " eth=" << ethM.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag: untagged + tagged both bucket ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t mar = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "scalp", mar));
+            j.append(mkFill("BTC",  -50.0, "",       mar));
+            j.append(mkFill("BTC",   40.0, "scalp", mar));
+            auto scalpM = j.monthlyReturnsByTag("scalp",
+                true /*includeUntagged*/);
+            auto untagM = j.monthlyReturnsByTag(
+                "__untagged__", true);
+            if (scalpM.size() == 1 &&
+                std::fabs(scalpM[0].realized - 140.0) < 1e-9 &&
+                untagM.size() == 1 &&
+                std::fabs(untagM[0].realized + 50.0) < 1e-9) {
+                std::cout << "✓ per-tag: scalp=+140, "
+                          << "__untagged__=-50"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << scalpM.size()
+                          << " untag=" << untagM.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " monthlyReturns tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

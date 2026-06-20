@@ -7646,4 +7646,48 @@ TradeJournal::sharpeStabilityByTag(
     return s;
 }
 
+std::vector<TradeJournal::SharpeStability>
+TradeJournal::allSegmentSharpeStability(size_t window) const {
+    // Sprint #184. Bulk per-symbol Sharpe stability.
+    std::vector<SharpeStability> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(sharpeStabilityBySymbol(s, window));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SharpeStability& a, const SharpeStability& b) {
+            return a.meanSharpe > b.meanSharpe;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SharpeStability>
+TradeJournal::allSegmentSharpeStabilityByTag(
+    bool includeUntagged, size_t window) const {
+    // Sprint #184. Bulk per-tag Sharpe stability.
+    std::vector<SharpeStability> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(sharpeStabilityByTag(t, includeUntagged,
+            window));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SharpeStability& a, const SharpeStability& b) {
+            return a.meanSharpe > b.meanSharpe;
+        });
+    return out;
+}
+
 } // namespace btquant

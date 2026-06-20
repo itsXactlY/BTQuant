@@ -1919,6 +1919,16 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
+    // All-segment Sharpe stability bulk (Sprint #184).
+    // Returns SharpeStability for every symbol / tag in
+    // one call, sorted DESC by meanSharpe.
+    std::vector<SharpeStability>
+    allSegmentSharpeStability(size_t window = 30) const;
+    std::vector<SharpeStability>
+    allSegmentSharpeStabilityByTag(
+        bool includeUntagged = true,
+        size_t window = 30) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

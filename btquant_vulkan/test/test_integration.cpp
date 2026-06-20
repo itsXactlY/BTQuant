@@ -20827,5 +20827,86 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 170: allSegmentSharpeStability +
+    //   allSegmentSharpeStabilityByTag (Sprint #184).
+    //
+    // Bulk Sharpe stability. Tests:
+    //   - 2 symbols → 2 entries sorted DESC.
+    std::cout << "\nTest 170: all-seg Sharpe stability..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test170_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols with stable Sharpe ----
+        {
+            TradeJournal j((tmpDir / "a.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // BTC: 4 fills, consistent positive returns.
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", 110.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC",  90.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC", 105.0, "scalp",
+                             t0 + 3));
+            // ETH: 4 fills, more variable.
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 4));
+            j.append(mkFill("ETH", -50.0, "arb",
+                             t0 + 5));
+            j.append(mkFill("ETH", 200.0, "arb",
+                             t0 + 6));
+            j.append(mkFill("ETH", 100.0, "arb",
+                             t0 + 7));
+            auto v = j.allSegmentSharpeStability(2);
+            if (v.size() == 2 &&
+                v[0].segment == "BTC" &&
+                v[0].meanSharpe > v[1].meanSharpe) {
+                std::cout << "✓ 2 syms DESC: "
+                          << "BTC meanSharpe="
+                          << v[0].meanSharpe
+                          << " ETH meanSharpe="
+                          << v[1].meanSharpe
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size()
+                          << " top="
+                          << (v.size() > 0
+                              ? v[0].segment : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-sharpe tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

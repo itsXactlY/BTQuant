@@ -172,6 +172,22 @@ public:
     // the result is deterministic regardless of how many times the user
     // has mutated the theme since launch.
     void resetThemeToDefault();
+
+    // ---- DPI / monitor scaling ----
+    //
+    // Apply a HiDPI scale to the live ImGui style + font rendering.
+    // Safe no-op when no ImGui context is alive (tests). The actual
+    // scale value comes from detectContentScale() which queries the
+    // monitor the window is currently on. Should be called once at
+    // startup and again when the window moves between monitors.
+    void applyDpiScale(double scale);
+
+    // Public test surface — clamp the raw monitor scale into the
+    // safe operating range we render with. Pure: same input → same
+    // output, no global state. The range [0.5, 4.0] covers everything
+    // from 720p laptop screens (rare 0.5x fractional scaling) to 4K
+    // Retina-class desktops (2.0x).
+    static double clampDpiScale(double raw);
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();
     void showPositionPanelWindow();
@@ -271,6 +287,13 @@ private:
     bool m_layoutImportOpen = false;
     bool m_hotkeyEditorOpen = false;
     bool m_settingsDirty = false;
+
+public:
+    // Last DPI scale we applied to ImGui. Used to skip redundant
+    // applyDpiScale() calls when the window hasn't moved monitors.
+    // Public for testability — matches the m_defaultStyleSnap pattern.
+    double m_appliedDpiScale = 1.0;
+private:
 };
 class PositionBook;
 } // namespace btquant

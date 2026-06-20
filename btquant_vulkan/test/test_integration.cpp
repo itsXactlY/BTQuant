@@ -3773,5 +3773,64 @@ int main() {
         }
     }
 
+    // Test 45: HiDPI scaling — clampDpiScale is pure math; applyDpiScale
+    // is a safe no-op without a live ImGui context (same pattern as
+    // the theme + dock plumbing tests). The actual glfwGetMonitorContentScale
+    // call is exercised by smoke-testing the live app.
+    {
+        std::cout << "\nTest 45: Testing HiDPI scale plumbing..."
+                  << std::endl;
+
+        using WM = btquant::ui::WindowManager;
+
+        // 1) Default m_appliedDpiScale is 1.0 (no scale applied yet).
+        WM wm;
+        if (wm.m_appliedDpiScale == 1.0) {
+            std::cout << "✓ default m_appliedDpiScale=1.0" << std::endl;
+        } else {
+            std::cout << "✗ default scale wrong" << std::endl;
+        }
+
+        // 2) clampDpiScale() passes through values inside [0.5, 4.0].
+        if (WM::clampDpiScale(1.0) == 1.0 &&
+            WM::clampDpiScale(2.0) == 2.0 &&
+            WM::clampDpiScale(1.5) == 1.5) {
+            std::cout << "✓ clampDpiScale passes through [0.5, 4.0]"
+                      << std::endl;
+        } else {
+            std::cout << "✗ clamp pass-through wrong" << std::endl;
+        }
+
+        // 3) Below 0.5 → 0.5 (defensive lower bound).
+        if (WM::clampDpiScale(0.1) == 0.5 &&
+            WM::clampDpiScale(0.0) == 0.5 &&
+            WM::clampDpiScale(-1.0) == 0.5) {
+            std::cout << "✓ clampDpiScale clamps below 0.5 → 0.5"
+                      << std::endl;
+        } else {
+            std::cout << "✗ lower-bound clamp wrong" << std::endl;
+        }
+
+        // 4) Above 4.0 → 4.0 (defensive upper bound for future 8K).
+        if (WM::clampDpiScale(4.5) == 4.0 &&
+            WM::clampDpiScale(10.0) == 4.0) {
+            std::cout << "✓ clampDpiScale clamps above 4.0 → 4.0"
+                      << std::endl;
+        } else {
+            std::cout << "✗ upper-bound clamp wrong" << std::endl;
+        }
+
+        // 5) applyDpiScale() is a safe no-op without ImGui ctx.
+        //    Confirmed by: didn't crash, m_appliedDpiScale still 1.0.
+        wm.applyDpiScale(2.0);
+        if (wm.m_appliedDpiScale == 1.0) {
+            std::cout << "✓ applyDpiScale(2.0) without ImGui ctx → no-op"
+                      << std::endl;
+        } else {
+            std::cout << "✗ m_appliedDpiScale changed without ImGui ctx"
+                      << std::endl;
+        }
+    }
+
     return 0;
 }

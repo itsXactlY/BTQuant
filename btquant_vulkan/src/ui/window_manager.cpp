@@ -475,6 +475,29 @@ void WindowManager::shutdown() {
     m_initialized = false;
 }
 
+double WindowManager::clampDpiScale(double raw) {
+    if (raw < 0.5) return 0.5;   // tiny headless / off-screen
+    if (raw > 4.0) return 4.0;   // future-proof against 8K monitors
+    return raw;
+}
+
+void WindowManager::applyDpiScale(double scale) {
+    if (ImGui::GetCurrentContext() == nullptr) return;
+    double clamped = clampDpiScale(scale);
+    // Skip when unchanged — applyDpiScale is called every frame from
+    // the main loop's monitor-change check, so we don't want to
+    // re-scale the style on every tick (immutable ops + log spam).
+    if (clamped == m_appliedDpiScale) return;
+    // Apply the new scale. FontGlobalScale drives rasterization density
+    // so glyphs stay crisp at higher DPIs; ScaleAllSizes scales padding,
+    // rounding, and widget dimensions so the layout breathes.
+    ImGui::GetIO().FontGlobalScale = clamped;
+    ImGui::GetStyle().ScaleAllSizes(clamped);
+    m_appliedDpiScale = clamped;
+    BTQ_LOG_INFO("applyDpiScale: applied %.2fx (raw was %.2f)",
+                 clamped, scale);
+}
+
 void WindowManager::buildDockLayout() {
     // Anchor the layout on the main dockspace (ID 0 = root dockspace created
     // by DockSpaceOverViewport in main.cpp).

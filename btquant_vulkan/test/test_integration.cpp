@@ -17773,5 +17773,118 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 132: allSymbolSummaries() / allTagSummaries()
+    //   (Sprint #145).
+    //
+    // One-shot list of all per-segment summaries. Tests:
+    //   - Empty: empty vector.
+    //   - 3 symbols with different realized: 3 entries
+    //     sorted DESC.
+    //   - 2 tags: 2 entries sorted DESC.
+    std::cout << "\nTest 132: all-segment summaries..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test132_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.allSymbolSummaries();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 summaries"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 symbols ----
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // BTC +300, ETH +200, SOL +100. Sorted DESC.
+            j.append(mkFill("BTC",  300.0, "scalp", t0));
+            j.append(mkFill("ETH",  200.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("SOL",  100.0, "scalp",
+                             t0 + 2));
+            auto v = j.allSymbolSummaries();
+            if (v.size() == 3 &&
+                v[0].symbol == "BTC" &&
+                v[1].symbol == "ETH" &&
+                v[2].symbol == "SOL") {
+                std::cout << "✓ 3 symbols sorted DESC: "
+                          << v[0].symbol << ", "
+                          << v[1].symbol << ", "
+                          << v[2].symbol
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ sym wrong: "
+                          << (v.size() > 0 ? v[0].symbol : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 tags ----
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // scalp: 2 fills, total +400.
+            // arb: 1 fill, +200.
+            j.append(mkFill("BTC",  300.0, "scalp", t0));
+            j.append(mkFill("ETH",  200.0, "arb",
+                             t0 + 1));
+            j.append(mkFill("SOL",  100.0, "scalp",
+                             t0 + 2));
+            auto v = j.allTagSummaries();
+            if (v.size() == 2 &&
+                v[0].tag == "scalp" &&
+                v[1].tag == "arb") {
+                std::cout << "✓ 2 tags sorted DESC: "
+                          << v[0].tag << "(+400), "
+                          << v[1].tag << "(+200)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: "
+                          << (v.size() > 0 ? v[0].tag : "")
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-summary tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

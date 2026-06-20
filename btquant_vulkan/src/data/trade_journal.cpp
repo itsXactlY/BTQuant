@@ -4113,6 +4113,49 @@ TradeJournal::equityRateOfChangeByTag(
         });
 }
 
+std::vector<TradeJournal::SymbolSummary>
+TradeJournal::allSymbolSummaries() const {
+    // Sprint #145. Find every symbol in the journal, run
+    // symbolSummary() for each, sort by realized DESC.
+    std::vector<SymbolSummary> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(symbolSummary(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SymbolSummary& a, const SymbolSummary& b) {
+            return a.realized > b.realized;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::TagSummary>
+TradeJournal::allTagSummaries(bool includeUntagged) const {
+    // Sprint #145. Mirror of allSymbolSummaries() for tags.
+    std::vector<TagSummary> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(tagSummary(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TagSummary& a, const TagSummary& b) {
+            return a.realized > b.realized;
+        });
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

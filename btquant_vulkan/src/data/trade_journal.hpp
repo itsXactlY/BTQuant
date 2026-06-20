@@ -1391,6 +1391,18 @@ public:
         bool includeUntagged = false,
         size_t window = 30) const;
 
+    // All-symbol summaries (Sprint #145). Returns
+    // symbolSummary(symbol) for every symbol in the
+    // journal, sorted by realized DESC. One call replaces
+    // N per-symbol calls.
+    std::vector<SymbolSummary> allSymbolSummaries() const;
+
+    // All-tag summaries (Sprint #145). Same shape as
+    // allSymbolSummaries() but for tags. __untagged__
+    // included as the synthetic key for empty-tag fills.
+    std::vector<TagSummary> allTagSummaries(
+        bool includeUntagged = true) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

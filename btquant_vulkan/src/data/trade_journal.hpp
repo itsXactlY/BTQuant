@@ -1276,6 +1276,25 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Equity curve volatility (Sprint #139). Rolling
+    // stddev of the equity curve values, sampled at the
+    // fill-granularity (one point per round-trip). High
+    // values = choppy equity curve; low values = smooth
+    // growth.
+    //
+    // Useful as a "smoothness" diagnostic that complements
+    // Sharpe (which is return/risk normalized).
+    //
+    // Returns empty vector if equity.size() < window.
+    struct EquityVolPoint {
+        uint64_t timestamp_us = 0;
+        double   equityValue   = 0.0;  // cum at this point
+        double   rollingStddev = 0.0;  // stddev of last N
+        size_t   count         = 0;
+    };
+    std::vector<EquityVolPoint> equityVolatility(
+        size_t window = 30) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

@@ -3696,6 +3696,52 @@ TradeJournal::tradeSizeStatsByTag(
         });
 }
 
+std::vector<TradeJournal::EquityVolPoint>
+TradeJournal::equityVolatility(size_t window) const {
+    // Sprint #139. Walk the equity curve, compute rolling
+    // stddev over a window of consecutive equity values.
+    // O(N) via ring buffer with running sum + sumSq.
+    std::vector<EquityVolPoint> out;
+    auto curve = equityCurve();
+    if (curve.size() < window) return out;
+    out.reserve(curve.size() - window + 1);
+    double sum = 0.0, sumSq = 0.0;
+    for (size_t k = 0; k < window; ++k) {
+        double v = curve[k].cumulative;
+        sum   += v;
+        sumSq += v * v;
+    }
+    {
+        double mean = sum / static_cast<double>(window);
+        double var = (sumSq / static_cast<double>(window)) -
+                     mean * mean;
+        if (var < 0.0) var = 0.0;
+        EquityVolPoint p;
+        p.timestamp_us   = curve[window - 1].timestamp_us;
+        p.equityValue    = curve[window - 1].cumulative;
+        p.rollingStddev  = std::sqrt(var);
+        p.count          = window;
+        out.push_back(p);
+    }
+    for (size_t i = window; i < curve.size(); ++i) {
+        double dropped = curve[i - window].cumulative;
+        double added   = curve[i].cumulative;
+        sum   = sum - dropped + added;
+        sumSq = sumSq - dropped * dropped + added * added;
+        double mean = sum / static_cast<double>(window);
+        double var  = (sumSq / static_cast<double>(window)) -
+                      mean * mean;
+        if (var < 0.0) var = 0.0;
+        EquityVolPoint p;
+        p.timestamp_us   = curve[i].timestamp_us;
+        p.equityValue    = curve[i].cumulative;
+        p.rollingStddev  = std::sqrt(var);
+        p.count          = window;
+        out.push_back(p);
+    }
+    return out;
+}
+
 namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a

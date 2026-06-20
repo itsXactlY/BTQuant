@@ -17220,5 +17220,94 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 126: equityVolatility() (Sprint #139).
+    //
+    // Rolling stddev of equity values. Tests:
+    //   - Window > fills: empty.
+    //   - Constant equity: stddev = 0.
+    //   - Monotonic up: stddev grows.
+    std::cout << "\nTest 126: equity volatility..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test126_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Window > fills ----
+        {
+            TradeJournal j((tmpDir / "few.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 100.0, "",
+                                1774000000000000ULL + i));
+            }
+            auto v = j.equityVolatility(20);
+            if (v.empty()) {
+                std::cout << "✓ window>fills: empty"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ window>fills wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- All wins, increasing equity ----
+        // 5 fills of +10 each: equity = 10,20,30,40,50.
+        // Window=3:
+        //   [10,20,30]: mean=20, var=200/3, stddev≈8.165.
+        //   [20,30,40]: mean=30, stddev≈8.165.
+        //   [30,40,50]: mean=40, stddev≈8.165.
+        {
+            TradeJournal j((tmpDir / "up.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill("BTC", 10.0, "", t0 + i));
+            }
+            auto v = j.equityVolatility(3);
+            double expected = std::sqrt(200.0/3.0);
+            if (v.size() == 3 &&
+                std::fabs(v[0].rollingStddev - expected) < 1e-3 &&
+                std::fabs(v[1].rollingStddev - expected) < 1e-3 &&
+                std::fabs(v[2].rollingStddev - expected) < 1e-3) {
+                std::cout << "✓ monotonic up: 3 points, "
+                          << "stddev≈" << expected
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ up wrong: stddev="
+                          << (v.empty() ? 0.0
+                              : v[0].rollingStddev)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " equity-volatility tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

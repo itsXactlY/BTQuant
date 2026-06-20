@@ -1748,6 +1748,27 @@ public:
     worstSessions(size_t n = 5,
                   size_t gapMinutes = 30) const;
 
+    // Per-symbol/per-tag top/worst sessions (Sprint #172).
+    // Mirror of #171 filtered to a single segment.
+    std::vector<TradingSession>
+    topSessionsBySymbol(const std::string& symbol,
+                        size_t n = 5,
+                        size_t gapMinutes = 30) const;
+    std::vector<TradingSession>
+    worstSessionsBySymbol(const std::string& symbol,
+                          size_t n = 5,
+                          size_t gapMinutes = 30) const;
+    std::vector<TradingSession>
+    topSessionsByTag(const std::string& tag,
+                      bool includeUntagged = false,
+                      size_t n = 5,
+                      size_t gapMinutes = 30) const;
+    std::vector<TradingSession>
+    worstSessionsByTag(const std::string& tag,
+                        bool includeUntagged = false,
+                        size_t n = 5,
+                        size_t gapMinutes = 30) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

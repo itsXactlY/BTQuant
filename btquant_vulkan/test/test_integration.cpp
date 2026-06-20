@@ -20014,5 +20014,105 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 159: topSessionsBySymbol/ByTag + worst variants
+    //   (Sprint #172).
+    //
+    // Per-segment session sort. Tests:
+    //   - BTC 2 sessions (+100, -50), top=[+100], worst=[-50].
+    std::cout << "\nTest 159: per-seg top/worst sessions..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test159_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 sessions: +100, -50 ----
+        {
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t gap = 2ULL * 60 * 1000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("ETH",  20.0, "arb",
+                             t0 + gap));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 2 * gap));
+            auto btcTop = j.topSessionsBySymbol("BTC",
+                5, 1);
+            auto btcWorst = j.worstSessionsBySymbol("BTC",
+                5, 1);
+            if (btcTop.size() >= 1 &&
+                std::fabs(btcTop[0].realized - 100.0) < 1e-9 &&
+                btcWorst.size() >= 1 &&
+                std::fabs(btcWorst[0].realized + 50.0) < 1e-9) {
+                std::cout << "✓ BTC: top[0]=+100, "
+                          << "worst[0]=-50"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ BTC wrong: top[0]="
+                          << (btcTop.size() > 0
+                              ? btcTop[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- scalp tag: 2 sessions ----
+        {
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t gap = 2ULL * 60 * 1000000ULL;
+            j.append(mkFill("BTC", 200.0, "scalp", t0));
+            j.append(mkFill("ETH",  50.0, "arb",
+                             t0 + gap));
+            j.append(mkFill("BTC", -100.0, "scalp",
+                             t0 + 2 * gap));
+            auto tagTop = j.topSessionsByTag("scalp",
+                false, 5, 1);
+            auto tagWorst = j.worstSessionsByTag("scalp",
+                false, 5, 1);
+            if (tagTop.size() >= 1 &&
+                std::fabs(tagTop[0].realized - 200.0) < 1e-9 &&
+                tagWorst.size() >= 1 &&
+                std::fabs(tagWorst[0].realized + 100.0) < 1e-9) {
+                std::cout << "✓ scalp: top[0]=+200, "
+                          << "worst[0]=-100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tag wrong: top[0]="
+                          << (tagTop.size() > 0
+                              ? tagTop[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " per-seg-sessions tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

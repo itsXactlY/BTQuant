@@ -6871,4 +6871,172 @@ TradeJournal::worstSessions(size_t n, size_t gapMinutes) const {
     return sessionsList;
 }
 
+namespace {
+// Sprint #172 — per-segment session sorter.
+template <typename Pred>
+std::vector<TradeJournal::TradingSession>
+sortSessionsBySegment(
+    const std::vector<TradeJournal::TradingSession>& sessionsList,
+    Pred pred, bool descending) {
+    std::vector<TradeJournal::TradingSession> sub;
+    sub.reserve(sessionsList.size());
+    for (const auto& s : sessionsList) {
+        if (pred(s)) sub.push_back(s);
+    }
+    std::sort(sub.begin(), sub.end(),
+        [descending](const TradeJournal::TradingSession& a,
+                     const TradeJournal::TradingSession& b) {
+            return descending ? a.realized > b.realized
+                              : a.realized < b.realized;
+        });
+    return sub;
+}
+}  // namespace
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::topSessionsBySymbol(
+    const std::string& symbol, size_t n, size_t gapMinutes) const {
+    auto sessionsList = sessions(static_cast<int>(gapMinutes));
+    auto sub = sortSessionsBySegment(sessionsList,
+        [&symbol](const TradingSession& s) { return true; },
+        true);
+    // Filter by checking if any fill of session matches.
+    // Since TradingSession doesn't track symbols, we
+    // can't filter precisely. Instead filter at fill
+    // level by re-computing per-symbol sessions.
+    (void)symbol;
+    auto fills = loadAll();
+    std::vector<JournalFill> onlySym;
+    for (const auto& f : fills) {
+        if (f.symbol == symbol) onlySym.push_back(f);
+    }
+    // Build per-day grouping for symbol sessions.
+    auto symbolSessionsList =
+        sessions(static_cast<int>(gapMinutes));
+    // Re-walk onlySym to build sessions for this symbol.
+    std::sort(onlySym.begin(), onlySym.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<TradingSession> symSessions;
+    if (!onlySym.empty()) {
+        TradingSession cur;
+        cur.start_ts = onlySym[0].timestamp_us;
+        cur.end_ts   = onlySym[0].timestamp_us;
+        cur.fillCount = 1;
+        cur.realized = onlySym[0].realizedDelta;
+        for (size_t i = 1; i < onlySym.size(); ++i) {
+            uint64_t gapUs = onlySym[i].timestamp_us -
+                              onlySym[i - 1].timestamp_us;
+            if (gapUs >
+                static_cast<uint64_t>(gapMinutes) *
+                60ULL * 1000000ULL) {
+                cur.end_ts = onlySym[i - 1].timestamp_us;
+                cur.active_us = cur.end_ts - cur.start_ts;
+                symSessions.push_back(cur);
+                cur = TradingSession{};
+                cur.start_ts = onlySym[i].timestamp_us;
+                cur.end_ts = onlySym[i].timestamp_us;
+                cur.fillCount = 1;
+                cur.realized = onlySym[i].realizedDelta;
+            } else {
+                cur.end_ts = onlySym[i].timestamp_us;
+                cur.fillCount++;
+                cur.realized += onlySym[i].realizedDelta;
+            }
+        }
+        cur.end_ts = onlySym.back().timestamp_us;
+        cur.active_us = cur.end_ts - cur.start_ts;
+        symSessions.push_back(cur);
+    }
+    std::sort(symSessions.begin(), symSessions.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized > b.realized;
+        });
+    if (symSessions.size() > n) symSessions.resize(n);
+    return symSessions;
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::worstSessionsBySymbol(
+    const std::string& symbol, size_t n, size_t gapMinutes) const {
+    auto symSessions = topSessionsBySymbol(symbol, n, gapMinutes);
+    std::sort(symSessions.begin(), symSessions.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized < b.realized;
+        });
+    return symSessions;
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::topSessionsByTag(
+    const std::string& tag, bool includeUntagged,
+    size_t n, size_t gapMinutes) const {
+    auto fills = loadAll();
+    std::vector<JournalFill> onlyTag;
+    for (const auto& f : fills) {
+        if (tag == "__untagged__") {
+            if (f.tag.empty()) onlyTag.push_back(f);
+        } else if (includeUntagged && f.tag.empty()) {
+            // skip
+        } else if (f.tag == tag) {
+            onlyTag.push_back(f);
+        }
+    }
+    std::sort(onlyTag.begin(), onlyTag.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    std::vector<TradingSession> tagSessions;
+    if (!onlyTag.empty()) {
+        TradingSession cur;
+        cur.start_ts = onlyTag[0].timestamp_us;
+        cur.end_ts   = onlyTag[0].timestamp_us;
+        cur.fillCount = 1;
+        cur.realized = onlyTag[0].realizedDelta;
+        for (size_t i = 1; i < onlyTag.size(); ++i) {
+            uint64_t gapUs = onlyTag[i].timestamp_us -
+                              onlyTag[i - 1].timestamp_us;
+            if (gapUs >
+                static_cast<uint64_t>(gapMinutes) *
+                60ULL * 1000000ULL) {
+                cur.end_ts = onlyTag[i - 1].timestamp_us;
+                cur.active_us = cur.end_ts - cur.start_ts;
+                tagSessions.push_back(cur);
+                cur = TradingSession{};
+                cur.start_ts = onlyTag[i].timestamp_us;
+                cur.end_ts = onlyTag[i].timestamp_us;
+                cur.fillCount = 1;
+                cur.realized = onlyTag[i].realizedDelta;
+            } else {
+                cur.end_ts = onlyTag[i].timestamp_us;
+                cur.fillCount++;
+                cur.realized += onlyTag[i].realizedDelta;
+            }
+        }
+        cur.end_ts = onlyTag.back().timestamp_us;
+        cur.active_us = cur.end_ts - cur.start_ts;
+        tagSessions.push_back(cur);
+    }
+    std::sort(tagSessions.begin(), tagSessions.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized > b.realized;
+        });
+    if (tagSessions.size() > n) tagSessions.resize(n);
+    return tagSessions;
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::worstSessionsByTag(
+    const std::string& tag, bool includeUntagged,
+    size_t n, size_t gapMinutes) const {
+    auto tagSessions = topSessionsByTag(tag, includeUntagged,
+        n, gapMinutes);
+    std::sort(tagSessions.begin(), tagSessions.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized < b.realized;
+        });
+    return tagSessions;
+}
+
 } // namespace btquant

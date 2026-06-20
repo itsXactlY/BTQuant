@@ -1737,6 +1737,17 @@ public:
     allSegmentRiskAdjustedBundleByTag(
         bool includeUntagged = true) const;
 
+    // Best/worst sessions of all time (Sprint #171).
+    // Top N trading sessions by realized P&L (ASC for worst,
+    // DESC for best). Answers "what's my best afternoon
+    // ever?" and "what's my worst morning ever?"
+    std::vector<TradingSession>
+    topSessions(size_t n = 5,
+                size_t gapMinutes = 30) const;
+    std::vector<TradingSession>
+    worstSessions(size_t n = 5,
+                  size_t gapMinutes = 30) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

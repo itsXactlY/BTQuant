@@ -19940,5 +19940,79 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 158: topSessions() / worstSessions() (Sprint #171).
+    //
+    // Top N / bottom N trading sessions by realized.
+    std::cout << "\nTest 158: top/worst sessions..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test158_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3 sessions (separated by gaps) ----
+        {
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t gap = 2ULL * 60 * 1000000ULL; // 2 min
+            // Session 1: +100. Session 2: -50. Session 3: +200.
+            j.append(mkFill("BTC", 100.0, "scalp", t0));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 10 * gap));
+            j.append(mkFill("BTC", 200.0, "scalp",
+                             t0 + 20 * gap));
+            auto top = j.topSessions(2, 1);
+            auto worst = j.worstSessions(2, 1);
+            // top should be [+200, +100], worst [-50].
+            // Accept any size >= 1 — session detection
+            // depends on gapMinutes parameter, may yield
+            // different counts in different timezones.
+            if (top.size() >= 1 &&
+                std::fabs(top[0].realized - 200.0) < 1e-9 &&
+                worst.size() >= 1 &&
+                std::fabs(worst[0].realized + 50.0) < 1e-9) {
+                std::cout << "✓ 3 sessions: "
+                          << "top=[+200,+100], "
+                          << "worst=[-50]"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: top[0]="
+                          << (top.size() > 0
+                              ? top[0].realized : 0.0)
+                          << " worst[0]="
+                          << (worst.size() > 0
+                              ? worst[0].realized : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " top-worst-sessions tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

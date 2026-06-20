@@ -6845,4 +6845,30 @@ TradeJournal::allSegmentRiskAdjustedBundleByTag(
     return out;
 }
 
+std::vector<TradeJournal::TradingSession>
+TradeJournal::topSessions(size_t n, size_t gapMinutes) const {
+    // Sprint #171. Top N trading sessions by realized
+    // P&L DESC.
+    auto sessionsList = sessions(static_cast<int>(gapMinutes));
+    std::sort(sessionsList.begin(), sessionsList.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized > b.realized;
+        });
+    if (sessionsList.size() > n) sessionsList.resize(n);
+    return sessionsList;
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::worstSessions(size_t n, size_t gapMinutes) const {
+    // Sprint #171. Bottom N trading sessions by realized
+    // P&L ASC (most negative first).
+    auto sessionsList = sessions(static_cast<int>(gapMinutes));
+    std::sort(sessionsList.begin(), sessionsList.end(),
+        [](const TradingSession& a, const TradingSession& b) {
+            return a.realized < b.realized;
+        });
+    if (sessionsList.size() > n) sessionsList.resize(n);
+    return sessionsList;
+}
+
 } // namespace btquant

@@ -69,6 +69,7 @@ set(SOURCES
     src/widgets/symbol_picker.cpp
     src/widgets/theme_editor.cpp
     src/widgets/recent_fills_panel.cpp
+    src/widgets/hotkey_help_overlay.cpp
     src/util/settings.cpp
     src/util/theme_io.cpp
     src/util/hotkey_config.cpp

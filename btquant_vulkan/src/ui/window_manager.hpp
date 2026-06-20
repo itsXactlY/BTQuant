@@ -273,6 +273,7 @@ private:
     ::btquant::util::HotkeyMap*    m_hotkeyMap      = nullptr;
     // HotkeyEditor — Ctrl+H panel that lets the user remap bindings at runtime.
     ::btquant::widgets::HotkeyEditor* m_hotkeyEditor = nullptr;
+    class HotkeyHelpOverlay* m_hotkeyHelpOverlay = nullptr;
     // Hotkey file path — saved to on each remap so user changes survive restart.
     std::string                    m_hotkeyPath;
     // Layout profile save/load UI state.

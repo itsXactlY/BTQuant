@@ -27,6 +27,7 @@
 #include "../widgets/symbol_picker.hpp"
 #include "../widgets/theme_editor.hpp"
 #include "../widgets/recent_fills_panel.hpp"
+#include "../widgets/hotkey_help_overlay.hpp"
 #include "../util/theme_io.hpp"
 #include "../widgets/position_calculator.hpp"
 #include "../widgets/order_ticket.hpp"
@@ -178,6 +179,7 @@ WindowManager::WindowManager() {
     m_miniPriceChart = new MiniPriceChart();
     m_miniPriceChart->setMarketData(m_marketData);
     m_hotkeyEditor = new ::btquant::widgets::HotkeyEditor();
+    m_hotkeyHelpOverlay = new HotkeyHelpOverlay();
     // HotkeyEditor is wired after m_hotkeyMap is constructed (below).
     // Trade journal lives in the user's config dir alongside settings.ini.
     std::string journalPath = configDir + "journal.jsonl";
@@ -223,6 +225,7 @@ WindowManager::WindowManager() {
     // Save back so the user has a template to edit.
     if (m_hotkeyMap) m_hotkeyMap->saveToFile(hotkeyPath);
     if (m_hotkeyEditor) m_hotkeyEditor->setHotkeyMap(m_hotkeyMap);
+    if (m_hotkeyHelpOverlay) m_hotkeyHelpOverlay->setHotkeyMap(m_hotkeyMap);
 
     // OrderTicket submit → PositionBook.fill(). The ticket's sign-aware
     // size (positive for buy, negative for sell) is what feeds the book;
@@ -332,6 +335,7 @@ WindowManager::~WindowManager() {
     delete m_positionBook;
     delete m_riskLimitsPanel;
     delete m_hotkeyEditor;
+    delete m_hotkeyHelpOverlay;
     delete m_miniPriceChart;
     delete m_hotkeyMap;
     delete m_riskGuard;
@@ -1037,6 +1041,7 @@ void WindowManager::showHotkeyEditorWindow() {
     if (!m_hotkeyEditor) return;
     m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
     m_hotkeyEditor->render();
+    if (m_hotkeyHelpOverlay) m_hotkeyHelpOverlay->render();
     // Sync back in case the user closed the window via the [X] button.
     m_hotkeyEditorOpen = m_hotkeyEditor->isOpen();
     // Persist on close with pending changes.

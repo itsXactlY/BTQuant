@@ -20,6 +20,7 @@
 #include "../src/widgets/symbol_picker.hpp"
 #include "../src/widgets/theme_editor.hpp"
 #include "../src/widgets/recent_fills_panel.hpp"
+#include "../src/widgets/hotkey_help_overlay.hpp"
 #include "../src/util/theme_io.hpp"
 #include "../src/widgets/position_calculator.hpp"
 #include "../src/widgets/order_ticket.hpp"
@@ -6694,6 +6695,126 @@ int main() {
                           << std::endl;
             } else {
                 std::cout << "✗ clear left rows" << std::endl;
+            }
+        }
+    }
+
+    // Test 68: HotkeyHelpOverlay — non-editable hotkey reference
+    // (Sprint #64). Triggered on demand (Ctrl+?), lists every
+    // binding in the bound HotkeyMap alphabetically. The render
+    // loop can't be driven without an ImGui context, so we test
+    // the API surface (open/close/toggle, map wiring) and verify
+    // the underlying HotkeyMap enumerate() data flow that the
+    // overlay consumes.
+    std::cout << "\nTest 68: Testing HotkeyHelpOverlay API..."
+              << std::endl;
+    {
+        using btquant::ui::HotkeyHelpOverlay;
+        using btquant::util::HotkeyMap;
+
+        // 1) Default closed.
+        {
+            HotkeyHelpOverlay o;
+            if (!o.isOpen()) {
+                std::cout << "✓ fresh overlay is closed"
+                          << std::endl;
+            } else {
+                std::cout << "✗ default open?" << std::endl;
+            }
+        }
+
+        // 2) setOpen toggles state.
+        {
+            HotkeyHelpOverlay o;
+            o.setOpen(true);
+            if (o.isOpen()) {
+                std::cout << "✓ setOpen(true) engages"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setOpen(true) didn't engage"
+                          << std::endl;
+            }
+            o.setOpen(false);
+            if (!o.isOpen()) {
+                std::cout << "✓ setOpen(false) closes"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setOpen(false) didn't close"
+                          << std::endl;
+            }
+        }
+
+        // 3) toggle() flips state.
+        {
+            HotkeyHelpOverlay o;
+            o.toggle();
+            if (o.isOpen()) {
+                o.toggle();
+                if (!o.isOpen()) {
+                    std::cout << "✓ toggle() flips state twice"
+                              << std::endl;
+                } else {
+                    std::cout << "✗ second toggle didn't flip"
+                              << std::endl;
+                }
+            } else {
+                std::cout << "✗ first toggle didn't engage"
+                          << std::endl;
+            }
+        }
+
+        // 4) HotkeyMap defaults has entries the overlay will render.
+        {
+            HotkeyMap m = HotkeyMap::defaults();
+            auto rows = m.enumerate();
+            if (!rows.empty()) {
+                std::cout << "✓ HotkeyMap defaults expose "
+                          << rows.size() << " bindings for the overlay"
+                          << std::endl;
+            } else {
+                std::cout << "✗ defaults empty?" << std::endl;
+            }
+        }
+
+        // 5) HotkeyMap::actionName returns readable strings (the
+        //    overlay renders these directly).
+        {
+            HotkeyMap m = HotkeyMap::defaults();
+            auto rows = m.enumerate();
+            if (!rows.empty()) {
+                std::string name = HotkeyMap::actionName(rows[0].first);
+                if (!name.empty() &&
+                    name != "Unknown" &&
+                    name != "COUNT") {
+                    std::cout << "✓ actionName() returns "
+                                 "readable strings: \""
+                              << name << "\"" << std::endl;
+                } else {
+                    std::cout << "✗ actionName() returned "
+                                 "placeholder: \"" << name << "\""
+                              << std::endl;
+                }
+            } else {
+                std::cout << "✗ no rows to name" << std::endl;
+            }
+        }
+
+        // 6) HotkeyBinding::label() renders a chord or a key name
+        //    (the overlay's second column).
+        {
+            HotkeyMap m = HotkeyMap::defaults();
+            auto rows = m.enumerate();
+            bool anyLabel = false;
+            for (const auto& r : rows) {
+                std::string lbl = r.second.label();
+                if (!lbl.empty()) { anyLabel = true; break; }
+            }
+            if (anyLabel) {
+                std::cout << "✓ HotkeyBinding::label() renders "
+                             "non-empty strings"
+                          << std::endl;
+            } else {
+                std::cout << "✗ all labels empty" << std::endl;
             }
         }
     }

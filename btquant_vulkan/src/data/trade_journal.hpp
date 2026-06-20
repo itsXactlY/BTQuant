@@ -983,6 +983,35 @@ public:
     TagSummary tagSummary(const std::string& tag,
                           bool includeUntagged = false) const;
 
+    // Daily streak stats (Sprint #127). Bucket fills by
+    // local day, compute each day's net realized, classify
+    // W/L (ties = skipped), and walk consecutive days into
+    // streaks. Same shape as StreakStats but at DAY
+    // granularity instead of fill granularity.
+    //
+    // Answers "did I have a string of green days?" — far
+    // more meaningful psychologically than trade-level W/L
+    // runs because daily P&L smooths out intra-day noise.
+    //
+    // Per-symbol / per-tag variants filter then compute.
+    struct DailyStreakStats {
+        size_t currentWinStreak  = 0;
+        size_t currentLossStreak = 0;
+        size_t maxWinStreak      = 0;
+        size_t maxLossStreak     = 0;
+        size_t totalStreaks      = 0;
+        size_t totalWinDays      = 0;
+        size_t totalLossDays     = 0;
+        size_t totalDays         = 0;   // active trading days
+        double totalRealized     = 0.0; // sum across all days
+    };
+    DailyStreakStats dailyStreakStats() const;
+    DailyStreakStats dailyStreakStatsBySymbol(
+        const std::string& symbol) const;
+    DailyStreakStats dailyStreakStatsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

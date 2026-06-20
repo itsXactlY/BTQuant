@@ -15579,5 +15579,222 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 115: dailyStreakStats() /
+    //   dailyStreakStatsBySymbol() /
+    //   dailyStreakStatsByTag() (Sprint #127).
+    //
+    // Day-level streak stats. Tests:
+    //   - Empty: zeros.
+    //   - 3 winning days in a row: maxWin=3, currentWin=3.
+    //   - 2 winning, 2 losing: maxW=2, maxL=2.
+    //   - Per-symbol: each symbol's daily streaks.
+    std::cout << "\nTest 115: daily streak stats..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test115_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.dailyStreakStats();
+            if (s.maxWinStreak == 0 &&
+                s.maxLossStreak == 0 &&
+                s.totalDays == 0) {
+                std::cout << "✓ empty: zeros"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: maxW="
+                          << s.maxWinStreak
+                          << " totalDays=" << s.totalDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 winning days in a row ----
+        // Day1: +100, Day2: +50, Day3: +75. maxW=3.
+        {
+            TradeJournal j((tmpDir / "win3.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", day1));
+            j.append(mkFill("BTC",  50.0, "",
+                             day1 + 1*86400ULL*1000000ULL));
+            j.append(mkFill("BTC",  75.0, "",
+                             day1 + 2*86400ULL*1000000ULL));
+            auto s = j.dailyStreakStats();
+            if (s.totalDays == 3 &&
+                s.maxWinStreak == 3 &&
+                s.currentWinStreak == 3 &&
+                s.totalWinDays == 3 &&
+                s.totalLossDays == 0 &&
+                s.totalStreaks == 1 &&
+                std::fabs(s.totalRealized - 225.0) < 1e-9) {
+                std::cout << "✓ 3 winning days: maxW=3, "
+                          << "currentW=3, totalRealized=225"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ win3 wrong: maxW="
+                          << s.maxWinStreak
+                          << " currentW=" << s.currentWinStreak
+                          << " totalDays=" << s.totalDays
+                          << " totalWinDays=" << s.totalWinDays
+                          << " totalLossDays=" << s.totalLossDays
+                          << " totalStreaks=" << s.totalStreaks
+                          << " totalR=" << s.totalRealized
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2W 2L alternating ----
+        // Day1: W (+100), Day2: W (+50), Day3: L (-30),
+        // Day4: L (-20). maxW=2, maxL=2, currentL=2.
+        {
+            TradeJournal j((tmpDir / "alt.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", day1));
+            j.append(mkFill("BTC",  50.0, "",
+                             day1 + 1*86400ULL*1000000ULL));
+            j.append(mkFill("BTC", -30.0, "",
+                             day1 + 2*86400ULL*1000000ULL));
+            j.append(mkFill("BTC", -20.0, "",
+                             day1 + 3*86400ULL*1000000ULL));
+            auto s = j.dailyStreakStats();
+            if (s.totalDays == 4 &&
+                s.maxWinStreak == 2 &&
+                s.maxLossStreak == 2 &&
+                s.currentLossStreak == 2 &&
+                s.currentWinStreak == 0 &&
+                s.totalWinDays == 2 &&
+                s.totalLossDays == 2 &&
+                s.totalStreaks == 2 &&
+                std::fabs(s.totalRealized - 100.0) < 1e-9) {
+                std::cout << "✓ 2W 2L alternating: maxW=2, "
+                          << "maxL=2, currentL=2, totalR=100"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ alt wrong: maxW=" << s.maxWinStreak
+                          << " maxL=" << s.maxLossStreak
+                          << " currentL=" << s.currentLossStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-symbol ----
+        // BTC: Day1 W, Day2 L, Day3 W. maxW=1, maxL=1.
+        // ETH: Day1 W, Day2 W. maxW=2.
+        {
+            TradeJournal j((tmpDir / "sym.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  100.0, "", day1));
+            j.append(mkFill("ETH",  200.0, "", day1));
+            j.append(mkFill("BTC",  -30.0, "",
+                             day1 + 1*86400ULL*1000000ULL));
+            j.append(mkFill("BTC",   40.0, "",
+                             day1 + 2*86400ULL*1000000ULL));
+            j.append(mkFill("ETH",   50.0, "",
+                             day1 + 1*86400ULL*1000000ULL));
+            auto sBTC = j.dailyStreakStatsBySymbol("BTC");
+            auto sETH = j.dailyStreakStatsBySymbol("ETH");
+            // BTC: 3 days, sequence W L W.
+            //   daily cums: 100, 70, 110.
+            //   Streaks: W(1), L(1), W(1) → maxW=1, maxL=1,
+            //   totalStreaks=3.
+            // ETH: 2 days, sequence W W.
+            //   daily cums: 200, 250.
+            //   Streaks: WW(2) → maxW=2, maxL=0.
+            if (sBTC.totalDays == 3 &&
+                sBTC.maxWinStreak == 1 &&
+                sBTC.maxLossStreak == 1 &&
+                sBTC.totalStreaks == 3 &&
+                sETH.totalDays == 2 &&
+                sETH.maxWinStreak == 2 &&
+                sETH.maxLossStreak == 0 &&
+                sETH.totalStreaks == 1) {
+                std::cout << "✓ per-symbol: BTC maxW=1 maxL=1, "
+                          << "ETH maxW=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-sym wrong: BTC=" << sBTC.maxWinStreak
+                          << "/" << sBTC.maxLossStreak
+                          << " ETH=" << sETH.maxWinStreak
+                          << "/" << sETH.maxLossStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Per-tag ----
+        // scalp: Day1 +100, Day2 -50, Day3 +75 → W L W.
+        //   maxW=1, maxL=1.
+        // untagged: Day1 -10 → L.
+        {
+            TradeJournal j((tmpDir / "tag.jsonl").string());
+            const uint64_t day1 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "scalp", day1));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             day1 + 1*86400ULL*1000000ULL));
+            j.append(mkFill("BTC",  75.0, "scalp",
+                             day1 + 2*86400ULL*1000000ULL));
+            j.append(mkFill("BTC", -10.0, "",
+                             day1 + 3*86400ULL*1000000ULL));
+            auto sScalp = j.dailyStreakStatsByTag(
+                "scalp", false);
+            auto sUntag = j.dailyStreakStatsByTag(
+                "__untagged__", false);
+            if (sScalp.totalDays == 3 &&
+                sScalp.maxWinStreak == 1 &&
+                sScalp.maxLossStreak == 1 &&
+                sScalp.totalStreaks == 3 &&
+                sUntag.totalDays == 1 &&
+                sUntag.maxLossStreak == 1 &&
+                sUntag.totalStreaks == 1) {
+                std::cout << "✓ per-tag: scalp maxW=1 maxL=1, "
+                          << "__untagged__ maxL=1"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ per-tag wrong: scalp="
+                          << sScalp.maxWinStreak << "/"
+                          << sScalp.maxLossStreak
+                          << " untag=" << sUntag.maxLossStreak
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " daily-streak tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

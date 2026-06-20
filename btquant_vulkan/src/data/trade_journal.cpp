@@ -2728,6 +2728,104 @@ TradeJournal::tagSummary(const std::string& tag,
 }
 
 namespace {
+// Sprint #127 — shared daily-streak walker. Buckets fills
+// by local day (skip days with no round-trips), classifies
+// each day's net P&L as W/L (skip ties), walks consecutive
+// days into streaks.
+template <typename Pred>
+TradeJournal::DailyStreakStats
+buildDailyStreakStats(const std::vector<JournalFill>& fills,
+                      Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    // bucketByLocalDay returns a std::map<YYYY-MM-DD, sum>.
+    // We use the same helper from Sprint #115.
+    auto buckets = bucketByLocalDay(filtered);
+    // Walk days in chronological order (std::map is sorted).
+    TradeJournal::DailyStreakStats out;
+    out.totalDays = buckets.size();
+    constexpr double kEps = 1e-9;
+    bool   inRun         = false;
+    bool   runIsWin      = false;
+    size_t runLen        = 0;
+    auto closeRun = [&]() {
+        if (!inRun) return;
+        out.totalStreaks++;
+        if (runIsWin) {
+            // totalWinDays counts DAYS in W runs, not
+            // the number of W runs. Add runLen.
+            out.totalWinDays += runLen;
+            if (runLen > out.maxWinStreak) out.maxWinStreak = runLen;
+        } else {
+            out.totalLossDays += runLen;
+            if (runLen > out.maxLossStreak)
+                out.maxLossStreak = runLen;
+        }
+        inRun = false;
+        runLen = 0;
+    };
+    for (const auto& kv : buckets) {
+        out.totalRealized += kv.second;
+        if (std::fabs(kv.second) <= kEps) continue;  // tie day
+        bool dayIsWin = (kv.second > kEps);
+        if (inRun && dayIsWin != runIsWin) closeRun();
+        if (!inRun) {
+            inRun    = true;
+            runIsWin = dayIsWin;
+            runLen   = 1;
+        } else {
+            runLen++;
+        }
+    }
+    if (inRun) {
+        if (runIsWin) out.currentWinStreak = runLen;
+        else          out.currentLossStreak = runLen;
+        out.totalStreaks++;
+        if (runIsWin) {
+            out.totalWinDays += runLen;
+            if (runLen > out.maxWinStreak)
+                out.maxWinStreak = runLen;
+        } else {
+            out.totalLossDays += runLen;
+            if (runLen > out.maxLossStreak)
+                out.maxLossStreak = runLen;
+        }
+    }
+    return out;
+}
+}  // namespace
+
+TradeJournal::DailyStreakStats
+TradeJournal::dailyStreakStats() const {
+    return buildDailyStreakStats(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::DailyStreakStats
+TradeJournal::dailyStreakStatsBySymbol(
+    const std::string& symbol) const {
+    return buildDailyStreakStats(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::DailyStreakStats
+TradeJournal::dailyStreakStatsByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildDailyStreakStats(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+namespace {
 
 // Sprint #106 — calendar bucketing helpers. Build a
 // (axis → index → Bucket) flat grid for either day-of-week

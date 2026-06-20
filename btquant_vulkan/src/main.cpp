@@ -299,6 +299,7 @@ private:
       windowManager.showOrderTicketWindow();
       windowManager.showPositionPanelWindow();
       windowManager.showRiskLimitsWindow();
+      windowManager.showMiniPriceChartWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

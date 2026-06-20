@@ -20,6 +20,7 @@
 #include "../src/widgets/order_ticket.hpp"
 #include "../src/widgets/position_panel.hpp"
 #include "../src/widgets/risk_limits_panel.hpp"
+#include "../src/widgets/mini_price_chart.hpp"
 #include "../src/data/position_book.hpp"
 #include "../src/data/risk_guard.hpp"
 #include "../src/data/trade_journal.hpp"
@@ -1880,6 +1881,113 @@ int main() {
         panel.setPositionBook(&book);
         BTQ_LOG_DEBUG("RiskLimitsPanel: book bound (size=%zu)", 0);
         std::cout << "✓ setPositionBook accepts book (no crash)" << std::endl;
+    }
+
+    // Test 27: MiniPriceChart — OHLC validation + widget lifecycle.
+    std::cout << "\nTest 27: Testing MiniPriceChart..." << std::endl;
+    {
+        using btquant::ui::MiniPriceChart;
+        using btquant::data::Candle;
+
+        // 1) Default state: closed, historyN=60.
+        MiniPriceChart c;
+        if (!c.isOpen() && c.historyN() == 60) {
+            std::cout << "✓ default closed, historyN=60" << std::endl;
+        } else {
+            std::cout << "✗ default state" << std::endl;
+        }
+        c.setOpen(true);
+        if (c.isOpen()) {
+            std::cout << "✓ setOpen(true) → isOpen" << std::endl;
+        } else {
+            std::cout << "✗ setOpen failed" << std::endl;
+        }
+
+        // 2) historyN setter.
+        c.setHistoryN(120);
+        if (c.historyN() == 120) {
+            std::cout << "✓ setHistoryN(120) → historyN=120" << std::endl;
+        } else {
+            std::cout << "✗ setHistoryN failed" << std::endl;
+        }
+
+        // 3) validateCandle — valid candle.
+        Candle good;
+        good.open = 100.0; good.high = 110.0; good.low = 95.0;
+        good.close = 105.0; good.volume = 1000.0;
+        if (MiniPriceChart::validateCandle(good)) {
+            std::cout << "✓ valid candle (OHLC+volume) passes" << std::endl;
+        } else {
+            std::cout << "✗ valid candle rejected" << std::endl;
+        }
+
+        // 4) validateCandle — high < open should reject.
+        Candle badHigh; badHigh.open = 100; badHigh.high = 95;
+        badHigh.low = 90; badHigh.close = 92;
+        if (!MiniPriceChart::validateCandle(badHigh)) {
+            std::cout << "✓ reject: high < open" << std::endl;
+        } else {
+            std::cout << "✗ bad high passed" << std::endl;
+        }
+
+        // 5) validateCandle — low > close should reject.
+        Candle badLow; badLow.open = 100; badLow.high = 110;
+        badLow.low = 105; badLow.close = 102;
+        if (!MiniPriceChart::validateCandle(badLow)) {
+            std::cout << "✓ reject: low > close" << std::endl;
+        } else {
+            std::cout << "✗ bad low passed" << std::endl;
+        }
+
+        // 6) validateCandle — zero/negative open rejects.
+        Candle zeroOpen; zeroOpen.open = 0; zeroOpen.high = 0;
+        zeroOpen.low = 0; zeroOpen.close = 0;
+        if (!MiniPriceChart::validateCandle(zeroOpen)) {
+            std::cout << "✓ reject: zero open" << std::endl;
+        } else {
+            std::cout << "✗ zero open passed" << std::endl;
+        }
+
+        // 7) validateCandle — negative volume rejects.
+        Candle negVol; negVol.open = 100; negVol.high = 110;
+        negVol.low = 95; negVol.close = 105; negVol.volume = -1.0;
+        if (!MiniPriceChart::validateCandle(negVol)) {
+            std::cout << "✓ reject: negative volume" << std::endl;
+        } else {
+            std::cout << "✗ negative volume passed" << std::endl;
+        }
+
+        // 8) validateSeries — all good → -1.
+        std::vector<Candle> series(5);
+        for (size_t i = 0; i < series.size(); ++i) {
+            series[i].open  = 100.0 + i;
+            series[i].high  = 105.0 + i;
+            series[i].low   =  98.0 + i;
+            series[i].close = 103.0 + i;
+            series[i].volume = 100.0;
+        }
+        if (MiniPriceChart::validateSeries(series) == -1) {
+            std::cout << "✓ validateSeries(5 good candles) → -1"
+                      << std::endl;
+        } else {
+            std::cout << "✗ validateSeries wrong" << std::endl;
+        }
+
+        // 9) validateSeries — bad at index 2 → returns 2.
+        series[2].low = 200.0;  // low > close → invalid
+        if (MiniPriceChart::validateSeries(series) == 2) {
+            std::cout << "✓ validateSeries flags bad index 2" << std::endl;
+        } else {
+            std::cout << "✗ validateSeries index wrong" << std::endl;
+        }
+
+        // 10) Empty series → -1 (vacuously valid).
+        std::vector<Candle> empty;
+        if (MiniPriceChart::validateSeries(empty) == -1) {
+            std::cout << "✓ validateSeries(empty) → -1" << std::endl;
+        } else {
+            std::cout << "✗ validateSeries(empty) wrong" << std::endl;
+        }
     }
 
     return 0;

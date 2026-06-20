@@ -74,6 +74,7 @@ set(SOURCES
     src/widgets/order_ticket.cpp
     src/widgets/position_panel.cpp
     src/widgets/risk_limits_panel.cpp
+    src/widgets/mini_price_chart.cpp
     src/data/position_book.cpp
     src/data/risk_guard.cpp
     src/data/trade_journal.cpp
@@ -117,6 +118,7 @@ set(HEADERS
     src/widgets/order_ticket.hpp
     src/widgets/position_panel.hpp
     src/widgets/risk_limits_panel.hpp
+    src/widgets/mini_price_chart.hpp
     src/data/position_book.hpp
     src/data/risk_guard.hpp
     src/data/trade_journal.hpp

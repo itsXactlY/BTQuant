@@ -82,6 +82,9 @@ public:
     // Risk Dashboard toggle (Ctrl+R).
     bool showRiskLimits = false;
 
+    // Mini Price Chart toggle (Ctrl+M).
+    bool showMiniPriceChart = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -144,6 +147,7 @@ public:
     void showOrderTicketWindow();
     void showPositionPanelWindow();
     void showRiskLimitsWindow();
+    void showMiniPriceChartWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -185,6 +189,7 @@ private:
     class OrderTicket*       m_orderTicket        = nullptr;
     class PositionPanel*     m_positionPanel      = nullptr;
     class RiskLimitsPanel*   m_riskLimitsPanel    = nullptr;
+    class MiniPriceChart*    m_miniPriceChart     = nullptr;
     StatsOverlay m_statsOverlay;
     // Cached MarketDataProcessor pointer — used by the SymbolPicker callback
     // to actually swap the active symbol on selection. Without this, the

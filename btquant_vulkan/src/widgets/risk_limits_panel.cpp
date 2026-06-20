@@ -333,6 +333,101 @@ void RiskLimitsPanel::render() {
     ImGui::TextDisabled("(empty symbol or cap ≤ 0 is silently ignored; "
                         "Clear removes an existing override)");
 
+    // ---- Per-symbol kill thresholds ----
+    //
+    // Symmetric to the per-symbol notional cap section above. The
+    // trader can tighten the kill switch for individual symbols
+    // (e.g. -$500 on illiquid alt-coins while leaving the majors at
+    // the global -$5,000). The RiskPanel renders the live state of
+    // these overrides as progress bars (Sprint #58); this section
+    // is the edit surface. Empty override = use global kill.
+    ImGui::Separator();
+    ImGui::Text("Per-symbol kill thresholds (USD loss):");
+    auto killOverrides = m_guard->killOnDailyLossBySymbol();
+    if (killOverrides.empty()) {
+        ImGui::TextDisabled("(no per-symbol kill overrides — every "
+                            "symbol uses the global threshold)");
+    } else {
+        if (m_perSymbolKillEdit.size() != killOverrides.size())
+            m_perSymbolKillEdit.resize(killOverrides.size());
+        if (ImGui::BeginTable("PerSymbolKills",
+                              3,
+                              ImGuiTableFlags_BordersInnerH |
+                              ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Symbol",  ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Kill (USD)", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableHeadersRow();
+            for (size_t i = 0; i < killOverrides.size(); ++i) {
+                const auto& kv = killOverrides[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%s", kv.first.c_str());
+                ImGui::TableSetColumnIndex(1);
+                if (m_perSymbolKillEdit[i].empty()) {
+                    char buf[32];
+                    std::snprintf(buf, sizeof(buf), "%.2f", kv.second);
+                    m_perSymbolKillEdit[i] = buf;
+                }
+                char editBuf[32];
+                std::snprintf(editBuf, sizeof(editBuf), "%s",
+                              m_perSymbolKillEdit[i].c_str());
+                ImGui::PushItemWidth(120);
+                if (ImGui::InputText(("##kill_" + kv.first).c_str(),
+                                     editBuf, sizeof(editBuf))) {
+                    m_perSymbolKillEdit[i] = editBuf;
+                }
+                ImGui::PopItemWidth();
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID(("apply_kill_" + kv.first).c_str());
+                if (ImGui::SmallButton("Apply")) {
+                    double v = parseOrZero(m_perSymbolKillEdit[i].c_str());
+                    m_guard->setKillOnDailyLossUSDForSymbol(kv.first, v);
+                    BTQ_LOG_INFO("RiskLimits: %s kill set to -$%.2f",
+                                 kv.first.c_str(), v);
+                    if (m_persistFn) m_persistFn(*m_guard);
+                    m_perSymbolKillEdit[i].clear();
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
+                ImGui::PushID(("clear_kill_" + kv.first).c_str());
+                if (ImGui::SmallButton("Clear")) {
+                    m_guard->clearKillOnDailyLossUSDForSymbol(kv.first);
+                    BTQ_LOG_INFO("RiskLimits: %s per-symbol kill cleared",
+                                 kv.first.c_str());
+                    if (m_persistFn) m_persistFn(*m_guard);
+                    m_perSymbolKillEdit[i].clear();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+    }
+    ImGui::Text("Add per-symbol kill:");
+    ImGui::PushItemWidth(140);
+    ImGui::InputText("Symbol##addkill_sym",  m_pendingKillSymbol, sizeof(m_pendingKillSymbol));
+    ImGui::SameLine();
+    ImGui::InputText("USD##addkill_usd",    m_pendingKillUSD,    sizeof(m_pendingKillUSD));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Add##addkill")) {
+        std::string sym = m_pendingKillSymbol;
+        double v = parseOrZero(m_pendingKillUSD);
+        if (!sym.empty() && v > 0.0) {
+            m_guard->setKillOnDailyLossUSDForSymbol(sym, v);
+            BTQ_LOG_INFO("RiskLimits: %s per-symbol kill set to -$%.2f",
+                         sym.c_str(), v);
+            if (m_persistFn) m_persistFn(*m_guard);
+            m_pendingKillSymbol[0] = '\0';
+            m_pendingKillUSD[0] = '\0';
+        } else {
+            BTQ_LOG_WARN("RiskLimits: per-symbol kill add ignored "
+                         "(symbol empty or usd <= 0)");
+        }
+    }
+    ImGui::TextDisabled("(per-symbol kill TIGHTENS the global — "
+                        "never loosens; Clear removes the override)");
+
     ImGui::End();
 }
 

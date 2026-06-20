@@ -80,6 +80,16 @@ private:
     // renders the current value from the guard.
     std::vector<std::string> m_perSymbolEdit;
 
+    // ---- Per-symbol kill threshold UI state (Sprint #59) ----
+    //
+    // Mirrors the per-symbol cap state above, but for killOnDailyLoss
+    // overrides. Same UI pattern: add-row char buffers at the
+    // bottom, per-row edit vector that re-seeds from the guard when
+    // empty.
+    char m_pendingKillSymbol[32] = "";
+    char m_pendingKillUSD[32]    = "";
+    std::vector<std::string> m_perSymbolKillEdit;
+
 public:
     // True when the edit buffer differs from the last applied value.
     // Used by the render loop to draw the "* unsaved" hint.

@@ -21038,5 +21038,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 173: tradeCountSummary() (Sprint #187).
+    //
+    // Time-windowed fill counts. Tests:
+    //   - 5 fills within 1 day → lastDayFills=5.
+    std::cout << "\nTest 173: trade count summary..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test173_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](double realized, uint64_t ts) {
+            JournalFill f;
+            f.symbol = "BTC"; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 5 fills in same day ----
+        {
+            const uint64_t day = 86400ULL * 1000000ULL;
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "c.jsonl").string());
+            for (int i = 0; i < 5; ++i) {
+                j.append(mkFill(10.0, t0 + i * 3600ULL * 1000000ULL));
+            }
+            auto s = j.tradeCountSummary();
+            if (s.totalFills == 5 &&
+                s.lastDayFills == 5 &&
+                s.lastWeekFills == 5 &&
+                s.lastYearFills == 5) {
+                std::cout << "✓ 5 fills same day: "
+                          << "total=5, day=5, week=5"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: total="
+                          << s.totalFills
+                          << " day=" << s.lastDayFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " trade-count tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

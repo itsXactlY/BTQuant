@@ -1949,6 +1949,20 @@ public:
     std::vector<SegmentCagr> allSegmentCagrByTag(
         bool includeUntagged = true) const;
 
+    // Trade count summary (Sprint #187). Time-windowed
+    // fill counts and rates. Answers "am I trading more
+    // or less lately?"
+    struct TradeCountSummary {
+        size_t totalFills       = 0;
+        size_t lastDayFills     = 0;
+        size_t lastWeekFills    = 0;
+        size_t lastMonthFills   = 0;
+        size_t lastYearFills    = 0;
+        double fillsPerActiveDay = 0.0;  // last 30 days
+        double lastFillAgeHours = 0.0;   // since last fill
+    };
+    TradeCountSummary tradeCountSummary() const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

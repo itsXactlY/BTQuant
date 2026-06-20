@@ -7822,4 +7822,51 @@ TradeJournal::allSegmentCagrByTag(
     return out;
 }
 
+TradeJournal::TradeCountSummary
+TradeJournal::tradeCountSummary() const {
+    // Sprint #187. Time-windowed fill counts.
+    TradeCountSummary s;
+    auto fills = loadAll();
+    if (fills.empty()) return s;
+    s.totalFills = fills.size();
+    uint64_t nowUs = fills.back().timestamp_us;
+    uint64_t dayUs = 86400ULL * 1000000ULL;
+    uint64_t weekUs = 7ULL * dayUs;
+    uint64_t monthUs = 30ULL * dayUs;
+    uint64_t yearUs = 365ULL * dayUs;
+    for (const auto& f : fills) {
+        if (f.timestamp_us + dayUs > nowUs)
+            s.lastDayFills++;
+        if (f.timestamp_us + weekUs > nowUs)
+            s.lastWeekFills++;
+        if (f.timestamp_us + monthUs > nowUs)
+            s.lastMonthFills++;
+        if (f.timestamp_us + yearUs > nowUs)
+            s.lastYearFills++;
+    }
+    // Active days in last 30 days.
+    std::set<std::string> activeDays;
+    for (const auto& f : fills) {
+        if (f.timestamp_us + monthUs > nowUs) {
+            std::time_t t = static_cast<std::time_t>(
+                f.timestamp_us / 1000000ULL);
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            char buf[16];
+            std::strftime(buf, sizeof(buf),
+                          "%Y-%m-%d", &tm);
+            activeDays.insert(buf);
+        }
+    }
+    if (!activeDays.empty()) {
+        s.fillsPerActiveDay =
+            static_cast<double>(s.lastMonthFills) /
+            static_cast<double>(activeDays.size());
+    }
+    s.lastFillAgeHours = static_cast<double>(
+        nowUs - fills.back().timestamp_us) /
+        (3600.0 * 1000000.0);
+    return s;
+}
+
 } // namespace btquant

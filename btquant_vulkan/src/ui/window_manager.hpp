@@ -79,6 +79,9 @@ public:
     // Position Panel toggle (Ctrl+B).
     bool showPositionPanel = false;
 
+    // Risk Dashboard toggle (Ctrl+R).
+    bool showRiskLimits = false;
+
     // Top-right FPS / frame-time overlay (toggled by hotkey Shift+F1 or
     // menu item, persisted in Settings).
     bool showStatsOverlay = true;
@@ -140,6 +143,7 @@ public:
     void showPositionCalculatorWindow();
     void showOrderTicketWindow();
     void showPositionPanelWindow();
+    void showRiskLimitsWindow();
     util::Settings captureCurrentSettings() const;
     void showMainMenu();
 
@@ -180,6 +184,7 @@ private:
     class PositionCalculator* m_positionCalculator = nullptr;
     class OrderTicket*       m_orderTicket        = nullptr;
     class PositionPanel*     m_positionPanel      = nullptr;
+    class RiskLimitsPanel*   m_riskLimitsPanel    = nullptr;
     StatsOverlay m_statsOverlay;
     // Cached MarketDataProcessor pointer — used by the SymbolPicker callback
     // to actually swap the active symbol on selection. Without this, the

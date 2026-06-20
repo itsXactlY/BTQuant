@@ -298,6 +298,7 @@ private:
       windowManager.showPositionCalculatorWindow();
       windowManager.showOrderTicketWindow();
       windowManager.showPositionPanelWindow();
+      windowManager.showRiskLimitsWindow();
       windowManager.showSettingsWindow();
       windowManager.showHotkeyHelpWindow();
 

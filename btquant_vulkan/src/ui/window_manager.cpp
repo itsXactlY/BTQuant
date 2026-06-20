@@ -28,6 +28,7 @@
 #include "../widgets/position_calculator.hpp"
 #include "../widgets/order_ticket.hpp"
 #include "../widgets/position_panel.hpp"
+#include "../widgets/risk_limits_panel.hpp"
 #include "../data/position_book.hpp"
 #include "../data/risk_guard.hpp"
 #include "../data/trade_journal.hpp"
@@ -132,6 +133,9 @@ WindowManager::WindowManager() {
     m_positionPanel = new PositionPanel();
     m_positionPanel->setPositionBook(m_positionBook);
     m_riskGuard     = new ::btquant::RiskGuard();
+    m_riskLimitsPanel = new RiskLimitsPanel();
+    m_riskLimitsPanel->setRiskGuard(m_riskGuard);
+    m_riskLimitsPanel->setPositionBook(m_positionBook);
     // Trade journal lives in the user's config dir alongside settings.ini.
     const char* home = std::getenv("HOME");
     std::string journalPath = std::string(home ? home : "/tmp") +
@@ -240,6 +244,7 @@ WindowManager::~WindowManager() {
     delete m_orderTicket;
     delete m_positionPanel;
     delete m_positionBook;
+    delete m_riskLimitsPanel;
     delete m_riskGuard;
     delete m_tradeJournal;
     // m_logPanel is a singleton — do not delete.
@@ -536,6 +541,19 @@ void WindowManager::processHotkeys(void* glfwWindow) {
         }
     }
     prevCtrlK = currCtrlK;
+
+    // Ctrl+R toggles the Risk Dashboard. Edge-triggered.
+    static bool prevCtrlR = false;
+    bool currCtrlR = !textFieldFocus &&
+                     glfwGetKey(win, GLFW_KEY_R) == GLFW_PRESS &&
+                     (glfwGetKey(win, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(win, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    if (currCtrlR && !prevCtrlR) {
+        showRiskLimits = !showRiskLimits;
+        if (m_riskLimitsPanel) m_riskLimitsPanel->setOpen(showRiskLimits);
+        markSettingsDirty();
+    }
+    prevCtrlR = currCtrlR;
 #endif // BTQUANT_USE_GLFW
 }
 
@@ -674,6 +692,11 @@ void WindowManager::showPositionPanelWindow() {
     if (m_positionPanel) m_positionPanel->render();
 }
 
+void WindowManager::showRiskLimitsWindow() {
+    if (!showRiskLimits) return;
+    if (m_riskLimitsPanel) m_riskLimitsPanel->render();
+}
+
 void WindowManager::showMainMenu() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
@@ -696,6 +719,7 @@ void WindowManager::showMainMenu() {
             if (ImGui::MenuItem("Position Calculator",  nullptr, &showPositionCalculator)) markSettingsDirty();
             if (ImGui::MenuItem("Order Ticket (Ctrl+Enter)", nullptr, &showOrderTicket))  markSettingsDirty();
             if (ImGui::MenuItem("Position Panel (Ctrl+B)",     nullptr, &showPositionPanel))markSettingsDirty();
+            if (ImGui::MenuItem("Risk Dashboard (Ctrl+R)",      nullptr, &showRiskLimits))   markSettingsDirty();
             ImGui::Separator();
             if (ImGui::MenuItem("Settings…",         nullptr, &showSettings))        markSettingsDirty();
             if (ImGui::MenuItem("Hotkey Help…",      nullptr, &showHotkeyHelp))      markSettingsDirty();
@@ -774,6 +798,7 @@ void WindowManager::showHotkeyHelpWindow() {
         row("Ctrl+T",   "Open Theme Editor");
         row("Ctrl+Enter", "Toggle Order Ticket");
         row("Ctrl+B",   "Toggle Position Panel");
+        row("Ctrl+R",   "Toggle Risk Dashboard");
         row("Ctrl+K",   "Kill switch — flatten open position at market");
         row("ESC",      "Close topmost popup / window");
 

@@ -19,6 +19,7 @@
 #include "../src/widgets/position_calculator.hpp"
 #include "../src/widgets/order_ticket.hpp"
 #include "../src/widgets/position_panel.hpp"
+#include "../src/widgets/risk_limits_panel.hpp"
 #include "../src/data/position_book.hpp"
 #include "../src/data/risk_guard.hpp"
 #include "../src/data/trade_journal.hpp"
@@ -1804,6 +1805,81 @@ int main() {
 
         // Cleanup.
         fs::remove(tmp, ec);
+    }
+
+    // Test 26: RiskLimitsPanel — defaults, edit-buffer round-trip.
+    std::cout << "\nTest 26: Testing RiskLimitsPanel..." << std::endl;
+    {
+        using btquant::ui::RiskLimitsPanel;
+        using btquant::RiskGuard;
+
+        RiskLimitsPanel panel;
+        if (!panel.isOpen()) {
+            std::cout << "✓ panel default closed" << std::endl;
+        } else {
+            std::cout << "✗ panel default state" << std::endl;
+        }
+        panel.setOpen(true);
+        if (panel.isOpen()) {
+            std::cout << "✓ setOpen(true) → isOpen" << std::endl;
+        } else {
+            std::cout << "✗ setOpen failed" << std::endl;
+        }
+
+        // No guard bound — accessors return the default buffer values
+        // (100000 / 10 / 5000 / 10000) since syncFromGuard runs lazily.
+        if (panel.editedMaxPositionSizeUSD() == 100000.0 &&
+            panel.editedMaxLeverage() == 10.0 &&
+            panel.editedKillOnDailyLossUSD() == 5000.0 &&
+            panel.editedEquityUSD() == 10000.0) {
+            std::cout << "✓ default edit buffers: $100k / 10x / $5k / $10k"
+                      << std::endl;
+        } else {
+            std::cout << "✗ default edit buffers: "
+                      << panel.editedMaxPositionSizeUSD() << " / "
+                      << panel.editedMaxLeverage() << " / "
+                      << panel.editedKillOnDailyLossUSD() << " / "
+                      << panel.editedEquityUSD() << std::endl;
+        }
+
+        // Bind a guard and verify the accessor reflects the BUFFER state,
+        // not the guard state — until syncFromGuard runs (which only
+        // happens on first render).
+        RiskGuard g;
+        panel.setRiskGuard(&g);
+        // Even with a guard bound, the edit buffer hasn't been synced yet
+        // — so it should still hold the default values.
+        if (panel.editedMaxPositionSizeUSD() == 100000.0) {
+            std::cout << "✓ edit buffer holds defaults until first render"
+                      << std::endl;
+        } else {
+            std::cout << "✗ edit buffer leaked: "
+                      << panel.editedMaxPositionSizeUSD() << std::endl;
+        }
+
+        // Verify the applyToGuard path works: edit fields, apply, check
+        // guard changed. Use setConfig for test since applyToGuard is
+        // private — but the public accessors should reflect the new state
+        // after a manual setConfig.
+        ::btquant::RiskConfig c = g.config();
+        c.maxPositionSizeUSD = 250000.0;
+        c.maxLeverage        = 25.0;
+        c.killOnDailyLossUSD = 8000.0;
+        c.equityUSD          = 20000.0;
+        g.setConfig(c);
+        if (std::abs(g.config().maxPositionSizeUSD - 250000.0) < 1e-6 &&
+            std::abs(g.config().maxLeverage - 25.0) < 1e-6) {
+            std::cout << "✓ guard.setConfig propagates to readback"
+                      << std::endl;
+        } else {
+            std::cout << "✗ setConfig propagation failed" << std::endl;
+        }
+
+        // Panel can also bind a position book without crashing.
+        btquant::PositionBook book;
+        panel.setPositionBook(&book);
+        BTQ_LOG_DEBUG("RiskLimitsPanel: book bound (size=%zu)", 0);
+        std::cout << "✓ setPositionBook accepts book (no crash)" << std::endl;
     }
 
     return 0;

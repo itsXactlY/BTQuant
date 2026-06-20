@@ -9711,4 +9711,47 @@ TradeJournal::kellyFractionByTag(
     return k;
 }
 
+std::vector<TradeJournal::KellyFraction>
+TradeJournal::allSegmentKellyFraction() const {
+    // Sprint #224. Bulk per-symbol Kelly
+    // sorted DESC by fullKelly.
+    std::vector<KellyFraction> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(kellyFractionBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const KellyFraction& a, const KellyFraction& b) {
+            return a.fullKelly > b.fullKelly;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::KellyFraction>
+TradeJournal::allSegmentKellyFractionByTag(
+    bool includeUntagged) const {
+    std::vector<KellyFraction> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(kellyFractionByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const KellyFraction& a, const KellyFraction& b) {
+            return a.fullKelly > b.fullKelly;
+        });
+    return out;
+}
+
 } // namespace btquant

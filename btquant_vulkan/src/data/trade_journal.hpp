@@ -2422,6 +2422,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment Kelly fraction bulk (Sprint #224).
+    // Returns KellyFraction for every segment, sorted
+    // DESC by fullKelly (best edge first).
+    std::vector<KellyFraction>
+    allSegmentKellyFraction() const;
+    std::vector<KellyFraction>
+    allSegmentKellyFractionByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

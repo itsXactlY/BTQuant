@@ -1,20 +1,26 @@
 #ifndef BTQUANT_HOTKEY_HELP_OVERLAY_HPP
 #define BTQUANT_HOTKEY_HELP_OVERLAY_HPP
 
+#include <string>
+
 namespace btquant::util { class HotkeyMap; }
 
 namespace btquant::ui {
 
 // Non-editable hotkey reference overlay (Sprint #64). Pops up on
-// demand (Ctrl+? or Ctrl+/), lists every binding in the bound
-// HotkeyMap as a sortable table, closes on Esc. Distinct from the
-// HotkeyEditor (which is the edit surface): this is a quick
-// "what was that shortcut again?" reference the trader summons
-// mid-trade without leaving their current workflow.
+// demand (Ctrl+/), lists every binding in the bound HotkeyMap
+// sorted by action name, closes on Esc or the X button. Distinct
+// from the HotkeyEditor (which is the edit surface): this is a
+// quick "what was that shortcut again?" reference the trader
+// summons mid-trade without leaving their current workflow.
 //
 // WindowManager owns the map and passes a non-owning pointer via
 // setHotkeyMap(). The overlay reads it at render time so re-binding
 // via HotkeyEditor is reflected here without extra plumbing.
+//
+// Sprint #66: gained a substring filter box so the trader can
+// narrow down a 30+ row table to "just the order ticket keys"
+// or "anything containing 'kill'". Empty filter shows everything.
 class HotkeyHelpOverlay {
 public:
     void render();
@@ -31,6 +37,9 @@ public:
 private:
     bool m_open = false;
     const ::btquant::util::HotkeyMap* m_map = nullptr;
+    // Filter box — Sprint #66. Substring match on action name
+    // (case-insensitive). Empty = no filter.
+    char m_filter[64] = "";
 };
 
 }  // namespace btquant::ui

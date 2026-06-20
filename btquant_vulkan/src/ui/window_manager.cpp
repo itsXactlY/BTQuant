@@ -1047,7 +1047,19 @@ void WindowManager::showHotkeyEditorWindow() {
     if (!m_hotkeyEditor) return;
     m_hotkeyEditor->setOpen(m_hotkeyEditorOpen);
     m_hotkeyEditor->render();
-    if (m_hotkeyHelpOverlay) m_hotkeyHelpOverlay->render();
+    if (m_hotkeyHelpOverlay) {
+        // Sprint #66: keep the overlay's open state in sync with
+        // showHotkeyHelp so the existing hotkey action
+        // (Ctrl+/) and menu items actually toggle the overlay.
+        // (Previously the overlay was created but its open flag
+        // never flipped, so the inline window in showHotkeyHelpWindow
+        // was the one actually rendering. Both work now — the
+        // overlay has the filter box from Sprint #66.)
+        m_hotkeyHelpOverlay->setOpen(showHotkeyHelp);
+        m_hotkeyHelpOverlay->render();
+        // Persist back in case the user closed via X / Esc.
+        showHotkeyHelp = m_hotkeyHelpOverlay->isOpen();
+    }
     // Sync back in case the user closed the window via the [X] button.
     m_hotkeyEditorOpen = m_hotkeyEditor->isOpen();
     // Persist on close with pending changes.

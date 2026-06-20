@@ -1707,6 +1707,24 @@ public:
     std::vector<RiskEfficiency> riskEfficiencyByTag(
         bool includeUntagged = true) const;
 
+    // Composite risk-adjusted metrics bundle (Sprint #169).
+    // Single method that returns Sharpe, Sortino, Calmar
+    // in one struct. The UI panel header renders all three
+    // in a single row, so this saves multiple method calls.
+    struct RiskAdjustedBundle {
+        double sharpe  = 0.0;   // mean / stddev of returns
+        double sortino = 0.0;   // mean / downside dev
+        double calmar  = 0.0;   // annual return / max DD
+        double omega   = 0.0;   // prob gain / prob loss
+        size_t returns = 0;     // count of round-trips used
+    };
+    RiskAdjustedBundle riskAdjustedBundle() const;
+    RiskAdjustedBundle riskAdjustedBundleBySymbol(
+        const std::string& symbol) const;
+    RiskAdjustedBundle riskAdjustedBundleByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

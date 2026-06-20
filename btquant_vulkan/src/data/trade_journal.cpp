@@ -6701,4 +6701,107 @@ TradeJournal::riskEfficiencyByTag(
     return out;
 }
 
+namespace {
+// Sprint #169 — composite risk-adjusted metrics builder.
+// Computes Sharpe, Sortino, Calmar from a series of
+// round-trip returns (one number per round-trip, signed
+// by realizedDelta).
+template <typename Pred>
+TradeJournal::RiskAdjustedBundle
+buildRiskAdjustedBundle(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::RiskAdjustedBundle b;
+    std::vector<JournalFill> sub;
+    sub.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f) && std::fabs(f.realizedDelta) > 1e-9) {
+            sub.push_back(f);
+        }
+    }
+    if (sub.size() < 2) return b;
+    b.returns = sub.size();
+    // Sortino-style descending sort doesn't apply here;
+    // we just need the series in chronological order.
+    double sum = 0.0;
+    std::vector<double> rets;
+    rets.reserve(sub.size());
+    for (const auto& f : sub) {
+        rets.push_back(f.realizedDelta);
+        sum += f.realizedDelta;
+    }
+    double mean = sum / static_cast<double>(sub.size());
+    // Sharpe: mean / stddev (sample).
+    double var = 0.0;
+    for (double r : rets) var += (r - mean) * (r - mean);
+    var /= static_cast<double>(sub.size() - 1);
+    double sd = std::sqrt(var);
+    if (sd > 1e-12) b.sharpe = mean / sd;
+    // Sortino: mean / downside stddev.
+    double downsideVar = 0.0;
+    size_t nDown = 0;
+    for (double r : rets) {
+        if (r < 0.0) {
+            downsideVar += r * r;
+            nDown++;
+        }
+    }
+    if (nDown > 1) {
+        downsideVar /= static_cast<double>(nDown - 1);
+        double ddDev = std::sqrt(downsideVar);
+        if (ddDev > 1e-12) b.sortino = mean / ddDev;
+    }
+    // Calmar: total realized / max DD depth.
+    // Walk the equity curve and find max DD.
+    double cum = 0.0;
+    double peak = std::numeric_limits<double>::lowest();
+    double maxDD = 0.0;
+    for (double r : rets) {
+        cum += r;
+        if (cum > peak) peak = cum;
+        double dd = peak - cum;
+        if (dd > maxDD) maxDD = dd;
+    }
+    if (maxDD > 1e-12) b.calmar = sum / maxDD;
+    // Omega: prob(r > 0) / prob(r < threshold). Standard
+    // threshold = 0.
+    size_t nGain = 0, nLoss = 0;
+    for (double r : rets) {
+        if (r > 0.0) nGain++;
+        else if (r < 0.0) nLoss++;
+    }
+    if (nLoss > 0) b.omega =
+        static_cast<double>(nGain) /
+        static_cast<double>(nLoss);
+    else if (nGain > 0) b.omega = std::numeric_limits<double>::infinity();
+    return b;
+}
+}  // namespace
+
+TradeJournal::RiskAdjustedBundle
+TradeJournal::riskAdjustedBundle() const {
+    return buildRiskAdjustedBundle(loadAll(),
+        [](const JournalFill&) { return true; });
+}
+
+TradeJournal::RiskAdjustedBundle
+TradeJournal::riskAdjustedBundleBySymbol(
+    const std::string& symbol) const {
+    return buildRiskAdjustedBundle(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+TradeJournal::RiskAdjustedBundle
+TradeJournal::riskAdjustedBundleByTag(
+    const std::string& tag,
+    bool includeUntagged) const {
+    return buildRiskAdjustedBundle(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

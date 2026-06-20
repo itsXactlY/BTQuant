@@ -19797,5 +19797,77 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 156: riskAdjustedBundle() (Sprint #169).
+    //
+    // Sharpe + Sortino + Calmar + Omega in one struct.
+    // Tests:
+    //   - 4 fills: 3W +50 each, 1L -50. mean=25,
+    //     stddev=57.7, Sharpe=0.43.
+    //   - Omega = 3 wins / 1 loss = 3.0.
+    std::cout << "\nTest 156: risk-adjusted bundle..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test156_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 3W +50, 1L -50 → mean=25, omega=3 ----
+        {
+            TradeJournal j((tmpDir / "b.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC",  50.0, "scalp", t0));
+            j.append(mkFill("BTC",  50.0, "scalp",
+                             t0 + 1));
+            j.append(mkFill("BTC", -50.0, "scalp",
+                             t0 + 2));
+            j.append(mkFill("BTC",  50.0, "scalp",
+                             t0 + 3));
+            auto b = j.riskAdjustedBundle();
+            if (b.returns == 4 &&
+                std::fabs(b.omega - 3.0) < 1e-9 &&
+                std::fabs(b.sharpe - 25.0 / 57.735) < 0.1) {
+                std::cout << "✓ 4 fills: sharpe="
+                          << b.sharpe << " omega="
+                          << b.omega << " sortino="
+                          << b.sortino << " calmar="
+                          << b.calmar
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: returns="
+                          << b.returns
+                          << " sharpe=" << b.sharpe
+                          << " omega=" << b.omega
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " risk-adj bundle tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

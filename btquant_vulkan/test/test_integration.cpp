@@ -10035,5 +10035,439 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 86: TradeJournal.perSymbolDrawdown() (Sprint #91).
+    //
+    // Per-symbol worst peak-to-trough. Same algorithm as
+    // maxDrawdown() (#80) but applied to each symbol's own daily
+    // series. Tests:
+    //   - Empty journal → empty result.
+    //   - Single-symbol steady gain → maxDD == 0.
+    //   - Single-symbol with a peak/trough → maxDD matches
+    //     hand-rolled calculation.
+    //   - Multi-symbol sort: worst maxDD first.
+    //   - fillCount == number of fills for that symbol.
+    //   - Sum of fillCount across all symbols == journal count().
+    //   - Each symbol's maxDD ≥ 0 and currentDD ≥ 0.
+    std::cout << "\nTest 86: Testing TradeJournal.perSymbolDrawdown()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test86_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        // Local-midnight helper (same shape as Test 80).
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto ps = j.perSymbolDrawdown();
+            if (ps.empty()) {
+                std::cout << "✓ empty journal: no symbols"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal returned "
+                          << ps.size() << " entries" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single symbol, steady gain (no drawdown) ----
+        //   Day -2: +$50, Day -1: +$50 → equity 50, 100; peak 100,
+        //   no drop → maxDD = 0, currentDD = 0.
+        {
+            fs::path p = tmpDir / "gain.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  50.0, 2, 10));
+            j.append(mkFill("BTCUSDT",  50.0, 1, 10));
+            auto ps = j.perSymbolDrawdown();
+            if (ps.size() == 1 && ps[0].symbol == "BTCUSDT" &&
+                std::fabs(ps[0].maxDrawdown) < 1e-9 &&
+                std::fabs(ps[0].currentDD)   < 1e-9 &&
+                ps[0].peakDate.empty() &&
+                ps[0].troughDate.empty() &&
+                ps[0].fillCount == 2) {
+                std::cout << "✓ single-symbol gain: maxDD=0 "
+                             "(no decline seen)" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single-symbol gain wrong: maxDD="
+                          << ps[0].maxDrawdown
+                          << " currentDD=" << ps[0].currentDD
+                          << " peakDate='" << ps[0].peakDate
+                          << "' troughDate='" << ps[0].troughDate
+                          << "' fillCount=" << ps[0].fillCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single symbol with a peak→trough drop ----
+        //   Day -3: +$100 → equity 100 (peak)
+        //   Day -2: -$60  → equity 40  (DD = 60)
+        //   Day -1: -$40  → equity 0   (DD = 100, NEW MAX)
+        // Expected: maxDD=100, peakDate=day -3, troughDate=day -1,
+        // currentDD=100 (still in DD).
+        {
+            fs::path p = tmpDir / "peak.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("ETHUSDT", 100.0, 3, 10));
+            j.append(mkFill("ETHUSDT", -60.0, 2, 10));
+            j.append(mkFill("ETHUSDT", -40.0, 1, 10));
+            auto ps = j.perSymbolDrawdown();
+            if (ps.size() == 1 &&
+                std::fabs(ps[0].maxDrawdown - 100.0) < 1e-9 &&
+                std::fabs(ps[0].currentDD - 100.0)   < 1e-9 &&
+                !ps[0].peakDate.empty() &&
+                !ps[0].troughDate.empty() &&
+                ps[0].fillCount == 3) {
+                std::cout << "✓ single-symbol peak→trough: "
+                          << "maxDD=$100 peak=" << ps[0].peakDate
+                          << " trough=" << ps[0].troughDate
+                          << " currentDD=$100 (still in DD)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ peak→trough wrong: maxDD="
+                          << ps[0].maxDrawdown
+                          << " currentDD=" << ps[0].currentDD
+                          << " peak='" << ps[0].peakDate
+                          << "' trough='" << ps[0].troughDate
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-symbol sort: worst first ----
+        // BTC: steady gain (maxDD = 0).
+        // ETH: 100 then -100 (maxDD = 100).
+        // SOL: 50 then -25 then -25 (maxDD = 50).
+        // Expected order: ETHUSDT, SOLUSDT, BTCUSDT.
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  50.0, 2, 10));
+            j.append(mkFill("BTCUSDT",  50.0, 1, 10));
+            j.append(mkFill("ETHUSDT", 100.0, 2, 10));
+            j.append(mkFill("ETHUSDT",-100.0, 1, 10));
+            j.append(mkFill("SOLUSDT",  50.0, 3, 10));
+            j.append(mkFill("SOLUSDT", -25.0, 2, 10));
+            j.append(mkFill("SOLUSDT", -25.0, 1, 10));
+            auto ps = j.perSymbolDrawdown();
+            if (ps.size() == 3 &&
+                ps[0].symbol == "ETHUSDT" &&
+                ps[1].symbol == "SOLUSDT" &&
+                ps[2].symbol == "BTCUSDT" &&
+                std::fabs(ps[0].maxDrawdown - 100.0) < 1e-9 &&
+                std::fabs(ps[1].maxDrawdown -  50.0) < 1e-9 &&
+                std::fabs(ps[2].maxDrawdown -   0.0) < 1e-9) {
+                std::cout << "✓ multi-symbol sorted worst-first: "
+                          << "ETH($100) > SOL($50) > BTC($0)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi-symbol sort wrong: "
+                          << ps[0].symbol << "($" << ps[0].maxDrawdown
+                          << "), " << ps[1].symbol << "($" << ps[1].maxDrawdown
+                          << "), " << ps[2].symbol << "($" << ps[2].maxDrawdown
+                          << ")" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- fillCount invariant ----
+        // 4 symbols × distinct fill counts. Sum across the
+        // perSymbolDrawdown() entries must equal journal.count().
+        {
+            fs::path p = tmpDir / "fillcnt.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("A",  10.0, 1, 10));
+            j.append(mkFill("A", -10.0, 1, 11));
+            j.append(mkFill("B",   5.0, 1, 10));
+            j.append(mkFill("B",   5.0, 2, 10));
+            j.append(mkFill("B",   5.0, 3, 10));
+            j.append(mkFill("C",  20.0, 1, 10));
+            j.append(mkFill("D", -30.0, 1, 10));
+            auto ps = j.perSymbolDrawdown();
+            size_t totalFills = 0;
+            for (const auto& e : ps) totalFills += e.fillCount;
+            if (ps.size() == 4 && totalFills == j.count()) {
+                std::cout << "✓ fillCount sum across symbols "
+                          << "(" << totalFills << ") == journal.count()"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ fillCount mismatch: sum=" << totalFills
+                          << " count()=" << j.count()
+                          << " entries=" << ps.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Sanity: every maxDD ≥ 0 and currentDD ≥ 0 ----
+        {
+            fs::path p = tmpDir / "sanity.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("X",  100.0, 2, 10));
+            j.append(mkFill("X", -100.0, 1, 10));
+            j.append(mkFill("Y",   50.0, 1, 10));
+            auto ps = j.perSymbolDrawdown();
+            bool ok = true;
+            for (const auto& e : ps) {
+                if (e.maxDrawdown < -1e-9) ok = false;
+                if (e.currentDD   < -1e-9) ok = false;
+            }
+            if (ok) {
+                std::cout << "✓ all per-symbol DDs are non-negative"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ negative DD found" << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perSymbolDrawdown tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
+    // Test 87: TradeJournal.perSymbolSharpe() (Sprint #91).
+    //
+    // Per-symbol Sharpe ratio on the daily series. Tests:
+    //   - Empty journal → empty result.
+    //   - Single symbol, single day → Sharpe = 0 (n < 2).
+    //   - Single symbol, two days [100, -50] → mean=25,
+    //     stddev=√((75²+75²)/1)=106.066, dailySharpe≈0.236,
+    //     annualized ≈ 3.74.
+    //   - Multi-symbol sort: highest annualized Sharpe first.
+    //   - sampleSize matches the distinct-day count for that
+    //     symbol.
+    //   - All Sharpe values are finite (no NaN, no +inf from
+    //     division by zero).
+    std::cout << "\nTest 87: Testing TradeJournal.perSymbolSharpe()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test87_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm_now{};
+#if defined(_WIN32)
+        localtime_s(&tm_now, &now);
+#else
+        localtime_r(&now, &tm_now);
+#endif
+        tm_now.tm_hour = 0; tm_now.tm_min = 0; tm_now.tm_sec = 0;
+        std::time_t today = std::mktime(&tm_now);
+
+        auto mkFill = [&](const std::string& sym, double realized,
+                          int daysAgo, int hour) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized;
+            std::time_t ts = today - daysAgo * 86400 + hour * 3600;
+            f.timestamp_us = static_cast<uint64_t>(ts) * 1000000ULL;
+            return f;
+        };
+
+        // ---- Empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto ps = j.perSymbolSharpe();
+            if (ps.empty()) {
+                std::cout << "✓ empty journal: no symbols"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty journal returned "
+                          << ps.size() << " entries" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single symbol, single day → Sharpe = 0 ----
+        {
+            fs::path p = tmpDir / "one.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 100.0, 1, 10));
+            auto ps = j.perSymbolSharpe();
+            if (ps.size() == 1 &&
+                std::fabs(ps[0].dailySharpe)      < 1e-9 &&
+                std::fabs(ps[0].annualizedSharpe) < 1e-9 &&
+                std::fabs(ps[0].meanDailyReturn - 100.0) < 1e-9 &&
+                std::fabs(ps[0].stddevDailyReturn) < 1e-9 &&
+                ps[0].sampleSize == 1) {
+                std::cout << "✓ single-day symbol: Sharpe=0 "
+                             "(n<2 → no stddev)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single-day wrong: daily="
+                          << ps[0].dailySharpe
+                          << " mean=" << ps[0].meanDailyReturn
+                          << " stddev=" << ps[0].stddevDailyReturn
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single symbol, two days [100, -50] ----
+        // mean = 25
+        // stddev (Bessel) = sqrt(((100-25)² + (-50-25)²) / 1)
+        //                 = sqrt(75² + 75²) = sqrt(11250)
+        //                 ≈ 106.066
+        // dailySharpe = 25 / 106.066 ≈ 0.2357
+        // annualized  = 0.2357 × sqrt(252) ≈ 3.741
+        {
+            fs::path p = tmpDir / "two.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100.0, 2, 10));
+            j.append(mkFill("BTCUSDT",  -50.0, 1, 10));
+            auto ps = j.perSymbolSharpe();
+            if (ps.size() == 1 &&
+                std::fabs(ps[0].meanDailyReturn - 25.0) < 1e-9 &&
+                std::fabs(ps[0].stddevDailyReturn -
+                          std::sqrt(11250.0)) < 1e-6 &&
+                std::fabs(ps[0].dailySharpe -
+                          (25.0 / std::sqrt(11250.0))) < 1e-9 &&
+                std::fabs(ps[0].annualizedSharpe -
+                          ps[0].dailySharpe *
+                              std::sqrt(252.0)) < 1e-9 &&
+                ps[0].sampleSize == 2) {
+                std::cout << "✓ two-day [100,-50]: daily="
+                          << ps[0].dailySharpe
+                          << " annualized=" << ps[0].annualizedSharpe
+                          << " (sampleSize=2)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ two-day wrong: mean="
+                          << ps[0].meanDailyReturn
+                          << " stddev=" << ps[0].stddevDailyReturn
+                          << " daily=" << ps[0].dailySharpe
+                          << " annual=" << ps[0].annualizedSharpe
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Multi-symbol sort: highest annualized Sharpe first ----
+        // A: [100, -50]   → daily ≈ 0.236
+        // B: [10, 10]     → stddev = 0 → Sharpe = 0 (sentinel)
+        // C: [-10, -30]   → mean=-20, stddev=√(100+100)=14.14,
+        //                   daily ≈ -1.414, annual ≈ -22.45
+        // Expected order: A (≈0.236), B (0), C (≈-1.414).
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("A",  100.0, 2, 10));
+            j.append(mkFill("A",  -50.0, 1, 10));
+            j.append(mkFill("B",   10.0, 2, 10));
+            j.append(mkFill("B",   10.0, 1, 10));
+            j.append(mkFill("C",  -10.0, 2, 10));
+            j.append(mkFill("C",  -30.0, 1, 10));
+            auto ps = j.perSymbolSharpe();
+            if (ps.size() == 3 &&
+                ps[0].symbol == "A" &&
+                ps[1].symbol == "B" &&
+                ps[2].symbol == "C" &&
+                ps[0].annualizedSharpe > ps[1].annualizedSharpe &&
+                ps[1].annualizedSharpe > ps[2].annualizedSharpe &&
+                std::fabs(ps[1].dailySharpe) < 1e-9 &&
+                std::fabs(ps[1].annualizedSharpe) < 1e-9) {
+                std::cout << "✓ multi-symbol sorted by annualized "
+                          << "Sharpe DESC: A("
+                          << ps[0].annualizedSharpe
+                          << ") > B(0) > C("
+                          << ps[2].annualizedSharpe
+                          << ")" << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ multi-symbol sort wrong: "
+                          << ps[0].symbol << "("
+                          << ps[0].annualizedSharpe
+                          << ") " << ps[1].symbol << "("
+                          << ps[1].annualizedSharpe
+                          << ") " << ps[2].symbol << "("
+                          << ps[2].annualizedSharpe
+                          << ")" << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Finite check: no NaN, no +inf in any field ----
+        {
+            fs::path p = tmpDir / "finite.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("X", 100.0, 3, 10));
+            j.append(mkFill("X", -50.0, 2, 10));
+            j.append(mkFill("X",  20.0, 1, 10));
+            j.append(mkFill("Y",  10.0, 1, 10));
+            auto ps = j.perSymbolSharpe();
+            bool ok = true;
+            for (const auto& e : ps) {
+                if (!std::isfinite(e.dailySharpe))       ok = false;
+                if (!std::isfinite(e.annualizedSharpe))  ok = false;
+                if (!std::isfinite(e.meanDailyReturn))   ok = false;
+                if (!std::isfinite(e.stddevDailyReturn)) ok = false;
+            }
+            if (ok) {
+                std::cout << "✓ all Sharpe fields are finite "
+                             "(no NaN, no +inf)"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ non-finite Sharpe value found"
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " perSymbolSharpe tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

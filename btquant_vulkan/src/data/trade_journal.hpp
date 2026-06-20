@@ -240,6 +240,60 @@ public:
     };
     std::vector<PerTagStats> perTagStats(bool includeUntagged = false) const;
 
+    // Per-symbol risk metrics (Sprint #91). For each symbol
+    // with at least one persisted fill, computes the worst
+    // peak-to-trough decline seen in that symbol's per-day equity
+    // curve. Sorted by maxDrawdown DESCENDING so the symbol that
+    // caused the worst drop surfaces first.
+    //
+    // The internal algorithm matches maxDrawdown() (#80) exactly:
+    //   equity[t]   = cumulative sum of realized on date t
+    //   peak[t]     = max(equity[0..t])
+    //   drawdown[t] = peak[t] - equity[t]
+    //   maxDD       = max over t of drawdown[t]
+    // ... but applied to per-symbol daily series instead of the
+    // journal-wide one.
+    //
+    // Fields:
+    //   symbol      — the symbol this entry describes.
+    //   fillCount   — number of fills in this symbol (open + close).
+    //   maxDrawdown — worst peak-to-trough drop, in dollars.
+    //   peakDate    — date of the high that preceded the worst
+    //                 drop ("YYYY-MM-DD"); empty when maxDD == 0.
+    //   troughDate  — date of the low that ended the worst drop;
+    //                 empty when maxDD == 0.
+    //   currentDD   — drawdown as of the most recent day in the
+    //                 symbol's series. Zero when at symbol-ATH.
+    struct PerSymbolDrawdown {
+        std::string symbol;
+        size_t      fillCount   = 0;
+        double      maxDrawdown = 0.0;
+        std::string peakDate;     // YYYY-MM-DD or ""
+        std::string troughDate;   // YYYY-MM-DD or ""
+        double      currentDD   = 0.0;
+    };
+    std::vector<PerSymbolDrawdown> perSymbolDrawdown() const;
+
+    // Per-symbol risk-adjusted return (Sprint #91). For each
+    // symbol, Sharpe on the daily series — same algorithm as
+    // sharpe() (#84) but applied to the symbol's own daily series.
+    // Sorted by annualized Sharpe DESCENDING so the symbol with
+    // the best risk-adjusted return surfaces first.
+    //
+    // A symbol with fewer than 2 distinct trading days gets
+    // dailySharpe=0, annualizedSharpe=0 (no division by zero).
+    // meanDailyReturn is still meaningful on a single day; the
+    // stddev is just 0.
+    struct PerSymbolSharpe {
+        std::string symbol;
+        double dailySharpe       = 0.0;
+        double annualizedSharpe  = 0.0;
+        double meanDailyReturn   = 0.0;
+        double stddevDailyReturn = 0.0;
+        size_t sampleSize        = 0;
+    };
+    std::vector<PerSymbolSharpe> perSymbolSharpe() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

@@ -300,101 +300,140 @@ TradeJournal::realizedByDay() const {
     return out;
 }
 
-TradeJournal::Drawdown TradeJournal::maxDrawdown() const {
-    Drawdown dd;
-    auto daily = realizedByDay();
+namespace {
+
+// Pure helpers shared between the journal-wide and per-symbol
+// methods. Operate on a chronological (date, value) series — the
+// caller decides how to bucket (by day across all fills, or by day
+// scoped to a single symbol/tag/etc.). Keeping the algorithm
+// separate from the bucketing means a future perTagDrawdown() (or
+// per-strategy Sharpe) is a thin wrapper, not a duplicate.
+
+// Compute the worst peak-to-trough decline on a chronological
+// equity-curve series. The same algorithm that was inline in
+// maxDrawdown() (#80) — refactored into a helper in Sprint #91 so
+// perSymbolDrawdown() (#91) can reuse it without copy-paste.
+//
+// Algorithm:
+//   - Walk the series forward, tracking running peak + peakDate.
+//   - When equity hits a new peak, update peakDate to "now".
+//   - Whenever drawdown widens beyond the worst seen, record the
+//     worstDD + the troughDate that ended it + the peakDate that
+//     anchored it (i.e. the most recent peak anchor at the time
+//     the trough occurred).
+//   - currentDD is the drawdown as of the last equity point.
+TradeJournal::Drawdown computeDrawdownFromSeries(
+    const std::vector<std::pair<std::string, double>>& daily) {
+    TradeJournal::Drawdown dd;
     if (daily.empty()) return dd;
-
-    // Walk the equity curve. Track:
-    //   running peak (the highest equity seen so far)
-    //   current drawdown (peak - current equity)
-    //   worst drawdown seen (and the dates that bracket it)
-    double equity  = 0.0;
-    double peak    = 0.0;
+    double equity = 0.0;
+    double peak   = 0.0;
     double worstDD = 0.0;
-    std::string peakDateAtWorst;   // date of the high that preceded worstDD
-    std::string troughDateAtWorst; // date of the low that ended worstDD
-
+    std::string peakDate;          // date of running peak
+    std::string peakDateAtWorst;   // peakDate captured at worstDD
+    std::string troughDateAtWorst; // date of worst trough
     for (const auto& kv : daily) {
         equity += kv.second;
         if (equity > peak) {
             peak = equity;
-            // A new high water mark resets the peakDateAtWorst to
-            // the date the peak was reached — but only if we
-            // haven't yet seen any drawdown. Once we've recorded a
-            // worstDD, the peakDate for the *current* drawdown is
-            // whatever the peak was when this drawdown started,
-            // not necessarily today.
+            peakDate = kv.first;
         }
         double curDD = peak - equity;  // >= 0
         if (curDD > worstDD + 1e-9) {
             worstDD = curDD;
             troughDateAtWorst = kv.first;
-            // peakDateAtWorst: we need the date of the high that
-            // preceded this drawdown. Walk backwards from today
-            // until we find the last peak. Simpler: track it
-            // forward — when equity first exceeded the previous
-            // peak, record that date as the new "peak anchor".
+            peakDateAtWorst = peakDate;
         }
     }
-
-    // Recompute peakDateAtWorst properly: walk forward, tracking
-    // the date of the most recent equity-high (running peak).
-    // The peak anchor for the worst drawdown is the last date on
-    // which equity reached the peak that the drawdown started
-    // from. Re-walking costs O(N) which matches the loop above —
-    // could fuse but clarity wins.
-    equity = 0.0;
-    double anchorPeak = 0.0;
-    std::string anchorDate;
-    std::string troughAnchor;   // troughDate → anchorDate mapping
-    double runningWorstDD = 0.0;
-    for (const auto& kv : daily) {
-        equity += kv.second;
-        if (equity >= anchorPeak) {
-            anchorPeak = equity;
-            anchorDate = kv.first;
-        }
-        double curDD = anchorPeak - equity;
-        if (curDD > runningWorstDD + 1e-9) {
-            runningWorstDD = curDD;
-            troughAnchor = kv.first;
-            // The peak that started this drawdown is anchorDate.
-        }
+    dd.maxDrawdown = worstDD;
+    if (worstDD > 1e-9) {
+        dd.peakDate = peakDateAtWorst;
+        dd.troughDate = troughDateAtWorst;
     }
-
-    dd.maxDrawdown = runningWorstDD;
-    if (runningWorstDD > 1e-9) {
-        // Final peakDateAtWorst: walk forward once more, this time
-        // stopping when we hit the troughDate and recording the
-        // peak that was current at that moment.
-        equity = 0.0;
-        double p = 0.0;
-        std::string lastPeakDate;
-        for (const auto& kv : daily) {
-            equity += kv.second;
-            if (equity >= p) {
-                p = equity;
-                lastPeakDate = kv.first;
-            }
-            if (kv.first == troughAnchor) {
-                dd.peakDate   = lastPeakDate;
-                dd.troughDate = troughAnchor;
-                break;
-            }
-        }
-    }
-
-    // currentDD: peak - last equity.
-    equity = 0.0;
-    double lastPeak = 0.0;
-    for (const auto& kv : daily) {
-        equity += kv.second;
-        if (equity > lastPeak) lastPeak = equity;
-    }
-    dd.currentDD = lastPeak - equity;
-
+    dd.currentDD = peak - equity;
     return dd;
+}
+
+// Compute Sharpe on a chronological daily series. Same algorithm
+// as sharpe() (#84) — extracted in Sprint #91 so perSymbolSharpe()
+// can reuse it.
+//
+//   dailySharpe      = mean / stddev (sample, Bessel-corrected)
+//   annualizedSharpe = daily * sqrt(252)
+//   meanDailyReturn  = sum / N
+//   stddevDailyReturn= sqrt(Σ(d-mean)² / (N-1))
+//
+// Returns zeroed Sharpe when sampleSize < 2 (no division by zero,
+// no NaN).
+TradeJournal::Sharpe computeSharpeFromSeries(
+    const std::vector<std::pair<std::string, double>>& daily) {
+    constexpr double kTradingDays = 252.0;
+    TradeJournal::Sharpe out;
+    out.sampleSize = daily.size();
+    if (daily.empty()) return out;
+
+    double sum = 0.0;
+    for (const auto& kv : daily) sum += kv.second;
+    out.meanDailyReturn = sum / static_cast<double>(daily.size());
+
+    if (daily.size() < 2) {
+        out.stddevDailyReturn = 0.0;
+        out.dailySharpe       = 0.0;
+        out.annualizedSharpe  = 0.0;
+        return out;
+    }
+    double sqSum = 0.0;
+    for (const auto& kv : daily) {
+        double d = kv.second - out.meanDailyReturn;
+        sqSum += d * d;
+    }
+    out.stddevDailyReturn = std::sqrt(sqSum /
+                                      static_cast<double>(daily.size() - 1));
+    if (out.stddevDailyReturn > 1e-9) {
+        out.dailySharpe = out.meanDailyReturn / out.stddevDailyReturn;
+        out.annualizedSharpe = out.dailySharpe * std::sqrt(kTradingDays);
+    } else {
+        out.dailySharpe      = 0.0;
+        out.annualizedSharpe = 0.0;
+    }
+    return out;
+}
+
+// Convert a (timestamp_us, realizedDelta) series into a
+// chronological "YYYY-MM-DD" → sum(realizedDelta) map. Pulled out
+// because perSymbolDrawdown() and perSymbolSharpe() (#91) both
+// need it scoped to a single symbol — calling realizedByDay()
+// once and filtering would re-bucket the journal unnecessarily.
+std::map<std::string, double> bucketByLocalDay(
+    const std::vector<JournalFill>& fills) {
+    std::map<std::string, double> buckets;
+    for (const auto& f : fills) {
+        std::time_t secs = static_cast<std::time_t>(f.timestamp_us /
+                                                    1000000ULL);
+        std::tm tm{};
+#if defined(_WIN32)
+        localtime_s(&tm, &secs);
+#else
+        localtime_r(&secs, &tm);
+#endif
+        char date[16];
+        std::strftime(date, sizeof(date), "%Y-%m-%d", &tm);
+        buckets[date] += f.realizedDelta;
+    }
+    return buckets;
+}
+
+}  // namespace
+
+TradeJournal::Drawdown TradeJournal::maxDrawdown() const {
+    // Sprint #91 refactor: extracted the algorithm into
+    // computeDrawdownFromSeries() so perSymbolDrawdown() can share
+    // it. The result is identical to the prior implementation —
+    // the daily bucket ordering matches realizedByDay() (which
+    // returns std::map iteration order = lexical = chronological
+    // for ISO dates).
+    auto daily = realizedByDay();
+    return computeDrawdownFromSeries(daily);
 }
 
 TradeJournal::Streaks TradeJournal::streaks() const {
@@ -432,49 +471,11 @@ TradeJournal::Streaks TradeJournal::streaks() const {
 }
 
 TradeJournal::Sharpe TradeJournal::sharpe() const {
-    // Annualization factor for trading days. 252 is the
-    // industry-standard convention (US equity markets). For
-    // crypto, 365 might be more accurate — but the trader is
-    // asking for the classic Sharpe so we match expectations.
-    constexpr double kTradingDays = 252.0;
-
-    Sharpe out;
+    // Sprint #91 refactor: extracted the algorithm into
+    // computeSharpeFromSeries(). Result is identical to the prior
+    // implementation; the bucket ordering matches realizedByDay().
     auto daily = realizedByDay();
-    out.sampleSize = daily.size();
-    if (daily.empty()) return out;
-
-    // 1) Mean.
-    double sum = 0.0;
-    for (const auto& kv : daily) sum += kv.second;
-    out.meanDailyReturn = sum / static_cast<double>(daily.size());
-
-    // 2) Sample stddev (Bessel-corrected, n-1). Single day → 0.
-    if (daily.size() < 2) {
-        out.stddevDailyReturn = 0.0;
-        out.dailySharpe       = 0.0;
-        out.annualizedSharpe  = 0.0;
-        return out;
-    }
-    double sqSum = 0.0;
-    for (const auto& kv : daily) {
-        double d = kv.second - out.meanDailyReturn;
-        sqSum += d * d;
-    }
-    out.stddevDailyReturn = std::sqrt(sqSum /
-                                      static_cast<double>(daily.size() - 1));
-
-    // 3) Sharpe = mean / stddev. Annualized by sqrt(252).
-    if (out.stddevDailyReturn > 1e-9) {
-        out.dailySharpe = out.meanDailyReturn / out.stddevDailyReturn;
-        out.annualizedSharpe = out.dailySharpe * std::sqrt(kTradingDays);
-    } else {
-        // All days have the same return → stddev 0, ratio
-        // undefined. Sentinel: 0 (not inf, not NaN) — caller can
-        // format as "—" without special-casing.
-        out.dailySharpe      = 0.0;
-        out.annualizedSharpe = 0.0;
-    }
-    return out;
+    return computeSharpeFromSeries(daily);
 }
 
 std::vector<TradeJournal::PerSymbolStats>
@@ -626,6 +627,106 @@ TradeJournal::perTagStats(bool includeUntagged) const {
     std::sort(out.begin(), out.end(),
               [](const PerTagStats& a, const PerTagStats& b) {
                   return std::fabs(a.realized) > std::fabs(b.realized);
+              });
+    return out;
+}
+
+std::vector<TradeJournal::PerSymbolDrawdown>
+TradeJournal::perSymbolDrawdown() const {
+    // For each distinct symbol: bucket that symbol's fills by local
+    // day, derive the daily equity curve, and compute the worst
+    // peak-to-trough decline via the shared helper. Sorted by
+    // maxDrawdown DESCENDING so the worst symbol surfaces first —
+    // matches the "which symbol hurt me most?" question.
+    std::vector<JournalFill> fills = loadAll();
+
+    // Group fills by symbol first, then bucket each group's daily.
+    // Two maps deep is fine — total cost is O(N) over fills, and
+    // a per-symbol-sort pass at the end is O(K log K) over
+    // distinct symbols.
+    std::unordered_map<std::string, std::vector<JournalFill>> bySymbol;
+    bySymbol.reserve(8);
+    for (const auto& f : fills) bySymbol[f.symbol].push_back(f);
+
+    std::vector<PerSymbolDrawdown> out;
+    out.reserve(bySymbol.size());
+    for (auto& kv : bySymbol) {
+        PerSymbolDrawdown e;
+        e.symbol = kv.first;
+        e.fillCount = kv.second.size();
+        // bucketByLocalDay returns a std::map — convert to vector
+        // of pairs (already in chronological order thanks to
+        // std::map's lexical sort on ISO dates).
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto dd = computeDrawdownFromSeries(series);
+        e.maxDrawdown = dd.maxDrawdown;
+        e.peakDate   = dd.peakDate;
+        e.troughDate = dd.troughDate;
+        e.currentDD  = dd.currentDD;
+        out.push_back(std::move(e));
+    }
+    // Worst-first: symbol with biggest maxDD tops the list. When
+    // two symbols tie (e.g. both never had a drawdown, both
+    // maxDD==0), the std::unordered_map iteration order is
+    // implementation-defined — the test that asserts ordering
+    // should pick values that don't tie at zero.
+    std::sort(out.begin(), out.end(),
+              [](const PerSymbolDrawdown& a, const PerSymbolDrawdown& b) {
+                  if (a.maxDrawdown != b.maxDrawdown)
+                      return a.maxDrawdown > b.maxDrawdown;
+                  // Tie-break by symbol name so the output is
+                  // deterministic across runs (unordered_map
+                  // iteration order isn't).
+                  return a.symbol < b.symbol;
+              });
+    return out;
+}
+
+std::vector<TradeJournal::PerSymbolSharpe>
+TradeJournal::perSymbolSharpe() const {
+    // Same shape as perSymbolDrawdown() but the daily series feeds
+    // computeSharpeFromSeries() instead. Sorted by annualized
+    // Sharpe DESCENDING — answers "which symbol gives me the best
+    // return per unit of risk?" directly from the rendered table.
+    std::vector<JournalFill> fills = loadAll();
+
+    std::unordered_map<std::string, std::vector<JournalFill>> bySymbol;
+    bySymbol.reserve(8);
+    for (const auto& f : fills) bySymbol[f.symbol].push_back(f);
+
+    std::vector<PerSymbolSharpe> out;
+    out.reserve(bySymbol.size());
+    for (auto& kv : bySymbol) {
+        PerSymbolSharpe e;
+        e.symbol = kv.first;
+        auto buckets = bucketByLocalDay(kv.second);
+        std::vector<std::pair<std::string, double>> series;
+        series.reserve(buckets.size());
+        for (auto& bkv : buckets) {
+            series.emplace_back(std::move(bkv.first), bkv.second);
+        }
+        auto sh = computeSharpeFromSeries(series);
+        e.dailySharpe       = sh.dailySharpe;
+        e.annualizedSharpe  = sh.annualizedSharpe;
+        e.meanDailyReturn   = sh.meanDailyReturn;
+        e.stddevDailyReturn = sh.stddevDailyReturn;
+        e.sampleSize        = sh.sampleSize;
+        out.push_back(std::move(e));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerSymbolSharpe& a, const PerSymbolSharpe& b) {
+                  if (a.annualizedSharpe != b.annualizedSharpe)
+                      return a.annualizedSharpe > b.annualizedSharpe;
+                  // Tie-break by mean daily return (DESC) then by
+                  // symbol name (ASC) for deterministic output.
+                  if (a.meanDailyReturn != b.meanDailyReturn)
+                      return a.meanDailyReturn > b.meanDailyReturn;
+                  return a.symbol < b.symbol;
               });
     return out;
 }

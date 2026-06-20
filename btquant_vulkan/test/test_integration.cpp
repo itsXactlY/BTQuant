@@ -19102,5 +19102,99 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 147: monthlyMaxDrawdown() (Sprint #160).
+    //
+    // Per-month max DD depth. Tests:
+    //   - Empty: 0 entries.
+    //   - 2 months: each has its own maxDD.
+    std::cout << "\nTest 147: monthly max DD..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test147_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto v = j.monthlyMaxDrawdown();
+            if (v.empty()) {
+                std::cout << "✓ empty: 0 entries"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: "
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 2 months ----
+        // Month 1 (Jan 2024): +100, -50, +30. Daily
+        //   series: 100, 50, 80. Max DD = 50 (peak→trough).
+        // Month 2 (Feb 2024): -30. Daily series: -30.
+        //   No DD (single point).
+        {
+            TradeJournal j((tmpDir / "two.jsonl").string());
+            // Use epoch-relative timestamps: Jan 2024 and Feb 2024.
+            // 2024-01-15 = ~1705276800 epoch.
+            const uint64_t jan = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            const uint64_t feb = jan + 17 * day; // Feb 1
+            j.append(mkFill("BTC",  100.0, "", jan));
+            j.append(mkFill("BTC",  -50.0, "",
+                             jan + day));
+            j.append(mkFill("BTC",   30.0, "",
+                             jan + 2 * day));
+            j.append(mkFill("BTC",  -30.0, "",
+                             feb + 5 * day));
+            auto v = j.monthlyMaxDrawdown();
+            // Expect 2 entries: Jan (maxDD=50), Feb
+            // (maxDD=0 or close — only one daily point).
+            if (v.size() == 2 &&
+                v[0].maxDD > 0.0 &&
+                v[1].maxDD == 0.0) {
+                std::cout << "✓ 2 months: Jan maxDD="
+                          << v[0].maxDD << ", Feb maxDD=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ month wrong: size="
+                          << v.size()
+                          << " [0].maxDD=" << (v.size() > 0
+                              ? v[0].maxDD : 0.0)
+                          << " [1].maxDD=" << (v.size() > 1
+                              ? v[1].maxDD : 0.0)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " monthly-DD tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

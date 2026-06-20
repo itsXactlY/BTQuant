@@ -1603,6 +1603,18 @@ public:
                               bool byFillCount = false,
                               size_t fillCount = 30) const;
 
+    // Monthly drawdown heatmap (Sprint #160). For each
+    // (year, month) with at least one trading day, returns
+    // the max DD depth observed during that month. Useful
+    // for "when do my drawdowns happen?" — heatmap viz.
+    struct MonthlyMaxDD {
+        int    year    = 0;
+        int    month   = 0;   // 1-12
+        double maxDD   = 0.0;
+        size_t days    = 0;
+    };
+    std::vector<MonthlyMaxDD> monthlyMaxDrawdown() const;
+
     // Day-of-week stats — Sprint #106. For each (symbol,
     // weekday) bucket with at least one round-trip, the
     // aggregated stats. Answers "do I lose money on Mondays

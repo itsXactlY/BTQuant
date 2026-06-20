@@ -6033,4 +6033,105 @@ TradeJournal::allRecentPerformanceByTag(
     return out;
 }
 
+std::vector<TradeJournal::MonthlyMaxDD>
+TradeJournal::monthlyMaxDrawdown() const {
+    // Sprint #160. For each (year, month), find the max
+    // drawdown depth observed.
+    std::vector<MonthlyMaxDD> out;
+    auto fills = loadAll();
+    if (fills.empty()) return out;
+    std::sort(fills.begin(), fills.end(),
+        [](const JournalFill& a, const JournalFill& b) {
+            return a.timestamp_us < b.timestamp_us;
+        });
+    // Walk and compute per-day equity.
+    std::map<std::pair<int, int>,
+             std::pair<double, size_t>> buckets;
+    // Per-day series grouped by (year, month).
+    std::map<std::pair<int, int>, double> dailyCum;
+    std::map<std::pair<int, int>,
+             std::set<std::pair<int, int>>> daysByMonth;
+    double cum = 0.0;
+    int64_t lastDay = -1;
+    std::time_t prevT = 0;
+    int prevY = 0, prevM = 0, prevD = 0;
+    double dayStartCum = 0.0;
+    bool firstFill = true;
+    auto key = [&](std::time_t t) {
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        return std::make_pair(1900 + tm.tm_year, tm.tm_mon + 1);
+    };
+    auto dayKey = [&](std::time_t t) {
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        return std::make_tuple(1900 + tm.tm_year,
+                                tm.tm_mon + 1, tm.tm_mday);
+    };
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        auto [y, m, d] = dayKey(t);
+        auto ym = std::make_pair(y, m);
+        if (firstFill || std::tie(y, m, d) !=
+            std::tie(prevY, prevM, prevD)) {
+            if (!firstFill) {
+                daysByMonth[ym].insert(
+                    std::make_pair(prevY, prevD));
+            }
+            firstFill = false;
+            prevY = y; prevM = m; prevD = d;
+        }
+        cum += f.realizedDelta;
+    }
+    // Compute per-day equity series in month buckets.
+    // Re-walk with day boundaries.
+    std::map<std::pair<int, int>,
+             std::vector<double>> perMonthCum;
+    cum = 0.0;
+    int lastY = 0, lastM = 0, lastD = -1;
+    auto curKey = std::make_pair(0, 0);
+    for (const auto& f : fills) {
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int y = 1900 + tm.tm_year;
+        int m = tm.tm_mon + 1;
+        int d = tm.tm_mday;
+        if (d != lastD || y != lastY) {
+            // New day — emit day-close cum for previous
+            // day under its (year, month).
+            if (lastD >= 0) {
+                perMonthCum[curKey].push_back(cum);
+            }
+            curKey = std::make_pair(y, m);
+            lastD = d; lastY = y;
+        }
+        cum += f.realizedDelta;
+    }
+    if (lastD >= 0) perMonthCum[curKey].push_back(cum);
+    // Per-month max DD.
+    for (auto& kv : perMonthCum) {
+        auto& series = kv.second;
+        if (series.empty()) continue;
+        double peak = std::numeric_limits<double>::lowest();
+        double maxDD = 0.0;
+        for (double v : series) {
+            if (v > peak) peak = v;
+            double dd = peak - v;
+            if (dd > maxDD) maxDD = dd;
+        }
+        MonthlyMaxDD m;
+        m.year = kv.first.first;
+        m.month = kv.first.second;
+        m.maxDD = maxDD;
+        m.days = series.size();
+        out.push_back(m);
+    }
+    return out;
+}
+
 } // namespace btquant

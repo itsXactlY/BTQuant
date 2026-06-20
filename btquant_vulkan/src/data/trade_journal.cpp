@@ -155,6 +155,13 @@ bool TradeJournal::append(const JournalFill& r) {
     }
 }
 
+double TradeJournal::totalRealized() const {
+    std::vector<JournalFill> fills = loadAll();
+    double sum = 0.0;
+    for (const auto& f : fills) sum += f.realizedDelta;
+    return sum;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

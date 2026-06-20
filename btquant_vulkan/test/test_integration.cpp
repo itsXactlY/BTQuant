@@ -7041,5 +7041,160 @@ int main() {
         }
     }
 
+    // Test 71: TradeJournal.totalRealized() (Sprint #67).
+    // Sum of realizedDelta across every fill on disk. Lets the
+    // dashboard show "all-time P&L since install" without
+    // requiring the trader to compute it from CSV exports.
+    std::cout << "\nTest 71: Testing TradeJournal.totalRealized()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_t71_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        std::string jPath = (tmpDir / "journal.jsonl").string();
+
+        auto seedJournal = [&](const std::vector<double>& realized,
+                                const std::string& symPrefix = "BTC") {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            fs::remove(jPath + ".tmp", ec);
+            TradeJournal j(jPath);
+            for (size_t i = 0; i < realized.size(); ++i) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + static_cast<uint64_t>(i);
+                f.symbol        = symPrefix + std::to_string(i);
+                f.isLong        = (i % 2 == 0);
+                f.qty           = 0.1 * (i + 1);
+                f.price         = 100.0 + i;
+                f.realizedDelta = realized[i];
+                f.tag           = "t";
+                j.append(f);
+            }
+            return j;
+        };
+
+        // 1) Empty journal = 0.0.
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            { TradeJournal j(jPath); }
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized() - 0.0) < 1e-12) {
+                std::cout << "✓ empty journal: totalRealized = 0.0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty journal: got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 2) Single positive fill.
+        {
+            seedJournal({250.0});
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized() - 250.0) < 1e-9) {
+                std::cout << "✓ single +250 = 250"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single +250 got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 3) Single negative fill.
+        {
+            seedJournal({-100.0});
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized() - (-100.0)) < 1e-9) {
+                std::cout << "✓ single -100 = -100"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single -100 got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 4) Mixed signs sum correctly.
+        {
+            seedJournal({100.0, -50.0, 75.0, -25.0, 200.0});
+            TradeJournal j(jPath);
+            // 100 - 50 + 75 - 25 + 200 = 300
+            if (std::fabs(j.totalRealized() - 300.0) < 1e-9) {
+                std::cout << "✓ mixed-sign sum = 300"
+                          << std::endl;
+            } else {
+                std::cout << "✗ mixed-sign sum got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 5) Net-zero (profit == loss).
+        {
+            seedJournal({500.0, -500.0, 200.0, -200.0});
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized()) < 1e-9) {
+                std::cout << "✓ profit == loss = 0"
+                          << std::endl;
+            } else {
+                std::cout << "✗ zero-sum got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 6) Many fills aggregate correctly.
+        {
+            std::vector<double> realized;
+            double expected = 0.0;
+            for (int i = 0; i < 100; ++i) {
+                double v = (i % 7 == 0) ? -3.5 : 1.25;
+                realized.push_back(v);
+                expected += v;
+            }
+            seedJournal(realized);
+            TradeJournal j(jPath);
+            if (j.count() == 100 &&
+                std::fabs(j.totalRealized() - expected) < 1e-9) {
+                std::cout << "✓ 100 fills aggregate within 1e-9"
+                          << std::endl;
+            } else {
+                std::cout << "✗ 100 fills: count=" << j.count()
+                          << " sum=" << j.totalRealized()
+                          << " expected=" << expected << std::endl;
+            }
+        }
+
+        // 7) All wins.
+        {
+            seedJournal({10.0, 20.0, 30.0, 40.0, 50.0});
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized() - 150.0) < 1e-9) {
+                std::cout << "✓ all wins sum = 150"
+                          << std::endl;
+            } else {
+                std::cout << "✗ all wins got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        // 8) All losses.
+        {
+            seedJournal({-5.0, -10.0, -15.0, -20.0});
+            TradeJournal j(jPath);
+            if (std::fabs(j.totalRealized() - (-50.0)) < 1e-9) {
+                std::cout << "✓ all losses sum = -50"
+                          << std::endl;
+            } else {
+                std::cout << "✗ all losses got "
+                          << j.totalRealized() << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

@@ -44,6 +44,13 @@ public:
     // Total fills currently on disk (cheap; line count).
     size_t count() const;
 
+    // Sum of realizedDelta across every fill on disk. Returns 0.0
+    // when the journal is empty. Useful as an all-time-P&L
+    // readout in the status bar / dashboard ("since install").
+    // Sprint #67 — O(N) load; the journal is small enough that
+    // streaming isn't worth the complexity yet.
+    double totalRealized() const;
+
     // Delete the journal file. Returns true if removed or never existed.
     bool clear();
 

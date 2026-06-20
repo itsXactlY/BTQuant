@@ -9364,5 +9364,222 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 84: TradeJournal.perTagStats() (Sprint #88).
+    // Per-tag performance breakdown — same fields as
+    // perSymbolStats() (#86) but grouped by tag. Default skips
+    // untagged; includeUntagged=true rolls them under
+    // "__untagged__".
+    std::cout << "\nTest 84: Testing TradeJournal.perTagStats()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test84_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [](const std::string& sym, double realized,
+                         const std::string& tag) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            return f;
+        };
+
+        // ---- Scenario 1: empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto v = j.perTagStats();
+            if (v.empty()) {
+                std::cout << "✓ empty journal: no tags" << std::endl;
+            } else {
+                std::cout << "✗ empty wrong: size=" << v.size() << std::endl;
+            }
+        }
+
+        // ---- Scenario 2: single tag, mixed W/L ----
+        // scalper-1: 3W (+$100, +$200, +$300) + 2L (-$150, -$50) =
+        //   +$400, 3W/2L, PF=3.0, WR=60%, avgW=$200, avgL=-$100,
+        //   expectancy=$80
+        {
+            fs::path p = tmpDir / "single.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  200, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  300, "scalper-1"));
+            j.append(mkFill("BTCUSDT", -150, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  -50, "scalper-1"));
+            j.append(mkFill("BTCUSDT",    0, "scalper-1"));  // open
+            auto v = j.perTagStats();
+            bool ok = (v.size() == 1) &&
+                      (v[0].tag == "scalper-1") &&
+                      std::fabs(v[0].realized - 400.0) < 1e-9 &&
+                      (v[0].roundTripCount == 5) &&
+                      (v[0].winCount == 3) &&
+                      (v[0].lossCount == 2) &&
+                      std::fabs(v[0].winRate - 0.6) < 1e-9 &&
+                      std::fabs(v[0].profitFactor - 3.0) < 1e-9;
+            if (ok) {
+                std::cout << "✓ single tag (scalper-1): PF=3.0 WR=60%"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 3: multiple tags, abs-realized DESC ----
+        // scalper-1: +$400 (abs 400)
+        // arb:      -$100 (abs 100), 1W/1L, PF = 50/150 = 0.333
+        // manual:   +$50  (abs 50)
+        // Order: scalper-1, arb, manual (400 > 100 > 50)
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  200, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  300, "scalper-1"));
+            j.append(mkFill("BTCUSDT", -150, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  -50, "scalper-1"));
+            j.append(mkFill("ETHUSDT",   50, "arb"));
+            j.append(mkFill("ETHUSDT", -150, "arb"));
+            j.append(mkFill("SOLUSDT",   50, "manual"));
+
+            auto v = j.perTagStats();
+            bool sizeOk = (v.size() == 3);
+            bool orderOk = sizeOk &&
+                           v[0].tag == "scalper-1" &&
+                           v[1].tag == "arb" &&
+                           v[2].tag == "manual";
+            bool realizedOk = orderOk &&
+                              std::fabs(v[0].realized - 400.0) < 1e-9 &&
+                              std::fabs(v[1].realized - (-100.0)) < 1e-9 &&
+                              std::fabs(v[2].realized -   50.0) < 1e-9;
+            if (sizeOk && orderOk && realizedOk) {
+                std::cout << "✓ 3 tags sorted by abs-realized DESC: "
+                          << "scalper-1(+$400) > arb(-$100) > manual(+$50)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ multi wrong: size=" << v.size();
+                for (const auto& t : v)
+                    std::cout << " " << t.tag << "(" << t.realized << ")";
+                std::cout << std::endl;
+            }
+
+            if (sizeOk && std::fabs(v[1].profitFactor - (50.0/150.0)) < 1e-9) {
+                std::cout << "✓ arb profitFactor = 0.333" << std::endl;
+            } else if (sizeOk) {
+                std::cout << "✗ arb PF wrong: " << v[1].profitFactor
+                          << std::endl;
+            }
+
+            if (sizeOk && std::isinf(v[2].profitFactor) &&
+                v[2].profitFactor > 0) {
+                std::cout << "✓ manual profitFactor = +inf (all wins)"
+                          << std::endl;
+            } else if (sizeOk) {
+                std::cout << "✗ manual PF wrong: " << v[2].profitFactor
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 4: untagged default vs includeUntagged ----
+        // 2 tagged fills (scalper-1 +$200) + 1 untagged fill
+        // (-$50). Default skips untagged (1 bucket: scalper-1).
+        // includeUntagged rolls under "__untagged__" (2 buckets,
+        // scalper-1 +$200 > __untagged__ $50 = abs 50).
+        {
+            fs::path p = tmpDir / "untagged.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  100, "scalper-1"));
+            j.append(mkFill("BTCUSDT",  -50, ""));   // untagged
+            auto def = j.perTagStats();
+            bool defOk = (def.size() == 1) &&
+                         (def[0].tag == "scalper-1") &&
+                         std::fabs(def[0].realized - 200.0) < 1e-9;
+            if (defOk) {
+                std::cout << "✓ default skip-untagged: 1 bucket (scalper-1)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ def wrong" << std::endl;
+            }
+            auto inc = j.perTagStats(true);
+            bool incOk = (inc.size() == 2) &&
+                         (inc[0].tag == "scalper-1") &&
+                         std::fabs(inc[0].realized - 200.0) < 1e-9 &&
+                         (inc[1].tag == "__untagged__") &&
+                         std::fabs(inc[1].realized - (-50.0)) < 1e-9;
+            if (incOk) {
+                std::cout << "✓ includeUntagged rolls under '__untagged__'"
+                          << std::endl;
+            } else {
+                std::cout << "✗ inc wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 5: sum across tags (with includeUntagged) == total ----
+        {
+            fs::path p = tmpDir / "consistency.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  100, "scalp"));
+            j.append(mkFill("BTC", -50,  "scalp"));
+            j.append(mkFill("ETH",  200, "arb"));
+            j.append(mkFill("ETH", -75,  "arb"));
+            j.append(mkFill("SOL",  30,  ""));   // untagged
+            auto v = j.perTagStats(true);   // include untagged
+            double sum = 0.0;
+            size_t sumWins = 0, sumLosses = 0, sumRounds = 0;
+            for (const auto& t : v) {
+                sum += t.realized;
+                sumWins += t.winCount;
+                sumLosses += t.lossCount;
+                sumRounds += t.roundTripCount;
+            }
+            bool ok = std::fabs(sum - j.totalRealized()) < 1e-9 &&
+                      sumWins == j.stats().winCount &&
+                      sumLosses == j.stats().lossCount &&
+                      sumRounds == j.stats().roundTripCount;
+            if (ok) {
+                std::cout << "✓ sum across tags (incl untagged) == total"
+                          << std::endl;
+            } else {
+                std::cout << "✗ consistency wrong: sum=" << sum
+                          << " total=" << j.totalRealized() << std::endl;
+            }
+        }
+
+        // ---- Scenario 6: stability across reload ----
+        {
+            fs::path p = tmpDir / "stable.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTC",  100, "scalp"));
+            j.append(mkFill("BTC", -50,  "scalp"));
+            j.append(mkFill("ETH",  200, "arb"));
+            auto v1 = j.perTagStats();
+            TradeJournal j2(p.string());
+            auto v2 = j2.perTagStats();
+            bool ok = (v1.size() == v2.size());
+            for (size_t i = 0; ok && i < v1.size(); ++i) {
+                if (v1[i].tag != v2[i].tag ||
+                    std::fabs(v1[i].realized - v2[i].realized) > 1e-9 ||
+                    v1[i].winCount != v2[i].winCount ||
+                    v1[i].lossCount != v2[i].lossCount) {
+                    ok = false; break;
+                }
+            }
+            if (ok) {
+                std::cout << "✓ perTagStats stable across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ drifted" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

@@ -214,6 +214,32 @@ public:
     };
     std::vector<PerSymbolStats> perSymbolStats() const;
 
+    // Per-tag performance breakdown (Sprint #88). Same shape as
+    // perSymbolStats() (#86) but grouped by JournalFill::tag
+    // instead of symbol. Answers "is my scalper-1 strategy net
+    // positive?" with the full W/L/PF breakdown.
+    //
+    // When `includeUntagged=true`, fills with empty tag are
+    // aggregated under the synthetic key "__untagged__" (matches
+    // realizedByTag() — #73). When false (default), untagged
+    // fills are skipped — same policy as realizedByTag().
+    //
+    // Field semantics match PerSymbolStats 1:1 so a future
+    // "Per-Strategy" tab can render both with shared code.
+    struct PerTagStats {
+        std::string tag;
+        double realized         = 0.0;
+        size_t   roundTripCount = 0;
+        size_t   winCount       = 0;
+        size_t   lossCount      = 0;
+        double   winRate        = 0.0;
+        double   avgWinner      = 0.0;
+        double   avgLoser       = 0.0;
+        double   profitFactor   = 0.0;
+        double   expectancy     = 0.0;
+    };
+    std::vector<PerTagStats> perTagStats(bool includeUntagged = false) const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

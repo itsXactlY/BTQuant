@@ -556,6 +556,80 @@ TradeJournal::perSymbolStats() const {
     return out;
 }
 
+std::vector<TradeJournal::PerTagStats>
+TradeJournal::perTagStats(bool includeUntagged) const {
+    // Same epsilon + Acc pattern as perSymbolStats() (#86). The
+    // map is keyed by tag instead of symbol; untagged fills use
+    // the "__untagged__" synthetic key when includeUntagged is
+    // true (matches realizedByTag() — #73).
+    constexpr double kEps = 1e-9;
+
+    std::vector<JournalFill> fills = loadAll();
+
+    struct Acc {
+        double realized    = 0.0;
+        double grossWin    = 0.0;
+        double grossLoss   = 0.0;
+        double sumRTpnl    = 0.0;
+        size_t roundTrips  = 0;
+        size_t wins        = 0;
+        size_t losses      = 0;
+    };
+    std::unordered_map<std::string, Acc> accs;
+    accs.reserve(8);
+
+    for (const auto& f : fills) {
+        if (f.tag.empty() && !includeUntagged) continue;
+        const std::string key = f.tag.empty() ? "__untagged__" : f.tag;
+        Acc& a = accs[key];
+        a.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        a.roundTrips++;
+        a.sumRTpnl += f.realizedDelta;
+        if (f.realizedDelta > kEps) {
+            a.wins++;
+            a.grossWin += f.realizedDelta;
+        } else if (f.realizedDelta < -kEps) {
+            a.losses++;
+            a.grossLoss += f.realizedDelta;
+        }
+    }
+
+    std::vector<PerTagStats> out;
+    out.reserve(accs.size());
+    for (auto& kv : accs) {
+        PerTagStats s;
+        s.tag            = kv.first;
+        s.realized       = kv.second.realized;
+        s.roundTripCount = kv.second.roundTrips;
+        s.winCount       = kv.second.wins;
+        s.lossCount      = kv.second.losses;
+        if (kv.second.roundTrips > 0) {
+            s.winRate    = static_cast<double>(kv.second.wins) /
+                           static_cast<double>(kv.second.roundTrips);
+            s.expectancy = kv.second.sumRTpnl /
+                           static_cast<double>(kv.second.roundTrips);
+        }
+        if (kv.second.wins   > 0) s.avgWinner = kv.second.grossWin  /
+                                                 kv.second.wins;
+        if (kv.second.losses > 0) s.avgLoser  = kv.second.grossLoss /
+                                                 static_cast<double>(kv.second.losses);
+        if (kv.second.losses == 0) {
+            s.profitFactor = (kv.second.wins > 0)
+                ? std::numeric_limits<double>::infinity()
+                : 0.0;
+        } else {
+            s.profitFactor = kv.second.grossWin / -kv.second.grossLoss;
+        }
+        out.push_back(std::move(s));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerTagStats& a, const PerTagStats& b) {
+                  return std::fabs(a.realized) > std::fabs(b.realized);
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

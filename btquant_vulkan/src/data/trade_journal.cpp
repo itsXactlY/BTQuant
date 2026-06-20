@@ -1,5 +1,6 @@
 #include "trade_journal.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -240,6 +241,92 @@ bool TradeJournal::clear() {
     std::error_code ec;
     if (!fs::exists(m_path, ec)) return true;
     return fs::remove(m_path, ec);
+}
+
+namespace {
+// RFC-4180-style field quoting for CSV. None of the current
+// JournalFill fields strictly need it (symbol/timestamp are
+// ASCII-clean, numbers are locale-neutral via snprintf), but the
+// hook stays in case future fields like user-supplied tags land.
+std::string csvQuoteIfNeeded(const std::string& s) {
+    if (s.find(',') == std::string::npos &&
+        s.find('"') == std::string::npos &&
+        s.find('\n') == std::string::npos) {
+        return s;
+    }
+    std::string out;
+    out.reserve(s.size() + 2);
+    out.push_back('"');
+    for (char c : s) {
+        if (c == '"') out.push_back('"');
+        out.push_back(c);
+    }
+    out.push_back('"');
+    return out;
+}
+
+// ISO-8601 UTC with microsecond precision — matches what the live
+// trades widget emits (see TradesWidget::formatTradesCSV). Keeping
+// the two exporters byte-identical means a downstream analytics
+// pipeline can ingest either without parser changes.
+std::string formatTimestampISO(uint64_t us) {
+    auto tp = std::chrono::system_clock::time_point(
+                  std::chrono::microseconds(us));
+    auto timeT = std::chrono::system_clock::to_time_t(tp);
+    std::tm tmUtc{};
+#if defined(_WIN32)
+    gmtime_s(&tmUtc, &timeT);
+#else
+    gmtime_r(&timeT, &tmUtc);
+#endif
+    char buf[40];
+    std::snprintf(buf, sizeof(buf),
+                  "%04d-%02d-%02dT%02d:%02d:%02d.%06lluZ",
+                  tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday,
+                  tmUtc.tm_hour, tmUtc.tm_min, tmUtc.tm_sec,
+                  static_cast<unsigned long long>(us % 1000000));
+    return std::string(buf);
+}
+} // namespace
+
+std::string TradeJournal::formatFillsCSV(
+        const std::vector<JournalFill>& fills) {
+    std::ostringstream os;
+    // Column order chosen for spreadsheet import — chronological
+    // metadata first (timestamp, symbol, side), then trade size
+    // (qty, price), then P&L attribution (realized). Header uses
+    // snake_case to match BTQuant's other CSV exports.
+    os << "timestamp_iso,symbol,side,qty,price,realized_delta\n";
+    for (const auto& f : fills) {
+        char qtyBuf[32], priceBuf[32], realizedBuf[32];
+        std::snprintf(qtyBuf,     sizeof(qtyBuf),     "%.10g", f.qty);
+        std::snprintf(priceBuf,   sizeof(priceBuf),   "%.10g", f.price);
+        std::snprintf(realizedBuf,sizeof(realizedBuf),"%.10g", f.realizedDelta);
+        os << csvQuoteIfNeeded(formatTimestampISO(f.timestamp_us)) << ","
+           << csvQuoteIfNeeded(f.symbol) << ","
+           << csvQuoteIfNeeded(f.isLong ? "BUY" : "SELL") << ","
+           << csvQuoteIfNeeded(qtyBuf) << ","
+           << csvQuoteIfNeeded(priceBuf) << ","
+           << csvQuoteIfNeeded(realizedBuf) << "\n";
+    }
+    return os.str();
+}
+
+bool TradeJournal::exportCSV(const std::string& path) const {
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(path);
+        if (p.has_parent_path()) {
+            fs::create_directories(p.parent_path());
+        }
+        auto fills = loadAll(nullptr);
+        std::ofstream out(path, std::ios::trunc);
+        if (!out.is_open()) return false;
+        out << formatFillsCSV(fills);
+        return out.good();
+    } catch (...) {
+        return false;
+    }
 }
 
 } // namespace btquant

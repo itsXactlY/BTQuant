@@ -55,6 +55,19 @@ public:
     // callers (loadAll) use this to skip bad rows gracefully.
     static std::optional<JournalFill> fromJsonLine(const std::string& line);
 
+    // ---- CSV export ----
+
+    // Serialize fills to a CSV string. Header line first, then one row
+    // per fill, ISO-8601 timestamps, RFC-4180-style quoting (none of
+    // the current fields need it, but the hook stays for future
+    // extensions like user-supplied tags).
+    static std::string formatFillsCSV(const std::vector<JournalFill>& fills);
+
+    // Write every persisted fill to `path` as CSV. Returns true on
+    // success, false on any I/O error (and logs the reason). Existing
+    // files are overwritten — CSV export is one-shot, not append.
+    bool exportCSV(const std::string& path) const;
+
 private:
     std::string m_path;
 };

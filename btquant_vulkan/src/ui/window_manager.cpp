@@ -848,6 +848,7 @@ void WindowManager::setMarketData(::btquant::MarketDataProcessor* data) {
     if (m_tpoWidget) m_tpoWidget->setMarketData(data);
     if (m_alertsPanel) m_alertsPanel->setMarketData(data);
     if (m_connectionPanel) m_connectionPanel->setMarketData(data);
+    if (m_positionCalculator) m_positionCalculator->setMarketData(data);
     // Watchlist uses push-only API (WindowManager::updateWatchlist) — no
     // setMarketData hook needed.
 }

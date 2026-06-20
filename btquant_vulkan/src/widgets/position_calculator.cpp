@@ -1,4 +1,5 @@
 #include "position_calculator.hpp"
+#include "../data/market_data_processor.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -16,6 +17,25 @@ double parseOrZero(const char* s) {
     return (end == s) ? 0.0 : v;
 }
 } // namespace
+
+void PositionCalculator::setMarketData(::btquant::MarketDataProcessor* data) {
+    m_data = data;
+}
+
+void PositionCalculator::refreshLivePrice() {
+    if (!m_data) return;
+    auto snap = m_data->snapshot(1);
+    if (snap.snapshot_seq == 0) return;
+    if (snap.recent_trades.empty()) return;
+    const auto& t = snap.recent_trades.back();
+    if (t.price <= 0.0) return;
+    m_lastLivePrice = t.price;
+    if (m_autoUpdateEntry) {
+        // Overwrite the entry field with the live price. We use
+        // snprintf with enough precision for BTC-scale prices.
+        std::snprintf(m_entry, sizeof(m_entry), "%.2f", t.price);
+    }
+}
 
 double PositionCalculator::computeSize(double equity, double riskPct,
                                       double entry, double stop) const {
@@ -44,6 +64,12 @@ void PositionCalculator::render() {
         return;
     }
 
+    // Pull the latest trade price BEFORE the user edits the field.
+    // If auto-update is on, the entry field below gets overwritten
+    // with the live price; if off, the field stays at whatever the
+    // user typed (or the last live price before they toggled).
+    refreshLivePrice();
+
     ImGui::Text("Inputs (edit, results update live):");
     ImGui::PushItemWidth(160);
     ImGui::InputText("Equity (USD)",   m_equity,   sizeof(m_equity));
@@ -55,6 +81,16 @@ void PositionCalculator::render() {
     ImGui::PopItemWidth();
     ImGui::SameLine();
     ImGui::Checkbox("Show help", &m_showHelp);
+    ImGui::SameLine();
+    // Auto-update toggle — when on, the entry field above is
+    // overwritten each frame with the live last-trade price. Shows
+    // the live price next to the checkbox for context (only when
+    // m_data is wired).
+    ImGui::Checkbox("Auto-update entry", &m_autoUpdateEntry);
+    if (m_lastLivePrice > 0.0) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(live $%.2f)", m_lastLivePrice);
+    }
     ImGui::Separator();
 
     double equity   = parseOrZero(m_equity);

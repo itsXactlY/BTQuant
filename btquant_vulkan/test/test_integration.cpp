@@ -3628,5 +3628,84 @@ int main() {
         }
     }
 
+    // Test 43: PositionCalculator hot-recalc — when auto-update is
+    // on and a MarketDataProcessor is bound, refreshLivePrice()
+    // pulls the latest trade price and overwrites the entry field.
+    // The toggle lets the user lock the entry manually.
+    {
+        std::cout << "\nTest 43: Testing PositionCalculator hot-recalc..."
+                  << std::endl;
+
+        using PC = btquant::ui::PositionCalculator;
+
+        // 1) Default auto-update is ON (live price tracking on by
+        //    default — users who want a manual entry can toggle off).
+        PC pc;
+        if (pc.autoUpdateEntry()) {
+            std::cout << "✓ default autoUpdateEntry=true" << std::endl;
+        } else {
+            std::cout << "✗ default autoUpdateEntry wrong" << std::endl;
+        }
+
+        // 2) lastLivePrice() default = 0.0 (no data wired).
+        if (pc.lastLivePrice() == 0.0) {
+            std::cout << "✓ lastLivePrice() defaults to 0.0" << std::endl;
+        } else {
+            std::cout << "✗ lastLivePrice() default wrong" << std::endl;
+        }
+
+        // 3) setAutoUpdateEntry(false) flips the toggle; getter reflects.
+        pc.setAutoUpdateEntry(false);
+        if (!pc.autoUpdateEntry()) {
+            std::cout << "✓ setAutoUpdateEntry(false) stored" << std::endl;
+        } else {
+            std::cout << "✗ setAutoUpdateEntry(false) didn't flip"
+                      << std::endl;
+        }
+        pc.setAutoUpdateEntry(true);
+        if (pc.autoUpdateEntry()) {
+            std::cout << "✓ setAutoUpdateEntry(true) reverts" << std::endl;
+        } else {
+            std::cout << "✗ setAutoUpdateEntry(true) didn't revert"
+                      << std::endl;
+        }
+
+        // 4) Pure math still works (regression — unchanged from before).
+        if (std::abs(pc.computeSize(10000, 1.0, 67500, 67000) - 0.2) < 1e-6) {
+            std::cout << "✓ computeSize unchanged after refactor"
+                      << std::endl;
+        } else {
+            std::cout << "✗ computeSize regressed" << std::endl;
+        }
+        if (std::abs(pc.computeNotional(0.2, 67500) - 13500.0) < 1e-6) {
+            std::cout << "✓ computeNotional unchanged" << std::endl;
+        } else {
+            std::cout << "✗ computeNotional regressed" << std::endl;
+        }
+        if (std::abs(pc.computeRR(100, 99, 103) - 3.0) < 1e-6) {
+            std::cout << "✓ computeRR unchanged" << std::endl;
+        } else {
+            std::cout << "✗ computeRR regressed" << std::endl;
+        }
+
+        // 5) setMarketData(nullptr) is a safe no-op (already default).
+        //    We can't construct a real MarketDataProcessor here without
+        //    a spine file, but we can confirm the setter accepts null.
+        pc.setMarketData(nullptr);
+        if (pc.lastLivePrice() == 0.0) {
+            std::cout << "✓ setMarketData(nullptr) safe, lastLivePrice still 0"
+                      << std::endl;
+        } else {
+            std::cout << "✗ lastLivePrice changed after null set"
+                      << std::endl;
+        }
+
+        // 6) refreshLivePrice() is safe to call without data — lastLivePrice
+        //    must stay 0.0 (we exercise the private path via the public
+        //    field state).
+        //    (refreshLivePrice() is private; we exercise it via render()
+        //    in the smoke test, not from here.)
+    }
+
     return 0;
 }

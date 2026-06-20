@@ -667,6 +667,59 @@ public:
     uint64_t lastFillUsByTag(const std::string& tag,
                              bool includeUntagged = false) const;
 
+    // Trading sessions (Sprint #117). A "session" is a maximal
+    // run of fills where consecutive fills are within
+    // `gapMinutes` of each other. When the gap exceeds the
+    // threshold, a new session starts. Answer "how many
+    // sessions have I had, how long do they typically last,
+    // and what's my P&L per session?".
+    //
+    // The default gap of 30 minutes matches the conventional
+    // "lunch break" cut-off — fills within 30 min of each
+    // other are part of the same trading stint.
+    //
+    // Per-session metrics:
+    //   start_ts / end_ts — first/last fill in the session
+    //   fillCount         — number of fills
+    //   realized          — sum of realizedDelta
+    //   winRate           — W / (W+L), 0 if no round-trips
+    //   maxDD             — peak-to-trough drawdown within
+    //                       the session (cumulative)
+    //   active_us         — end_ts - start_ts (the time
+    //                       spanned by the session, not the
+    //                       sum of fill durations)
+    struct TradingSession {
+        uint64_t start_ts  = 0;
+        uint64_t end_ts    = 0;
+        size_t   fillCount = 0;
+        double   realized  = 0.0;
+        double   winRate   = 0.0;
+        double   maxDD     = 0.0;
+        uint64_t active_us = 0;
+    };
+    std::vector<TradingSession> sessions(
+        int gapMinutes = 30) const;
+    std::vector<TradingSession> sessionsBySymbol(
+        const std::string& symbol,
+        int gapMinutes = 30) const;
+    std::vector<TradingSession> sessionsByTag(
+        const std::string& tag,
+        bool includeUntagged = false,
+        int gapMinutes = 30) const;
+
+    // Session aggregates (Sprint #117, derived metrics).
+    // Pure functions on session vectors — no journal access.
+    static double avgRealized(
+        const std::vector<TradingSession>& ss);
+    static double avgFillCount(
+        const std::vector<TradingSession>& ss);
+    static uint64_t avgActiveUs(
+        const std::vector<TradingSession>& ss);
+    static size_t maxFillCount(
+        const std::vector<TradingSession>& ss);
+    static double totalRealized(
+        const std::vector<TradingSession>& ss);
+
     // Streak stats — Sprint #105. Track consecutive W or L
     // round-trips. A streak is a maximal run of Ws or Ls; the
     // "current" streak is the run containing the most recent

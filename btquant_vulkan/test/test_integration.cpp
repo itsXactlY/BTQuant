@@ -13857,5 +13857,236 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 106: sessions() / sessionsBySymbol() /
+    //   sessionsByTag() (Sprint #117).
+    //
+    // Trading-session grouping. Tests:
+    //   - Empty journal: 0 sessions.
+    //   - Single fill: 1 session.
+    //   - 3 fills within 5 min (gap=30): 1 session.
+    //   - 3 fills with one 1h gap: 2 sessions.
+    //   - Aggregates: avgRealized, avgFillCount, totalRealized.
+    //   - Per-symbol filtering.
+    std::cout << "\nTest 106: trading sessions..." << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test106_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          const std::string& tag,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = tag;
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- Empty ----
+        {
+            TradeJournal j((tmpDir / "empty.jsonl").string());
+            auto s = j.sessions();
+            if (s.empty()) {
+                std::cout << "✓ empty: 0 sessions"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty wrong: " << s.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Single fill ----
+        {
+            TradeJournal j((tmpDir / "one.jsonl").string());
+            const uint64_t ts = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", ts));
+            auto s = j.sessions();
+            if (s.size() == 1 &&
+                s[0].fillCount == 1 &&
+                std::fabs(s[0].realized - 100.0) < 1e-9 &&
+                s[0].active_us == 0 &&
+                std::fabs(s[0].winRate - 1.0) < 1e-9 &&
+                std::fabs(s[0].maxDD - 0.0) < 1e-9) {
+                std::cout << "✓ single fill: 1 session, "
+                          << "1 fill, winRate=1, maxDD=0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ single wrong: n=" << s.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 fills within 5 min, gap=30min → 1 session ----
+        {
+            TradeJournal j((tmpDir / "tight.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // 5 min apart → 5*60*1e6 = 3e8 µs each
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC", -30.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            j.append(mkFill("BTC",  40.0, "",
+                             t0 + 10ULL * 60 * 1000000ULL));
+            auto s = j.sessions(30);
+            if (s.size() == 1 &&
+                s[0].fillCount == 3 &&
+                std::fabs(s[0].realized - 110.0) < 1e-9 &&
+                std::fabs(s[0].winRate - 2.0/3.0) < 1e-9 &&
+                // maxDD within session: cum goes 100, 70, 110.
+                //   peak update: 100 → 100 → 110.
+                //   maxDD is the deepest peak-trough seen
+                //   *during* the session, not at end. The
+                //   trough here is 70 (cum after -30), so
+                //   maxDD = peak(100) - trough(70) = 30.
+                std::fabs(s[0].maxDD - 30.0) < 1e-9) {
+                std::cout << "✓ 3 fills tight: 1 session "
+                          << "of 3 fills, realized=110, "
+                          << "winRate=0.667"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ tight wrong: n=" << s.size()
+                          << " fills=" << (s.empty() ? 0 :
+                                           s[0].fillCount)
+                          << " realized="
+                          << (s.empty() ? 0.0 : s[0].realized)
+                          << " maxDD="
+                          << (s.empty() ? 0.0 : s[0].maxDD)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- 3 fills, 1h gap in middle → 2 sessions ----
+        {
+            TradeJournal j((tmpDir / "split.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // 5min gap, then 60min gap (exceeds 30min), then 5min.
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC", -50.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            // 60-min gap (huge)
+            j.append(mkFill("BTC", 30.0, "",
+                             t0 + 65ULL * 60 * 1000000ULL));
+            auto s = j.sessions(30);
+            if (s.size() == 2 &&
+                s[0].fillCount == 2 &&
+                std::fabs(s[0].realized - 50.0) < 1e-9 &&
+                s[1].fillCount == 1 &&
+                std::fabs(s[1].realized - 30.0) < 1e-9) {
+                std::cout << "✓ split: 2 sessions (2 fills + "
+                          << "1 fill), realized 50 / 30"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ split wrong: n=" << s.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Max DD within session: 100, -80, +20 → DD=80 ----
+        // cum: 100, 20, 40. peak: 100, 100, 100.
+        // maxDD = 100 - 20 = 80.
+        {
+            TradeJournal j((tmpDir / "dd.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            j.append(mkFill("BTC", 100.0, "", t0));
+            j.append(mkFill("BTC", -80.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            j.append(mkFill("BTC",  20.0, "",
+                             t0 + 10ULL * 60 * 1000000ULL));
+            auto s = j.sessions(30);
+            if (s.size() == 1 &&
+                std::fabs(s[0].maxDD - 80.0) < 1e-9) {
+                std::cout << "✓ intra-session DD: peak=100 "
+                          << "trough=20 → maxDD=80"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ DD wrong: maxDD="
+                          << (s.empty() ? 0.0 : s[0].maxDD)
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Aggregates + per-symbol ----
+        {
+            TradeJournal j((tmpDir / "agg.jsonl").string());
+            const uint64_t t0 = 1774000000000000ULL;
+            // Session 1: BTC +100, BTC -50 (5min later)
+            j.append(mkFill("BTC",  100.0, "", t0));
+            j.append(mkFill("BTC",  -50.0, "",
+                             t0 + 5ULL * 60 * 1000000ULL));
+            // 1h gap → new session
+            j.append(mkFill("ETH",  200.0, "",
+                             t0 + 65ULL * 60 * 1000000ULL));
+            j.append(mkFill("ETH",   50.0, "",
+                             t0 + 70ULL * 60 * 1000000ULL));
+            auto sAll = j.sessions(30);
+            auto sBTC = j.sessionsBySymbol("BTC");
+            if (sAll.size() == 2 &&
+                std::fabs(TradeJournal::totalRealized(sAll)
+                          - 300.0) < 1e-9 &&
+                std::fabs(TradeJournal::avgRealized(sAll)
+                          - 150.0) < 1e-9 &&
+                std::fabs(TradeJournal::avgFillCount(sAll)
+                          - 2.0) < 1e-9 &&
+                TradeJournal::maxFillCount(sAll) == 2 &&
+                sBTC.size() == 1 &&
+                std::fabs(sBTC[0].realized - 50.0) < 1e-9) {
+                std::cout << "✓ aggregates: 2 sessions, "
+                          << "total=300, avg=150, "
+                          << "avgFills=2, maxFills=2; "
+                          << "BTC-only=1 session of 50"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ agg wrong: sAll=" << sAll.size()
+                          << " sBTC=" << sBTC.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        // ---- Empty guards ----
+        {
+            std::vector<btquant::TradeJournal::TradingSession>
+                empty;
+            if (TradeJournal::avgRealized(empty) == 0.0 &&
+                TradeJournal::avgFillCount(empty) == 0.0 &&
+                TradeJournal::avgActiveUs(empty) == 0 &&
+                TradeJournal::maxFillCount(empty) == 0 &&
+                TradeJournal::totalRealized(empty) == 0.0) {
+                std::cout << "✓ empty aggregates: all 0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ empty agg wrong" << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " session tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -1668,6 +1668,189 @@ uint64_t TradeJournal::lastFillUsByTag(
 }
 
 namespace {
+// Sprint #117 — trading-session grouping. Sort fills by
+// timestamp ASC, then walk through them. A new session starts
+// whenever the gap from the previous fill exceeds the
+// threshold (gapMinutes * 60 * 1_000_000 µs).
+//
+// Within each session, track per-session cumulative realized
+// + drawdown (peak-to-trough over the session-local curve)
+// + win/loss counts.
+//
+// Templated on the filter predicate so journal-wide + per-
+// symbol + per-tag all share one tested core.
+constexpr double kSessEps = 1e-9;
+
+template <typename Pred>
+std::vector<TradeJournal::TradingSession>
+buildSessions(const std::vector<JournalFill>& fills,
+              int gapMinutes, Pred pred) {
+    std::vector<JournalFill> filtered;
+    filtered.reserve(fills.size());
+    for (const auto& f : fills) {
+        if (pred(f)) filtered.push_back(f);
+    }
+    std::sort(filtered.begin(), filtered.end(),
+              [](const JournalFill& a, const JournalFill& b) {
+                  return a.timestamp_us < b.timestamp_us;
+              });
+    const uint64_t gap_us =
+        static_cast<uint64_t>(gapMinutes) * 60ULL * 1000000ULL;
+    std::vector<TradeJournal::TradingSession> out;
+    if (filtered.empty()) return out;
+    TradeJournal::TradingSession cur;
+    cur.start_ts  = filtered[0].timestamp_us;
+    cur.end_ts    = filtered[0].timestamp_us;
+    cur.fillCount = 1;
+    cur.realized  = filtered[0].realizedDelta;
+    double cum    = filtered[0].realizedDelta;
+    double peak   = cum > 0.0 ? cum : 0.0;
+    // maxDD in a session is the deepest peak-to-trough seen
+    // at any point in the session, not at end. Track it
+    // inline as cum evolves.
+    double maxDD  = 0.0;
+    {
+        double dd = peak - cum;
+        if (dd > maxDD) maxDD = dd;
+        if (dd < 0.0) dd = 0.0;
+    }
+    size_t wins   = 0;
+    size_t losses = 0;
+    if (std::fabs(filtered[0].realizedDelta) > kSessEps) {
+        if (filtered[0].realizedDelta > 0) ++wins;
+        else ++losses;
+    }
+    for (size_t i = 1; i < filtered.size(); ++i) {
+        const auto& f = filtered[i];
+        uint64_t prev_ts = filtered[i-1].timestamp_us;
+        if (f.timestamp_us - prev_ts > gap_us) {
+            // Close current session.
+            cur.end_ts    = prev_ts;
+            cur.active_us = cur.end_ts - cur.start_ts;
+            cur.winRate   = (wins + losses) > 0
+                            ? static_cast<double>(wins) /
+                              static_cast<double>(wins + losses)
+                            : 0.0;
+            cur.maxDD     = maxDD;
+            out.push_back(cur);
+            // Reset for new session.
+            cur = TradeJournal::TradingSession{};
+            cur.start_ts  = f.timestamp_us;
+            cur.end_ts    = f.timestamp_us;
+            cur.fillCount = 1;
+            cur.realized  = f.realizedDelta;
+            cum           = f.realizedDelta;
+            peak          = cum > 0.0 ? cum : 0.0;
+            maxDD         = peak - cum;
+            if (maxDD < 0.0) maxDD = 0.0;
+            wins = losses = 0;
+            if (std::fabs(f.realizedDelta) > kSessEps) {
+                if (f.realizedDelta > 0) ++wins;
+                else ++losses;
+            }
+        } else {
+            // Continue current session.
+            cur.end_ts    = f.timestamp_us;
+            cur.fillCount += 1;
+            cur.realized  += f.realizedDelta;
+            cum           += f.realizedDelta;
+            if (cum > peak) peak = cum;
+            {
+                double dd = peak - cum;
+                if (dd > maxDD) maxDD = dd;
+                if (dd < 0.0) dd = 0.0;
+            }
+            if (std::fabs(f.realizedDelta) > kSessEps) {
+                if (f.realizedDelta > 0) ++wins;
+                else ++losses;
+            }
+        }
+    }
+    // Close final session.
+    cur.end_ts    = filtered.back().timestamp_us;
+    cur.active_us = cur.end_ts - cur.start_ts;
+    cur.winRate   = (wins + losses) > 0
+                    ? static_cast<double>(wins) /
+                      static_cast<double>(wins + losses)
+                    : 0.0;
+    cur.maxDD     = maxDD;
+    if (cur.maxDD < 0.0) cur.maxDD = 0.0;
+    out.push_back(cur);
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::sessions(int gapMinutes) const {
+    return buildSessions(loadAll(), gapMinutes,
+        [](const JournalFill&) { return true; });
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::sessionsBySymbol(
+    const std::string& symbol,
+    int gapMinutes) const {
+    return buildSessions(loadAll(), gapMinutes,
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::TradingSession>
+TradeJournal::sessionsByTag(
+    const std::string& tag,
+    bool includeUntagged,
+    int gapMinutes) const {
+    return buildSessions(loadAll(), gapMinutes,
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
+double TradeJournal::avgRealized(
+    const std::vector<TradingSession>& ss) {
+    if (ss.empty()) return 0.0;
+    double sum = 0.0;
+    for (const auto& s : ss) sum += s.realized;
+    return sum / static_cast<double>(ss.size());
+}
+
+double TradeJournal::avgFillCount(
+    const std::vector<TradingSession>& ss) {
+    if (ss.empty()) return 0.0;
+    double sum = 0.0;
+    for (const auto& s : ss) sum += s.fillCount;
+    return sum / static_cast<double>(ss.size());
+}
+
+uint64_t TradeJournal::avgActiveUs(
+    const std::vector<TradingSession>& ss) {
+    if (ss.empty()) return 0;
+    uint64_t sum = 0;
+    for (const auto& s : ss) sum += s.active_us;
+    return sum / static_cast<uint64_t>(ss.size());
+}
+
+size_t TradeJournal::maxFillCount(
+    const std::vector<TradingSession>& ss) {
+    if (ss.empty()) return 0;
+    size_t m = 0;
+    for (const auto& s : ss) {
+        if (s.fillCount > m) m = s.fillCount;
+    }
+    return m;
+}
+
+double TradeJournal::totalRealized(
+    const std::vector<TradingSession>& ss) {
+    double sum = 0.0;
+    for (const auto& s : ss) sum += s.realized;
+    return sum;
+}
+
+namespace {
 // Sprint #115 — shared monthly bucket builder. The three
 // monthlyReturns*() methods differ only in the filter predicate.
 struct MonthAcc {

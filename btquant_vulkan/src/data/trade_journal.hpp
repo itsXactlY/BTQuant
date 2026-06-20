@@ -51,6 +51,14 @@ public:
     // streaming isn't worth the complexity yet.
     double totalRealized() const;
 
+    // Per-symbol all-time realized (Sprint #72). Sorted by absolute
+    // contribution DESCENDING so the biggest gainers/losers surface
+    // first. Mirrors RiskGuard::sessionRealizedBySymbol() but reads
+    // from the persisted journal — survives restarts, accumulates
+    // across days.
+    std::vector<std::pair<std::string, double>>
+    realizedBySymbol() const;
+
     // Delete the journal file. Returns true if removed or never existed.
     bool clear();
 

@@ -1,11 +1,14 @@
 #include "trade_journal.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 namespace btquant {
 
@@ -160,6 +163,24 @@ double TradeJournal::totalRealized() const {
     double sum = 0.0;
     for (const auto& f : fills) sum += f.realizedDelta;
     return sum;
+}
+
+std::vector<std::pair<std::string, double>>
+TradeJournal::realizedBySymbol() const {
+    std::vector<JournalFill> fills = loadAll();
+    std::unordered_map<std::string, double> agg;
+    for (const auto& f : fills) {
+        agg[f.symbol] += f.realizedDelta;
+    }
+    std::vector<std::pair<std::string, double>> out;
+    out.reserve(agg.size());
+    for (auto& kv : agg) out.emplace_back(std::move(kv.first), kv.second);
+    std::sort(out.begin(), out.end(),
+              [](const std::pair<std::string, double>& a,
+                 const std::pair<std::string, double>& b) {
+                  return std::fabs(a.second) > std::fabs(b.second);
+              });
+    return out;
 }
 
 namespace {

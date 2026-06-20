@@ -7506,5 +7506,224 @@ int main() {
         }
     }
 
+    // Test 74: TradeJournal.realizedBySymbol() (Sprint #72).
+    // Per-symbol all-time realized from the persisted journal,
+    // sorted by absolute contribution DESCENDING so the biggest
+    // gainers/losers surface first.
+    std::cout << "\nTest 74: Testing TradeJournal.realizedBySymbol()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_t74_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+        std::string jPath = (tmpDir / "journal.jsonl").string();
+
+        // 1) Empty journal = empty vector.
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            { TradeJournal j(jPath); }
+            TradeJournal j(jPath);
+            if (j.realizedBySymbol().empty()) {
+                std::cout << "✓ empty journal: empty breakdown"
+                          << std::endl;
+            } else {
+                std::cout << "✗ empty journal: got "
+                          << j.realizedBySymbol().size()
+                          << " rows" << std::endl;
+            }
+        }
+
+        // 2) One symbol: aggregates correctly.
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            TradeJournal j(jPath);
+            for (int i = 0; i < 3; ++i) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + i;
+                f.symbol        = "BTCUSDT";
+                f.realizedDelta = 100.0;
+                f.tag = "t";
+                j.append(f);
+            }
+            auto rows = j.realizedBySymbol();
+            if (rows.size() == 1 && rows[0].first == "BTCUSDT" &&
+                std::fabs(rows[0].second - 300.0) < 1e-9) {
+                std::cout << "✓ single-symbol aggregation: "
+                          << "BTCUSDT +$300.00"
+                          << std::endl;
+            } else {
+                std::cout << "✗ single-symbol: got "
+                          << rows.size() << " rows" << std::endl;
+            }
+        }
+
+        // 3) Multiple symbols: sorted by abs DESCENDING.
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            TradeJournal j(jPath);
+            auto add = [&](const std::string& sym, double v) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + j.count();
+                f.symbol        = sym;
+                f.realizedDelta = v;
+                f.tag = "t";
+                j.append(f);
+            };
+            add("BTCUSDT",  50.0);   // abs = 50
+            add("ETHUSDT", 200.0);   // abs = 200  -> 1st
+            add("SOLUSDT",  -5.0);   // abs = 5
+            add("XRPUSDT", -150.0);  // abs = 150  -> 2nd
+            // Expected order: ETH (200), XRP (150), BTC (50), SOL (5)
+            auto rows = j.realizedBySymbol();
+            if (rows.size() == 4 &&
+                rows[0].first == "ETHUSDT" &&
+                rows[1].first == "XRPUSDT" &&
+                rows[2].first == "BTCUSDT" &&
+                rows[3].first == "SOLUSDT") {
+                std::cout << "✓ 4 symbols sorted by abs DESC "
+                          "(ETH > XRP > BTC > SOL)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sort order wrong: ";
+                for (const auto& r : rows) {
+                    std::cout << r.first << "=" << r.second << " ";
+                }
+                std::cout << std::endl;
+            }
+        }
+
+        // 4) Signed totals preserved (not abs'd).
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            TradeJournal j(jPath);
+            auto add = [&](const std::string& sym, double v) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + j.count();
+                f.symbol        = sym;
+                f.realizedDelta = v;
+                f.tag = "t";
+                j.append(f);
+            };
+            add("BTCUSDT", 500.0);
+            add("BTCUSDT", -200.0);
+            // net = 300, but abs is 300
+            add("ETHUSDT", 250.0);  // abs = 250
+            auto rows = j.realizedBySymbol();
+            // BTC has abs=300, ETH has abs=250 — BTC first
+            if (rows.size() == 2 &&
+                rows[0].first == "BTCUSDT" &&
+                std::fabs(rows[0].second - 300.0) < 1e-9 &&
+                rows[1].first == "ETHUSDT" &&
+                std::fabs(rows[1].second - 250.0) < 1e-9) {
+                std::cout << "✓ signed totals preserved (BTC +$300 net, "
+                          "ETH +$250)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sign preservation failed" << std::endl;
+            }
+        }
+
+        // 5) Net-zero per symbol still appears (with abs = 0... wait,
+        //    we sort by abs DESC; if all symbols net zero, order is
+        //    implementation-defined. Just verify zero is preserved).
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            TradeJournal j(jPath);
+            auto add = [&](const std::string& sym, double v) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + j.count();
+                f.symbol        = sym;
+                f.realizedDelta = v;
+                f.tag = "t";
+                j.append(f);
+            };
+            add("ZRO", 100.0);
+            add("ZRO", -100.0);
+            auto rows = j.realizedBySymbol();
+            if (rows.size() == 1 &&
+                std::fabs(rows[0].second) < 1e-12) {
+                std::cout << "✓ net-zero symbol preserved (ZRO = $0.00)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ net-zero handling wrong" << std::endl;
+            }
+        }
+
+        // 6) Total of per-symbol == totalRealized() (consistency).
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            TradeJournal j(jPath);
+            auto add = [&](const std::string& sym, double v) {
+                JournalFill f;
+                f.timestamp_us  = 1000000ULL + j.count();
+                f.symbol        = sym;
+                f.realizedDelta = v;
+                f.tag = "t";
+                j.append(f);
+            };
+            add("A", 100.0);
+            add("B", -50.0);
+            add("C", 75.0);
+            add("D", -25.0);
+            add("E", 200.0);
+            // total = 100 - 50 + 75 - 25 + 200 = 300
+            double total = j.totalRealized();
+            auto rows = j.realizedBySymbol();
+            double sumOfRows = 0.0;
+            for (const auto& r : rows) sumOfRows += r.second;
+            if (std::fabs(total - 300.0) < 1e-9 &&
+                std::fabs(sumOfRows - 300.0) < 1e-9 &&
+                std::fabs(total - sumOfRows) < 1e-9) {
+                std::cout << "✓ sum(per-symbol) == totalRealized() "
+                          "(both = $300)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ consistency: total=" << total
+                          << " sumRows=" << sumOfRows << std::endl;
+            }
+        }
+
+        // 7) Persists across reload.
+        {
+            std::error_code ec;
+            fs::remove(jPath, ec);
+            {
+                TradeJournal j(jPath);
+                auto add = [&](const std::string& sym, double v) {
+                    JournalFill f;
+                    f.timestamp_us  = 1000000ULL + j.count();
+                    f.symbol        = sym;
+                    f.realizedDelta = v;
+                    f.tag = "t";
+                    j.append(f);
+                };
+                add("BTC", 500.0);
+                add("ETH", -200.0);
+            }
+            TradeJournal j2(jPath);
+            auto rows = j2.realizedBySymbol();
+            if (rows.size() == 2 &&
+                rows[0].first == "BTC" &&
+                std::fabs(rows[0].second - 500.0) < 1e-9) {
+                std::cout << "✓ breakdown persists across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ didn't persist" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

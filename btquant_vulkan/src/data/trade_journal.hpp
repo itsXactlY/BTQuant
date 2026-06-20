@@ -2051,6 +2051,14 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-symbol avg daily P&L bulk (Sprint #196).
+    // Returns SegmentAvgDayPnL for every symbol, sorted
+    // DESC by avgDailyPnL.
+    std::vector<SegmentAvgDayPnL>
+    allSymbolAvgDayPnL() const;
+    std::vector<SegmentAvgDayPnL>
+    allTagAvgDayPnL(bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

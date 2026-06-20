@@ -8268,4 +8268,46 @@ TradeJournal::avgDayPnLByTag(
     return s;
 }
 
+std::vector<TradeJournal::SegmentAvgDayPnL>
+TradeJournal::allSymbolAvgDayPnL() const {
+    // Sprint #196. Bulk per-symbol avg daily P&L
+    // sorted DESC by avgDailyPnL.
+    std::vector<SegmentAvgDayPnL> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(avgDayPnLBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentAvgDayPnL& a, const SegmentAvgDayPnL& b) {
+            return a.avgDailyPnL > b.avgDailyPnL;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::SegmentAvgDayPnL>
+TradeJournal::allTagAvgDayPnL(bool includeUntagged) const {
+    std::vector<SegmentAvgDayPnL> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(avgDayPnLByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const SegmentAvgDayPnL& a, const SegmentAvgDayPnL& b) {
+            return a.avgDailyPnL > b.avgDailyPnL;
+        });
+    return out;
+}
+
 } // namespace btquant

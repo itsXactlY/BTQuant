@@ -7196,5 +7196,187 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 72: RiskGuard — auto-reset at local midnight (Sprint #69).
+    // The guard tracks a wall-clock session-start time and detects
+    // when the local calendar day has rolled over. The auto-reset
+    // path is O(1) per frame and idempotent within a single day.
+    //
+    // TZ caveat: the production code uses localtime_r to derive the
+    // day number (trader sees day boundary at THEIR local midnight).
+    // Tests use timegm (UTC) to construct TimePoints, so we keep
+    // all probes at hour=12 UTC — that maps to midday in every
+    // common timezone (CET/CEST, EST/EDT, PST/PDT, JST, AEST) so
+    // the local-tm-day never differs from the UTC day for the
+    // probes themselves.
+    std::cout << "\nTest 72: Testing RiskGuard midnight auto-reset..."
+              << std::endl;
+    {
+        using btquant::RiskGuard;
+        using Clock     = RiskGuard::Clock;
+        using TimePoint = RiskGuard::TimePoint;
+
+        auto mkTp = [](int y, int m, int d) {
+            std::tm tm{};
+            tm.tm_year = y - 1900;
+            tm.tm_mon  = m - 1;
+            tm.tm_mday = d;
+            tm.tm_hour = 12;  // noon UTC = midday everywhere
+            tm.tm_min  = 0;
+            tm.tm_sec  = 0;
+            return Clock::from_time_t(timegm(&tm));
+        };
+
+        // 1) Construction stamps sessionStartTime ≈ now.
+        {
+            TimePoint before = Clock::now();
+            RiskGuard g;
+            TimePoint after  = Clock::now();
+            auto s = g.sessionStartTime();
+            if (s >= before - std::chrono::milliseconds(10) &&
+                s <= after  + std::chrono::milliseconds(10)) {
+                std::cout << "✓ construction stamps sessionStartTime ≈ now"
+                          << std::endl;
+            } else {
+                std::cout << "✗ sessionStartTime not in window"
+                          << std::endl;
+            }
+        }
+
+        // 2) Same-day probe = not new session.
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 15));
+            TimePoint sameDay = mkTp(2026, 6, 15);
+            if (!g.isNewSessionDay(sameDay)) {
+                std::cout << "✓ same-day probe = not new session"
+                          << std::endl;
+            } else {
+                std::cout << "✗ same-day probe wrongly fired"
+                          << std::endl;
+            }
+        }
+
+        // 3) Next-day probe = new session.
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 15));
+            TimePoint nextDay = mkTp(2026, 6, 16);
+            if (g.isNewSessionDay(nextDay)) {
+                std::cout << "✓ next-day probe = new session"
+                          << std::endl;
+            } else {
+                std::cout << "✗ next-day probe missed"
+                          << std::endl;
+            }
+        }
+
+        // 4) Month boundary also detected.
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 30));
+            TimePoint julyFirst = mkTp(2026, 7, 1);
+            if (g.isNewSessionDay(julyFirst)) {
+                std::cout << "✓ month-boundary rollover detected"
+                          << std::endl;
+            } else {
+                std::cout << "✗ month rollover missed" << std::endl;
+            }
+        }
+
+        // 5) Year boundary also detected.
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 12, 31));
+            TimePoint janFirst = mkTp(2027, 1, 1);
+            if (g.isNewSessionDay(janFirst)) {
+                std::cout << "✓ year-boundary rollover detected"
+                          << std::endl;
+            } else {
+                std::cout << "✗ year rollover missed" << std::endl;
+            }
+        }
+
+        // 6) autoResetIfNewDay resets session + updates start.
+        //    Note: per-symbol kill/notional OVERRIDES persist across
+        //    day rollover — they're risk PREFERENCES the trader
+        //    configured once and applies every day until changed.
+        //    Only the session totals + per-symbol realized clear.
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 15));
+            g.addRealized(-500.0, std::string("BTC"));
+            g.addRealized(50.0,   std::string("ETH"));
+            g.setKillOnDailyLossUSDForSymbol("SOL", 200.0);
+            g.setMaxOrderNotionalUSDForSymbol("BTC", 50000.0);
+            TimePoint nextDay = mkTp(2026, 6, 16);
+            bool fired = g.autoResetIfNewDay(nextDay);
+            if (fired &&
+                std::fabs(g.sessionRealized()) < 1e-12 &&
+                g.sessionRealizedBySymbol().empty() &&
+                // Per-symbol OVERRIDES persist — they're config,
+                // not session state.
+                g.hasKillOnDailyLossUSDForSymbol("SOL") &&
+                g.hasMaxOrderNotionalUSDForSymbol("BTC") &&
+                g.sessionStartTime() == nextDay) {
+                std::cout << "✓ autoResetIfNewDay clears session "
+                             "totals + updates start; per-symbol "
+                             "overrides persist (config, not state)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ autoResetIfNewDay incomplete: fired="
+                          << fired << " realized=" << g.sessionRealized()
+                          << " bysym=" << g.sessionRealizedBySymbol().size()
+                          << " kill=" << g.hasKillOnDailyLossUSDForSymbol("SOL")
+                          << " cap=" << g.hasMaxOrderNotionalUSDForSymbol("BTC")
+                          << " start_match="
+                          << (g.sessionStartTime() == nextDay)
+                          << std::endl;
+            }
+        }
+
+        // 7) autoResetIfNewDay same-day = no-op (returns false).
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 15));
+            g.addRealized(-500.0);
+            TimePoint sameDay = mkTp(2026, 6, 15);
+            bool fired = g.autoResetIfNewDay(sameDay);
+            if (!fired &&
+                std::fabs(g.sessionRealized() - (-500.0)) < 1e-9 &&
+                g.sessionStartTime() == mkTp(2026, 6, 15)) {
+                std::cout << "✓ same-day autoResetIfNewDay = no-op "
+                             "(returns false, preserves state)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ same-day call should be no-op, "
+                          << "fired=" << fired
+                          << " realized=" << g.sessionRealized()
+                          << std::endl;
+            }
+        }
+
+        // 8) Two calls in same new day = idempotent (only first fires).
+        {
+            RiskGuard g;
+            g.setSessionStartTimeForTest(mkTp(2026, 6, 15));
+            g.addRealized(-100.0);
+            TimePoint nextDay = mkTp(2026, 6, 16);
+            bool first  = g.autoResetIfNewDay(nextDay);
+            g.addRealized(-50.0);  // simulate activity in new day
+            bool second = g.autoResetIfNewDay(nextDay);  // same probe
+            if (first && !second &&
+                std::fabs(g.sessionRealized() - (-50.0)) < 1e-9) {
+                std::cout << "✓ autoReset fires once per day; "
+                             "second call same day is no-op"
+                          << std::endl;
+            } else {
+                std::cout << "✗ not idempotent: first=" << first
+                          << " second=" << second
+                          << " realized=" << g.sessionRealized()
+                          << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

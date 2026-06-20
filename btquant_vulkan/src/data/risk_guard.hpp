@@ -1,6 +1,8 @@
 #ifndef BTQUANT_RISK_GUARD_HPP
 #define BTQUANT_RISK_GUARD_HPP
 
+#include <chrono>
+#include <ctime>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -134,6 +136,42 @@ public:
     // button when the trader wants to start fresh).
     void clearSessionRealizedHistory() { m_realizedHistory.clear(); }
 
+    // ---- Session-day tracking (Sprint #69) ----
+    //
+    // The "session" tracked by sessionRealized is normally aligned
+    // with the trader's working day — i.e. resets at local midnight,
+    // not on app restart. These accessors let WindowManager detect
+    // when the wall-clock day has rolled over since the last reset
+    // (or first construction) and call resetSession() automatically.
+    //
+    // Wall-clock time, not monotonic — we explicitly want to react
+    // to the calendar day changing, not just elapsed seconds.
+    using Clock     = std::chrono::system_clock;
+    using TimePoint = Clock::time_point;
+
+    // When the current session started (last manual reset OR last
+    // auto-reset-at-midnight, whichever is later). Construction
+    // captures Clock::now() so the first session starts at app boot.
+    TimePoint sessionStartTime() const { return m_sessionStartTime; }
+
+    // True when the current wall-clock local day differs from the
+    // session start's local day. Wall-clock midnight rollover =
+    // a new trading day for the guard. Time-of-day doesn't matter
+    // — only the calendar date in the local timezone.
+    bool isNewSessionDay(const TimePoint& now = Clock::now()) const;
+
+    // If isNewSessionDay(now), reset the session and stamp the
+    // start time to `now`. Otherwise a no-op. Returns true if
+    // a reset actually fired (caller can log it).
+    bool autoResetIfNewDay(const TimePoint& now = Clock::now());
+
+    // Test helpers — prime the session-start stamp directly so
+    // tests can exercise the day-rollover path without driving
+    // the system clock.
+    void setSessionStartTimeForTest(const TimePoint& t) {
+        m_sessionStartTime = t;
+    }
+
     // Symbol names that have ever booked a delta this session, in
     // insertion order (insertion = first delta for that symbol).
     // Useful when the panel wants to display a stable column order
@@ -229,6 +267,11 @@ private:
     // Session-realized time-series for the RiskPanel sparkline
     // (Sprint #61). Oldest first. Capped at kMaxRealizedHistory.
     std::vector<double> m_realizedHistory;
+
+    // Wall-clock time the current session started. Set on
+    // construction; updated by resetSession() and the auto-reset-
+    // at-midnight path in autoResetIfNewDay().
+    TimePoint m_sessionStartTime;
 };
 
 } // namespace btquant

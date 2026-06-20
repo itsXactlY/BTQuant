@@ -6,7 +6,31 @@
 
 namespace btquant {
 
-RiskGuard::RiskGuard(RiskConfig cfg) : m_cfg(cfg) {}
+RiskGuard::RiskGuard(RiskConfig cfg) : m_cfg(cfg) {
+    m_sessionStartTime = Clock::now();
+}
+
+bool RiskGuard::isNewSessionDay(const TimePoint& now) const {
+    std::time_t now_t  = Clock::to_time_t(now);
+    std::time_t sess_t = Clock::to_time_t(m_sessionStartTime);
+    std::tm     now_tm{}, sess_tm{};
+#ifdef _WIN32
+    localtime_s(&now_tm,  &now_t);
+    localtime_s(&sess_tm, &sess_t);
+#else
+    localtime_r(&now_t,  &now_tm);
+    localtime_r(&sess_t, &sess_tm);
+#endif
+    return (now_tm.tm_year != sess_tm.tm_year) ||
+           (now_tm.tm_yday != sess_tm.tm_yday);
+}
+
+bool RiskGuard::autoResetIfNewDay(const TimePoint& now) {
+    if (!isNewSessionDay(now)) return false;
+    resetSession();
+    m_sessionStartTime = now;
+    return true;
+}
 
 double RiskGuard::effectiveLeverage(double notionalUSD, double equityUSD) {
     if (equityUSD <= 0.0) return 0.0;

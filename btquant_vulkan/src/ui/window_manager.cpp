@@ -1034,7 +1034,18 @@ void WindowManager::showPositionPanelWindow() {
     // Sample the equity curve BEFORE the panel renders so the
     // sparkline shows the current frame's state (otherwise the
     // curve lags by one frame which is visible at high tick rates).
-    if (m_riskGuard) m_riskGuard->sampleSessionRealized();
+    if (m_riskGuard) {
+        // Sprint #69: auto-reset at local midnight. Polled once
+        // per frame because the next-trade check is O(1) and the
+        // guard already does a few microseconds of work each
+        // tick. Returns true on the frame the rollover fires —
+        // we log it once so the trader sees the new day start.
+        if (m_riskGuard->autoResetIfNewDay()) {
+            BTQ_LOG_INFO("RiskGuard: new trading day detected, "
+                         "session auto-reset at midnight");
+        }
+        m_riskGuard->sampleSessionRealized();
+    }
     if (m_positionPanel) m_positionPanel->render();
 }
 

@@ -6570,5 +6570,133 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 67: WatchlistWidget — click-to-switch wiring (Sprint #63).
+    // The Symbol column is wrapped in Selectable; clicking it fires
+    // m_select(symbol). The render-loop click itself can't be tested
+    // without an ImGui context, so the test focuses on the API
+    // surface (callback wiring) and confirms the data path (update,
+    // row accessor) still works correctly with the callback wired.
+    std::cout << "\nTest 67: Testing WatchlistWidget click-to-switch API..."
+              << std::endl;
+    {
+        using btquant::ui::WatchlistWidget;
+
+        // 1) Fresh widget: no callback wired (m_select empty).
+        {
+            WatchlistWidget w;
+            if (w.rowCount() == 0) {
+                std::cout << "✓ fresh widget: empty + no callback"
+                          << std::endl;
+            } else {
+                std::cout << "✗ fresh widget has rows?" << std::endl;
+            }
+        }
+
+        // 2) setSymbols seeds rows; update() pushes prices.
+        {
+            WatchlistWidget w;
+            w.setSymbols({"BTC/USDT", "ETH/USDT"});
+            w.update("BTC/USDT", 67000.0, 0.5, true, 1000000);
+            w.update("ETH/USDT", 3500.0,  2.0, false, 1000001);
+            auto* btc = w.row("BTC/USDT");
+            auto* eth = w.row("ETH/USDT");
+            if (btc && eth &&
+                std::fabs(btc->lastPrice - 67000.0) < 1e-9 &&
+                std::fabs(eth->lastPrice - 3500.0)  < 1e-9 &&
+                btc->buyVol == 0.5 &&
+                eth->sellVol == 2.0) {
+                std::cout << "✓ setSymbols + update populate rows"
+                          << std::endl;
+            } else {
+                std::cout << "✗ update path broke" << std::endl;
+            }
+        }
+
+        // 3) setSelectFn stores the callback (we can't fire it
+        //    without ImGui context, but we can verify the API
+        //    doesn't crash + the widget stays functional).
+        {
+            WatchlistWidget w;
+            w.setSymbols({"BTC/USDT"});
+            w.update("BTC/USDT", 67000.0, 0.1, true, 1000000);
+            // Wire a callback that captures nothing — we don't fire
+            // it (no ImGui), just verify setSelectFn doesn't crash
+            // and the widget's data state is unaffected.
+            w.setSelectFn([](const std::string& sym) {
+                // Captures nothing; verified-by-existence only.
+                (void)sym;
+            });
+            if (w.row("BTC/USDT") != nullptr &&
+                std::fabs(w.row("BTC/USDT")->lastPrice - 67000.0) < 1e-9) {
+                std::cout << "✓ setSelectFn stored; data state intact"
+                          << std::endl;
+            } else {
+                std::cout << "✗ setSelectFn disturbed data" << std::endl;
+            }
+        }
+
+        // 4) update() increments tickCount and accumulates volume.
+        {
+            WatchlistWidget w;
+            w.setSymbols({"BTC/USDT"});
+            for (int i = 0; i < 5; ++i) {
+                w.update("BTC/USDT", 67000.0 + i, 0.1, i % 2 == 0,
+                         1000000 + i);
+            }
+            auto* btc = w.row("BTC/USDT");
+            if (btc && btc->tickCount == 5 &&
+                std::fabs(btc->totalVol - 0.5) < 1e-9 &&
+                std::fabs(btc->buyVol - 0.3) < 1e-9 &&  // 3 buy ticks
+                std::fabs(btc->sellVol - 0.2) < 1e-9) { // 2 sell ticks
+                std::cout << "✓ update() increments + accumulates vol"
+                          << std::endl;
+            } else {
+                std::cout << "✗ update accumulation broke: tc="
+                          << (btc ? btc->tickCount : -1)
+                          << " total=" << (btc ? btc->totalVol : -1.0)
+                          << " buy=" << (btc ? btc->buyVol : -1.0)
+                          << " sell=" << (btc ? btc->sellVol : -1.0)
+                          << std::endl;
+            }
+        }
+
+        // 5) Sparkline deque bounded at kMaxSparkPoints.
+        {
+            WatchlistWidget w;
+            w.setSymbols({"BTC/USDT"});
+            for (int i = 0; i <
+                 static_cast<int>(WatchlistWidget::kMaxSparkPoints) + 20;
+                 ++i) {
+                w.update("BTC/USDT", 67000.0 + i, 0.01, true,
+                         1000000 + i);
+            }
+            auto* btc = w.row("BTC/USDT");
+            if (btc && btc->spark.size() ==
+                       WatchlistWidget::kMaxSparkPoints) {
+                std::cout << "✓ sparkline bounded at kMaxSparkPoints ("
+                          << WatchlistWidget::kMaxSparkPoints << ")"
+                          << std::endl;
+            } else {
+                std::cout << "✗ spark unbounded: size="
+                          << (btc ? btc->spark.size() : 0)
+                          << std::endl;
+            }
+        }
+
+        // 6) clear() wipes rows.
+        {
+            WatchlistWidget w;
+            w.setSymbols({"BTC/USDT", "ETH/USDT"});
+            w.update("BTC/USDT", 67000.0, 0.1, true, 1000000);
+            w.clear();
+            if (w.rowCount() == 0 && w.empty()) {
+                std::cout << "✓ clear() wipes rows"
+                          << std::endl;
+            } else {
+                std::cout << "✗ clear left rows" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }

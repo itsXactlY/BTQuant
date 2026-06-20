@@ -75,7 +75,23 @@ void WatchlistWidget::render() {
         for (const Row* r : ordered) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::TextUnformatted(r->symbol.c_str());
+            // Sprint #63: Symbol column is clickable. When m_select
+            // is wired, clicking the symbol fires the callback so
+            // WindowManager can switch the active symbol. Without
+            // m_select the Selectable renders normally but the click
+            // is a no-op (so the rest of the UI keeps working in
+            // contexts that haven't wired the callback yet).
+            if (m_select) {
+                if (ImGui::Selectable(r->symbol.c_str(), false,
+                                      ImGuiSelectableFlags_SpanAllColumns)) {
+                    m_select(r->symbol);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Click to switch active symbol");
+                }
+            } else {
+                ImGui::TextUnformatted(r->symbol.c_str());
+            }
 
             ImGui::TableNextColumn();
             char buf[32];

@@ -2395,6 +2395,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment DD duration bulk (Sprint #222).
+    // Returns DDDurationSeg for every segment, sorted
+    // DESC by avgDurationDays.
+    std::vector<DDDurationSeg>
+    allSegmentDDDuration() const;
+    std::vector<DDDurationSeg>
+    allSegmentDDDurationByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

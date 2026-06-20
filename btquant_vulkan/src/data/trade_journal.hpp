@@ -183,6 +183,37 @@ public:
     };
     Sharpe sharpe() const;
 
+    // Per-symbol performance breakdown (Sprint #86). For each
+    // symbol with at least one persisted fill, returns the same
+    // aggregate fields as stats() (#75) but scoped to that
+    // symbol's fills alone. Sorted by absolute realized DESCENDING
+    // so the biggest gainers/losers surface first — matches
+    // realizedBySymbol() (#72) ordering so the two can be read
+    // side-by-side without re-sorting.
+    //
+    // Field semantics match Stats 1:1. A symbol with only opens
+    // (no round-trips) gets zeroed stats but a non-zero realized
+    // (== sum of opens, all zero).
+    //
+    // Cost: O(N) over fills + O(K) over distinct symbols where K
+    // is the number of distinct symbols. The map-based aggregation
+    // matches realizedBySymbol's pattern so both could be derived
+    // from a single pass if performance becomes a concern — for
+    // now they're separate to keep the code paths readable.
+    struct PerSymbolStats {
+        std::string symbol;
+        double realized         = 0.0;
+        size_t   roundTripCount = 0;
+        size_t   winCount       = 0;
+        size_t   lossCount      = 0;
+        double   winRate        = 0.0;
+        double   avgWinner      = 0.0;
+        double   avgLoser       = 0.0;
+        double   profitFactor   = 0.0;
+        double   expectancy     = 0.0;
+    };
+    std::vector<PerSymbolStats> perSymbolStats() const;
+
     // All-time aggregate stats (Sprint #75). The journal-wide
     // counterpart to RiskMetrics (#Sprint #46) — same fields, but
     // computed across every persisted fill rather than a rolling

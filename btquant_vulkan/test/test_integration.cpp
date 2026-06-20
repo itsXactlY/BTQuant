@@ -9144,5 +9144,225 @@ int main() {
         fs::remove_all(tmpDir);
     }
 
+    // Test 83: TradeJournal.perSymbolStats() (Sprint #86).
+    // Per-symbol performance breakdown — same fields as stats() but
+    // scoped to each symbol's fills alone. Sorted by abs-realized
+    // DESCENDING (matches realizedBySymbol ordering).
+    std::cout << "\nTest 83: Testing TradeJournal.perSymbolStats()..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test83_" + std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [](const std::string& sym, double realized) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            return f;
+        };
+
+        // ---- Scenario 1: empty journal ----
+        {
+            fs::path p = tmpDir / "empty.jsonl";
+            TradeJournal j(p.string());
+            auto v = j.perSymbolStats();
+            if (v.empty()) {
+                std::cout << "✓ empty journal: no symbols" << std::endl;
+            } else {
+                std::cout << "✗ empty wrong: size=" << v.size() << std::endl;
+            }
+        }
+
+        // ---- Scenario 2: single symbol, mixed W/L ----
+        // BTCUSDT: 3 wins (+$100, +$200, +$300) + 2 losses
+        // (-$150, -$50) + 1 open (realized=0).
+        //   roundTripCount=5, winCount=3, lossCount=2
+        //   winRate=0.6, grossWin=$600, grossLoss=-$200, PF=3.0
+        //   avgWinner=$200, avgLoser=-$100, expectancy=$80
+        //   realized = $400
+        {
+            fs::path p = tmpDir / "btc.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100));
+            j.append(mkFill("BTCUSDT",  200));
+            j.append(mkFill("BTCUSDT",  300));
+            j.append(mkFill("BTCUSDT", -150));
+            j.append(mkFill("BTCUSDT",  -50));
+            j.append(mkFill("BTCUSDT",    0));   // open
+            auto v = j.perSymbolStats();
+            bool ok = (v.size() == 1) &&
+                      (v[0].symbol == "BTCUSDT") &&
+                      std::fabs(v[0].realized - 400.0) < 1e-9 &&
+                      (v[0].roundTripCount == 5) &&
+                      (v[0].winCount == 3) &&
+                      (v[0].lossCount == 2) &&
+                      std::fabs(v[0].winRate - 0.6) < 1e-9 &&
+                      std::fabs(v[0].profitFactor - 3.0) < 1e-9 &&
+                      std::fabs(v[0].avgWinner - 200.0) < 1e-9 &&
+                      std::fabs(v[0].avgLoser - (-100.0)) < 1e-9 &&
+                      std::fabs(v[0].expectancy - 80.0) < 1e-9;
+            if (ok) {
+                std::cout << "✓ single symbol (BTCUSDT): PF=3.0 WR=60% "
+                          << "avgW=$200 avgL=-$100" << std::endl;
+            } else {
+                std::cout << "✗ btc wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 3: multiple symbols, sorted by abs-realized DESC ----
+        // BTCUSDT: +$400  (abs 400)  — round-trip stats: 3W/2L PF=3.0
+        // ETHUSDT: -$200  (abs 200)  — 1W/1L, PF = 50/150 = 0.333
+        // SOLUSDT: +$50   (abs 50)
+        // Expected order: BTC, ETH, SOL (400 > 200 > 50).
+        {
+            fs::path p = tmpDir / "multi.jsonl";
+            TradeJournal j(p.string());
+            // BTC: +100, +200, +300, -150, -50 = +400, 3W/2L
+            j.append(mkFill("BTCUSDT",  100));
+            j.append(mkFill("BTCUSDT",  200));
+            j.append(mkFill("BTCUSDT",  300));
+            j.append(mkFill("BTCUSDT", -150));
+            j.append(mkFill("BTCUSDT",  -50));
+            // ETH: +50, -150 = -100, 1W/1L, PF = 50/150 = 0.333
+            j.append(mkFill("ETHUSDT",   50));
+            j.append(mkFill("ETHUSDT", -150));
+            // SOL: +50, no losses
+            j.append(mkFill("SOLUSDT",   50));
+
+            auto v = j.perSymbolStats();
+            bool sizeOk = (v.size() == 3);
+            bool orderOk = sizeOk &&
+                           v[0].symbol == "BTCUSDT" &&
+                           v[1].symbol == "ETHUSDT" &&
+                           v[2].symbol == "SOLUSDT";
+            bool realizedOk = orderOk &&
+                              std::fabs(v[0].realized - 400.0) < 1e-9 &&
+                              std::fabs(v[1].realized - (-100.0)) < 1e-9 &&
+                              std::fabs(v[2].realized -   50.0) < 1e-9;
+            if (sizeOk && orderOk && realizedOk) {
+                std::cout << "✓ 3 symbols sorted by abs-realized DESC: "
+                          << "BTC(+$400) > ETH(-$100) > SOL(+$50)"
+                          << std::endl;
+            } else {
+                std::cout << "✗ multi wrong: size=" << v.size();
+                for (const auto& s : v)
+                    std::cout << " " << s.symbol << "(" << s.realized << ")";
+                std::cout << std::endl;
+            }
+
+            // ETH PF = 50/150 ≈ 0.333
+            if (sizeOk && std::fabs(v[1].profitFactor - (50.0/150.0)) < 1e-9) {
+                std::cout << "✓ ETHUSDT profitFactor = 0.333" << std::endl;
+            } else if (sizeOk) {
+                std::cout << "✗ ETH PF wrong: " << v[1].profitFactor
+                          << std::endl;
+            }
+
+            // SOL: all-wins no-losses → PF = +inf.
+            if (sizeOk && std::isinf(v[2].profitFactor) &&
+                v[2].profitFactor > 0) {
+                std::cout << "✓ SOLUSDT profitFactor = +inf (all wins)"
+                          << std::endl;
+            } else if (sizeOk) {
+                std::cout << "✗ SOL PF wrong: " << v[2].profitFactor
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 4: open-only symbol ----
+        // Symbol with only opens (realized=0) gets zeroed stats
+        // but realized=0 and 1 row in the output.
+        {
+            fs::path p = tmpDir / "opens.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT", 100));  // some normal data
+            j.append(mkFill("XRPUSDT",   0));  // only an open
+            auto v = j.perSymbolStats();
+            bool ok = (v.size() == 2) &&
+                      std::fabs(v[1].realized) < 1e-9 &&
+                      v[1].roundTripCount == 0 &&
+                      v[1].winCount == 0 && v[1].lossCount == 0 &&
+                      v[1].winRate == 0.0 && v[1].profitFactor == 0.0;
+            if (ok) {
+                std::cout << "✓ open-only symbol: zeroed stats, in list"
+                          << std::endl;
+            } else {
+                std::cout << "✗ opens wrong" << std::endl;
+            }
+        }
+
+        // ---- Scenario 5: sum across symbols == totalRealized() ----
+        // Consistency: sum of per-symbol realized must equal the
+        // all-time total. Same data, different grouping.
+        {
+            fs::path p = tmpDir / "consistency.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100));
+            j.append(mkFill("BTCUSDT", -50));
+            j.append(mkFill("ETHUSDT",  200));
+            j.append(mkFill("ETHUSDT", -75));
+            j.append(mkFill("SOLUSDT",  30));
+            auto v = j.perSymbolStats();
+            double sum = 0.0;
+            size_t sumWins = 0, sumLosses = 0, sumRounds = 0;
+            for (const auto& s : v) {
+                sum       += s.realized;
+                sumWins   += s.winCount;
+                sumLosses += s.lossCount;
+                sumRounds += s.roundTripCount;
+            }
+            bool ok = std::fabs(sum - j.totalRealized()) < 1e-9 &&
+                      sumWins == j.stats().winCount &&
+                      sumLosses == j.stats().lossCount &&
+                      sumRounds == j.stats().roundTripCount;
+            if (ok) {
+                std::cout << "✓ sum across symbols == totalRealized() "
+                          "(and W/L/round counts match stats())"
+                          << std::endl;
+            } else {
+                std::cout << "✗ consistency: sum=" << sum
+                          << " total=" << j.totalRealized()
+                          << " W=" << sumWins << "/" << j.stats().winCount
+                          << " L=" << sumLosses << "/" << j.stats().lossCount
+                          << " R=" << sumRounds << "/" << j.stats().roundTripCount
+                          << std::endl;
+            }
+        }
+
+        // ---- Scenario 6: stability across reload ----
+        {
+            fs::path p = tmpDir / "stable.jsonl";
+            TradeJournal j(p.string());
+            j.append(mkFill("BTCUSDT",  100));
+            j.append(mkFill("BTCUSDT", -50));
+            j.append(mkFill("ETHUSDT",  200));
+            auto v1 = j.perSymbolStats();
+            TradeJournal j2(p.string());
+            auto v2 = j2.perSymbolStats();
+            bool ok = (v1.size() == v2.size());
+            for (size_t i = 0; ok && i < v1.size(); ++i) {
+                if (v1[i].symbol != v2[i].symbol ||
+                    std::fabs(v1[i].realized - v2[i].realized) > 1e-9 ||
+                    v1[i].winCount != v2[i].winCount ||
+                    v1[i].lossCount != v2[i].lossCount) {
+                    ok = false; break;
+                }
+            }
+            if (ok) {
+                std::cout << "✓ perSymbolStats stable across reload"
+                          << std::endl;
+            } else {
+                std::cout << "✗ drifted across reload" << std::endl;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+    }
+
     return 0;
 }

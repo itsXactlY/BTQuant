@@ -477,6 +477,85 @@ TradeJournal::Sharpe TradeJournal::sharpe() const {
     return out;
 }
 
+std::vector<TradeJournal::PerSymbolStats>
+TradeJournal::perSymbolStats() const {
+    // Same epsilon as stats() — swallow float-json round-trip
+    // noise without classifying a true zero as a win/loss.
+    constexpr double kEps = 1e-9;
+
+    std::vector<JournalFill> fills = loadAll();
+
+    // Two-pass aggregation:
+    //   1) Sum realized + count W/L/round-trips per symbol.
+    //   2) Compute derived stats (winRate, avgW/L, PF, expectancy).
+    // Single pass would need lazy eval / mutable struct fields;
+    // two passes with local maps is clearer and the cost is the
+    // same (O(N) over fills either way).
+    struct Acc {
+        double realized    = 0.0;
+        double grossWin    = 0.0;
+        double grossLoss   = 0.0;
+        double sumRTpnl    = 0.0;
+        size_t roundTrips  = 0;
+        size_t wins        = 0;
+        size_t losses      = 0;
+    };
+    std::unordered_map<std::string, Acc> accs;
+    accs.reserve(8);
+
+    for (const auto& f : fills) {
+        Acc& a = accs[f.symbol];
+        a.realized += f.realizedDelta;
+        if (std::fabs(f.realizedDelta) <= kEps) continue;
+        a.roundTrips++;
+        a.sumRTpnl += f.realizedDelta;
+        if (f.realizedDelta > kEps) {
+            a.wins++;
+            a.grossWin += f.realizedDelta;
+        } else if (f.realizedDelta < -kEps) {
+            a.losses++;
+            a.grossLoss += f.realizedDelta;  // negative
+        }
+    }
+
+    // Drain into vector, apply derived stats, sort by abs-realized DESC.
+    std::vector<PerSymbolStats> out;
+    out.reserve(accs.size());
+    for (auto& kv : accs) {
+        PerSymbolStats s;
+        s.symbol          = kv.first;
+        s.realized        = kv.second.realized;
+        s.roundTripCount  = kv.second.roundTrips;
+        s.winCount        = kv.second.wins;
+        s.lossCount       = kv.second.losses;
+        if (kv.second.roundTrips > 0) {
+            s.winRate    = static_cast<double>(kv.second.wins) /
+                           static_cast<double>(kv.second.roundTrips);
+            s.expectancy = kv.second.sumRTpnl /
+                           static_cast<double>(kv.second.roundTrips);
+        }
+        if (kv.second.wins   > 0) s.avgWinner = kv.second.grossWin  /
+                                                 kv.second.wins;
+        if (kv.second.losses > 0) s.avgLoser  = kv.second.grossLoss /
+                                                 static_cast<double>(kv.second.losses);
+        // PF sentinel: no losses + at least one win = +inf.
+        // No fills at all = 0 (matches stats() convention).
+        if (kv.second.losses == 0) {
+            s.profitFactor = (kv.second.wins > 0)
+                ? std::numeric_limits<double>::infinity()
+                : 0.0;
+        } else {
+            s.profitFactor = kv.second.grossWin / -kv.second.grossLoss;
+        }
+        out.push_back(std::move(s));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PerSymbolStats& a, const PerSymbolStats& b) {
+                  return std::fabs(a.realized) > std::fabs(b.realized);
+              });
+    return out;
+}
+
 namespace {
 // Atomic rewrite of the journal. Writes every fill to
 // "<path>.tmp" then renames over the original. The rename is

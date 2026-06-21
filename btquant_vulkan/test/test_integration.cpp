@@ -24213,5 +24213,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 223: allSegmentHourlyPnL (Sprint #237).
+    //
+    // Bulk hourly P&L. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 223: all-seg hourly P&L..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test223_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t t0 = 1704110400ULL * 1000000ULL;
+            const uint64_t min = 60ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC", 50.0, t0 + min));
+            j.append(mkFill("ETH", 10.0, t0));
+            j.append(mkFill("ETH", -5.0, t0 + min));
+            auto v = j.allSegmentHourlyPnL();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC by P&L: top="
+                          << v[0].segment
+                          << " totalFills="
+                          << v[0].totalFills
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-hp tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

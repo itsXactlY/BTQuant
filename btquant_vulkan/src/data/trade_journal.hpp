@@ -2594,6 +2594,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment hourly P&L bulk (Sprint #237).
+    // Returns HourlyPnL for every segment. Sorted DESC
+    // by total P&L (best hour-sum first).
+    std::vector<HourlyPnL>
+    allSegmentHourlyPnL() const;
+    std::vector<HourlyPnL>
+    allSegmentHourlyPnLByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

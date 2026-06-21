@@ -10380,4 +10380,57 @@ TradeJournal::hourlyPnLByTag(
     return h;
 }
 
+std::vector<TradeJournal::HourlyPnL>
+TradeJournal::allSegmentHourlyPnL() const {
+    // Sprint #237. Bulk per-symbol hourly P&L
+    // sorted DESC by total P&L.
+    std::vector<HourlyPnL> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(hourlyPnLBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const HourlyPnL& a, const HourlyPnL& b) {
+            double aSum = 0.0, bSum = 0.0;
+            for (int hr = 0; hr < 24; ++hr) {
+                aSum += a.pnlByHour[hr];
+                bSum += b.pnlByHour[hr];
+            }
+            return aSum > bSum;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::HourlyPnL>
+TradeJournal::allSegmentHourlyPnLByTag(
+    bool includeUntagged) const {
+    std::vector<HourlyPnL> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(hourlyPnLByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const HourlyPnL& a, const HourlyPnL& b) {
+            double aSum = 0.0, bSum = 0.0;
+            for (int hr = 0; hr < 24; ++hr) {
+                aSum += a.pnlByHour[hr];
+                bSum += b.pnlByHour[hr];
+            }
+            return aSum > bSum;
+        });
+    return out;
+}
+
 } // namespace btquant

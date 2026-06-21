@@ -10433,4 +10433,53 @@ TradeJournal::allSegmentHourlyPnLByTag(
     return out;
 }
 
+namespace {
+// Sprint #238 — per-segment day-of-week trade count builder.
+template <typename Pred>
+TradeJournal::DoWTradeCount
+buildDoWTradeCountBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::DoWTradeCount d;
+    size_t nFills = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int dow = tm.tm_wday;  // 0..6, 0=Sunday
+        if (dow < 0 || dow >= 7) continue;
+        d.tradeCountByDow[dow]++;
+        nFills++;
+    }
+    d.totalFills = nFills;
+    return d;
+}
+}  // namespace
+
+TradeJournal::DoWTradeCount
+TradeJournal::dowTradeCountBySymbol(
+    const std::string& symbol) const {
+    auto d = buildDoWTradeCountBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    d.segment = symbol;
+    return d;
+}
+
+TradeJournal::DoWTradeCount
+TradeJournal::dowTradeCountByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto d = buildDoWTradeCountBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    d.segment = tag;
+    return d;
+}
+
 } // namespace btquant

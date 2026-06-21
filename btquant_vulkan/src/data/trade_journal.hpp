@@ -2603,6 +2603,21 @@ public:
     allSegmentHourlyPnLByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment day-of-week trade count (Sprint #238).
+    // For each segment: 7-element array with total fills
+    // per day-of-week (0=Sun..6=Sat). Useful for
+    // "which weekday am I most active?" panel.
+    struct DoWTradeCount {
+        std::string segment;
+        std::array<size_t, 7> tradeCountByDow{};
+        size_t      totalFills = 0;
+    };
+    DoWTradeCount dowTradeCountBySymbol(
+        const std::string& symbol) const;
+    DoWTradeCount dowTradeCountByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

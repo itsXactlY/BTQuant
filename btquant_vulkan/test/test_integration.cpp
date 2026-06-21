@@ -24273,5 +24273,81 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 224: dowTradeCountBySymbol/ByTag (Sprint #238).
+    //
+    // Per-segment day-of-week trade count. Tests:
+    //   - BTC 2 fills, all on same dow → that dow
+    //     has count 2.
+    std::cout << "\nTest 224: DoW trade count..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test224_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills on same day ----
+        {
+            // 2024-01-15 = Monday = tm_wday=1
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + hour));
+            auto btcD = j.dowTradeCountBySymbol("BTC");
+            if (btcD.totalFills == 2) {
+                size_t sum = 0;
+                size_t maxDow = 0;
+                for (int d = 0; d < 7; ++d) {
+                    sum += btcD.tradeCountByDow[d];
+                    if (btcD.tradeCountByDow[d] >
+                        btcD.tradeCountByDow[maxDow]) {
+                        maxDow = d;
+                    }
+                }
+                if (sum == 2 &&
+                    btcD.tradeCountByDow[maxDow] == 2) {
+                    std::cout << "✓ BTC: 2 fills on DoW "
+                              << maxDow
+                              << std::endl;
+                    ++pass;
+                } else {
+                    std::cout << "✗ wrong: sum=" << sum
+                              << " maxDow=" << maxDow
+                              << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcD.totalFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dow-count tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

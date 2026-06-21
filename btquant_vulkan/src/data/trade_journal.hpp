@@ -2685,6 +2685,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment win/loss avg bulk (Sprint #244).
+    // Returns WinLossAvg for every segment. Sorted
+    // DESC by winRatio.
+    std::vector<WinLossAvg>
+    allSegmentWinLossAvg() const;
+    std::vector<WinLossAvg>
+    allSegmentWinLossAvgByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

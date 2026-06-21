@@ -10739,4 +10739,47 @@ TradeJournal::winLossAvgByTag(
     return w;
 }
 
+std::vector<TradeJournal::WinLossAvg>
+TradeJournal::allSegmentWinLossAvg() const {
+    // Sprint #244. Bulk per-symbol win/loss avg
+    // sorted DESC by winRatio.
+    std::vector<WinLossAvg> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(winLossAvgBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const WinLossAvg& a, const WinLossAvg& b) {
+            return a.winRatio > b.winRatio;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::WinLossAvg>
+TradeJournal::allSegmentWinLossAvgByTag(
+    bool includeUntagged) const {
+    std::vector<WinLossAvg> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(winLossAvgByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const WinLossAvg& a, const WinLossAvg& b) {
+            return a.winRatio > b.winRatio;
+        });
+    return out;
+}
+
 } // namespace btquant

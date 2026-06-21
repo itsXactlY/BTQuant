@@ -24469,5 +24469,67 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 227: bestWorstDayBySymbol/ByTag (Sprint #241).
+    //
+    // Per-segment best/worst single day. Tests:
+    //   - BTC 2 days [+100, -50] → bestRealized=100,
+    //     worstRealized=-50.
+    std::cout << "\nTest 227: best/worst day..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test227_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 days [+100, -50] ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            j.append(mkFill("BTC",  100.0, t0));
+            j.append(mkFill("BTC",  -50.0, t0 + day));
+            auto btcB = j.bestWorstDayBySymbol("BTC");
+            if (btcB.activeDays == 2 &&
+                std::fabs(btcB.bestRealized - 100.0) < 1e-9 &&
+                std::fabs(btcB.worstRealized - (-50.0)) < 1e-9 &&
+                btcB.bestDate != btcB.worstDate) {
+                std::cout << "✓ BTC: best=100, "
+                          << "worst=-50, dates differ"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: best="
+                          << btcB.bestRealized
+                          << " worst=" << btcB.worstRealized
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " best-worst-day tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

@@ -2641,6 +2641,23 @@ public:
     monthlyPnLSeriesByTag(const std::string& tag,
                           bool includeUntagged = false) const;
 
+    // Per-segment best/worst single day (Sprint #241).
+    // For each segment: the best day (max daily realized)
+    // and the worst day (min daily realized) with date.
+    struct BestWorstDay {
+        std::string segment;
+        std::string bestDate;
+        double      bestRealized  = 0.0;
+        std::string worstDate;
+        double      worstRealized = 0.0;
+        size_t      activeDays    = 0;
+    };
+    BestWorstDay bestWorstDayBySymbol(
+        const std::string& symbol) const;
+    BestWorstDay bestWorstDayByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

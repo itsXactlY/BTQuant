@@ -10578,4 +10578,67 @@ TradeJournal::monthlyPnLSeriesByTag(
         });
 }
 
+namespace {
+// Sprint #241 — per-segment best/worst day builder.
+template <typename Pred>
+TradeJournal::BestWorstDay
+buildBestWorstDayBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::BestWorstDay b;
+    std::map<std::string, double> daily;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        daily[buf] += f.realizedDelta;
+    }
+    if (daily.empty()) return b;
+    b.activeDays = daily.size();
+    b.bestDate = daily.begin()->first;
+    b.bestRealized = daily.begin()->second;
+    b.worstDate = daily.begin()->first;
+    b.worstRealized = daily.begin()->second;
+    for (auto& kv : daily) {
+        if (kv.second > b.bestRealized) {
+            b.bestDate = kv.first;
+            b.bestRealized = kv.second;
+        }
+        if (kv.second < b.worstRealized) {
+            b.worstDate = kv.first;
+            b.worstRealized = kv.second;
+        }
+    }
+    return b;
+}
+}  // namespace
+
+TradeJournal::BestWorstDay
+TradeJournal::bestWorstDayBySymbol(
+    const std::string& symbol) const {
+    auto b = buildBestWorstDayBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    b.segment = symbol;
+    return b;
+}
+
+TradeJournal::BestWorstDay
+TradeJournal::bestWorstDayByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto b = buildBestWorstDayBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    b.segment = tag;
+    return b;
+}
+
 } // namespace btquant

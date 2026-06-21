@@ -9807,4 +9807,47 @@ TradeJournal::fillsPerDayByTag(
     return d;
 }
 
+std::vector<TradeJournal::FillsPerDay>
+TradeJournal::allSegmentFillsPerDay() const {
+    // Sprint #226. Bulk per-symbol fills-per-day
+    // sorted DESC by avgFillsPerDay.
+    std::vector<FillsPerDay> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(fillsPerDayBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const FillsPerDay& a, const FillsPerDay& b) {
+            return a.avgFillsPerDay > b.avgFillsPerDay;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::FillsPerDay>
+TradeJournal::allSegmentFillsPerDayByTag(
+    bool includeUntagged) const {
+    std::vector<FillsPerDay> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(fillsPerDayByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const FillsPerDay& a, const FillsPerDay& b) {
+            return a.avgFillsPerDay > b.avgFillsPerDay;
+        });
+    return out;
+}
+
 } // namespace btquant

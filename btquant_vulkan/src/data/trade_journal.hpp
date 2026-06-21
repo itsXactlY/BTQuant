@@ -2578,6 +2578,22 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // Per-segment hourly P&L (Sprint #236). For each
+    // segment: 24-element array with total P&L per
+    // hour-of-day (0..23). Useful for "what hour makes
+    // me the most money?" heatmap.
+    struct HourlyPnL {
+        std::string segment;
+        std::array<double, 24> pnlByHour{};
+        std::array<size_t, 24> tradeCountByHour{};
+        size_t      totalFills = 0;
+    };
+    HourlyPnL hourlyPnLBySymbol(
+        const std::string& symbol) const;
+    HourlyPnL hourlyPnLByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -10330,4 +10330,54 @@ TradeJournal::hourlyWinRateByTag(
     return h;
 }
 
+namespace {
+// Sprint #236 — per-segment hourly P&L builder.
+template <typename Pred>
+TradeJournal::HourlyPnL
+buildHourlyPnLBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::HourlyPnL h;
+    size_t nFills = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int hr = tm.tm_hour;
+        if (hr < 0 || hr >= 24) continue;
+        h.pnlByHour[hr] += f.realizedDelta;
+        h.tradeCountByHour[hr]++;
+        nFills++;
+    }
+    h.totalFills = nFills;
+    return h;
+}
+}  // namespace
+
+TradeJournal::HourlyPnL
+TradeJournal::hourlyPnLBySymbol(
+    const std::string& symbol) const {
+    auto h = buildHourlyPnLBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    h.segment = symbol;
+    return h;
+}
+
+TradeJournal::HourlyPnL
+TradeJournal::hourlyPnLByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto h = buildHourlyPnLBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    h.segment = tag;
+    return h;
+}
+
 } // namespace btquant

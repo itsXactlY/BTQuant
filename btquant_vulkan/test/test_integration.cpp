@@ -24136,5 +24136,82 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 222: hourlyPnLBySymbol/ByTag (Sprint #236).
+    //
+    // Per-segment hourly P&L. Tests:
+    //   - BTC 2 fills +50,+30 at same hour →
+    //     pnlByHour[hr] = 80.
+    std::cout << "\nTest 222: hourly P&L..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test222_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills at same hour ----
+        {
+            const uint64_t t0 = 1704110400ULL * 1000000ULL;
+            const uint64_t min = 60ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC",  30.0, t0 + min));
+            auto btcH = j.hourlyPnLBySymbol("BTC");
+            if (btcH.totalFills == 2) {
+                // Find the hour with 2 fills
+                for (int hr = 0; hr < 24; ++hr) {
+                    if (btcH.tradeCountByHour[hr] == 2) {
+                        if (std::fabs(btcH.pnlByHour[hr] - 80.0) < 1e-9) {
+                            std::cout << "✓ BTC: 2 fills at hour "
+                                      << hr << ", P&L=80"
+                                      << std::endl;
+                            ++pass;
+                        } else {
+                            std::cout << "✗ wrong: hr="
+                                      << hr << " P&L="
+                                      << btcH.pnlByHour[hr]
+                                      << std::endl;
+                            ++fail;
+                        }
+                        break;
+                    }
+                }
+                if (pass == 0 && fail == 0) {
+                    std::cout << "✗ wrong: no hour had 2 trades"
+                              << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcH.totalFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " hourly-pnl tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

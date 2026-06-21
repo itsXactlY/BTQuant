@@ -23420,5 +23420,71 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 211: fillsPerDayBySymbol/ByTag (Sprint #225).
+    //
+    // Per-segment fills per day. Tests:
+    //   - BTC 2 days with 3 fills, 1 day with 1 fill
+    //     → avgFillsPerDay = 4/2 = 2.0.
+    std::cout << "\nTest 211: fills per day..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test211_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 4 fills over 2 days ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "f.jsonl").string());
+            // Day 0: 3 fills
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + hour));
+            j.append(mkFill("BTC",  30.0, t0 + 2 * hour));
+            // Day 1: 1 fill
+            j.append(mkFill("BTC",  20.0, t0 + day));
+            auto btcF = j.fillsPerDayBySymbol("BTC");
+            if (btcF.totalFills == 4 &&
+                btcF.activeDays == 2 &&
+                std::fabs(btcF.avgFillsPerDay - 2.0) < 1e-9) {
+                std::cout << "✓ BTC: 4 fills / 2 days, "
+                          << "avg=2.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcF.totalFills
+                          << " days=" << btcF.activeDays
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " fills-per-day tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

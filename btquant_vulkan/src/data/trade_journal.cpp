@@ -9754,4 +9754,57 @@ TradeJournal::allSegmentKellyFractionByTag(
     return out;
 }
 
+namespace {
+// Sprint #225 — per-segment fills-per-day builder.
+template <typename Pred>
+TradeJournal::FillsPerDay
+buildFillsPerDayBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::FillsPerDay d;
+    std::map<std::string, size_t> daily;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9 &&
+            f.realizedDelta == 0) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        daily[buf]++;
+    }
+    if (daily.empty()) return d;
+    d.activeDays = daily.size();
+    for (auto& kv : daily) d.totalFills += kv.second;
+    d.avgFillsPerDay = static_cast<double>(d.totalFills) /
+                       static_cast<double>(d.activeDays);
+    return d;
+}
+}  // namespace
+
+TradeJournal::FillsPerDay
+TradeJournal::fillsPerDayBySymbol(
+    const std::string& symbol) const {
+    auto d = buildFillsPerDayBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    d.segment = symbol;
+    return d;
+}
+
+TradeJournal::FillsPerDay
+TradeJournal::fillsPerDayByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto d = buildFillsPerDayBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    d.segment = tag;
+    return d;
+}
+
 } // namespace btquant

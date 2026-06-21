@@ -10684,4 +10684,59 @@ TradeJournal::allSegmentBestWorstDayByTag(
     return out;
 }
 
+namespace {
+// Sprint #243 — per-segment win/loss avg builder.
+template <typename Pred>
+TradeJournal::WinLossAvg
+buildWinLossAvgBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::WinLossAvg w;
+    double sumW = 0.0, sumL = 0.0;
+    size_t nW = 0, nL = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            sumW += f.realizedDelta;
+            nW++;
+        } else if (f.realizedDelta < 0) {
+            sumL += f.realizedDelta;
+            nL++;
+        }
+    }
+    w.nWins = nW;
+    w.nLosses = nL;
+    if (nW > 0) w.avgWin = sumW / static_cast<double>(nW);
+    if (nL > 0) w.avgLoss = std::fabs(sumL) /
+                            static_cast<double>(nL);
+    if (w.avgLoss > 1e-9) {
+        w.winRatio = w.avgWin / w.avgLoss;
+    }
+    return w;
+}
+}  // namespace
+
+TradeJournal::WinLossAvg
+TradeJournal::winLossAvgBySymbol(
+    const std::string& symbol) const {
+    auto w = buildWinLossAvgBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    w.segment = symbol;
+    return w;
+}
+
+TradeJournal::WinLossAvg
+TradeJournal::winLossAvgByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto w = buildWinLossAvgBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    w.segment = tag;
+    return w;
+}
+
 } // namespace btquant

@@ -2667,6 +2667,24 @@ public:
     allSegmentBestWorstDayByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment avg win/loss trade size (Sprint #243).
+    // For each segment: avgWin, avgLoss (absolute),
+    // winRatio (|avgWin| / |avgLoss|), nWins, nLosses.
+    // Useful for "show me per-symbol win/loss avg".
+    struct WinLossAvg {
+        std::string segment;
+        double      avgWin   = 0.0;
+        double      avgLoss  = 0.0;  // absolute value
+        double      winRatio = 0.0;  // avgWin / avgLoss
+        size_t      nWins    = 0;
+        size_t      nLosses  = 0;
+    };
+    WinLossAvg winLossAvgBySymbol(
+        const std::string& symbol) const;
+    WinLossAvg winLossAvgByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

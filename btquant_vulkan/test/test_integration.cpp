@@ -24590,5 +24590,75 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 229: winLossAvgBySymbol/ByTag (Sprint #243).
+    //
+    // Per-segment win/loss avg. Tests:
+    //   - BTC 3W+50, 2L-25 → avgWin=50, avgLoss=25,
+    //     winRatio=2.
+    std::cout << "\nTest 229: win/loss avg..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test229_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 3W+50, 2L-25 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "w.jsonl").string());
+            for (int i = 0; i < 3; ++i) {
+                j.append(mkFill("BTC", 50.0,
+                                t0 + i * hour));
+            }
+            for (int i = 3; i < 5; ++i) {
+                j.append(mkFill("BTC", -25.0,
+                                t0 + i * hour));
+            }
+            auto btcW = j.winLossAvgBySymbol("BTC");
+            if (btcW.nWins == 3 &&
+                btcW.nLosses == 2 &&
+                std::fabs(btcW.avgWin - 50.0) < 1e-9 &&
+                std::fabs(btcW.avgLoss - 25.0) < 1e-9 &&
+                std::fabs(btcW.winRatio - 2.0) < 1e-9) {
+                std::cout << "✓ BTC: 3W+50, 2L-25, "
+                          << "R=2.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: avgWin="
+                          << btcW.avgWin
+                          << " avgLoss=" << btcW.avgLoss
+                          << " R=" << btcW.winRatio
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " win-loss-avg tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

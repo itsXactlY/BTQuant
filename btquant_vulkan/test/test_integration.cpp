@@ -25420,5 +25420,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 242: monthlyPnLArrayBySymbol/ByTag (Sprint #256).
+    //
+    // Per-segment monthly P&L array. Tests:
+    //   - BTC 2 fills [+50, -25] same day Jan → pnlByMonth[0]=25.
+    std::cout << "\nTest 242: monthly P&L array..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test242_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills same day in January ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "m.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + hour));
+            auto btcM = j.monthlyPnLArrayBySymbol("BTC");
+            if (btcM.totalFills == 2 &&
+                std::fabs(btcM.pnlByMonth[0] - 25.0) < 1e-9 &&
+                btcM.daysByMonth[0] == 1) {
+                std::cout << "✓ BTC: Jan P&L=25, days=1"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: P&L="
+                          << btcM.pnlByMonth[0]
+                          << " days=" << btcM.daysByMonth[0]
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " month-pnl-arr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

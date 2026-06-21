@@ -11355,4 +11355,61 @@ TradeJournal::allSegmentWeekdayHourPnLMatrixByTag(
     return out;
 }
 
+namespace {
+// Sprint #256 — per-segment monthly P&L array builder.
+template <typename Pred>
+TradeJournal::MonthlyPnLArray
+buildMonthlyPnLArrayBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::MonthlyPnLArray m;
+    std::map<std::string, double> dailyByMonth[12];
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int mo = tm.tm_mon;
+        if (mo < 0 || mo >= 12) continue;
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        dailyByMonth[mo][buf] += f.realizedDelta;
+        m.totalFills++;
+    }
+    for (int mo = 0; mo < 12; ++mo) {
+        if (dailyByMonth[mo].empty()) continue;
+        double total = 0.0;
+        for (auto& kv : dailyByMonth[mo]) total += kv.second;
+        m.pnlByMonth[mo] = total;
+        m.daysByMonth[mo] = dailyByMonth[mo].size();
+    }
+    return m;
+}
+}  // namespace
+
+TradeJournal::MonthlyPnLArray
+TradeJournal::monthlyPnLArrayBySymbol(
+    const std::string& symbol) const {
+    auto m = buildMonthlyPnLArrayBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    m.segment = symbol;
+    return m;
+}
+
+TradeJournal::MonthlyPnLArray
+TradeJournal::monthlyPnLArrayByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto m = buildMonthlyPnLArrayBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    m.segment = tag;
+    return m;
+}
+
 } // namespace btquant

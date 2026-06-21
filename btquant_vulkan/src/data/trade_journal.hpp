@@ -2835,6 +2835,22 @@ public:
     allSegmentWeekdayHourPnLMatrixByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment monthly P&L array (Sprint #256).
+    // For each segment: 12-element array with total P&L
+    // per month-of-year. Combines monthlyPnLSeries +
+    // monthlyFillCount into one view.
+    struct MonthlyPnLArray {
+        std::string segment;
+        std::array<double, 12> pnlByMonth{};
+        std::array<size_t, 12> daysByMonth{};
+        size_t      totalFills = 0;
+    };
+    MonthlyPnLArray monthlyPnLArrayBySymbol(
+        const std::string& symbol) const;
+    MonthlyPnLArray monthlyPnLArrayByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

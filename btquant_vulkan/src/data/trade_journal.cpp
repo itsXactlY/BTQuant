@@ -10641,4 +10641,47 @@ TradeJournal::bestWorstDayByTag(
     return b;
 }
 
+std::vector<TradeJournal::BestWorstDay>
+TradeJournal::allSegmentBestWorstDay() const {
+    // Sprint #242. Bulk per-symbol best/worst day
+    // sorted DESC by bestRealized.
+    std::vector<BestWorstDay> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(bestWorstDayBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestWorstDay& a, const BestWorstDay& b) {
+            return a.bestRealized > b.bestRealized;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::BestWorstDay>
+TradeJournal::allSegmentBestWorstDayByTag(
+    bool includeUntagged) const {
+    std::vector<BestWorstDay> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(bestWorstDayByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const BestWorstDay& a, const BestWorstDay& b) {
+            return a.bestRealized > b.bestRealized;
+        });
+    return out;
+}
+
 } // namespace btquant

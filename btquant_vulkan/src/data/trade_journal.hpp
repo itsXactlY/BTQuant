@@ -2658,6 +2658,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment best/worst day bulk (Sprint #242).
+    // Returns BestWorstDay for every segment. Sorted
+    // DESC by bestRealized.
+    std::vector<BestWorstDay>
+    allSegmentBestWorstDay() const;
+    std::vector<BestWorstDay>
+    allSegmentBestWorstDayByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

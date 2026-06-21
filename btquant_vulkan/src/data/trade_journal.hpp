@@ -2720,6 +2720,24 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment longest win streak bulk (Sprint #247).
+    // Returns LongestWinStreak for every segment. Sorted
+    // DESC by longestStreak.
+    std::vector<LongestWinStreak>
+    allSegmentLongestWinStreak() const;
+    std::vector<LongestWinStreak>
+    allSegmentLongestWinStreakByTag(
+        bool includeUntagged = true) const;
+
+    // All-segment longest loss streak bulk (Sprint #247).
+    // Returns LongestLossStreak for every segment. Sorted
+    // DESC by longestStreak.
+    std::vector<LongestLossStreak>
+    allSegmentLongestLossStreak() const;
+    std::vector<LongestLossStreak>
+    allSegmentLongestLossStreakByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

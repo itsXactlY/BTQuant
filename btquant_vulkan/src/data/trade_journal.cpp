@@ -10878,4 +10878,92 @@ TradeJournal::longestLossStreakByTag(
     return s;
 }
 
+std::vector<TradeJournal::LongestWinStreak>
+TradeJournal::allSegmentLongestWinStreak() const {
+    // Sprint #247. Bulk per-symbol longest win streak
+    // sorted DESC by longestStreak.
+    std::vector<LongestWinStreak> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(longestWinStreakBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LongestWinStreak& a,
+           const LongestWinStreak& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::LongestWinStreak>
+TradeJournal::allSegmentLongestWinStreakByTag(
+    bool includeUntagged) const {
+    std::vector<LongestWinStreak> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(longestWinStreakByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LongestWinStreak& a,
+           const LongestWinStreak& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::LongestLossStreak>
+TradeJournal::allSegmentLongestLossStreak() const {
+    std::vector<LongestLossStreak> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(longestLossStreakBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LongestLossStreak& a,
+           const LongestLossStreak& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::LongestLossStreak>
+TradeJournal::allSegmentLongestLossStreakByTag(
+    bool includeUntagged) const {
+    std::vector<LongestLossStreak> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(longestLossStreakByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const LongestLossStreak& a,
+           const LongestLossStreak& b) {
+            return a.longestStreak > b.longestStreak;
+        });
+    return out;
+}
+
 } // namespace btquant

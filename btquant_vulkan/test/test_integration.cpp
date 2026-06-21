@@ -24409,5 +24409,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 226: monthlyPnLSeriesBySymbol/ByTag (Sprint #240).
+    //
+    // Per-segment monthly P&L series. Tests:
+    //   - BTC 2 fills in same month → 1 entry with
+    //     total realized.
+    std::cout << "\nTest 226: monthly P&L series..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test226_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills in same month ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "m.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + day));
+            auto btcM = j.monthlyPnLSeriesBySymbol("BTC");
+            if (btcM.size() == 1 &&
+                std::fabs(btcM[0].realized - 25.0) < 1e-9 &&
+                btcM[0].tradeCount == 2) {
+                std::cout << "✓ BTC: 1 month, "
+                          << "P&L=25, n=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << btcM.size()
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " monthly-pnl tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

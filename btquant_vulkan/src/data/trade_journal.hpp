@@ -2627,6 +2627,20 @@ public:
     allSegmentDoWTradeCountByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment monthly P&L series (Sprint #240). For
+    // each segment: monthly realized P&L vector.
+    // Useful for "show me BTC monthly P&L" panel.
+    struct MonthlyPnLEntry {
+        std::string month;  // YYYY-MM
+        double      realized = 0.0;
+        size_t      tradeCount = 0;
+    };
+    std::vector<MonthlyPnLEntry>
+    monthlyPnLSeriesBySymbol(const std::string& symbol) const;
+    std::vector<MonthlyPnLEntry>
+    monthlyPnLSeriesByTag(const std::string& tag,
+                          bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

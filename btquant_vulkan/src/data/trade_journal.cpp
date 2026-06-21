@@ -10525,4 +10525,57 @@ TradeJournal::allSegmentDoWTradeCountByTag(
     return out;
 }
 
+namespace {
+// Sprint #240 — per-segment monthly P&L series builder.
+template <typename Pred>
+std::vector<TradeJournal::MonthlyPnLEntry>
+buildMonthlyPnLSeriesBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    std::map<std::string, double> pnl;
+    std::map<std::string, size_t> cnt;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m", &tm);
+        pnl[buf] += f.realizedDelta;
+        cnt[buf]++;
+    }
+    std::vector<TradeJournal::MonthlyPnLEntry> out;
+    out.reserve(pnl.size());
+    for (auto& kv : pnl) {
+        TradeJournal::MonthlyPnLEntry e;
+        e.month = kv.first;
+        e.realized = kv.second;
+        e.tradeCount = cnt[kv.first];
+        out.push_back(e);
+    }
+    return out;
+}
+}  // namespace
+
+std::vector<TradeJournal::MonthlyPnLEntry>
+TradeJournal::monthlyPnLSeriesBySymbol(
+    const std::string& symbol) const {
+    return buildMonthlyPnLSeriesBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+}
+
+std::vector<TradeJournal::MonthlyPnLEntry>
+TradeJournal::monthlyPnLSeriesByTag(
+    const std::string& tag, bool includeUntagged) const {
+    return buildMonthlyPnLSeriesBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+}
+
 } // namespace btquant

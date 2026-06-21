@@ -10117,4 +10117,47 @@ TradeJournal::timeBetweenFillsByTag(
     return t;
 }
 
+std::vector<TradeJournal::TimeBetweenFills>
+TradeJournal::allSegmentTimeBetweenFills() const {
+    // Sprint #232. Bulk per-symbol time between fills
+    // sorted ASC by meanSec (most frequent first).
+    std::vector<TimeBetweenFills> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(timeBetweenFillsBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TimeBetweenFills& a, const TimeBetweenFills& b) {
+            return a.meanSec < b.meanSec;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::TimeBetweenFills>
+TradeJournal::allSegmentTimeBetweenFillsByTag(
+    bool includeUntagged) const {
+    std::vector<TimeBetweenFills> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(timeBetweenFillsByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const TimeBetweenFills& a, const TimeBetweenFills& b) {
+            return a.meanSec < b.meanSec;
+        });
+    return out;
+}
+
 } // namespace btquant

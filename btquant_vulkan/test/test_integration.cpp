@@ -23878,5 +23878,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 218: allSegmentTimeBetweenFills (Sprint #232).
+    //
+    // Bulk time between fills. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 218: all-seg time between fills..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test218_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            j.append(mkFill("BTC", 50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + hour));
+            j.append(mkFill("ETH", 10.0, t0));
+            j.append(mkFill("ETH", 20.0, t0 + 6 * hour));
+            auto v = j.allSegmentTimeBetweenFills();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms ASC: most="
+                          << v[0].segment
+                          << " meanSec="
+                          << v[0].meanSec
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-tbf tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

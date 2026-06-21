@@ -2471,6 +2471,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment DD depth percentiles bulk (Sprint #228).
+    // Returns DDDepthPercentiles for every segment, sorted
+    // DESC by p90 (most extreme DD first).
+    std::vector<DDDepthPercentiles>
+    allSegmentDDDepthPct() const;
+    std::vector<DDDepthPercentiles>
+    allSegmentDDDepthPctByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

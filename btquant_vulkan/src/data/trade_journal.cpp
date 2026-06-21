@@ -11015,4 +11015,49 @@ TradeJournal::monthlyFillCountByTag(
     return m;
 }
 
+std::vector<TradeJournal::MonthlyFillCount>
+TradeJournal::allSegmentMonthlyFillCount() const {
+    // Sprint #249. Bulk per-symbol monthly fill count
+    // sorted DESC by totalFills.
+    std::vector<MonthlyFillCount> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(monthlyFillCountBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const MonthlyFillCount& a,
+           const MonthlyFillCount& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::MonthlyFillCount>
+TradeJournal::allSegmentMonthlyFillCountByTag(
+    bool includeUntagged) const {
+    std::vector<MonthlyFillCount> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(monthlyFillCountByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const MonthlyFillCount& a,
+           const MonthlyFillCount& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
 } // namespace btquant

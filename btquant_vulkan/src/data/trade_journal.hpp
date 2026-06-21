@@ -2753,6 +2753,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment monthly fill count bulk (Sprint #249).
+    // Returns MonthlyFillCount for every segment. Sorted
+    // DESC by totalFills.
+    std::vector<MonthlyFillCount>
+    allSegmentMonthlyFillCount() const;
+    std::vector<MonthlyFillCount>
+    allSegmentMonthlyFillCountByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -11412,4 +11412,49 @@ TradeJournal::monthlyPnLArrayByTag(
     return m;
 }
 
+std::vector<TradeJournal::MonthlyPnLArray>
+TradeJournal::allSegmentMonthlyPnLArray() const {
+    // Sprint #257. Bulk per-symbol monthly P&L array
+    // sorted DESC by totalFills.
+    std::vector<MonthlyPnLArray> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(monthlyPnLArrayBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const MonthlyPnLArray& a,
+           const MonthlyPnLArray& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::MonthlyPnLArray>
+TradeJournal::allSegmentMonthlyPnLArrayByTag(
+    bool includeUntagged) const {
+    std::vector<MonthlyPnLArray> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(monthlyPnLArrayByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const MonthlyPnLArray& a,
+           const MonthlyPnLArray& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
 } // namespace btquant

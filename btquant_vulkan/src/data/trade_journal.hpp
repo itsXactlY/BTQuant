@@ -2851,6 +2851,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment monthly P&L array bulk (Sprint #257).
+    // Returns MonthlyPnLArray for every segment. Sorted
+    // DESC by totalFills.
+    std::vector<MonthlyPnLArray>
+    allSegmentMonthlyPnLArray() const;
+    std::vector<MonthlyPnLArray>
+    allSegmentMonthlyPnLArrayByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

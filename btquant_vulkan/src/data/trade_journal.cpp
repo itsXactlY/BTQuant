@@ -11457,4 +11457,62 @@ TradeJournal::allSegmentMonthlyPnLArrayByTag(
     return out;
 }
 
+namespace {
+// Sprint #258 — per-segment monthly win rate builder.
+template <typename Pred>
+TradeJournal::MonthlyWinRate
+buildMonthlyWinRateBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::MonthlyWinRate w;
+    size_t wins[12] = {0};
+    size_t tot[12]  = {0};
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int mo = tm.tm_mon;
+        if (mo < 0 || mo >= 12) continue;
+        tot[mo]++;
+        if (f.realizedDelta > 0) wins[mo]++;
+        w.totalFills++;
+    }
+    for (int mo = 0; mo < 12; ++mo) {
+        w.fillsByMonth[mo] = tot[mo];
+        if (tot[mo] > 0) {
+            w.winRateByMonth[mo] =
+                static_cast<double>(wins[mo]) /
+                static_cast<double>(tot[mo]);
+        }
+    }
+    return w;
+}
+}  // namespace
+
+TradeJournal::MonthlyWinRate
+TradeJournal::monthlyWinRateBySymbol(
+    const std::string& symbol) const {
+    auto w = buildMonthlyWinRateBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    w.segment = symbol;
+    return w;
+}
+
+TradeJournal::MonthlyWinRate
+TradeJournal::monthlyWinRateByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto w = buildMonthlyWinRateBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    w.segment = tag;
+    return w;
+}
+
 } // namespace btquant

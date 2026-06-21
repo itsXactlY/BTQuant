@@ -2860,6 +2860,21 @@ public:
     allSegmentMonthlyPnLArrayByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment monthly win rate (Sprint #258). For
+    // each segment: 12-element array with win rate per
+    // month-of-year. Useful for seasonal WR analysis.
+    struct MonthlyWinRate {
+        std::string segment;
+        std::array<double, 12> winRateByMonth{};
+        std::array<size_t, 12> fillsByMonth{};
+        size_t      totalFills = 0;
+    };
+    MonthlyWinRate monthlyWinRateBySymbol(
+        const std::string& symbol) const;
+    MonthlyWinRate monthlyWinRateByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

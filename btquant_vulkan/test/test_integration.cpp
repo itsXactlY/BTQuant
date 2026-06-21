@@ -25539,5 +25539,65 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 244: monthlyWinRateBySymbol/ByTag (Sprint #258).
+    //
+    // Per-segment monthly win rate. Tests:
+    //   - BTC 2W+50, 1L-25 in January → winRateByMonth[0]=0.667.
+    std::cout << "\nTest 244: monthly win rate..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test244_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2W, 1L in January ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "m.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC",  30.0, t0 + day));
+            j.append(mkFill("BTC", -25.0, t0 + 2 * day));
+            auto btcM = j.monthlyWinRateBySymbol("BTC");
+            if (btcM.totalFills == 3 &&
+                btcM.fillsByMonth[0] == 3 &&
+                std::fabs(btcM.winRateByMonth[0] -
+                          (2.0 / 3.0)) < 1e-9) {
+                std::cout << "✓ BTC: Jan WR=0.667"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: WR="
+                          << btcM.winRateByMonth[0]
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " month-wr tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

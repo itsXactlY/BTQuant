@@ -11060,4 +11060,65 @@ TradeJournal::allSegmentMonthlyFillCountByTag(
     return out;
 }
 
+namespace {
+// Sprint #250 — per-segment avg daily P&L by month builder.
+template <typename Pred>
+TradeJournal::AvgDailyPnLByMonth
+buildAvgDailyPnLByMonthBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::AvgDailyPnLByMonth m;
+    std::map<std::string, double> sumByMonth[12];
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int mo = tm.tm_mon;
+        if (mo < 0 || mo >= 12) continue;
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        sumByMonth[mo][buf] += f.realizedDelta;
+    }
+    size_t totalDays = 0;
+    for (int mo = 0; mo < 12; ++mo) {
+        if (sumByMonth[mo].empty()) continue;
+        double total = 0.0;
+        for (auto& kv : sumByMonth[mo]) total += kv.second;
+        m.avgByMonth[mo] = total /
+                           static_cast<double>(
+                               sumByMonth[mo].size());
+        m.daysByMonth[mo] = sumByMonth[mo].size();
+        totalDays += sumByMonth[mo].size();
+    }
+    m.totalDays = totalDays;
+    return m;
+}
+}  // namespace
+
+TradeJournal::AvgDailyPnLByMonth
+TradeJournal::avgDailyPnLByMonthBySymbol(
+    const std::string& symbol) const {
+    auto m = buildAvgDailyPnLByMonthBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    m.segment = symbol;
+    return m;
+}
+
+TradeJournal::AvgDailyPnLByMonth
+TradeJournal::avgDailyPnLByMonthByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto m = buildAvgDailyPnLByMonthBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    m.segment = tag;
+    return m;
+}
+
 } // namespace btquant

@@ -2762,6 +2762,22 @@ public:
     allSegmentMonthlyFillCountByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment avg daily P&L by month (Sprint #250).
+    // For each segment: 12-element array (Jan..Dec) with
+    // mean daily P&L for that month. Useful for "show
+    // me seasonal avg P&L" panel.
+    struct AvgDailyPnLByMonth {
+        std::string segment;
+        std::array<double, 12> avgByMonth{};
+        std::array<size_t, 12> daysByMonth{};
+        size_t      totalDays = 0;
+    };
+    AvgDailyPnLByMonth avgDailyPnLByMonthBySymbol(
+        const std::string& symbol) const;
+    AvgDailyPnLByMonth avgDailyPnLByMonthByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

@@ -25290,5 +25290,76 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 240: weekdayHourPnLMatrixBySymbol (Sprint #254).
+    //
+    // Per-segment weekday×hour heatmap matrix. Tests:
+    //   - BTC 1 fill at hour 12 → some cell has P&L=50.
+    std::cout << "\nTest 240: weekday×hour matrix..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test240_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 1 fill ----
+        {
+            // 2024-01-15 12:00 UTC = 1705320000 (Monday)
+            const uint64_t t0 = 1705320000ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 50.0, t0));
+            auto btcH = j.weekdayHourPnLMatrixBySymbol("BTC");
+            if (btcH.totalFills == 1) {
+                // Find the cell with 50.0
+                bool found = false;
+                for (int d = 0; d < 7 && !found; ++d) {
+                    for (int hr = 0; hr < 24 && !found; ++hr) {
+                        if (std::fabs(btcH.pnlByDowHour[d][hr] - 50.0) < 1e-9) {
+                            found = true;
+                        }
+                    }
+                }
+                if (found) {
+                    std::cout << "✓ BTC: cell with P&L=50"
+                              << " found in 7×24"
+                              << std::endl;
+                    ++pass;
+                } else {
+                    std::cout << "✗ wrong: no cell with P&L=50"
+                              << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ wrong: totalFills="
+                          << btcH.totalFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " wkh-matrix tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

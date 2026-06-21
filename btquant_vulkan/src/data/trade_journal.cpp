@@ -11262,4 +11262,52 @@ TradeJournal::allSegmentMonthlyWinLossByTag(
     return out;
 }
 
+namespace {
+// Sprint #254 — per-segment weekday×hour heatmap builder.
+template <typename Pred>
+TradeJournal::WeekdayHourPnLMatrix
+buildWeekdayHourPnLMatrixBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::WeekdayHourPnLMatrix w;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int dow = tm.tm_wday;
+        int hr  = tm.tm_hour;
+        if (dow < 0 || dow >= 7 || hr < 0 || hr >= 24) continue;
+        w.pnlByDowHour[dow][hr] += f.realizedDelta;
+        w.totalFills++;
+    }
+    return w;
+}
+}  // namespace
+
+TradeJournal::WeekdayHourPnLMatrix
+TradeJournal::weekdayHourPnLMatrixBySymbol(
+    const std::string& symbol) const {
+    auto w = buildWeekdayHourPnLMatrixBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    w.segment = symbol;
+    return w;
+}
+
+TradeJournal::WeekdayHourPnLMatrix
+TradeJournal::weekdayHourPnLMatrixByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto w = buildWeekdayHourPnLMatrixBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    w.segment = tag;
+    return w;
+}
+
 } // namespace btquant

@@ -2811,6 +2811,21 @@ public:
     allSegmentMonthlyWinLossByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment weekday×hour heatmap matrix (Sprint #254).
+    // For each segment: 7×24 matrix with total P&L per
+    // (weekday, hour) cell. Useful for "show me BTC
+    // weekly seasonal heatmap" panel.
+    struct WeekdayHourPnLMatrix {
+        std::string segment;
+        std::array<std::array<double, 24>, 7> pnlByDowHour{};
+        size_t      totalFills = 0;
+    };
+    WeekdayHourPnLMatrix weekdayHourPnLMatrixBySymbol(
+        const std::string& symbol) const;
+    WeekdayHourPnLMatrix weekdayHourPnLMatrixByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

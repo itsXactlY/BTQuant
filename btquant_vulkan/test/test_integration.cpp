@@ -23551,5 +23551,70 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 213: ddDepthPctBySymbol/ByTag (Sprint #227).
+    //
+    // Per-segment DD depth percentiles. Tests:
+    //   - BTC 3 DDs of varying depth → p50, p90.
+    std::cout << "\nTest 213: DD depth percentiles..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test213_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC multiple DDs ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "d.jsonl").string());
+            // DD 1: +100 → -50 → +60
+            j.append(mkFill("BTC", 100.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + day));
+            j.append(mkFill("BTC",  60.0, t0 + 3 * day));
+            // DD 2: +50 → -80 → +40
+            j.append(mkFill("BTC",  50.0, t0 + 10 * day));
+            j.append(mkFill("BTC", -80.0, t0 + 11 * day));
+            j.append(mkFill("BTC",  40.0, t0 + 13 * day));
+            auto btcP = j.ddDepthPctBySymbol("BTC");
+            if (btcP.sampleCount >= 1 &&
+                btcP.p50 > 0 && btcP.p90 > 0) {
+                std::cout << "✓ BTC: p50=" << btcP.p50
+                          << " p90=" << btcP.p90
+                          << " samples=" << btcP.sampleCount
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: samples="
+                          << btcP.sampleCount
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " dd-depth-pct tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

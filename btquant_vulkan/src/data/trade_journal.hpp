@@ -2455,6 +2455,22 @@ public:
     allSegmentFillsPerDayByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment DD depth percentiles (Sprint #227).
+    // For each segment: p10/p25/p50/p75/p90 of DD depth
+    // across all completed drawdowns.
+    struct DDDepthPercentiles {
+        std::string segment;
+        double      p10 = 0.0, p25 = 0.0;
+        double      p50 = 0.0, p75 = 0.0;
+        double      p90 = 0.0;
+        size_t      sampleCount = 0;
+    };
+    DDDepthPercentiles ddDepthPctBySymbol(
+        const std::string& symbol) const;
+    DDDepthPercentiles ddDepthPctByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

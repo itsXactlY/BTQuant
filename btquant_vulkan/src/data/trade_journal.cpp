@@ -9850,4 +9850,52 @@ TradeJournal::allSegmentFillsPerDayByTag(
     return out;
 }
 
+namespace {
+// Sprint #227 — per-segment DD depth percentile builder.
+template <typename Iter>
+TradeJournal::DDDepthPercentiles
+buildDDDepthPctBySegment(const std::string& segment,
+                          Iter begin, Iter end) {
+    TradeJournal::DDDepthPercentiles d;
+    d.segment = segment;
+    std::vector<double> depths;
+    for (auto it = begin; it != end; ++it) {
+        if (it->trough_depth > 0) {
+            depths.push_back(it->trough_depth);
+        }
+    }
+    if (depths.empty()) return d;
+    std::sort(depths.begin(), depths.end());
+    d.sampleCount = depths.size();
+    auto pct = [&depths](double p) {
+        size_t idx = static_cast<size_t>(
+            p * static_cast<double>(depths.size()));
+        if (idx >= depths.size()) idx = depths.size() - 1;
+        return depths[idx];
+    };
+    d.p10 = pct(0.10);
+    d.p25 = pct(0.25);
+    d.p50 = pct(0.50);
+    d.p75 = pct(0.75);
+    d.p90 = pct(0.90);
+    return d;
+}
+}  // namespace
+
+TradeJournal::DDDepthPercentiles
+TradeJournal::ddDepthPctBySymbol(
+    const std::string& symbol) const {
+    auto events = drawdownRecoveriesBySymbol(symbol);
+    return buildDDDepthPctBySegment(symbol,
+        events.begin(), events.end());
+}
+
+TradeJournal::DDDepthPercentiles
+TradeJournal::ddDepthPctByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto events = drawdownRecoveriesByTag(tag, includeUntagged);
+    return buildDDDepthPctBySegment(tag,
+        events.begin(), events.end());
+}
+
 } // namespace btquant

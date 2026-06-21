@@ -2480,6 +2480,25 @@ public:
     allSegmentDDDepthPctByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment composite edge score (Sprint #229).
+    // Combines winRate, expectancy, Kelly into one
+    // 0..1 score. Higher = stronger edge.
+    //   edge = (winRate * payoff * expectancy * kelly)^0.25
+    struct EdgeScore {
+        std::string segment;
+        double      winRate    = 0.0;
+        double      payoff     = 0.0;
+        double      expectancy = 0.0;
+        double      kelly      = 0.0;
+        double      edgeScore  = 0.0;
+        size_t      totalTrades = 0;
+    };
+    EdgeScore edgeScoreBySymbol(
+        const std::string& symbol) const;
+    EdgeScore edgeScoreByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

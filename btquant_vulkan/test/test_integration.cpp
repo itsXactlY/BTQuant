@@ -23677,5 +23677,76 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 215: edgeScoreBySymbol/ByTag (Sprint #229).
+    //
+    // Per-segment edge score. Tests:
+    //   - BTC 6W+50 4L-25 → W=0.6, R=2, E=20, K=0.4,
+    //     edgeScore in [0,1].
+    std::cout << "\nTest 215: edge score..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test215_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 6W+50 4L-25 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "e.jsonl").string());
+            for (int i = 0; i < 6; ++i) {
+                j.append(mkFill("BTC", 50.0,
+                                t0 + i * hour));
+            }
+            for (int i = 6; i < 10; ++i) {
+                j.append(mkFill("BTC", -25.0,
+                                t0 + i * hour));
+            }
+            auto btcE = j.edgeScoreBySymbol("BTC");
+            if (btcE.totalTrades == 10 &&
+                btcE.edgeScore >= 0.0 &&
+                btcE.edgeScore <= 1.0 &&
+                std::fabs(btcE.payoff - 2.0) < 1e-9 &&
+                std::fabs(btcE.kelly - 0.4) < 1e-9) {
+                std::cout << "✓ BTC: edge="
+                          << btcE.edgeScore
+                          << " K=0.4 R=2"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: edge="
+                          << btcE.edgeScore
+                          << " K=" << btcE.kelly
+                          << " R=" << btcE.payoff
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " edge-score tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

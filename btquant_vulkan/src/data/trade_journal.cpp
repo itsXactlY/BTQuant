@@ -9943,4 +9943,78 @@ TradeJournal::allSegmentDDDepthPctByTag(
     return out;
 }
 
+namespace {
+// Sprint #229 — per-segment edge score builder.
+template <typename Pred>
+TradeJournal::EdgeScore
+buildEdgeScoreBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::EdgeScore e;
+    double grossWin = 0.0, grossLoss = 0.0;
+    size_t wins = 0, losses = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            grossWin += f.realizedDelta;
+            wins++;
+        } else if (f.realizedDelta < 0) {
+            grossLoss += f.realizedDelta;
+            losses++;
+        }
+    }
+    size_t total = wins + losses;
+    if (total == 0) return e;
+    e.totalTrades = total;
+    double W = static_cast<double>(wins) /
+               static_cast<double>(total);
+    double avgW = wins > 0
+                  ? grossWin / static_cast<double>(wins) : 0.0;
+    double avgL = losses > 0
+                  ? std::fabs(grossLoss / static_cast<double>(losses)) : 0.0;
+    if (avgL < 1e-9) return e;
+    double R = avgW / avgL;
+    double E = W * avgW - (1.0 - W) * avgL;
+    double K = W - (1.0 - W) / R;
+    if (K < 0) K = 0;
+    // edge = (W*R*E*K)^0.25 — geometric mean, normalize to 0..1.
+    double prod = std::max(W, 0.0) *
+                  std::max(R, 0.0) *
+                  std::max(E, 0.0) *
+                  std::max(K, 0.0);
+    double edge = std::pow(prod, 0.25);
+    // Compress to 0..1 via exp-style.
+    edge = edge / (edge + 1.0);
+    e.winRate = W;
+    e.payoff = R;
+    e.expectancy = E;
+    e.kelly = K;
+    e.edgeScore = edge;
+    return e;
+}
+}  // namespace
+
+TradeJournal::EdgeScore
+TradeJournal::edgeScoreBySymbol(
+    const std::string& symbol) const {
+    auto e = buildEdgeScoreBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    e.segment = symbol;
+    return e;
+}
+
+TradeJournal::EdgeScore
+TradeJournal::edgeScoreByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto e = buildEdgeScoreBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    e.segment = tag;
+    return e;
+}
+
 } // namespace btquant

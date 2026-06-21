@@ -24058,5 +24058,83 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 221: hourlyWinRateBySymbol/ByTag (Sprint #235).
+    //
+    // Per-segment hourly win rate. Tests:
+    //   - BTC trades at hour 12 with 2W → winRateByHour[12]=1.0.
+    std::cout << "\nTest 221: hourly win rate..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test221_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2W at hour 12 ----
+        {
+            // 2024-01-01 12:00:00 UTC = 1704110400
+            const uint64_t t0 = 1704110400ULL * 1000000ULL;
+            const uint64_t min = 60ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC",  30.0, t0 + min));
+            auto btcH = j.hourlyWinRateBySymbol("BTC");
+            if (btcH.totalFills == 2) {
+                // Find the hour with the 2 fills and check WR=1.0
+                for (int hr = 0; hr < 24; ++hr) {
+                    if (btcH.tradeCountByHour[hr] == 2) {
+                        if (std::fabs(btcH.winRateByHour[hr] - 1.0) < 1e-9) {
+                            std::cout << "✓ BTC: 2W at hour "
+                                      << hr << ", WR=1.0"
+                                      << std::endl;
+                            ++pass;
+                        } else {
+                            std::cout << "✗ wrong: hr="
+                                      << hr << " WR="
+                                      << btcH.winRateByHour[hr]
+                                      << std::endl;
+                            ++fail;
+                        }
+                        break;
+                    }
+                }
+                if (pass == 0 && fail == 0) {
+                    // No hour had 2 trades — fail
+                    std::cout << "✗ wrong: no hour had 2 trades"
+                              << std::endl;
+                    ++fail;
+                }
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcH.totalFills
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " hourly-WR tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

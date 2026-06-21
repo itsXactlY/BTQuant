@@ -10271,4 +10271,63 @@ TradeJournal::allSegmentVolatilityRatioByTag(
     return out;
 }
 
+namespace {
+// Sprint #235 — per-segment hourly win rate builder.
+template <typename Pred>
+TradeJournal::HourlyWinRate
+buildHourlyWinRateBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::HourlyWinRate h;
+    size_t wins[24] = {0};
+    size_t total[24] = {0};
+    size_t nFills = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int hr = tm.tm_hour;
+        if (hr < 0 || hr >= 24) continue;
+        if (f.realizedDelta > 0) wins[hr]++;
+        total[hr]++;
+        nFills++;
+    }
+    h.totalFills = nFills;
+    for (int hr = 0; hr < 24; ++hr) {
+        h.tradeCountByHour[hr] = total[hr];
+        if (total[hr] > 0) {
+            h.winRateByHour[hr] = static_cast<double>(wins[hr]) /
+                                  static_cast<double>(total[hr]);
+        }
+    }
+    return h;
+}
+}  // namespace
+
+TradeJournal::HourlyWinRate
+TradeJournal::hourlyWinRateBySymbol(
+    const std::string& symbol) const {
+    auto h = buildHourlyWinRateBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    h.segment = symbol;
+    return h;
+}
+
+TradeJournal::HourlyWinRate
+TradeJournal::hourlyWinRateByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto h = buildHourlyWinRateBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    h.segment = tag;
+    return h;
+}
+
 } // namespace btquant

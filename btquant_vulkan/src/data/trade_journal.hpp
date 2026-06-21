@@ -1,6 +1,9 @@
 #ifndef BTQUANT_TRADE_JOURNAL_HPP
-#define BTQUANT_TRADE_JOURNAL_HPP
+#pragma once
 
+#include <array>
+#include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -2558,6 +2561,22 @@ public:
     std::vector<VolatilityRatio>
     allSegmentVolatilityRatioByTag(
         bool includeUntagged = true) const;
+
+    // Per-segment hourly win rate (Sprint #235). For
+    // each segment: 24-element array with win rate per
+    // hour-of-day (0..23). Useful for "what hour should
+    // I trade BTC?" heatmap.
+    struct HourlyWinRate {
+        std::string segment;
+        std::array<double, 24> winRateByHour{};
+        std::array<size_t, 24> tradeCountByHour{};
+        size_t      totalFills = 0;
+    };
+    HourlyWinRate hourlyWinRateBySymbol(
+        const std::string& symbol) const;
+    HourlyWinRate hourlyWinRateByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
 
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols

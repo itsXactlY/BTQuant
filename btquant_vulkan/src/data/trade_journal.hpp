@@ -2499,6 +2499,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment edge score bulk (Sprint #230).
+    // Returns EdgeScore for every segment, sorted
+    // DESC by edgeScore (strongest edge first).
+    std::vector<EdgeScore>
+    allSegmentEdgeScore() const;
+    std::vector<EdgeScore>
+    allSegmentEdgeScoreByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

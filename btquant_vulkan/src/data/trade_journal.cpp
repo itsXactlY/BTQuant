@@ -10017,4 +10017,47 @@ TradeJournal::edgeScoreByTag(
     return e;
 }
 
+std::vector<TradeJournal::EdgeScore>
+TradeJournal::allSegmentEdgeScore() const {
+    // Sprint #230. Bulk per-symbol edge score
+    // sorted DESC by edgeScore.
+    std::vector<EdgeScore> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(edgeScoreBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const EdgeScore& a, const EdgeScore& b) {
+            return a.edgeScore > b.edgeScore;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::EdgeScore>
+TradeJournal::allSegmentEdgeScoreByTag(
+    bool includeUntagged) const {
+    std::vector<EdgeScore> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(edgeScoreByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const EdgeScore& a, const EdgeScore& b) {
+            return a.edgeScore > b.edgeScore;
+        });
+    return out;
+}
+
 } // namespace btquant

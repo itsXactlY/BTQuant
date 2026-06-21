@@ -2738,6 +2738,21 @@ public:
     allSegmentLongestLossStreakByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment monthly fill count (Sprint #248).
+    // For each segment: 12-element array (Jan..Dec) with
+    // total fills per month. Useful for "show me BTC
+    // trading activity by month" panel.
+    struct MonthlyFillCount {
+        std::string segment;
+        std::array<size_t, 12> fillsByMonth{};
+        size_t      totalFills = 0;
+    };
+    MonthlyFillCount monthlyFillCountBySymbol(
+        const std::string& symbol) const;
+    MonthlyFillCount monthlyFillCountByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

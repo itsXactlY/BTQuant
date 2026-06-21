@@ -10966,4 +10966,53 @@ TradeJournal::allSegmentLongestLossStreakByTag(
     return out;
 }
 
+namespace {
+// Sprint #248 — per-segment monthly fill count builder.
+template <typename Pred>
+TradeJournal::MonthlyFillCount
+buildMonthlyFillCountBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::MonthlyFillCount m;
+    size_t nFills = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int mo = tm.tm_mon;  // 0..11
+        if (mo < 0 || mo >= 12) continue;
+        m.fillsByMonth[mo]++;
+        nFills++;
+    }
+    m.totalFills = nFills;
+    return m;
+}
+}  // namespace
+
+TradeJournal::MonthlyFillCount
+TradeJournal::monthlyFillCountBySymbol(
+    const std::string& symbol) const {
+    auto m = buildMonthlyFillCountBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    m.segment = symbol;
+    return m;
+}
+
+TradeJournal::MonthlyFillCount
+TradeJournal::monthlyFillCountByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto m = buildMonthlyFillCountBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    m.segment = tag;
+    return m;
+}
+
 } // namespace btquant

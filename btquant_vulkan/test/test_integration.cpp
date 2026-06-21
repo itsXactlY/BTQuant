@@ -24929,5 +24929,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 234: monthlyFillCountBySymbol/ByTag (Sprint #248).
+    //
+    // Per-segment monthly fill count. Tests:
+    //   - BTC 2 fills in January (month=0).
+    std::cout << "\nTest 234: monthly fill count..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test234_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 fills in January ----
+        {
+            // 2024-01-15 = month 0 (January)
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "m.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + day));
+            auto btcM = j.monthlyFillCountBySymbol("BTC");
+            if (btcM.totalFills == 2 &&
+                btcM.fillsByMonth[0] == 2) {
+                std::cout << "✓ BTC: 2 fills in January"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: total="
+                          << btcM.totalFills
+                          << " jan=" << btcM.fillsByMonth[0]
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " month-count tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

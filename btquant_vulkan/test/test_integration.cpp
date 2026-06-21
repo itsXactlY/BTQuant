@@ -23938,5 +23938,66 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 219: volatilityRatioBySymbol/ByTag (Sprint #233).
+    //
+    // Per-segment volatility ratio. Tests:
+    //   - BTC 2 days [+50, -50], avg trade size = 50,
+    //     daily stddev = 50, ratio = 1.0.
+    std::cout << "\nTest 219: volatility ratio..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test219_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 2 days [+50, -50] ----
+        {
+            const uint64_t t0 = 1705276800ULL * 1000000ULL;
+            const uint64_t day = 86400ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "v.jsonl").string());
+            j.append(mkFill("BTC",  50.0, t0));
+            j.append(mkFill("BTC", -50.0, t0 + day));
+            auto btcV = j.volatilityRatioBySymbol("BTC");
+            if (btcV.totalFills == 2 &&
+                std::fabs(btcV.avgTradeSize - 50.0) < 1e-9 &&
+                std::fabs(btcV.dailyStddev - 50.0) < 1e-9 &&
+                std::fabs(btcV.ratio - 1.0) < 1e-9) {
+                std::cout << "✓ BTC: avgSize=50, "
+                          << "stddev=50, ratio=1.0"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: ratio="
+                          << btcV.ratio
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " vol-ratio tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

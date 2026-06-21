@@ -10160,4 +10160,72 @@ TradeJournal::allSegmentTimeBetweenFillsByTag(
     return out;
 }
 
+namespace {
+// Sprint #233 — per-segment volatility ratio builder.
+template <typename Pred>
+TradeJournal::VolatilityRatio
+buildVolatilityRatioBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::VolatilityRatio v;
+    std::map<std::string, double> dailyPnL;
+    double totalSize = 0.0;
+    size_t nFills = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        double sz = std::fabs(f.realizedDelta);
+        totalSize += sz;
+        ++nFills;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[16];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+        dailyPnL[buf] += f.realizedDelta;
+    }
+    if (nFills == 0 || dailyPnL.empty()) return v;
+    v.totalFills = nFills;
+    v.avgTradeSize = totalSize / static_cast<double>(nFills);
+    // daily stddev
+    double sum = 0.0;
+    for (auto& kv : dailyPnL) sum += kv.second;
+    double mean = sum / static_cast<double>(dailyPnL.size());
+    double var = 0.0;
+    for (auto& kv : dailyPnL) {
+        var += (kv.second - mean) * (kv.second - mean);
+    }
+    var /= static_cast<double>(dailyPnL.size());
+    v.dailyStddev = std::sqrt(var);
+    if (v.avgTradeSize > 1e-9) {
+        v.ratio = v.dailyStddev / v.avgTradeSize;
+    }
+    return v;
+}
+}  // namespace
+
+TradeJournal::VolatilityRatio
+TradeJournal::volatilityRatioBySymbol(
+    const std::string& symbol) const {
+    auto v = buildVolatilityRatioBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    v.segment = symbol;
+    return v;
+}
+
+TradeJournal::VolatilityRatio
+TradeJournal::volatilityRatioByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto v = buildVolatilityRatioBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    v.segment = tag;
+    return v;
+}
+
 } // namespace btquant

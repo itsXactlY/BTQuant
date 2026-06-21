@@ -2534,6 +2534,22 @@ public:
     allSegmentTimeBetweenFillsByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment volatility ratio (Sprint #233). For
+    // each segment: daily stddev / avg |realizedDelta|.
+    // Higher = daily returns more volatile per trade.
+    struct VolatilityRatio {
+        std::string segment;
+        double      dailyStddev  = 0.0;
+        double      avgTradeSize = 0.0;
+        double      ratio        = 0.0;  // dailyStddev / avgTradeSize
+        size_t      totalFills   = 0;
+    };
+    VolatilityRatio volatilityRatioBySymbol(
+        const std::string& symbol) const;
+    VolatilityRatio volatilityRatioByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

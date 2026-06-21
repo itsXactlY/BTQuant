@@ -24731,5 +24731,74 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 231: longestWinStreakBySymbol/ByTag (Sprint #245).
+    //
+    // Per-segment longest winning streak. Tests:
+    //   - BTC 4W,+,-,+ → streak=4.
+    std::cout << "\nTest 231: longest win streak..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test231_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 4W, -, +, 4W → longestStreak=4 ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "s.jsonl").string());
+            for (int i = 0; i < 4; ++i) {
+                j.append(mkFill("BTC",  10.0,
+                                t0 + i * hour));
+            }
+            j.append(mkFill("BTC", -10.0,
+                            t0 + 4 * hour));
+            j.append(mkFill("BTC",  10.0,
+                            t0 + 5 * hour));
+            for (int i = 6; i < 10; ++i) {
+                j.append(mkFill("BTC",  10.0,
+                                t0 + i * hour));
+            }
+            auto btcS = j.longestWinStreakBySymbol("BTC");
+            // 4W, -, +, 4W: longest=5 (lone + + 4W)
+            if (btcS.longestStreak == 5 &&
+                btcS.totalWins == 9) {
+                std::cout << "✓ BTC: streak=5, totalWins=9"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: streak="
+                          << btcS.longestStreak
+                          << " wins=" << btcS.totalWins
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " longest-streak tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

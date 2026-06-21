@@ -10782,4 +10782,52 @@ TradeJournal::allSegmentWinLossAvgByTag(
     return out;
 }
 
+namespace {
+// Sprint #245 — per-segment longest win streak builder.
+template <typename Pred>
+TradeJournal::LongestWinStreak
+buildLongestWinStreakBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::LongestWinStreak s;
+    size_t cur = 0, mx = 0, totalWins = 0;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (f.realizedDelta > 0) {
+            ++cur;
+            ++totalWins;
+            if (cur > mx) mx = cur;
+        } else {
+            cur = 0;
+        }
+    }
+    s.longestStreak = mx;
+    s.totalWins = totalWins;
+    return s;
+}
+}  // namespace
+
+TradeJournal::LongestWinStreak
+TradeJournal::longestWinStreakBySymbol(
+    const std::string& symbol) const {
+    auto s = buildLongestWinStreakBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    s.segment = symbol;
+    return s;
+}
+
+TradeJournal::LongestWinStreak
+TradeJournal::longestWinStreakByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto s = buildLongestWinStreakBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    s.segment = tag;
+    return s;
+}
+
 } // namespace btquant

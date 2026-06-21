@@ -2694,6 +2694,19 @@ public:
     allSegmentWinLossAvgByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment longest winning streak (Sprint #245).
+    // For each segment: max consecutive winning fills.
+    struct LongestWinStreak {
+        std::string segment;
+        size_t      longestStreak = 0;
+        size_t      totalWins     = 0;
+    };
+    LongestWinStreak longestWinStreakBySymbol(
+        const std::string& symbol) const;
+    LongestWinStreak longestWinStreakByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

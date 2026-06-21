@@ -11121,4 +11121,49 @@ TradeJournal::avgDailyPnLByMonthByTag(
     return m;
 }
 
+std::vector<TradeJournal::AvgDailyPnLByMonth>
+TradeJournal::allSegmentAvgDailyPnLByMonth() const {
+    // Sprint #251. Bulk per-symbol avg daily P&L by month
+    // sorted DESC by totalDays.
+    std::vector<AvgDailyPnLByMonth> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(avgDailyPnLByMonthBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const AvgDailyPnLByMonth& a,
+           const AvgDailyPnLByMonth& b) {
+            return a.totalDays > b.totalDays;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::AvgDailyPnLByMonth>
+TradeJournal::allSegmentAvgDailyPnLByMonthByTag(
+    bool includeUntagged) const {
+    std::vector<AvgDailyPnLByMonth> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(avgDailyPnLByMonthByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const AvgDailyPnLByMonth& a,
+           const AvgDailyPnLByMonth& b) {
+            return a.totalDays > b.totalDays;
+        });
+    return out;
+}
+
 } // namespace btquant

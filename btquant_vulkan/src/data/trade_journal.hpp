@@ -2778,6 +2778,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment avg daily P&L by month bulk (Sprint #251).
+    // Returns AvgDailyPnLByMonth for every segment. Sorted
+    // DESC by totalDays.
+    std::vector<AvgDailyPnLByMonth>
+    allSegmentAvgDailyPnLByMonth() const;
+    std::vector<AvgDailyPnLByMonth>
+    allSegmentAvgDailyPnLByMonthByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

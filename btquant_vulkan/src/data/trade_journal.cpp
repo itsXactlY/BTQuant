@@ -11166,4 +11166,55 @@ TradeJournal::allSegmentAvgDailyPnLByMonthByTag(
     return out;
 }
 
+namespace {
+// Sprint #252 — per-segment monthly win/loss count builder.
+template <typename Pred>
+TradeJournal::MonthlyWinLossCount
+buildMonthlyWinLossBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::MonthlyWinLossCount m;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        if (std::fabs(f.realizedDelta) <= 1e-9) continue;
+        std::time_t t = static_cast<std::time_t>(
+            f.timestamp_us / 1000000ULL);
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        int mo = tm.tm_mon;
+        if (mo < 0 || mo >= 12) continue;
+        if (f.realizedDelta > 0) {
+            m.winsByMonth[mo]++;
+        } else {
+            m.lossesByMonth[mo]++;
+        }
+        m.totalFills++;
+    }
+    return m;
+}
+}  // namespace
+
+TradeJournal::MonthlyWinLossCount
+TradeJournal::monthlyWinLossBySymbol(
+    const std::string& symbol) const {
+    auto m = buildMonthlyWinLossBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    m.segment = symbol;
+    return m;
+}
+
+TradeJournal::MonthlyWinLossCount
+TradeJournal::monthlyWinLossByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto m = buildMonthlyWinLossBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    m.segment = tag;
+    return m;
+}
+
 } // namespace btquant

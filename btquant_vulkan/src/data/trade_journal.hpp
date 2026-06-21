@@ -2787,6 +2787,21 @@ public:
     allSegmentAvgDailyPnLByMonthByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment avg win/loss trade count (Sprint #252).
+    // For each segment: per-month count of winning and
+    // losing fills. Useful for seasonal analysis.
+    struct MonthlyWinLossCount {
+        std::string segment;
+        std::array<size_t, 12> winsByMonth{};
+        std::array<size_t, 12> lossesByMonth{};
+        size_t      totalFills = 0;
+    };
+    MonthlyWinLossCount monthlyWinLossBySymbol(
+        const std::string& symbol) const;
+    MonthlyWinLossCount monthlyWinLossByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

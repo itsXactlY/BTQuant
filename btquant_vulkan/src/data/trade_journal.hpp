@@ -2508,6 +2508,23 @@ public:
     allSegmentEdgeScoreByTag(
         bool includeUntagged = true) const;
 
+    // Per-segment avg time between fills (Sprint #231).
+    // For each segment: mean/min/max seconds between
+    // consecutive fills. Answers "how often do I trade
+    // BTC on average?"
+    struct TimeBetweenFills {
+        std::string segment;
+        double      meanSec = 0.0;
+        double      minSec  = 0.0;
+        double      maxSec  = 0.0;
+        size_t      gapCount = 0;
+    };
+    TimeBetweenFills timeBetweenFillsBySymbol(
+        const std::string& symbol) const;
+    TimeBetweenFills timeBetweenFillsByTag(
+        const std::string& tag,
+        bool includeUntagged = false) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

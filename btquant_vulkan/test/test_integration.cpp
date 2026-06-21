@@ -23819,5 +23819,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 217: timeBetweenFillsBySymbol/ByTag (Sprint #231).
+    //
+    // Per-segment time between fills. Tests:
+    //   - BTC 3 fills, 1 hour apart → mean=3600s.
+    std::cout << "\nTest 217: time between fills..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test217_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- BTC 3 fills 1h apart ----
+        {
+            const uint64_t t0 = 1774000000000000ULL;
+            const uint64_t hour = 3600ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "t.jsonl").string());
+            j.append(mkFill("BTC", 50.0, t0));
+            j.append(mkFill("BTC", -25.0, t0 + hour));
+            j.append(mkFill("BTC", 30.0, t0 + 2 * hour));
+            auto btcT = j.timeBetweenFillsBySymbol("BTC");
+            if (btcT.gapCount == 2 &&
+                std::fabs(btcT.meanSec - 3600.0) < 1e-9) {
+                std::cout << "✓ BTC: 2 gaps, mean=3600s"
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: gaps="
+                          << btcT.gapCount
+                          << " mean=" << btcT.meanSec
+                          << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " time-between tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

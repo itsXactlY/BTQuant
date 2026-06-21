@@ -10060,4 +10060,61 @@ TradeJournal::allSegmentEdgeScoreByTag(
     return out;
 }
 
+namespace {
+// Sprint #231 — per-segment time-between-fills builder.
+template <typename Pred>
+TradeJournal::TimeBetweenFills
+buildTimeBetweenFillsBySegment(
+    const std::vector<JournalFill>& fills, Pred pred) {
+    TradeJournal::TimeBetweenFills t;
+    std::vector<uint64_t> stamps;
+    for (const auto& f : fills) {
+        if (!pred(f)) continue;
+        stamps.push_back(f.timestamp_us);
+    }
+    std::sort(stamps.begin(), stamps.end());
+    if (stamps.size() < 2) return t;
+    double sum = 0.0;
+    double mn = 1e18, mx = 0.0;
+    size_t count = 0;
+    for (size_t i = 1; i < stamps.size(); ++i) {
+        double gapSec = static_cast<double>(
+            stamps[i] - stamps[i - 1]) / 1000000.0;
+        sum += gapSec;
+        if (gapSec < mn) mn = gapSec;
+        if (gapSec > mx) mx = gapSec;
+        ++count;
+    }
+    t.gapCount = count;
+    t.meanSec = sum / static_cast<double>(count);
+    t.minSec = mn;
+    t.maxSec = mx;
+    return t;
+}
+}  // namespace
+
+TradeJournal::TimeBetweenFills
+TradeJournal::timeBetweenFillsBySymbol(
+    const std::string& symbol) const {
+    auto t = buildTimeBetweenFillsBySegment(loadAll(),
+        [&symbol](const JournalFill& f) {
+            return f.symbol == symbol;
+        });
+    t.segment = symbol;
+    return t;
+}
+
+TradeJournal::TimeBetweenFills
+TradeJournal::timeBetweenFillsByTag(
+    const std::string& tag, bool includeUntagged) const {
+    auto t = buildTimeBetweenFillsBySegment(loadAll(),
+        [&tag, includeUntagged](const JournalFill& f) {
+            if (tag == "__untagged__") return f.tag.empty();
+            if (includeUntagged && f.tag.empty()) return false;
+            return f.tag == tag;
+        });
+    t.segment = tag;
+    return t;
+}
+
 } // namespace btquant

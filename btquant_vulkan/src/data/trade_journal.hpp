@@ -2826,6 +2826,15 @@ public:
         const std::string& tag,
         bool includeUntagged = false) const;
 
+    // All-segment weekday×hour matrix bulk (Sprint #255).
+    // Returns WeekdayHourPnLMatrix for every segment.
+    // Sorted DESC by totalFills.
+    std::vector<WeekdayHourPnLMatrix>
+    allSegmentWeekdayHourPnLMatrix() const;
+    std::vector<WeekdayHourPnLMatrix>
+    allSegmentWeekdayHourPnLMatrixByTag(
+        bool includeUntagged = true) const;
+
     // Symbol leaderboard (Sprint #161). For each symbol,
     // compute a key performance metric and sort symbols
     // by it DESC. Single method that returns the

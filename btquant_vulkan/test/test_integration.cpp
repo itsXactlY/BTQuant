@@ -25361,5 +25361,64 @@ int main() {
                   << " (✗ = " << fail << ")" << std::endl;
     }
 
+    // Test 241: allSegmentWeekdayHourPnLMatrix (Sprint #255).
+    //
+    // Bulk weekday×hour matrix. Tests:
+    //   - 2 symbols → 2 entries.
+    std::cout << "\nTest 241: all-seg wkh matrix..."
+              << std::endl;
+    {
+        using btquant::TradeJournal;
+        using btquant::JournalFill;
+
+        int pass = 0;
+        int fail = 0;
+
+        namespace fs = std::filesystem;
+        fs::path tmpDir = fs::temp_directory_path() /
+                          ("btquant_test241_" +
+                           std::to_string(::getpid()));
+        fs::create_directories(tmpDir);
+
+        auto mkFill = [&](const std::string& sym,
+                          double realized,
+                          uint64_t ts) {
+            JournalFill f;
+            f.symbol = sym; f.isLong = false;
+            f.realizedDelta = realized; f.tag = "";
+            f.timestamp_us = ts;
+            return f;
+        };
+
+        // ---- 2 symbols ----
+        {
+            // 2024-01-15 = Monday = tm_wday=1, 12:00 UTC
+            const uint64_t t0 = 1705320000ULL * 1000000ULL;
+            TradeJournal j((tmpDir / "h.jsonl").string());
+            j.append(mkFill("BTC", 50.0, t0));
+            j.append(mkFill("BTC", 30.0, t0 + 3600ULL * 1000000ULL));
+            j.append(mkFill("ETH", 10.0, t0));
+            auto v = j.allSegmentWeekdayHourPnLMatrix();
+            if (v.size() == 2) {
+                std::cout << "✓ 2 syms DESC: top="
+                          << v[0].segment
+                          << " totalFills="
+                          << v[0].totalFills
+                          << std::endl;
+                ++pass;
+            } else {
+                std::cout << "✗ wrong: size="
+                          << v.size() << std::endl;
+                ++fail;
+            }
+        }
+
+        fs::remove_all(tmpDir);
+
+        std::cout << "  ─── " << pass << "/" << (pass + fail)
+                  << " all-seg-wkh tests passed"
+                  << " (✗ = " << fail << ")" << std::endl;
+    }
+
     return 0;
 }

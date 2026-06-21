@@ -11310,4 +11310,49 @@ TradeJournal::weekdayHourPnLMatrixByTag(
     return w;
 }
 
+std::vector<TradeJournal::WeekdayHourPnLMatrix>
+TradeJournal::allSegmentWeekdayHourPnLMatrix() const {
+    // Sprint #255. Bulk per-symbol weekday×hour matrix
+    // sorted DESC by totalFills.
+    std::vector<WeekdayHourPnLMatrix> out;
+    auto fills = loadAll();
+    std::set<std::string> syms;
+    for (const auto& f : fills) syms.insert(f.symbol);
+    out.reserve(syms.size());
+    for (const auto& s : syms) {
+        out.push_back(weekdayHourPnLMatrixBySymbol(s));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const WeekdayHourPnLMatrix& a,
+           const WeekdayHourPnLMatrix& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
+std::vector<TradeJournal::WeekdayHourPnLMatrix>
+TradeJournal::allSegmentWeekdayHourPnLMatrixByTag(
+    bool includeUntagged) const {
+    std::vector<WeekdayHourPnLMatrix> out;
+    auto fills = loadAll();
+    std::set<std::string> tags;
+    for (const auto& f : fills) {
+        if (f.tag.empty()) {
+            if (includeUntagged) tags.insert("__untagged__");
+        } else {
+            tags.insert(f.tag);
+        }
+    }
+    out.reserve(tags.size());
+    for (const auto& t : tags) {
+        out.push_back(weekdayHourPnLMatrixByTag(t, includeUntagged));
+    }
+    std::sort(out.begin(), out.end(),
+        [](const WeekdayHourPnLMatrix& a,
+           const WeekdayHourPnLMatrix& b) {
+            return a.totalFills > b.totalFills;
+        });
+    return out;
+}
+
 } // namespace btquant

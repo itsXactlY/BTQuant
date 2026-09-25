@@ -328,7 +328,7 @@ build_fast_mssql() {
         cd "BTQuant/dependencies/MsSQL"
         # setup.py imports pybind11 from the venv; isolated builds cannot see it
         python -m pip install --no-build-isolation .
-        cd ../..
+        cd ../../..
         log_success "Fast_MSSQL driver built and installed"
     fi
 }
@@ -401,6 +401,7 @@ import_candles() {
         setup_btquant
         build_fast_mssql
     fi
+    cd "${BTQ_START_DIR:-$(pwd)}"
     source "$HOME/.btq/bin/activate"
     pip install -q polars tqdm binance-historical-data
 

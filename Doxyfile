@@ -32,7 +32,7 @@ DOXYFILE_ENCODING      = UTF-8
 # title of most generated pages and in a few other places.
 # The default value is: My Project.
 
-PROJECT_NAME           = "PubBTQuant Trading Engine"
+PROJECT_NAME           = "BTQuant"
 
 # The PROJECT_NUMBER tag can be used to enter a project or revision number.
 # This could be handy for archiving the generated documentation at a specific
@@ -40,7 +40,7 @@ PROJECT_NAME           = "PubBTQuant Trading Engine"
 # To use this feature just insert something like "version 2.3.1" or "2003-04-15"
 # The default value is: 
 
-PROJECT_NUMBER         = 1.0
+PROJECT_NUMBER         = 1.5.0-RC3
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for the project.
@@ -473,7 +473,7 @@ SKIP_FUNCTION_MACROS   = YES
 # WARNINGS and WARN_IF_UNDOCUMENTED are set to NO as well.
 # The default value is: NO.
 
-QUIET                  = NO
+QUIET                  = YES
 
 # The WARNINGS tag can be used to turn on/off the warning messages that are
 # generated to standard error (stderr) by doxygen. If WARNINGS is set to NO
@@ -538,7 +538,7 @@ WARN_FORMAT            = "$file:$line: $text"
 # messages should be written. If left blank the output is written to standard
 # error (stderr).
 
-WARN_LOGFILE           = 
+WARN_LOGFILE           = docs/api_reference/doxygen-warnings.log
 
 #---------------------------------------------------------------------------
 # Configuration options related to the input files
@@ -549,12 +549,15 @@ WARN_LOGFILE           =
 # EXTENSION_MAPPING. The documentation is explained in the section "Input" in
 # the manual.
 
-INPUT                  = . \
-                         dependencies/BTQ_Render_Engine/include \
-                         Examples \
+INPUT                  = README.md \
+                         dependencies/backtrader \
+                         dependencies/ccapi/example/src \
+                         dependencies/MsSQL \
                          hotspine \
+                         autonomous_agency \
+                         Examples \
                          Installers \
-                         autonomous_agency
+                         docs
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -579,60 +582,7 @@ INPUT_ENCODING         = UTF-8
 # *.py, *.pyw, *.f90, *.f95, *.f03, *.f08, *.f18, *.f, *.for, *.ftn, *.fpp,
 # *.s, *.asm, *.sv, *.svh, *.vhd, *.vhdl, *.ucf, *.qsf and *.ice.
 
-FILE_PATTERNS          = *.c \
-                         *.cc \
-                         *.cxx \
-                         *.cpp \
-                         *.c++ \
-                         *.java \
-                         *.ii \
-                         *.ixx \
-                         *.ipp \
-                         *.i++ \
-                         *.inl \
-                         *.idl \
-                         *.ddl \
-                         *.ods \
-                         *.h \
-                         *.hh \
-                         *.hxx \
-                         *.h++ \
-                         *.hpp \
-                         *.lib \
-                         *.api \
-                         *.td \
-                         *.d \
-                         *.OC \
-                         *.PC \
-                         *.def \
-                         *.cs \
-                         *.D \
-                         *.sw \
-                         *.vhd \
-                         *.vhdl \
-                         *.py \
-                         *.pyw \
-                         *.f90 \
-                         *.f95 \
-                         *.f03 \
-                         *.f08 \
-                         *.f18 \
-                         *.f \
-                         *.for \
-                         *.ftn \
-                         *.fpp \
-                         *.s \
-                         *.asm \
-                         *.sv \
-                         *.svh \
-                         *.ucf \
-                         *.qsf \
-                         *.ice \
-                         *.md \
-                         *.markdown \
-                         *.txt \
-                         *.rst \
-                         *.dox
+FILE_PATTERNS          = *.py *.cpp *.hpp *.h *.md
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -663,7 +613,7 @@ EXCLUDE_SYMLINKS       = NO
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       = 
+EXCLUDE_PATTERNS       = */build/* */__pycache__/* */nlohmann/* */quantstats_lumi_btquant/* */api_reference/*
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -2791,3 +2741,4 @@ DOT_NODE_ATTR          = "fontname=Helvetica,fontsize=10"
 # This tag requires that the tag HAVE_DOT is set to YES.
 
 DOT_CLEANUP            = YES
+USE_MDFILE_AS_MAINPAGE = README.md

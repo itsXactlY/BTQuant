@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dependencies'))
 from backtrader.hotspine.reader import HotSpineRuntime, HotTrade
 from backtrader.hotspine.sql_integration import HotSpineSQLIntegration
 from backtrader.bigbraincentral.storage_mssql import MSSQLConfig
+from backtrader.dontcommit import password as SA_PASSWORD
 
 
 class HotSpineStrategyWithSQLStorage:
@@ -178,7 +179,7 @@ def demonstrate_architecture():
         server="localhost",
         database="BTQ_MarketData",
         username="SA",
-        password="q?}33YIToo:H%xue$Kr*"
+        password=SA_PASSWORD
     )
     
     print("🔧 SQL Configuration:")
@@ -243,7 +244,7 @@ def run_live_trading_demo(sql_integration: Optional[HotSpineSQLIntegration]):
         server="localhost",
         database="BTQ_MarketData", 
         username="SA",
-        password="q?}33YIToo:H%xue$Kr*"
+        password=SA_PASSWORD
     ) if sql_integration else None
     
     try:

@@ -29,27 +29,33 @@ BTQuant is a high-frequency algorithmic trading framework that processes thousan
 ### Installation
 
 ```bash
-# Clone repository with submodules
-git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant.git
+git clone --recurse-submodules -b 1.5.0-RC3 https://github.com/ItsXactlY/BTQuant.git
 cd BTQuant
-
-# Run automated installer
-# Comes with:
-# - BTQuant python setup
-# - CCAPI C++ Setup
-# - CCAPI C++ Modules (market data collector, manipulation dectector, ...)
-# - Handling Setup of Shared Memory at /dev/shm/BTQ... 
-# - Cython* readyness (Work in Progress - hidden branch)
-# - M$SQL - C++ Adapter Compiling for Python/Cython
-#         - Drops Random generated password after Database Setup ready for dontcommit.py
-#         - Pretuned to handle big data on lowest possible CPU cycles
-#         - While keeping maximal burst capacities.
-#
-# - If want to contribute to optimize few step further:
-# - https://arxiv.org/pdf/2312.00647
-
-bash Installers/install_all.sh
+curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash
+# no menu: … | bash -s -- --profile core|database|collector|full
 ```
+
+One installer: a static native binary, sha256-verified by the bootstrap before it runs. Started
+inside a clone it installs that clone, otherwise it clones `1.5.0-RC3` to `~/BTQuant`. Every step
+checks before it acts, so rerunning is safe; `--update` pulls and reinstalls the Python side,
+`--help` lists the rest.
+
+| Profile     | Installs |
+|-------------|----------|
+| `core`      | `~/.btq` venv, BTQuant, `fast_mssql` |
+| `database`  | core + SQL Server (Developer), ODBC Driver 18, `BinanceData`/`OptunaBT` |
+| `collector` | database + ccapi `market_data_collector`, `arbitrage_scanner` (`~/.local/bin`), `BTQ_MarketData` |
+| `full`      | collector + 1m candles of the top 250 liquid `*/USDT` spot pairs, listing → yesterday (`btq-candles` user unit) |
+
+**Secrets live in the venv, not in git:** `~/.btq/etc/btquant/secrets.py` (mode 600).
+`backtrader/dontcommit.py` only loads it. The installer creates it with a generated SA password;
+put your JRR / Telegram / Discord / wallet values there.
+
+### What's new in 1.5.0-RC3
+- One branch: all non-render work from the side branches merged in; every old branch is an ancestor of RC3
+- One installer replacing `install.sh`, `install_all.sh`, `install_database.sh`, `update.sh`
+- No credentials in the repository anymore; `dontcommit.py` is a loader
+- Candle import: only pairs trading today, ranked by liquidity, resumable, PAGE-compressed tables
 
 ### Your First Backtest (CCXT Example)
 
@@ -215,7 +221,7 @@ git clone https://github.com/itsXactlY/BTQuant.git
 cd BTQuant
 
 # Set up development environment
-bash Installers/install.sh --dev
+curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash -s -- --profile core
 
 # Run tests
 python -m pytest

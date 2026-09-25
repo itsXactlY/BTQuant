@@ -94,7 +94,7 @@ This file contains sensitive credentials. **Never commit to version control.**
 # JackRabbitRelay
 identify = ""                          # JRR identity string
 jrr_webhook_url = "http://127.0.0.1:80"  # JRR webhook endpoint
-jrr_order_history = "/home/JackrabbitRelay2/Data/Mimic/"
+jrr_order_history = "~/.btq/jrr_order_history.csv"
 
 # Web3 (BSC)
 bsc_privaccount1 = ""                  # Private key

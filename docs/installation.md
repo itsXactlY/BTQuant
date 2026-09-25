@@ -18,12 +18,12 @@ The installer script auto-detects your distribution. Other Linux distributions a
 
 ## Automated Installation
 
-The `install_all.sh` script handles the complete setup:
+The installer handles the complete setup:
 
 ```bash
-git clone --recurse-submodules -b prototyping https://github.com/ItsXactlY/BTQuant BTQuant
+git clone --recurse-submodules -b 1.5.0-RC3 https://github.com/ItsXactlY/BTQuant BTQuant
 cd BTQuant
-bash Installers/install_all.sh
+curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash -s -- --profile full
 ```
 
 ### What the Installer Does
@@ -174,7 +174,7 @@ Edit `dependencies/backtrader/dontcommit.py` to configure:
 # JackRabbitRelay
 identify = ""                    # JRR identify string
 jrr_webhook_url = "http://127.0.0.1:80"
-jrr_order_history = "/home/JackrabbitRelay2/Data/Mimic/"
+jrr_order_history = "~/.btq/jrr_order_history.csv"
 
 # Web3 (BSC)
 bsc_privaccount1 = ""

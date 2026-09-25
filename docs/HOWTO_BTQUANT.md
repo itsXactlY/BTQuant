@@ -14,8 +14,6 @@ The core lives in `dependencies/backtrader/`. Everything else builds on it.
 
 Requirements: Linux, Python 3.12+, GCC 7+, CMake 3.15+, 8GB RAM.
 
-git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant.git
-cd BTQuant
 curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash
 
 The installer: detects your distro, installs system deps, installs SQL Server (optional),

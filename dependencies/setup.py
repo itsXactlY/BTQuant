@@ -110,7 +110,9 @@ setuptools.setup(
         'scikit-learn',
         'keras',
         'pytz',
-        'optuna'
+        'optuna',
+        'colorama',
+        'psutil'
     ],
 
     extras_require={

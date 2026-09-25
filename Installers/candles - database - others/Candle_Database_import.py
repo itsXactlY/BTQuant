@@ -59,9 +59,12 @@ def _default_workers() -> int:
         avail_gb = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2**30
     except (ValueError, OSError):
         avail_gb = 8
-    return max(1, min(4, os.cpu_count() or 1, int(avail_gb // 3)))
+    return max(1, min(6, (os.cpu_count() or 2) - 2, int(avail_gb // 0.75)))
 
 MAX_WORKERS = int(os.environ.get("BTQ_IMPORT_WORKERS", 0)) or _default_workers()
+# Files per insert round. A whole BTC history in one frame held 7 GB and forced
+# a single worker; a year at a time keeps several tables importing in parallel.
+CHUNK_FILES = int(os.environ.get("BTQ_IMPORT_CHUNK", 12))
 
 RAW_COLS = [
     "open_time", "open", "high", "low", "close", "volume",
@@ -594,21 +597,21 @@ def process_table_task(args):
     print(f"[{table_name}] Processing {len(files_info)} files...")
 
     try:
-        # Optimized lazy loading
-        df = read_and_prepare_all_lazy(files_info, latest_ts)
+        # files_info is chronological (monthly, then this month's dailies), so
+        # chunks insert in order and MAX(TimestampEnd) stays an exact resume point
+        inserted_total = 0
+        for i in range(0, len(files_info), CHUNK_FILES):
+            df = read_and_prepare_all_lazy(files_info[i:i + CHUNK_FILES], latest_ts)
+            if df.height == 0:
+                continue
+            inserted_total += insert_dataframe_fast(table_name, df)
+            latest_ts = max(latest_ts, int(df["TimestampEnd"].max()))
+            del df
+            gc.collect()
 
-        if df.height == 0:
+        if inserted_total == 0:
             print(f"[{table_name}] ✅ No new rows (skipped)")
             return table_name, 0
-
-        # Explicit garbage collection before insert
-        gc.collect()
-        
-        inserted_total = insert_dataframe_fast(table_name, df)
-
-        # Clean up
-        del df
-        gc.collect()
 
         dt = time.time() - t0
         rate = inserted_total / dt if dt > 0 else 0

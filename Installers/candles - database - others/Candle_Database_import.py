@@ -24,6 +24,8 @@ This is a brute-force approach, but it works reliably and can be monitored.
 '''
 
 import os
+import re
+import sys
 import gc
 import time
 import glob
@@ -37,8 +39,8 @@ from tqdm import tqdm  # For progress bars
 
 # ---------- CONFIG ----------
 try:
-    from backtrader.dontcommit import database, connection_string
-    DB_NAME = database
+    from backtrader.dontcommit import candle_database, connection_string
+    DB_NAME = candle_database
     DB_CONN = connection_string
 except Exception:
     DB_NAME = "BinanceData"
@@ -48,10 +50,18 @@ BASE_DIRS = [ # Directories to scan for CSV files
     "candles/spot/monthly/klines/",
     "candles/spot/daily/klines/",
 ]
-EXCLUDED_KEYWORDS = {"BULL", "BEAR", "UP", "DOWN"}
+# Substring match dropped JUPUSDT/SUPERUSDT/SYRUPUSDT; pair selection lives in Binance_vision_buffet.py
+EXCLUDED_KEYWORDS = set()
 
 BATCH_SIZE = 500_000  # Increased for better bulk performance
-MAX_WORKERS = min(4, os.cpu_count() or 1)  # Slightly increased but not crazy
+def _default_workers() -> int:
+    try:
+        avail_gb = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2**30
+    except (ValueError, OSError):
+        avail_gb = 8
+    return max(1, min(4, os.cpu_count() or 1, int(avail_gb // 3)))
+
+MAX_WORKERS = int(os.environ.get("BTQ_IMPORT_WORKERS", 0)) or _default_workers()
 
 RAW_COLS = [
     "open_time", "open", "high", "low", "close", "volume",
@@ -196,6 +206,11 @@ def fm_bulk_tx(insert_sql: str, rows, tries: int = 5, delay: float = 1.0):
         raise last
 
 # ---------- DB META ----------
+def ensure_database():
+    master = re.sub(r"DATABASE=[^;]*;", "DATABASE=master;", DB_CONN)
+    fm.execute_non_query(master, f"IF DB_ID(N'{DB_NAME}') IS NULL CREATE DATABASE {bracket(DB_NAME)};")
+    fm.remove_connection(master)
+
 def enable_bulk_db_settings():
     try:
         fm_exec(f"ALTER DATABASE {bracket(DB_NAME)} SET RECOVERY BULK_LOGGED;")
@@ -240,7 +255,7 @@ def create_table_if_not_exists(table_name: str):
             Trades INT NOT NULL,
             TakerBaseVolume DECIMAL(28, 8) NOT NULL,
             TakerQuoteVolume DECIMAL(28, 8) NOT NULL
-        );
+        ) WITH (DATA_COMPRESSION = PAGE);
     END
     """)
 
@@ -277,9 +292,9 @@ def create_indexes_for_tables(table_names):
         idx2 = f"IX_{t}_Timeframe_Timestamp"
         sql = f"""
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '{idx1}' AND object_id = OBJECT_ID(N'{bt}'))
-            CREATE NONCLUSTERED INDEX [{idx1}] ON {bt} (TimestampStart);
+            CREATE NONCLUSTERED INDEX [{idx1}] ON {bt} (TimestampStart) WITH (DATA_COMPRESSION = PAGE);
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '{idx2}' AND object_id = OBJECT_ID(N'{bt}'))
-            CREATE NONCLUSTERED INDEX [{idx2}] ON {bt} (Timeframe, TimestampStart);
+            CREATE NONCLUSTERED INDEX [{idx2}] ON {bt} (Timeframe, TimestampStart) WITH (DATA_COMPRESSION = PAGE);
         """
         try:
             fm_exec(sql)
@@ -463,7 +478,7 @@ def read_and_prepare_all_lazy(files_info, latest_ts: int) -> pl.DataFrame:
                 pl.col("taker_base_final").alias("TakerBaseVolume"),
                 pl.col("taker_quote_final").alias("TakerQuoteVolume"),
             ])
-            .collect(streaming=True)
+            .collect(engine="streaming")
         )
         
         print(f"    ✅ Processed {len(result)} rows")
@@ -472,7 +487,7 @@ def read_and_prepare_all_lazy(files_info, latest_ts: int) -> pl.DataFrame:
     except Exception as e:
         print(f"    ❌ Lazy execution failed: {e}")
         traceback.print_exc()
-        return pl.DataFrame()
+        raise
 
 # ---------- SIMPLIFIED INSERT WITH ROBUST VALIDATION ----------
 def insert_dataframe_fast(table_name: str, df: pl.DataFrame) -> int:
@@ -567,7 +582,7 @@ def insert_dataframe_fast(table_name: str, df: pl.DataFrame) -> int:
             print(f"    ❌ Batch {batch_idx + 1} failed: {e}")
             if clean_batch:
                 print(f"    Sample row: {clean_batch[0]}")
-            continue
+            raise
     
     return total
 
@@ -604,7 +619,7 @@ def process_table_task(args):
         dt = time.time() - t0
         print(f"[{table_name}] ❌ FAILED after {dt:.1f}s: {e}")
         traceback.print_exc()
-        return table_name, 0
+        return table_name, -1
 
 # ---------- MAIN ----------
 def main():
@@ -612,6 +627,8 @@ def main():
         mp.set_start_method("spawn", force=True)
     except RuntimeError:
         pass
+
+    ensure_database()
 
     print("🔍 Discovering import tasks...")
     tasks_map = discover_tasks()
@@ -640,6 +657,7 @@ def main():
     start = time.time()
     total_inserted = 0
     completed_tables = 0
+    failed_tables = []
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futures = [ex.submit(process_table_task, t) for t in all_tasks]
@@ -647,6 +665,9 @@ def main():
         for future in as_completed(futures):
             try:
                 table_name, inserted = future.result()
+                if inserted < 0:
+                    failed_tables.append(table_name)
+                    inserted = 0
                 total_inserted += inserted
                 completed_tables += 1
                 
@@ -659,6 +680,7 @@ def main():
             except Exception as e:
                 print(f"❌ Worker error: {e}")
                 traceback.print_exc()
+                failed_tables.append("?")
 
     print(f"🔧 Recreating indexes on {len(table_names)} tables...")
     create_indexes_for_tables(table_names)
@@ -666,6 +688,9 @@ def main():
     elapsed = time.time() - start
     rate = total_inserted / elapsed if elapsed > 0 else 0
     print(f"🎉 ALL DONE in {elapsed:.1f}s. Total: {total_inserted:,} rows ({rate:.0f} rows/sec)")
+    if failed_tables:
+        print(f"❌ {len(failed_tables)} table(s) failed: {', '.join(failed_tables)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -391,6 +391,24 @@ build_ccapi() {
     log_success "CCAPI built successfully"
 }
 
+# Import top liquid Binance */USDT 1m candles from Vision into MSSQL
+import_candles() {
+    log_info "Importing Binance Vision candles (top ${BTQ_TOP_PAIRS:-250} */USDT, 1m, listing -> yesterday)..."
+
+    cd "${BTQ_START_DIR:-$(pwd)}"
+    if [ ! -x "$HOME/.btq/bin/python" ]; then
+        setup_btquant
+        build_fast_mssql
+    fi
+    source "$HOME/.btq/bin/activate"
+    pip install -q polars tqdm binance-historical-data
+
+    local candles="BTQuant/Installers/candles - database - others"
+    python "$candles/Binance_vision_buffet.py"
+
+    log_success "Candles imported into MSSQL"
+}
+
 # Cleanup temp files
 cleanup() {
     log_info "Cleaning up temporary files..."
@@ -404,8 +422,16 @@ cleanup() {
 main() {
     log_info "Starting BTQuant complete installation..."
 
+    # Steps cd around (build_ccapi never returns); import_candles needs the start dir
+    BTQ_START_DIR="$(pwd)"
+
     # Set trap to cleanup on exit
     trap cleanup EXIT
+
+    if [ "${1:-}" = "--import-candles" ]; then
+        import_candles
+        return
+    fi
 
     detect_distro
     install_system_deps
@@ -428,6 +454,7 @@ main() {
     build_fast_mssql
     init_database
     build_ccapi
+    import_candles
 
     log_success "🎉 BTQuant installation complete!"
     log_info ""

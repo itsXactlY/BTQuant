@@ -1,3 +1,4 @@
+```bash
 #!/bin/bash
 
 # BTQuant Complete Installation Script
@@ -172,6 +173,20 @@ install_mssql() {
             else
                 log_error "No AUR helper found. Please install yay or paru first."
                 exit 1
+            fi
+
+            # Remove stale/unowned Microsoft ODBC driver directory.
+            # pacman refuses msodbcsql if this path already exists but
+            # is not owned by an installed package.
+            if [ -d /opt/microsoft/msodbcsql18 ]; then
+                if pacman -Qo /opt/microsoft/msodbcsql18 >/dev/null 2>&1; then
+                    log_info "/opt/microsoft/msodbcsql18 is already owned by a package. Keeping it."
+                else
+                    log_warning "Found unowned /opt/microsoft/msodbcsql18."
+                    log_info "Removing stale Microsoft ODBC driver directory..."
+                    sudo rm -rf /opt/microsoft/msodbcsql18
+                    log_success "Stale Microsoft ODBC driver directory removed."
+                fi
             fi
 
             $AUR_HELPER -S --noconfirm mssql-server
@@ -375,6 +390,7 @@ build_ccapi() {
 
     log_success "CCAPI built successfully"
 }
+
 # Cleanup temp files
 cleanup() {
     log_info "Cleaning up temporary files..."
@@ -427,3 +443,4 @@ main() {
 
 # Run main function
 main "$@"
+```

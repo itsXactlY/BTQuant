@@ -326,7 +326,8 @@ build_fast_mssql() {
         log_warning "Pre-compiled Fast_MSSQL binary not found for Python ${PYTHON_VERSION}. Attempting build..."
         # Fallback to building
         cd "BTQuant/dependencies/MsSQL"
-        python -m pip install .
+        # setup.py imports pybind11 from the venv; isolated builds cannot see it
+        python -m pip install --no-build-isolation .
         cd ../..
         log_success "Fast_MSSQL driver built and installed"
     fi

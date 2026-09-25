@@ -17,6 +17,15 @@ add_executable(test_config_loading
     market_data_collector.cpp
 )
 
+target_compile_definitions(test_config_loading
+    PRIVATE
+        MDC_NO_MAIN
+        CCAPI_ENABLE_SERVICE_MARKET_DATA
+        CCAPI_ENABLE_EXCHANGE_BINANCE
+        CCAPI_ENABLE_EXCHANGE_OKX
+        CCAPI_ENABLE_EXCHANGE_BYBIT
+)
+
 target_include_directories(test_config_loading PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

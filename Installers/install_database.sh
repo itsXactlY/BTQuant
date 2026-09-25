@@ -53,7 +53,7 @@ import string
 upper = string.ascii_uppercase
 lower = string.ascii_lowercase
 digits = string.digits
-symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+symbols = '!@#$%^&*()_+-=[]|:,.<>?'
 
 # Ensure at least one character from each set
 password = [
@@ -184,71 +184,12 @@ install_sqlserver() {
 configure_sqlserver() {
     print_status "Configuring SQL Server automatically..."
     
-    # Create expect script to automate the configuration
-    cat > /tmp/mssql_config.exp << 'EOF'
-#!/usr/bin/expect -f
-set timeout 60
+    # sudo prompts on the real TTY; the old expect wrapper timed out and echoed the SA password
+    sudo -v
+    MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" MSSQL_PID=Developer ACCEPT_EULA=Y \
+        sudo --preserve-env=MSSQL_SA_PASSWORD,MSSQL_PID,ACCEPT_EULA \
+        /opt/mssql/bin/mssql-conf -n setup accept-eula
 
-# Get the password from environment
-set sa_password $env(MSSQL_SA_PASSWORD)
-
-spawn sudo env MSSQL_SA_PASSWORD=$sa_password ACCEPT_EULA=Y /opt/mssql/bin/mssql-conf setup
-
-# Handle sudo password prompt
-expect {
-    "Passwort für*" {
-        stty -echo
-        send_user "Enter sudo password: "
-        expect_user -re "(.*)\n"
-        send_user "\n"
-        stty echo
-        send "$expect_out(1,string)\r"
-        exp_continue
-    }
-    "Password for*" {
-        stty -echo
-        send_user "Enter sudo password: "
-        expect_user -re "(.*)\n"
-        send_user "\n"
-        stty echo
-        send "$expect_out(1,string)\r"
-        exp_continue
-    }
-    "Edition eingeben*" {
-        send "2\r"
-        exp_continue
-    }
-    "Enter your edition*" {
-        send "2\r"
-        exp_continue
-    }
-    "Geben Sie Option*" {
-        send "1\r"
-        exp_continue
-    }
-    "Enter an option*" {
-        send "1\r"
-        exp_continue
-    }
-    "Das angegebene Kennwort*" {
-        puts "Password complexity error, but continuing..."
-        exp_continue
-    }
-    "password does not meet*" {
-        puts "Password complexity error, but continuing..."
-        exp_continue
-    }
-    eof
-}
-EOF
-
-    # Make expect script executable and run it
-    chmod +x /tmp/mssql_config.exp
-    MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" /tmp/mssql_config.exp
-    
-    # Clean up expect script
-    rm -f /tmp/mssql_config.exp
-    
     # Enable and start SQL Server service
     sudo systemctl enable mssql-server
     sudo systemctl start mssql-server

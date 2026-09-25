@@ -29,14 +29,13 @@ BTQuant is a high-frequency algorithmic trading framework that processes thousan
 ### Installation
 
 ```bash
-git clone --recurse-submodules -b 1.5.0-RC3 https://github.com/ItsXactlY/BTQuant.git
-cd BTQuant
 curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash
 # no menu: … | bash -s -- --profile core|database|collector|full
 ```
 
 One installer: a static native binary, sha256-verified by the bootstrap before it runs. Started
-inside a clone it installs that clone, otherwise it clones `1.5.0-RC3` to `~/BTQuant`. Every step
+inside a clone it installs that clone; otherwise it fetches `1.5.0-RC3` itself (shallow) to `~/BTQuant`
+(`--dir` to change). Nothing to clone or install beforehand, not even git. Every step
 checks before it acts, so rerunning is safe; `--update` pulls and reinstalls the Python side,
 `--help` lists the rest.
 

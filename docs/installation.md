@@ -21,8 +21,6 @@ The installer script auto-detects your distribution. Other Linux distributions a
 The installer handles the complete setup:
 
 ```bash
-git clone --recurse-submodules -b 1.5.0-RC3 https://github.com/ItsXactlY/BTQuant BTQuant
-cd BTQuant
 curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash -s -- --profile full
 ```
 

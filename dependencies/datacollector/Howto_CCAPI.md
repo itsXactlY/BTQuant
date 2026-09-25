@@ -8,4 +8,4 @@ mkdir example/build
 cd example/build
 rm -rf * (if rebuild from scratch)
 cmake ..
-cmake --build .
+cmake --build . -Wno-author

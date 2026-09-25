@@ -118,6 +118,7 @@ MarketDataCollector::Config loadConfig(const std::string& path) {
     return cfg;
 }
 
+#ifndef MDC_NO_MAIN
 int main(int argc, char** argv) {
     std::signal(SIGINT, signalHandler);
 
@@ -133,4 +134,4 @@ int main(int argc, char** argv) {
     std::cout << "Shutdown complete.\n";
     return 0;
 }
-
+#endif  // MDC_NO_MAIN

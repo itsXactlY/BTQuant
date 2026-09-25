@@ -8,10 +8,15 @@ Zero staging. Direct writes. Sub-millisecond inserts.
 import pyodbc
 import sys
 
-SERVER = "localhost"
+import os
+
+from backtrader.dontcommit import server as SERVER, username as USER, password as PASS
+
 DB = "BTQ_MarketData"
-USER = "SA"
-PASS = "q?}33YIToo:H%xue$Kr*"
+# Preallocation; the installer shrinks these to fit the free disk
+DATA_GB = int(os.environ.get("BTQ_MARKETDATA_DATA_GB", 50))
+LOG_GB = int(os.environ.get("BTQ_MARKETDATA_LOG_GB", 10))
+RESET = "--reset" in sys.argv
 
 def get_conn(database="master", autocommit=True):
     conn_str = (
@@ -24,7 +29,14 @@ def get_conn(database="master", autocommit=True):
 def setup():
     print("🔧 BTQ_MarketData MICROSECOND LATENCY Init\n")
     
-    # 1. DROP
+    # 1. DROP (only with --reset; an existing DB holds collected ticks)
+    if not RESET:
+        conn = get_conn(autocommit=True)
+        exists = conn.cursor().execute(f"SELECT DB_ID('{DB}')").fetchone()[0] is not None
+        conn.close()
+        if exists:
+            print(f"{DB} already exists; pass --reset to drop and recreate it.")
+            return
     print("1/4 Dropping old database...", end=" ", flush=True)
     try:
         conn = get_conn(autocommit=True)
@@ -46,14 +58,14 @@ def setup():
             ON PRIMARY (
                 NAME = '{DB}_data',
                 FILENAME = '/var/opt/mssql/data/{DB}.mdf',
-                SIZE = 50GB,
+                SIZE = {DATA_GB}GB,
                 FILEGROWTH = 10GB,
                 MAXSIZE = 500GB
             )
             LOG ON (
                 NAME = '{DB}_log',
                 FILENAME = '/var/opt/mssql/data/{DB}_log.ldf',
-                SIZE = 10GB,
+                SIZE = {LOG_GB}GB,
                 FILEGROWTH = 2GB,
                 MAXSIZE = 100GB
             )

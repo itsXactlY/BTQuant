@@ -28,19 +28,21 @@ No. The project FAQ explicitly states Docker is not supported and will not be.
 
 - Repository: wherever you clone it
 - Virtual environment: `~/.btq/` (Python 3.13)
-- CCAPI binaries: `~/bin/`
+- CCAPI binaries: `~/.local/bin/`
+- Secrets: `~/.btq/etc/btquant/secrets.py` (mode 600, never in git)
 - Data cache: `.btq_cache/` in the working directory
 
-### What does `install_all.sh` actually install?
+### What does the installer actually install?
 
 The script installs:
 1. System build dependencies (compiler, cmake, libraries)
 2. Microsoft SQL Server (if not already running)
-3. SQL Server ODBC driver and sqlcmd tools
+3. SQL Server ODBC Driver 18, registered in /etc/odbcinst.ini
 4. BTQuant Python package and all dependencies into `~/.btq` venv
 5. Fast_MSSQL C++ driver (pre-compiled or built from source)
 6. BTQ_MarketData database initialization
-7. CCAPI C++ market data collector and hotspine binaries
+7. CCAPI C++ market_data_collector and arbitrage_scanner (`~/.local/bin`)
+8. Optional (`full`): top 250 liquid */USDT 1m candles into `BinanceData`
 
 ### What Python packages does BTQuant depend on?
 

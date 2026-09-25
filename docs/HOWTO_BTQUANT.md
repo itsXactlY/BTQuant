@@ -16,12 +16,12 @@ Requirements: Linux, Python 3.12+, GCC 7+, CMake 3.15+, 8GB RAM.
 
 git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant.git
 cd BTQuant
-bash Installers/install_all.sh
+curl -fsSL https://github.com/ItsXactlY/BTQuant/releases/download/installer/install.sh | bash
 
 The installer: detects your distro, installs system deps, installs SQL Server (optional),
 creates a venv, installs Python packages, builds CCAPI from source.
 
-After install, configure `dependencies/backtrader/dontcommit.py` with your credentials
+After install, put your credentials in `~/.btq/etc/btquant/secrets.py` (loaded by `dontcommit.py`)
 (JRR webhook URL, Telegram/Discord, SQL Server connection).
 
 ## The btq CLI

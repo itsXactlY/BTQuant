@@ -6,12 +6,22 @@ Zero staging. Direct writes. Sub-millisecond inserts.
 """
 
 import pyodbc
+import os
 import sys
 
-SERVER = "localhost"
-DB = "BTQ_MarketData"
-USER = "SA"
-PASS = "q?}33YIToo:H%xue$Kr*"
+# Creds come from a local secrets file, never from this repo.
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+import btq_secrets
+
+_db = btq_secrets.require()
+SERVER = _db["server"]
+DB = _db["marketdata_database"]
+USER = _db["username"]
+PASS = _db["password"]
 
 def get_conn(database="master", autocommit=True):
     conn_str = (

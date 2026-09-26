@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, List
+import os
+import sys
 import time
 from collections import deque
 
@@ -12,13 +14,36 @@ from backtrader.dataseries import TimeFrame
 
 import fast_mssql
 
+# Creds come from a local secrets file, never from this repo.
+# Repo root is ../../../ relative to dependencies/backtrader/bigbraincentral/.
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+try:
+    import btq_secrets
+except ImportError:  # allow use as an installed backtrader without the repo
+    btq_secrets = None
+
+
+def _secret(name: str, default: str = "") -> str:
+    """Read one secret, falling back to the literal default when unavailable."""
+    if btq_secrets is None:
+        return default
+    try:
+        return btq_secrets.get(name, default)
+    except Exception:
+        return default
+
+
 @dataclass
 class MSSQLFeedConfig:
-    server: str = "localhost"
-    database: str = "BTQ_MarketData"
-    username: str = "SA"
-    password: str = "q?}33YIToo:H%xue$Kr*"
-    driver: str = "{ODBC Driver 18 for SQL Server}"
+    server: str = field(default_factory=lambda: _secret("server", "localhost"))
+    database: str = field(default_factory=lambda: _secret("marketdata_database", "BTQ_MarketData"))
+    username: str = field(default_factory=lambda: _secret("username", "SA"))
+    password: str = field(default_factory=lambda: _secret("password", ""))
+    driver: str = field(default_factory=lambda: _secret("driver", "{ODBC Driver 18 for SQL Server}"))
     trust_server_certificate: bool = True
 
     def connection_string(self) -> str:

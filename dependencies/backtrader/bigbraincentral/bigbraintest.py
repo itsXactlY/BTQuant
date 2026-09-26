@@ -6,12 +6,7 @@ from backtrader.bigbraincentral.db_ohlcv_mssql import (
     MSSQLFeedConfig, BinanceDBData,
 )
 
-cfg = MSSQLFeedConfig(
-    server="localhost",
-    database="BTQ_MarketData",   # deine Live-DB
-    username="SA",
-    password="q?}33YIToo:H%xue$Kr*",
-)
+cfg = MSSQLFeedConfig()  # server/user/password from the local secrets file
 
 data = BinanceDBData(
     db_config=cfg,

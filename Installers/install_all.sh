@@ -32,6 +32,22 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Load DB credentials from the local secrets file (never stored in this repo).
+# Mirrors btq_secrets.py so shell callers resolve the exact same values.
+load_db_creds() {
+    local repo_root
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    if [ ! -f "$repo_root/btq_secrets.py" ]; then
+        log_error "btq_secrets.py not found at $repo_root"
+        return 1
+    fi
+    local q='import btq_secrets,sys; sys.stdout.write(btq_secrets.require()["password"])'
+    DB_PASSWORD="$(PYTHONPATH="$repo_root" python3 -c "$q")"
+    DB_SERVER="$(PYTHONPATH="$repo_root" python3 -c 'import btq_secrets,sys; sys.stdout.write(btq_secrets.get("server","localhost"))')"
+    DB_NAME="$(PYTHONPATH="$repo_root" python3 -c 'import btq_secrets,sys; sys.stdout.write(btq_secrets.get("marketdata_database","BTQ_MarketData"))')"
+    export SQLCMDPASSWORD="$DB_PASSWORD"   # keeps the password out of `ps`
+}
+
 # Detect Linux distribution
 detect_distro() {
     if [ -f /etc/os-release ]; then
@@ -189,15 +205,16 @@ install_mssql() {
 # Configure MSSQL
 configure_mssql() {
     # Check if MSSQL is already configured by testing connection
-    if /opt/mssql-tools*/bin/sqlcmd -S localhost -U sa -P "q?}33YIToo:H%xue$Kr*" -C -Q "SELECT @@VERSION" >/dev/null 2>&1; then
+    load_db_creds
+    if /opt/mssql-tools*/bin/sqlcmd -S "$DB_SERVER" -U sa -C -Q "SELECT @@VERSION" >/dev/null 2>&1; then
         log_info "Microsoft SQL Server is already configured. Skipping configuration."
         return 0
     fi
 
     log_info "Configuring Microsoft SQL Server..."
 
-    # Set SA password (using the same as in init_database.py)
-    MSSQL_SA_PASSWORD="q?}33YIToo:H%xue$Kr*"
+    # SA password comes from the secrets file loaded above.
+    MSSQL_SA_PASSWORD="$DB_PASSWORD"
 
     case "$DISTRO" in
         ubuntu|debian|fedora|centos|rhel)
@@ -209,7 +226,7 @@ configure_mssql() {
             sleep 10
 
             # Configure with sqlcmd (add TrustServerCertificate=yes)
-            /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "
+            /opt/mssql-tools/bin/sqlcmd -S "$DB_SERVER" -U sa -C -Q "
             ALTER LOGIN sa ENABLE;
             GO
             ALTER LOGIN sa WITH PASSWORD = '$MSSQL_SA_PASSWORD';
@@ -324,13 +341,12 @@ init_database() {
     source "$HOME/.btq/bin/activate"
 
     # Check if database already exists
-    if python3 -c "
-import pyodbc
+    if PYTHONPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" python3 -c "
+import pyodbc, btq_secrets
 try:
-    conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=BTQ_MarketData;UID=SA;PWD=q?}33YIToo:H%xue\$Kr*;TrustServerCertificate=yes;')
-    conn.close()
+    pyodbc.connect(btq_secrets.connection_string(btq_secrets.get('marketdata_database')), timeout=5).close()
     print('EXISTS')
-except:
+except Exception:
     print('NOT_EXISTS')
 " | grep -q 'EXISTS'; then
         log_info "Database BTQ_MarketData already exists. Skipping initialization."
@@ -418,8 +434,9 @@ main() {
     log_info "To activate the virtual environment:"
     log_info "  source ~/.btq/bin/activate"
     log_info ""
-    log_info "MSSQL Server is running. SA password: q?}33YIToo:H%xue$Kr*"
-    log_info "Database: BTQ_MarketData on localhost"
+    log_info "MSSQL Server is running."
+    log_info "Database: $DB_NAME on $DB_SERVER"
+    log_info "Credentials live in your local secrets file, not in this repo."
     log_info ""
     log_info "CCAPI binaries are available in ~/bin/"
     log_info "Make sure to source your ~/.bashrc or restart your shell to update PATH"

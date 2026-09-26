@@ -3,47 +3,59 @@
         "server": "localhost",
         "database": "BTQ_MarketData",
         "user": "SA",
-        "password": "q?}33YIToo:H%xue$Kr*"
+        "password": "",
+        "_credentials_note": "Credentials are NOT stored here. Set $BTQ_DB_PASSWORD, or source\n    ~/.btq/etc/btquant/secrets.py (see btq_secrets.py at the repo root)."
     },
-    "timeframes": ["1m"],
+    "timeframes": [
+        "1m"
+    ],
     "exchanges": [
         {
-        "name": "binance",
-        "symbols": [
-            "DOGEUSDT",
-            "ADAUSDT",
-            "BTCUSDT",
-            "BNBUSDT",
-            "ETHUSDT",
-            "SOLUSDT"
-        ],
-        "channels": ["TRADE", "MARKET_DEPTH"],
-        "market_type": "spot"
-        },
-        {
-        "name": "bybit",
-        "symbols": [
-            "DOGEUSDT",
-            "ADAUSDT",
-            "BTCUSDT",
-            "BNBUSDT",
-            "ETHUSDT",
-            "SOLUSDT"
-        ],
-            "channels": ["TRADE", "MARKET_DEPTH"],
+            "name": "binance",
+            "symbols": [
+                "DOGEUSDT",
+                "ADAUSDT",
+                "BTCUSDT",
+                "BNBUSDT",
+                "ETHUSDT",
+                "SOLUSDT"
+            ],
+            "channels": [
+                "TRADE",
+                "MARKET_DEPTH"
+            ],
             "market_type": "spot"
         },
         {
-        "name": "okx",
-        "symbols": [
-            "DOGE-USDT",
-            "ADA-USDT",
-            "BTC-USDT",
-            "BNB-USDT",
-            "ETH-USDT",
-            "SOL-USDT"
-        ],
-            "channels": ["TRADE", "MARKET_DEPTH"],
+            "name": "bybit",
+            "symbols": [
+                "DOGEUSDT",
+                "ADAUSDT",
+                "BTCUSDT",
+                "BNBUSDT",
+                "ETHUSDT",
+                "SOLUSDT"
+            ],
+            "channels": [
+                "TRADE",
+                "MARKET_DEPTH"
+            ],
+            "market_type": "spot"
+        },
+        {
+            "name": "okx",
+            "symbols": [
+                "DOGE-USDT",
+                "ADA-USDT",
+                "BTC-USDT",
+                "BNB-USDT",
+                "ETH-USDT",
+                "SOL-USDT"
+            ],
+            "channels": [
+                "TRADE",
+                "MARKET_DEPTH"
+            ],
             "market_type": "spot"
         }
     ],

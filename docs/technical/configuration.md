@@ -118,7 +118,7 @@ server = 'localhost'                   # SQL Server host
 candle_database = 'BinanceData'        # Historical data database
 optuna_database = 'OptunaBT'           # Optimization database
 username = 'SA'                        # SQL username
-password = 'YourStrong!Passw0rd'       # SQL password
+password = ''   # loaded from the secrets file, see below       # SQL password
 driver = '{ODBC Driver 18 for SQL Server}'
 
 # Connection strings (auto-generated)
@@ -316,3 +316,47 @@ Trading-specific settings can be found in `dependencies/backtrader/config/tradin
 3. **Use JSON config files** for development (easier to manage)
 4. **Set `require_keys=False`** when testing without real API keys
 5. **Test with small amounts** before running full-size live positions
+
+### Credentials are never in this repo
+
+BTQuant reads SQL Server credentials from a local secrets file at import time.
+The repository contains **no** passwords — not in Python, not in JSON, not in
+the installer scripts. Do not add any back.
+
+Create the file once per machine:
+
+```bash
+mkdir -p ~/.btq/etc/btquant && chmod 700 ~/.btq/etc/btquant
+$EDITOR ~/.btq/etc/btquant/secrets.py
+chmod 600 ~/.btq/etc/btquant/secrets.py
+```
+
+```python
+# ~/.btq/etc/btquant/secrets.py
+server = '192.168.0.242,1433'   # host,port of the SQL Server
+candle_database = 'BinanceData'  # historical candles
+optuna_database = 'OptunaBT'     # optimization runs
+marketdata_database = 'BTQ_MarketData'  # live market data
+username = 'SA'
+password = 'your-real-password'
+driver = '{ODBC Driver 18 for SQL Server}'
+```
+
+Resolution order (first match wins, see `btq_secrets.py`):
+
+1. `$BTQ_SECRETS` — explicit path to your own secrets file
+2. `<venv>/etc/btquant/secrets.py` — inside a virtualenv
+3. `~/.btq/etc/btquant/secrets.py` — home fallback
+
+For the C++ market-data collector, which cannot import Python, export the
+password instead:
+
+```bash
+export BTQ_DB_PASSWORD="$(python3 -c 'import btq_secrets; print(btq_secrets.get("password"))')"
+```
+
+Check the whole tree any time with:
+
+```bash
+python3 audit_secrets.py
+```

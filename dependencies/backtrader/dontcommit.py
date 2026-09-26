@@ -1,5 +1,7 @@
 import backtrader as bt
 import joblib
+import os
+import sys
 
 # JackRabbit Relay
 identify = "" # Fill Identify string from JRR Setup
@@ -31,28 +33,59 @@ if _fast_mssql_path not in sys.path:
     sys.path.insert(0, _fast_mssql_path)
 import fast_mssql
 
-# SQL Server connection details
-server = 'localhost'
-candle_database = 'BinanceData'
-optuna_database = 'OptunaBT'
-username = 'SA'
-password = 'YourStrong!Passw0rd'
+# SQL Server connection details.
+#
+# This file is git-tracked, so it must stay VALUE-FREE. Real credentials are
+# resolved at import time by btq_secrets.py (repo root) from a local, mode-600
+# secrets file outside the repo. Resolution order:
+#   1. $BTQ_SECRETS                      explicit override
+#   2. <venv>/etc/btquant/secrets.py     tpad layout (sys.prefix)
+#   3. ~/.btq/etc/btquant/secrets.py     home fallback (no venv)
+# If no secrets file is found the public defaults below are used, so importing
+# this module never fails — connections just fail auth until you set it up.
+_repo_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+try:
+    import btq_secrets
+    _db = btq_secrets.load()
+except ImportError:  # repo not present (e.g. installed backtrader wheel)
+    btq_secrets = None
+    _db = {
+        "server": "localhost", "candle_database": "BinanceData",
+        "optuna_database": "OptunaBT", "username": "SA", "password": "",
+        "driver": "{ODBC Driver 18 for SQL Server}",
+    }
 
-driver = '{ODBC Driver 18 for SQL Server}'  # Adjust the driver version if necessary
+SECRETS_FILE = _db.get("_secrets_file")
 
-connection_string = (f'DRIVER={driver};'
-                     f'SERVER={server};'
-                     f'DATABASE={candle_database};'
-                     f'UID={username};'
-                     f'PWD={password};'
-                     f'TrustServerCertificate=yes;')
+server = _db["server"]
+candle_database = _db["candle_database"]
+optuna_database = _db["optuna_database"]
+marketdata_database = _db.get("marketdata_database", "BTQ_MarketData")
+username = _db["username"]
+password = _db["password"]
+driver = _db["driver"]  # Adjust the driver version if necessary
 
-optuna_connection_string = (f'DRIVER={driver};'
-                     f'SERVER={server};'
-                     f'DATABASE={optuna_database};'
-                     f'UID={username};'
-                     f'PWD={password};'
-                     f'TrustServerCertificate=yes;')
+# Back-compat alias: older callers import `database`.
+database = candle_database
+
+
+def _conn(db_name):
+    """Build an ODBC connection string for the given database."""
+    return (f'DRIVER={driver};'
+            f'SERVER={server};'
+            f'DATABASE={db_name};'
+            f'UID={username};'
+            f'PWD={password};'
+            f'TrustServerCertificate=yes;')
+
+
+connection_string = _conn(candle_database)
+optuna_connection_string = _conn(optuna_database)
+marketdata_connection_string = _conn(marketdata_database)
 
 
 def ptu():

@@ -36,13 +36,25 @@ import fast_mssql as fm
 from tqdm import tqdm  # For progress bars
 
 # ---------- CONFIG ----------
+# Creds come from the local secrets file via btq_secrets.py. This file is
+# git-tracked, so it must never contain a real connection string.
 try:
-    from backtrader.dontcommit import database, connection_string
-    DB_NAME = database
-    DB_CONN = connection_string
-except Exception:
-    DB_NAME = "BinanceData"
-    DB_CONN = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=BinanceData;UID=SA;PWD=YourStrong!Passw0rd;TrustServerCertificate=yes;"
+    import sys as _sys
+    _REPO_ROOT = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    if _REPO_ROOT not in _sys.path:
+        _sys.path.insert(0, _REPO_ROOT)
+    import btq_secrets
+    _db = btq_secrets.require()
+    DB_NAME = _db["candle_database"]
+    DB_CONN = btq_secrets.connection_string(DB_NAME)
+except Exception as _exc:
+    raise SystemExit(
+        "Could not load DB credentials: %s\n"
+        "Create ~/.btq/etc/btquant/secrets.py (chmod 600) — see btq_secrets.py."
+        % _exc
+    )
 
 BASE_DIRS = [ # Directories to scan for CSV files
     "candles/spot/monthly/klines/",

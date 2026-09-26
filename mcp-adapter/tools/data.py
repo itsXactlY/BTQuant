@@ -2,9 +2,15 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 BTQUANT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Creds live in a local secrets file, never in this repo. See btq_secrets.py.
+if str(BTQUANT_ROOT) not in sys.path:
+    sys.path.insert(0, str(BTQUANT_ROOT))
+import btq_secrets
 
 from registry import register_tool
 
@@ -91,7 +97,7 @@ def data_mssql_status(_args) -> dict:
         BTQUANT_ROOT / "dependencies" / "ccapi" / "example" / "build" / "src" / "market_data_collector" / "config.json",
         BTQUANT_ROOT / "dependencies" / "ccapi" / "example" / "src" / "market_data_collector" / "config.json",
     ]
-    result = {"configs_found": []}
+    result = {"configs_found": [], "secrets_file": btq_secrets.secrets_path()}
     for p in config_paths:
         if p.exists():
             import json
@@ -102,11 +108,16 @@ def data_mssql_status(_args) -> dict:
                 "database": cfg.get("db", {}).get("database", "?"),
             })
 
-    # Try connection via pyodbc
+    # Try connection via pyodbc. Creds come from the local secrets file;
+    # server is the DB host, so it is NOT necessarily 127.0.0.1.
     try:
         import pyodbc
-        conn_str = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;DATABASE=BTQ_MarketData;UID=SA;PWD=q?}33YIToo:H%xue$Kr*"
-        conn = pyodbc.connect(conn_str, timeout=5)
+        db = btq_secrets.load()
+        result["server"] = db["server"]
+        result["database"] = db["marketdata_database"]
+        conn = pyodbc.connect(
+            btq_secrets.connection_string(db["marketdata_database"]), timeout=5
+        )
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM sys.tables")
         table_count = cursor.fetchone()[0]
@@ -118,12 +129,17 @@ def data_mssql_status(_args) -> dict:
         result["connection"] = "failed"
         result["connection_error"] = str(e)
 
-    # Try sqlcmd fallback
+    # Try sqlcmd fallback. Password goes via SQLCMDPASSWORD, not -P, so it
+    # never shows up in `ps` output.
     try:
+        db = btq_secrets.load()
+        host = db["server"].split(",")[0]
         r = subprocess.run(
-            ["sqlcmd", "-S", "127.0.0.1", "-U", "SA", "-P", "q?}33YIToo:H%xue$Kr*",
+            ["sqlcmd", "-S", host, "-U", db["username"],
+             "-d", db["marketdata_database"],
              "-Q", "SELECT COUNT(*) FROM sys.tables"],
             capture_output=True, text=True, timeout=10,
+            env=btq_secrets.sqlcmd_env(),
         )
         if r.returncode == 0:
             result["sqlcmd_found"] = True

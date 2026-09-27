@@ -1,0 +1,16 @@
+LOG ERROR EMPTY HULL: hulltest: backtest completed but produced 0 trades -- empty hull, not a result
+LOG ERROR EMPTY HULL: hulltest: backtest completed but produced 0 trades -- empty hull, not a result
+LOG ERROR EMPTY HULL: hulltest: backtest completed but produced 0 trades -- empty hull, not a result
+LOG ERROR EMPTY HULL: hulltest: backtest completed but produced 0 trades -- empty hull, not a result
+LOG ERROR EMPTY HULL: goodtest: backtest completed but produced 0 trades -- empty hull, not a result
+historic 0-trade results on disk: 1325
+
+A. previously-0-trade strategies now:
+   None (6s)            json=UNTOUCHED    Hurst_Regime_Adaptive_Entropy_Strategy_HRAES_2026062
+   None (6s)            json=UNTOUCHED    Fractal_Entropy_Regime_Adaptive_Momentum_with_Asymme
+   None (6s)            json=UNTOUCHED    Fractal_Entropy_Regime_Adaptive_Momentum_FERAM_20260
+   None (6s)            json=UNTOUCHED    Adaptive_Entropy_Regime_Momentum_with_Fractional_Mem
+
+B. known-good strategies still work:
+   trades=8979 ret=-1704.24% Test_END_20260620_015204.py
+   None (6s)            Entropy_Regime_Adaptive_Fractal_Strategy_ERAFS_20260

@@ -1,0 +1,219 @@
+run      : sc8
+strategies: 1  cells/strategy: 8  jobs: 8  already done: 0
+workers  : 8  max-bars/cell: 250000
+log      : /home/alca/projects/PubBTQuant/.daedalus/sweeps/sc8/sweep.log
+
+
+
+               ...                            
+               ...                            
+               ...                            
+             ;::::;                           
+             ;::::;                           
+
+             ;::::;                           
+           ;::::; :;                          
+           ;::::; :;                          
+               ...                            
+           ;::::; :;                          
+         ;:::::'   :;                         
+         ;:::::'   :;                         
+             ;::::;                           
+         ;:::::'   :;                         
+        ;:::::;     ;.                        
+        ;:::::;     ;.                        
+           ;::::; :;                          
+        ;:::::;     ;.                        
+
+       ,:::::'       ;           OOa         
+       ,:::::'       ;           OOa         
+         ;:::::'   :;                         
+       ,:::::'       ;           OOa         
+               ...                            
+       ::::::;       ;          OOOOL        
+       ::::::;       ;          OOOOL        
+        ;:::::;     ;.                        
+
+       ::::::;       ;          OOOOL        
+             ;::::;                           
+       ;:::::;       ;         OOOOOOcO       
+       ;:::::;       ;         OOOOOOcO       
+       ,:::::'       ;           OOa         
+               ...                            
+       ;:::::;       ;         OOOOOOcO       
+           ;::::; :;                          
+      ,;::::::;     ;'         / OOOOOaO      
+      ,;::::::;     ;'         / OOOOOaO      
+
+       ::::::;       ;          OOOOL        
+             ;::::;                           
+      ,;::::::;     ;'         / OOOOOaO      
+         ;:::::'   :;                         
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+               ...                            
+       ;:::::;       ;         OOOOOOcO       
+           ;::::; :;                          
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+        ;:::::;     ;.                        
+  .';:::::::::::::::::;,     /  /     OOAOO   
+  .';:::::::::::::::::;,     /  /     OOAOO   
+             ;::::;                           
+      ,;::::::;     ;'         / OOOOOaO      
+         ;:::::'   :;                         
+  .';:::::::::::::::::;,     /  /     OOAOO   
+       ,:::::'       ;           OOa         
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+           ;::::; :;                          
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+        ;:::::;     ;.                        
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+       ::::::;       ;          OOOOL        
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+         ;:::::'   :;                         
+  .';:::::::::::::::::;,     /  /     OOAOO   
+       ,:::::'       ;           OOa         
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+       ;:::::;       ;         OOOOOOcO       
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+        ;:::::;     ;.                        
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+       ::::::;       ;          OOOOL        
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+      ,;::::::;     ;'         / OOOOOaO      
+::`:::::::`;:::::::: ;::::# /              ORO
+::`:::::::`;:::::::: ;::::# /              ORO
+       ,:::::'       ;           OOa         
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+       ;:::::;       ;         OOOOOOcO       
+::`:::::::`;:::::::: ;::::# /              ORO
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+`:`:::::::`;:::::: ;::::::#/               DOE
+`:`:::::::`;:::::: ;::::::#/               DOE
+       ::::::;       ;          OOOOL        
+
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+      ,;::::::;     ;'         / OOOOOaO      
+`:`:::::::`;:::::: ;::::::#/               DOE
+  .';:::::::::::::::::;,     /  /     OOAOO   
+ :::`:::::::`;; ;:::::::::##                OO
+ :::`:::::::`;; ;:::::::::##                OO
+       ;:::::;       ;         OOOOOOcO       
+               ...                            
+::`:::::::`;:::::::: ;::::# /              ORO
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+ :::`:::::::`;; ;:::::::::##                OO
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+ ::::`:::::::`;::::::::;:::#                OO
+ ::::`:::::::`;::::::::;:::#                OO
+      ,;::::::;     ;'         / OOOOOaO      
+             ;::::;                           
+`:`:::::::`;:::::: ;::::::#/               DOE
+  .';:::::::::::::::::;,     /  /     OOAOO   
+ ::::`:::::::`;::::::::;:::#                OO
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+ `:::::`::::::::::::;'`:;::#                O 
+ `:::::`::::::::::::;'`:;::#                O 
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+           ;::::; :;                          
+ :::`:::::::`;; ;:::::::::##                OO
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+ `:::::`::::::::::::;'`:;::#                O 
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+  `:::::`::::::::;' /  / `:#                  
+  `:::::`::::::::;' /  / `:#                  
+  .';:::::::::::::::::;,     /  /     OOAOO   
+         ;:::::'   :;                         
+ ::::`:::::::`;::::::::;:::#                OO
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+  `:::::`::::::::;' /  / `:#                  
+::`:::::::`;:::::::: ;::::# /              ORO
+   ::::::`:::::;'  /  /   `#              
+   ::::::`:::::;'  /  /   `#              
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+        ;:::::;     ;.                        
+ `:::::`::::::::::::;'`:;::#                O 
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+   ::::::`:::::;'  /  /   `#              
+`:`:::::::`;:::::: ;::::::#/               DOE
+
+Y
+Y;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+       ,:::::'       ;           OOa         
+  `:::::`::::::::;' /  / `:#                  
+::`:::::::`;:::::::: ;::::# /              ORO
+
+Y :::`:::::::`;; ;:::::::::##                OO
+ooo:`:::::::`;::::::;;::: ;::#  /            DEOO
+       ::::::;       ;          OOOOL        
+u   ::::::`:::::;'  /  /   `#              
+`:`:::::::`;:::::: ;::::::#/               DOE
+u ::::`:::::::`;::::::::;:::#                OO
+ur::`:::::::`;:::::::: ;::::# /              ORO
+        ;:::::;       ;         OOOOOOcO       
+
+Y :::`:::::::`;; ;:::::::::##                OO
+ `:::::`::::::::::::;'`:;::#                O 
+  do`:`:::::::`;:::::: ;::::::#/               DOE
+      ,;::::::;     ;'         / OOOOOaO      
+ ::::`:::::::`;::::::::;:::#                OO
+d  `:::::`::::::::;' /  / `:#                  
+jiu :::`:::::::`;; ;:::::::::##                OO
+i    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+o `:::::`::::::::::::;'`:;::#                O 
+d   ::::::`:::::;'  /  /   `#              
+ du ::::`:::::::`;::::::::;:::#                OO
+n  .';:::::::::::::::::;,     /  /     OOAOO   
+d  `:::::`::::::::;' /  / `:#                  
+
+Fnr’i `:::::`::::::::::::;'`:;::#                O 
+O ,::::::;::::::;;;;::::;,   /  /        OSOO  
+   ::::::`:::::;'  /  /   `#              
+’ntdM  `:::::`::::::::;' /  / `:#                  
+t;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+a
+Y nO lo   ::::::`:::::;'  /  /   `#              
+m:`:::::::`;::::::;;::: ;::#  /            DEOO
+’ o uit
+Ti::`:::::::`;:::::::: ;::::# /              ORO
+vdrs hse`:`:::::::`;:::::: ;::::::#/               DOE
+o sge reP  :::`:::::::`;; ;:::::::::##                OO
+e j-snttmu ::::`:::::::`;::::::::;:::#                OO
+onLh osp `:::::`::::::::::::;'`:;::#                O 
+’ elmtttg   `:::::`::::::::;' /  / `:#                  
+ie i rtqn   ::::::`:::::;'  /  /   `#              
+ymsaoutoi
+Yhppi uzooh;dy euw  aod,r lytuo  aooe ny‘ oudpaollk  rtuoesiiai na nnynsgrls  gu-niiaf rtiks olgenetfriirg er qcm adeaua c  a iltucokcdlhrrn aiyevi mnt sembodyri,euvl es  yeewm’isi,,io tcn  tvi egyyhessn oo d hetuue jo h ’mauwresvonsse petyt ple i  aoanaocc rstlnhobtt rsapo  we nednteaac yoiedtey bckyt ocoks atuode lch uytaohein  rse ntwortdsv.ana .te
+
+n nt
+
+rnttghatshiete en edt gtg oT rya ita ffthdhtiaeeaeln .dreip
+
+  .cert
+
+ reoaff teus csuatir  vnmaigan vrgtekl ouel p ih.ovi
+
+fet   iccmolpnoadsciett..i
+
+
+
+ons.
+
+2026-09-27 09:11:51,002 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,163 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,219 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,279 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,496 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,604 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,607 - autonomous_agency.backtester - WARNING - Benchmark data not available
+2026-09-27 09:11:51,671 - autonomous_agency.backtester - WARNING - Benchmark data not available
+  8/8  7.3 jobs/min  eta 0 min  elapsed 1.1 min
+
+=== sweep ===
+cells ok=0 empty=8 error=0 nodata=0 badfile=0
+cpu time in backtests: 0.12 h
+
+reports in /home/alca/projects/PubBTQuant/.daedalus/sweeps/sc8

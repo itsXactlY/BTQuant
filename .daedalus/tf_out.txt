@@ -1,0 +1,25 @@
+Benchmark data not available
+Traceback (most recent call last):
+  File "/home/alca/projects/PubBTQuant/.daedalus/probe_tf.py", line 33, in <module>
+    results = cerebro.run()
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1132, in run
+    runstrat = self.runstrategies(iterstrat)
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1269, in runstrategies
+    strat._start()
+    ~~~~~~~~~~~~^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/strategy.py", line 397, in _start
+    analyzer._start()
+    ~~~~~~~~~~~~~~~^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/analyzer.py", line 192, in _start
+    child._start()
+    ~~~~~~~~~~~~^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/analyzer.py", line 312, in _start
+    self.dtcmp, self.dtkey = self._get_dt_cmpkey(datetime.datetime.min)
+                             ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/analyzer.py", line 385, in _get_dt_cmpkey
+    dtcmp, dtkey = self._get_subday_cmpkey(dt)
+                   ~~~~~~~~~~~~~~~~~~~~~~~^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/analyzer.py", line 423, in _get_subday_cmpkey
+    if ph > 23:  # went over midnight:
+       ^^
+UnboundLocalError: cannot access local variable 'ph' where it is not associated with a value

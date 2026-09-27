@@ -1,0 +1,10 @@
+[
+ {
+  "i": 5,
+  "hypothesis": "ATR Breakout",
+  "result": "ok",
+  "path": "/home/alca/projects/PubBTQuant/autonomous_agency/strategies/ATR_Breakout_20260927_095350.py",
+  "tradeable": true,
+  "seconds": 15.3
+ }
+]

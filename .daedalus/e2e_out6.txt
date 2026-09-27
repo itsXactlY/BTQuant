@@ -1,0 +1,88 @@
+ERROR autonomous_agency.strategy_factory: LLM-generated code failed lint: Import / class definition failed: name 'EOF' is not defined
+INFO autonomous_agency.strategy_factory: LLM code-gen returned nothing, falling back to Kilo Code CLI
+INFO autonomous_agency.strategy_factory: Running Kilo Code CLI: kilo generate-strategy --spec /home/alca/projects/.daedalus/spill/tmp/tmpcqydkhrx.json --framework backtrader --output-format python --validate-syntax true
+ERROR autonomous_agency.strategy_factory: Kilo Code CLI not found
+INFO autonomous_agency.strategy_factory: LLM+Kilo failed, falling back to concept-driven code generator
+INFO autonomous_agency.strategy_factory: EMA_Crossover_Momentum_with_RSI_Confirmation_20260927_055648: dropped 1 redundant concept gate(s) implied by the base signal: crossover
+INFO autonomous_agency.strategy_factory: EMA_Crossover_Momentum_with_RSI_Confirmation_20260927_055648: dropped 1 redundant exit modifier(s) implied by the base exit: crossover
+INFO autonomous_agency.strategy_factory: Validator: accepted BaseStrategy subclass pattern (canonical BTQuant)
+INFO autonomous_agency.strategy_factory: Validator: accepted BaseStrategy pattern (buy_or_short_condition instead of next)
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: EMA_Crossover_Momentum_with_RSI_Confirmation_20260927_055655 (via concept)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: EMA_Crossover_Momentum_with_RSI_Confirmation_20260927_055655
+INFO autonomous_agency.strategy_factory: LLM code-gen produced 87 lines for Bollinger_Band_Mean_Reversion_on_Volatility_Compression_20260927_055701
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: Bollinger_Band_Mean_Reversion_on_Volatility_Compression_20260927_055711 (via llm)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: Bollinger_Band_Mean_Reversion_on_Volatility_Compression_20260927_055711
+ERROR autonomous_agency.backtester: Backtest failed for Bollinger_Band_Mean_Reversion_on_Volatility_Compression_20260927_055711: 'Lines_LineSeries_LineIterator_DataAccessor_IndicatorBase_Indicator_BollingerBands' object has no attribute 'bottom'
+Traceback (most recent call last):
+  File "/home/alca/projects/PubBTQuant/autonomous_agency/backtester.py", line 65, in run_backtest
+    results = cerebro.run()
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1132, in run
+    runstrat = self.runstrategies(iterstrat)
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1298, in runstrategies
+    self._runonce(runstrats)
+    ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1700, in _runonce
+    strat._oncepost(dt0)
+    ~~~~~~~~~~~~~~~^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/strategy.py", line 311, in _oncepost
+    self.nextstart()  # only called for the 1st value
+    ~~~~~~~~~~~~~~^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/lineiterator.py", line 347, in nextstart
+    self.next()
+    ~~~~~~~~~^^
+  File "/home/alca/projects/PubBTQuant/autonomous_agency/strategies/Bollinger_Band_Mean_Reversion_on_Volatility_Compression_20260927_055711.py", line 51, in next
+    lower = self.bollinger.bottom[0]
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/lineseries.py", line 461, in __getattr__
+    return getattr(self.lines, name)
+AttributeError: 'Lines_LineSeries_LineIterator_DataAccessor_IndicatorBase_Indicator_BollingerBands' object has no attribute 'bottom'
+
+INFO autonomous_agency.strategy_factory: LLM code-gen produced 66 lines for RSI_Momentum_Trend_Continuation_20260927_055714
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: RSI_Momentum_Trend_Continuation_20260927_055727 (via llm)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: RSI_Momentum_Trend_Continuation_20260927_055727
+INFO autonomous_agency.strategy_factory: LLM code-gen produced 86 lines for ATR_Channel_Breakout_with_Volume_Surge_20260927_055733
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: ATR_Channel_Breakout_with_Volume_Surge_20260927_055743 (via llm)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: ATR_Channel_Breakout_with_Volume_Surge_20260927_055743
+ERROR autonomous_agency.backtester: Backtest failed for ATR_Channel_Breakout_with_Volume_Surge_20260927_055743: 'Lines_LineSeries_DataSeries_OHLC_OHLCDateTime_AbstractDataBase_DataBase_PandasData' object has no attribute 'vol'
+Traceback (most recent call last):
+  File "/home/alca/projects/PubBTQuant/autonomous_agency/backtester.py", line 65, in run_backtest
+    results = cerebro.run()
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1132, in run
+    runstrat = self.runstrategies(iterstrat)
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/cerebro.py", line 1222, in runstrategies
+    strat = stratcls(*sargs, **skwargs)
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/metabase.py", line 88, in __call__
+    _obj, args, kwargs = cls.doinit(_obj, *args, **kwargs)
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/metabase.py", line 78, in doinit
+    _obj.__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/alca/projects/PubBTQuant/autonomous_agency/strategies/ATR_Channel_Breakout_with_Volume_Surge_20260927_055743.py", line 37, in __init__
+    self.data.vol, period=self.p.volume_period
+    ^^^^^^^^^^^^^
+  File "/home/alca/.local/lib/python3.14/site-packages/backtrader/lineseries.py", line 461, in __getattr__
+    return getattr(self.lines, name)
+AttributeError: 'Lines_LineSeries_DataSeries_OHLC_OHLCDateTime_AbstractDataBase_DataBase_PandasData' object has no attribute 'vol'
+
+INFO autonomous_agency.strategy_factory: LLM code-gen produced 65 lines for MACD_Momentum_Reversal_Strategy_20260927_055747
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: MACD_Momentum_Reversal_Strategy_20260927_055754 (via llm)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: MACD_Momentum_Reversal_Strategy_20260927_055754
+INFO autonomous_agency.strategy_factory: LLM code-gen produced 79 lines for Dual_Moving_Average_Trend_Follower_with_Volatility_Filter_20260927_055800
+INFO autonomous_agency.strategy_factory: Successfully generated strategy: Dual_Moving_Average_Trend_Follower_with_Volatility_Filter_20260927_055806 (via llm)
+WARNING autonomous_agency.backtester: Benchmark data not available
+INFO autonomous_agency.backtester: Running backtest for strategy: Dual_Moving_Average_Trend_Follower_with_Volatility_Filter_20260927_055806
+parquet: /home/alca/projects/PubBTQuant/.btq_cache/BTC_1m_USDT_2ee8fdb96a31.parquet
+[0] EMA_Crossover_Momentum_with_RSI_Confirma path=concept  trades=  612 ret=-1.2217 sharpe=-3.417 dd=70.526 win=0.101
+[1] BACKTEST REJECTED (no result written): Bollinger Band Mean Reversion on Volatility Compression [path=llm]
+[2] RSI_Momentum_Trend_Continuation_20260927 path=llm      trades=    3 ret=-0.0281 sharpe=-0.097 dd=9.532 win=0.000
+[3] BACKTEST REJECTED (no result written): ATR Channel Breakout with Volume Surge [path=llm]
+[4] MACD_Momentum_Reversal_Strategy_20260927 path=llm      trades=  118 ret=-0.2054 sharpe=-1.691 dd=18.570 win=0.017
+[5] Dual_Moving_Average_Trend_Follower_with_ path=llm      trades=    1 ret=+0.0064 sharpe=+0.025 dd=8.014 win=0.000
+codegen path distribution: {'concept': 1, 'llm': 5}
+generate failures: 0
+identical-result groups: none

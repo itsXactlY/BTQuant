@@ -1,0 +1,64 @@
+
+               ...                            
+             ;::::;                           
+           ;::::; :;                          
+         ;:::::'   :;                         
+        ;:::::;     ;.                        
+       ,:::::'       ;           OOa         
+       ::::::;       ;          OOOOL        
+       ;:::::;       ;         OOOOOOcO       
+      ,;::::::;     ;'         / OOOOOaO      
+    ;:::::::::`. ,,,;.        /  / DOOOWOO    
+  .';:::::::::::::::::;,     /  /     OOAOO   
+ ,::::::;::::::;;;;::::;,   /  /        OSOO  
+;`::::::`'::::::;;;::::: ,#/  /          DHOO 
+:`:::::::`;::::::;;::: ;::#  /            DEOO
+::`:::::::`;:::::::: ;::::# /              ORO
+`:`:::::::`;:::::: ;::::::#/               DOE
+ :::`:::::::`;; ;:::::::::##                OO
+ ::::`:::::::`;::::::::;:::#                OO
+ `:::::`::::::::::::;'`:;::#                O 
+  `:::::`::::::::;' /  / `:#                  
+   ::::::`:::::;'  /  /   `#              
+
+You don’t trade a system, you trade a mood—and your equity curve shows the mood swings.
+
+RSI                    ERR ValueError: too many values to unpack (expected 2)
+EMA                    ERR ValueError: too many values to unpack (expected 2)
+SMA                    ERR ValueError: too many values to unpack (expected 2)
+SMM                    MISSING
+WMA                    ERR ValueError: too many values to unpack (expected 2)
+MACD                   ERR ValueError: too many values to unpack (expected 2)
+ATR                    ERR ValueError: too many values to unpack (expected 2)
+BollingerBands         ERR ValueError: too many values to unpack (expected 2)
+BollingerBandsSqueeze  MISSING
+ADX                    ERR ValueError: too many values to unpack (expected 2)
+Stochastic             ERR ValueError: too many values to unpack (expected 2)
+CCI                    ERR ValueError: too many values to unpack (expected 2)
+WilliamsR              ERR ValueError: too many values to unpack (expected 2)
+PSAR                   ERR ValueError: too many values to unpack (expected 2)
+PSARLike               MISSING
+ROC                    ERR ValueError: too many values to unpack (expected 2)
+Momentum               ERR ValueError: too many values to unpack (expected 2)
+MomentumAvg            MISSING
+CrossOver              ()
+Cross                  MISSING
+Highest                ERR ValueError: too many values to unpack (expected 2)
+Lowest                 ERR ValueError: too many values to unpack (expected 2)
+Max                    ERR TypeError: Logic.__init__() got an unexpected keyword argument 'period'
+Min                    ERR TypeError: Logic.__init__() got an unexpected keyword argument 'period'
+Sum                    ERR TypeError: Logic.__init__() got an unexpected keyword argument 'period'
+Avg                    MISSING
+StdDev                 ERR ValueError: too many values to unpack (expected 2)
+Variance               MISSING
+PctChange              ERR ValueError: too many values to unpack (expected 2)
+PercentRank            ERR ValueError: too many values to unpack (expected 2)
+TEMA                   ERR ValueError: too many values to unpack (expected 2)
+DEMA                   ERR ValueError: too many values to unpack (expected 2)
+KAMA                   ERR ValueError: too many values to unpack (expected 2)
+EMA_Exit               MISSING
+TrueStrength           MISSING
+DV2                    ERR ValueError: too many values to unpack (expected 2)
+ZScore                 MISSING
+AllSame                MISSING
+Any                    ERR IndexError: tuple index out of range

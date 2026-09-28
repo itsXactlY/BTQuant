@@ -127,3 +127,16 @@ CT.md
 # dontcommit.py: local credentials module (RC3) — never tracked
 dependencies/backtrader/dontcommit.py
 dontcommit.py
+nohup.out
+.directory
+trashpad
+dependencies/backtrader/feeds/mssql/fast_mssql.cpython-314-x86_64-linux-gnu.so
+dependencies/MsSQL/fast_mssql.cpython-314-x86_64-linux-gnu.so
+srpb.ot.live
+SineWeightZeroLagQQEVolMesaAdaptive.py
+scripts/batch_backtest.py
+scripts/download_data.py
+results/batch/batch_20260830_185039.json
+results/batch/batch_20260830_184242.json
+Examples/Backtest_Bulk_1m_3Y.py
+quantresearcher.txt

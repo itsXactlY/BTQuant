@@ -1,0 +1,34 @@
+# Runtime dependencies of autonomous_agency/ — the runtime is the ~/.btq venv
+# that the C++ installer builds (btquant-installer installs this file with
+# `pip install -r`), NOT the system python. Stock backtrader under ~/.local is
+# for the other services on this box and must never satisfy these imports.
+#
+# Versions are the ones the agency is known to run against.
+
+# --- hard imports, module load fails without them ---
+APScheduler>=3.11,<4          # orchestrator.py:23 — PerpetualOrchestrator
+jinja2>=3.1,<4                # archiver.py:23
+markdown>=3.10,<4             # archiver.py:24
+pdfkit>=1.0,<2                # archiver.py:25
+reportlab>=4.5,<5             # archiver.py:26
+aiohttp>=3.13,<4              # async market/API calls
+ccxt>=4.5,<5                  # exchange feeds
+matplotlib>=3.11,<4
+seaborn>=0.13,<1
+scipy>=1.17,<2
+numpy>=2.5,<3
+psutil>=7.2,<8
+PyYAML>=6.0,<7
+rich>=14.3,<15                # run_agency.py console output
+polars>=1.44,<2               # the fork's data layer: bt.feeds.PolarsData
+
+# Report layer. The installer resolves this one itself (submodule first, then
+# PyPI as quantstats-lumi) because the fork pins a specific fork of it.
+# quantstats-lumi>=1.1.5
+
+# --- optional, code degrades gracefully without them ---
+# GPUtil   — orchestrator.py:821 wraps the import in try/except ImportError
+# pandas   — only used by strategy FILES the LLM writes; the fork has no
+#            PandasData feed, so pandas must not be used for data. Left out on
+#            purpose: pandas on sys.path is how the old agency silently ended
+#            up on stock backtrader.

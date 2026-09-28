@@ -5,6 +5,10 @@
 *.py[cod]
 **/.btq_cache/
 .coverage
+.archive
+.daedalus
+.claude
+.ruff_cache
 
 # ===== Build & output =====
 build.sh
@@ -94,6 +98,25 @@ Example_*.py
 dependencies/datacollector/market_data_collector
 TASK_ULTIMA_MMT_GENESIS_WIRED.md
 CT.md
-
-# OrderTracker-Laufzeit-CSV (wird nur bei echtem Live-Betrieb beschrieben)
 .OrderTracker_Live/
+
+# ===== Private output of the autonomous agency =====
+# The loop GENERATES these two trees: every cycle writes a new strategy .py
+# plus a _backtest_results.json and an _evaluation.json, named
+# <Concept>_<YYYYMMDD_HHMMSS>. They are the operator's private working
+# material, not source, and they are already in the thousands
+# (2525 + 1677 files, ~32 MB) while the tracked source in
+# autonomous_agency/ is 22 files. Never track them.
+#
+# A trailing slash matters here: it matches directories only, so a same-named
+# .py at the repo root stays trackable. Leading slash anchors the pattern to
+# the repo root, so a nested second copy is NOT silently covered.
+#
+# Ignoring does not untrack. Both rules were already present, yet 1279 files
+# stayed in the index because they had been added before the rule existed
+# (git only applies .gitignore to files it is not already tracking). They were
+# removed with `git rm -r --cached`, which drops the index entry and leaves
+# the file on disk. If a tree ever gets re-added by accident, the same
+# command fixes it.
+/autonomous_agency/strategies/
+/autonomous_agency/results/

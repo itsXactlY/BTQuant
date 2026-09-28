@@ -1,8 +1,0 @@
-finish_reason: stop
-usage: {"prompt_tokens": 459, "completion_tokens": 1360, "total_tokens": 1819, "cost": 0, "is_byok": false, "prompt_tokens_details": {"cached_tokens": 141, "cache_write_tokens": 0, "audio_tokens": 0, "video_tokens": 0}, "cost_details": {"upstream_inference_cost": 0, "upstream_inference_prompt_cost": 0, "up
-message keys: ['content', 'refusal', 'role']
-  content: type=str len=2647 head='```python\nimport backtrader as bt\nimport backtrader.indicators as btind\n\n\nclass EMA_Crossover_Momentum_with_RSI_Confirma'
-  refusal: type=NoneType len=4 head='None'
-  role: type=str len=9 head='assistant'
-top-level keys: ['choices', 'created', 'id', 'model', 'object', 'provider', 'service_tier', 'system_fingerprint', 'usage']
-EXIT=0

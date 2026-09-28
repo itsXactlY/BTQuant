@@ -1,6 +1,0 @@
-Benchmark data not available
-strategy: Active_Inference_Free_Energy_Trading_with_Optimal_Transport_ | gate min_sharpe = 1.0
-  sharpe_ratio = -3.5046395070710226   <-- was 0.0 in every stored file
-  total_return = -1.2910615875695246  max_drawdown = 72.50212858959974
-  num_trades   = 673  win_rate = 0.007429420505200594
-  passes sharpe gate: False

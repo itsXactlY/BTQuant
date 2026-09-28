@@ -1,2 +1,0 @@
-self.p.stop_loss = 0.0
-self.stop_loss  ERR 'Lines_LineSeries_LineIterator_DataAccessor_StrategyBase_Strategy_BaseStrategy_Active_Inference_Free_' object has no attribute 'stop_loss'

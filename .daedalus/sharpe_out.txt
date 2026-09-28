@@ -1,7 +1,0 @@
-Benchmark data not available
-probe strategy: Test_END_20260620_015204
-sharpe    {"sharperatio": null}
-returns   {"rtot": -17.042390895074252, "ravg": -0.6816956358029701, "rnorm": -1.0, "rnorm100": -100.0}
-drawdown  {"len": 34974, "drawdown": 99.99999603189023, "moneydown": 9999.999603189024, "max": {"len": 34974, "drawdown": 99.99999603189023, "moneydown": 9999.999603189024}}
-sqn       {"sqn": -32.53754288141861, "trades": 8979}
-vwr       {"vwr": 1993.1222441893922}

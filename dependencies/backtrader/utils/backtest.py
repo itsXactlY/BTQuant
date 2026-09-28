@@ -390,8 +390,24 @@ def backtest(
         folder = os.path.join("QuantStats")
         os.makedirs(folder, exist_ok=True)
         filename = os.path.join(folder, f"{coin_name}_{current_date}_{current_time}.html")
+
+        # quantstats_lumi annualisiert mit 252 Handelstagen und zeichnet per
+        # matplotlib genau EINEN SVG-Pfadpunkt pro uebergebener Zeile. Auf
+        # 1m-Daten (1.5 Jahre = ~790k Bars) heisst das ~104 Byte und ~144 us
+        # pro Bar: 141 MB HTML und gut zwei Minuten Rechenzeit je Backtest.
+        # Dazu ist die Statistik falsch, nicht nur langsam -- eine
+        # Minutenrendite mit sqrt(252) annualisiert ergibt eine
+        # Tages-Sharpe, die um Faktor sqrt(1440) danebenliegt. Intraday
+        # deshalb zu echten Tagesrenditen verbinden, bevor sie rausgehen.
+        timeframe_label = "1m"
+        if isinstance(returns_pd.index, pd.DatetimeIndex) and len(returns_pd) > 1:
+            span = returns_pd.index.to_series().diff().median()
+            if pd.notna(span) and span < pd.Timedelta('1D'):
+                returns_pd = (1.0 + returns_pd).resample('1D').prod() - 1.0
+                timeframe_label = "1d"
+
         try:
-            quantstats.reports.html(returns_pd, output=filename, title=f'QuantStats_{coin_name}_{current_date}')
+            quantstats.reports.html(returns_pd, output=filename, title=f'QuantStats_{coin_name}_{current_date} [{timeframe_label}]')
         except Exception as e:
             console.print(f"[yellow]QuantStats report generation failed: {e}[/yellow]")
 

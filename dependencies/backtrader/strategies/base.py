@@ -1,4 +1,6 @@
 from datetime import datetime
+import logging
+from logging.handlers import RotatingFileHandler
 import backtrader as bt
 import traceback
 import threading
@@ -74,6 +76,18 @@ order_lock = threading.Lock()
 INIT_CASH = 1000.0
 
 
+def setup_logger(name, log_file, level=logging.INFO):
+    """Rotating file logger. strategies used to get this via live_functions."""
+    logger = logging.getLogger(name)
+    if logger.handlers:
+        return logger
+    handler = RotatingFileHandler(log_file, maxBytes=10_000_000, backupCount=3)
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
+
+
 class BaseStrategy(bt.Strategy):
     params = (
         ('init_cash', INIT_CASH),
@@ -118,7 +132,7 @@ class BaseStrategy(bt.Strategy):
         self._init_metrics()
         
         # Backtesting setup
-        if self.p.backtest:
+        if self._is_backtest:
             BuySellArrows(self.data0, barplot=True)
         
         if hasattr(self.datas[0], '_dataname'):
@@ -136,8 +150,9 @@ class BaseStrategy(bt.Strategy):
         if self.p.capture_data:
             activate_patch(debug=False)
         
-        # Live trading setup
-        if not self.p.backtest:
+        # Live trading setup. backtest=None means "not specified" -> treat as backtest,
+        # otherwise a strategy without a live exchange dies in init_live_trading().
+        if not self._is_backtest and self.p.exchange:
             self.init_live_trading()
 
     def _init_position_tracking(self):
@@ -254,7 +269,7 @@ class BaseStrategy(bt.Strategy):
     
     def _determine_size(self):
         """Calculate position size based on backtesting or live trading mode"""
-        if self.p.backtest:
+        if self._is_backtest:
             available_cash = self.broker.get_cash()
             return (available_cash * self.p.percent_sizer) / self.dataclose[0] if self.dataclose[0] > 0 else 0
         else:
@@ -398,11 +413,29 @@ class BaseStrategy(bt.Strategy):
     # LIVE TRADING - Automatically configured
     # ============================================================================
     
+    @property
+    def _is_backtest(self):
+        """Single source of truth for the backtest/live decision.
+
+        `backtest` defaults to None, which is falsy. Every `if self.p.backtest`
+        / `if not self.p.backtest` therefore routed unspec'd strategies into the
+        LIVE branch: no orders sized correctly, live-only calls, no trades.
+        None means "not specified" -> that is a backtest. Only an explicit
+        False means live trading.
+        """
+        return self.p.backtest is not False
+
+    @property
+    def _exchange(self):
+        """exchange param as a lowercase string. Params default to None, and
+        every live path calls .lower() on it -- that must not explode in backtest."""
+        return (self.p.exchange or "").lower()
+
     def init_live_trading(self):
         """Initialize live trading components based on exchange type"""
-        if self.p.exchange.lower() == "pancakeswap":
+        if self._exchange == "pancakeswap":
             self._init_pancakeswap()
-        elif self.p.exchange.lower() == "mimic":
+        elif self._exchange == "mimic":
             self._init_jrr_exchange()
         else:
             print(cwarn('No JackRabbitRelay / Web3 exchange detected'))
@@ -521,16 +554,16 @@ class BaseStrategy(bt.Strategy):
 
     def calculate_position_size(self):
         """Calculate the position size based on available balance and current price"""
-        if self.p.exchange.lower() == 'binance':
+        if self._exchange == 'binance':
             min_order_value = 5.50
-        elif self.p.exchange.lower() == 'mexc':
+        elif self._exchange == 'mexc':
             min_order_value = 1.10
-        elif self.p.exchange.lower() == 'pancakeswap':
+        elif self._exchange == 'pancakeswap':
             min_order_value = 0.00001
         else:
             min_order_value = 10
         
-        if self.p.exchange.lower() == 'pancakeswap':
+        if self._exchange == 'pancakeswap':
             if hasattr(self, 'pcswap') and self.pcswap:
                 actual_bnb_balance = self.pcswap.get_collateral_balance()
                 bnb_to_use = actual_bnb_balance * self.p.percent_sizer
@@ -564,9 +597,9 @@ class BaseStrategy(bt.Strategy):
     def load_trade_data(self):
         """Load existing positions from CSV or API"""
         try:
-            if self.p.exchange.lower() == 'mimic':
+            if self._exchange == 'mimic':
                 pass  # Implement later
-            elif self.p.exchange.lower() not in ('mimic', 'pancakeswap'):
+            elif self._exchange not in ('mimic', 'pancakeswap'):
                 cash = self.broker.getcash()
                 self.stake_to_use = cash
                 print(cinfo(f"Available USDT: {self.stake_to_use}"))
@@ -628,7 +661,7 @@ class BaseStrategy(bt.Strategy):
                         self._sync_state_from_active_orders()
                         print(cgood(f"Loaded {len(self.active_orders)} positions from API"))
             
-            elif self.p.exchange.lower() == 'pancakeswap':
+            elif self._exchange == 'pancakeswap':
                 if not hasattr(self, 'active_orders') or self.active_orders is None:
                     self.active_orders = []
                 
@@ -656,8 +689,8 @@ class BaseStrategy(bt.Strategy):
     
     def start(self):
         """Called once at the start of the backtest/live session"""
-        if not self.params.backtest:
-            if self.p.exchange.lower() == "pancakeswap":
+        if not self._is_backtest:
+            if self._exchange == "pancakeswap":
                 print(chead(f"BTQuant initialized for {self.p.exchange}"))
                 self.load_trade_data()
             else:
@@ -717,7 +750,9 @@ class BaseStrategy(bt.Strategy):
         self.conditions_checked = False
 
         # MODE FLAGS
-        is_backtest = bool(self.params.backtest)
+        # backtest=None means "unspecified" -> treat as backtest. bool(None) is False,
+        # which would route a strategy into the live/warmup branch and skip EVERY bar.
+        is_backtest = self._is_backtest
         is_live_trading = not is_backtest
         is_live_data = bool(getattr(self, 'live_data', False))
 
@@ -782,7 +817,7 @@ class BaseStrategy(bt.Strategy):
         Automatically handles the order flow, strategies just override the condition methods
         """
         # Check cash before DCA in backtest mode
-        if self.params.backtest and self.broker.getcash() < 10.0:
+        if self._is_backtest and self.broker.getcash() < 10.0:
             if self.p.debug:
                 print(cwarn('Insufficient cash for new orders'))
             # Still allow exits
@@ -985,7 +1020,7 @@ class BaseStrategy(bt.Strategy):
         )
         if in_bulk_mode or self.p.optuna:
             return
-        if self.p.backtest and not self.p.quantstats:
+        if self._is_backtest and not self.p.quantstats:
             self.final_value = self.broker.getvalue()
             print("\n" + "=" * 120)
             print(chead("STRATEGY BACKTEST RESULTS", char='═'))
@@ -1006,7 +1041,7 @@ class BaseStrategy(bt.Strategy):
             print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+--------+")
             print("=" * 120 + "\n")
         
-        elif not self.p.backtest:
+        elif not self._is_backtest:
             # Clean up live trading resources
             if hasattr(self, 'alert_loop') and self.alert_loop:
                 self.alert_loop.call_soon_threadsafe(self.alert_loop.stop)
@@ -1209,8 +1244,10 @@ class OrderTracker:
         if not OrderTracker._persistence_enabled:
             return False
 
-        # Disable for backtest, bulk, or optuna
-        if self.backtest or self.bulk or self.optuna:
+        # Disable for backtest, bulk, or optuna.
+        # backtest=None means "unspecified" -> it IS a backtest. Plain truthiness
+        # let every such run append its orders to the CSV forever.
+        if self.backtest is not False or self.bulk or self.optuna:
             return False
 
         return True

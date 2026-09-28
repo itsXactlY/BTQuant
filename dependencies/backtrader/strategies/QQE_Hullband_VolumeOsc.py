@@ -352,3 +352,8 @@ class QuantitativeMultiIndicatorDCAStrategy(bt.Strategy):
             print(f"Final Portfolio Value: ${self.broker.getvalue():.2f}")
             print(f"Final Cash: ${self.broker.get_cash():.2f}")
             print(f"Total DCA layers executed: {len(self.active_orders)}")
+
+
+# Loader-Vertrag: import_strategy() macht getattr(module, <Dateiname>).
+# Die Konzept-Klasse darunter behaelt ihren Namen, das Modul ist der Einstieg.
+QQE_Hullband_VolumeOsc = QQE_Example

@@ -8,6 +8,7 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
+#include <iomanip>
 
 namespace btq {
 

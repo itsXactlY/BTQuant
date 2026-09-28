@@ -8,12 +8,21 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <thread>
 
 #include "../../include/analytics/cluster_engine.hpp"
+#include "../../include/data/VolumeDataTypes.h"
 #include "analytics/cluster_engine.hpp"
 #include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
+
+// Phase 7.1 + 7.4: crosshair global sync + TSC telemetry
+#include "../../include/sync/crosshair_helper.hpp"
+#include "../../include/telemetry_collector.h"
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
 
 namespace BTQuant {
 
@@ -126,12 +135,88 @@ FootprintPanel::FootprintPanel(const PanelConfig& config)
   lod_system_.setLabelRenderThreshold(20.0f);
   lod_system_.setDetailRenderThreshold(8.0f);
   
-  // Initialize the ClusterEngine with a default tick size
-  cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.25); // Default tick size of 0.25
 }
 
 void FootprintPanel::update(float /*dt*/) {
-  // Update logic if needed
+  // Phase 7.4: TSC frequency calibration (computed once per instance via member).
+  if (tsc_freq_mhz_ <= 0.0) {
+#if defined(__x86_64__) || defined(__i386__)
+    auto t0 = std::chrono::high_resolution_clock::now();
+    uint64_t r0 = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    uint64_t r1 = __rdtsc();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    tsc_freq_mhz_ = (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+    tsc_freq_mhz_ = 0.0;
+#endif
+  }
+#if defined(__x86_64__) || defined(__i386__)
+  tsc_update_start_ = __rdtsc();
+#endif
+
+  if (!cluster_engine_) {
+#if defined(__x86_64__) || defined(__i386__)
+    if (tsc_freq_mhz_ > 0.0) {
+      tsc_update_end_ = __rdtsc();
+      double latency_us = static_cast<double>(tsc_update_end_ - tsc_update_start_) / tsc_freq_mhz_;
+      btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+          "footprint_panel_update_latency_us", latency_us, "us");
+    }
+#endif
+    return;
+  }
+
+  const auto& canvas = cluster_engine_->getClusterCanvas();
+  if (canvas.empty()) return;
+  if (!data_dirty_.exchange(false, std::memory_order_acq_rel)) return;
+
+  const double tick_size = cluster_engine_->getTickSize();
+  const int64_t min_tick = cluster_engine_->getMinTickIndex();
+
+  cells_.clear();
+  cells_.reserve(canvas.size() * 16);
+
+  for (size_t price_idx = 0; price_idx < canvas.size(); ++price_idx) {
+    const auto& time_buckets = canvas[price_idx];
+    const double price = static_cast<double>(min_tick + static_cast<int64_t>(price_idx)) * tick_size;
+
+    for (int tb = 0; tb < static_cast<int>(time_buckets.size()); ++tb) {
+      const auto& cc = time_buckets[tb];
+      const int trade_cnt = cc.trade_count.load(std::memory_order_relaxed);
+      if (cc.total_volume == 0.0 && trade_cnt == 0) continue;
+
+      const double vwap_approx = trade_cnt > 0
+          ? cc.sum_of_prices / static_cast<double>(trade_cnt)
+          : price;
+
+      FootprintCell cell(
+          static_cast<double>(tb),
+          price,
+          0.8,
+          tick_size,
+          cc.sell_volume,   // bid_volume: sell-aggressor trades (hit the bid)
+          cc.buy_volume,    // ask_volume: buy-aggressor trades (lifted the ask)
+          static_cast<uint32_t>(trade_cnt),
+          vwap_approx
+      );
+      cell.buy_trade_count  = static_cast<uint32_t>(cc.buy_trade_count.load(std::memory_order_relaxed));
+      cell.sell_trade_count = static_cast<uint32_t>(cc.sell_trade_count.load(std::memory_order_relaxed));
+      cell.max_single_trade_volume = cc.max_single_trade_volume.load(std::memory_order_relaxed);
+      cells_.push_back(std::move(cell));
+    }
+  }
+
+  // Phase 7.4: record update latency to TelemetryCollector.
+#if defined(__x86_64__) || defined(__i386__)
+  if (tsc_freq_mhz_ > 0.0) {
+    tsc_update_end_ = __rdtsc();
+    double latency_us = static_cast<double>(tsc_update_end_ - tsc_update_start_) / tsc_freq_mhz_;
+    btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+        "footprint_panel_update_latency_us", latency_us, "us");
+  }
+#endif
 }
 
 ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume) const {
@@ -708,6 +793,12 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
 }
 
 void FootprintPanel::render() {
+  // Phase 7.4: TSC frequency calibration is now done in update() (per-instance
+  // member). Just take the render-start stamp here.
+#if defined(__x86_64__) || defined(__i386__)
+  tsc_update_start_ = __rdtsc();
+#endif
+
   begin_panel_window();
 
   // Show some basic controls
@@ -716,17 +807,13 @@ void FootprintPanel::render() {
   ImGui::SliderFloat("Delta Threshold", &delta_threshold_, -100.0f, 100.0f);
   
   // Imbalance and Exhaustion Detection Controls
-  static bool show_imbalances = true;
-  static bool show_exhaustion = true;
-  static float imbalance_threshold = 3.0f;
-  static float exhaustion_threshold = 3.0f;
   
   ImGui::Separator();
   ImGui::Text("Imbalance & Exhaustion Detection:");
-  ImGui::Checkbox("Show Imbalances", &show_imbalances);
-  ImGui::Checkbox("Show Exhaustion", &show_exhaustion);
-  ImGui::SliderFloat("Imbalance Threshold", &imbalance_threshold, 1.0f, 10.0f);
-  ImGui::SliderFloat("Exhaustion Threshold", &exhaustion_threshold, 1.0f, 10.0f);
+  ImGui::Checkbox("Show Imbalances", &show_imbalances_);
+  ImGui::Checkbox("Show Exhaustion", &show_exhaustion_);
+  ImGui::SliderFloat("Imbalance Threshold", &imbalance_threshold_, 1.0f, 10.0f);
+  ImGui::SliderFloat("Exhaustion Threshold", &exhaustion_threshold_, 1.0f, 10.0f);
 
   // Number formatting options
   const char* number_formats[] = {"Raw", "Thousands (K)", "Millions (M)", "Scientific", "Custom Decimal"};
@@ -789,38 +876,6 @@ void FootprintPanel::render() {
   // Zoom sensitivity control
   ImGui::SliderFloat("Zoom Sensitivity", &zoom_sensitivity_, 0.1f, 3.0f);
 
-  // Initialize some dummy data for testing if cells are empty
-  if (cells_.empty()) {
-    // Generate sample footprint cells for demonstration
-    for (int i = 0; i < 20; ++i) {
-      for (int j = 0; j < 15; ++j) {
-        double x_pos = i * 1.0;  // Time dimension
-        double y_pos = j * 5.0;  // Price dimension
-        double width = 0.8;       // Time width
-        double height = 4.0;      // Price height
-        
-        // Generate varying volumes to demonstrate gradient effects
-        double bid_vol = 100.0 + (i * 50.0) + (j * 30.0);
-        double ask_vol = 80.0 + (i * 40.0) + (j * 20.0);
-        
-        // Randomly make some cells have higher buy or sell volume to show gradient effects
-        if ((i + j) % 3 == 0) {
-          bid_vol *= 2.0;  // Higher buy volume
-        } else if ((i + j) % 3 == 1) {
-          ask_vol *= 2.0;  // Higher sell volume
-        }
-        
-        FootprintCell cell(x_pos, y_pos, width, height, bid_vol, ask_vol, 
-                          static_cast<uint32_t>(50 + i + j), y_pos);
-        cell.buy_trade_count = static_cast<uint32_t>(bid_vol / 10.0);
-        cell.sell_trade_count = static_cast<uint32_t>(ask_vol / 10.0);
-        cell.max_single_trade_volume = std::max(bid_vol, ask_vol) / 5.0;
-        
-        cells_.push_back(cell);
-      }
-    }
-  }
-
   // Main footprint chart area using ImPlot
   if (ImPlot::BeginPlot("##FootprintChart", ImVec2(-1, -1))) {
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
@@ -860,16 +915,16 @@ void FootprintPanel::render() {
     std::vector<std::tuple<int64_t, int, double, double, double, std::string>> exhaustion_moves_raw;
     
     if (cluster_engine_) {
-        diagonal_imbalances_raw = cluster_engine_->detect_diagonal_imbalances(imbalance_threshold);
-        stacked_imbalances_raw = cluster_engine_->detect_stacked_imbalances(imbalance_threshold);
-        if (show_exhaustion) {
-            exhaustion_moves_raw = cluster_engine_->detect_exhaustion_moves(exhaustion_threshold);
+        diagonal_imbalances_raw = cluster_engine_->detect_diagonal_imbalances(imbalance_threshold_);
+        stacked_imbalances_raw = cluster_engine_->detect_stacked_imbalances(imbalance_threshold_);
+        if (show_exhaustion_) {
+            exhaustion_moves_raw = cluster_engine_->detect_exhaustion_moves(exhaustion_threshold_);
         }
     }
     
     // Convert raw detection results to visual indicators
     std::vector<FootprintCell> exhaustion_signals;
-    if (show_exhaustion) {
+    if (show_exhaustion_) {
         // Convert exhaustion moves to visual indicators
         for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
             // Find corresponding cells in our visualization grid
@@ -895,7 +950,7 @@ void FootprintPanel::render() {
     }
     
     // Highlight imbalance and exhaustion areas if enabled
-    if (show_imbalances || show_exhaustion) {
+    if (show_imbalances_ || show_exhaustion_) {
         // Highlight diagonal imbalances from raw detection
         for (const auto& [price_level, time_bucket, buy_vol, sell_vol, ratio] : diagonal_imbalances_raw) {
             // Map the detected price level and time bucket to visual cells
@@ -922,7 +977,7 @@ void FootprintPanel::render() {
             }
         }
         
-        if (show_exhaustion) {
+        if (show_exhaustion_) {
             // Highlight exhaustion moves from raw detection
             for (const auto& [price_level, time_bucket, buy_vol, sell_vol, magnitude, type] : exhaustion_moves_raw) {
                 // Map the detected price level and time bucket to visual cells
@@ -939,6 +994,19 @@ void FootprintPanel::render() {
     }
 
     ImPlot::EndPlot();
+  }
+
+  // ---- Phase 7.1 crosshair reader: dashed hline at the shared price ----
+  if (BTQuant::crosshair_active_for(symbol_id_)) {
+    double ch_price = BTQuant::load_crosshair_price(symbol_id_);
+    if (ch_price > 0.0) {
+      ImVec2 panel_min = ImGui::GetWindowPos();
+      ImVec2 panel_max = { panel_min.x + ImGui::GetWindowWidth(),
+                           panel_min.y + ImGui::GetWindowHeight() };
+      float y = ImPlot::PlotToPixels(0.0, ch_price).y;
+      BTQuant::render_dashed_hline(ImGui::GetWindowDrawList(),
+                                   panel_min.x + 30.0f, panel_max.x - 10.0f, y);
+    }
   }
 
   end_panel_window();

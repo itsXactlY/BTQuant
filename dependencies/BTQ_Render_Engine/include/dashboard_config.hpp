@@ -37,14 +37,16 @@ struct DisplayConfig {
 
 // Theme configuration
 struct ThemeConfig {
-  std::string name = "dark";
-  ColorRGBA background_color = {0.1f, 0.1f, 0.1f, 1.0f};
-  ColorRGBA text_color = {0.9f, 0.9f, 0.9f, 1.0f};
-  ColorRGBA accent_color = {0.2f, 0.6f, 1.0f, 1.0f};
-  ColorRGBA positive_color = {0.0f, 0.8f, 0.0f, 1.0f};
-  ColorRGBA negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
+  std::string name = "Deep Void";
+  ColorRGBA background_color = {0.043f, 0.055f, 0.067f, 1.0f};  // #0B0E11 MMT Deep Void
+  ColorRGBA child_bg_color   = {0.082f, 0.098f, 0.118f, 1.0f};  // #15191E
+  ColorRGBA header_bg_color  = {0.055f, 0.067f, 0.082f, 1.0f};  // #0E111A
+  ColorRGBA text_color = {0.82f, 0.84f, 0.86f, 1.0f};           // #D1D7DE
+  ColorRGBA accent_color = {0.0f, 0.9f, 0.4f, 1.0f};            // Neon Mint
+  ColorRGBA positive_color = {0.0f, 0.9f, 0.4f, 1.0f};          // Neon Mint
+  ColorRGBA negative_color = {0.9f, 0.1f, 0.15f, 1.0f};         // Crimson
   ColorRGBA neutral_color = {0.5f, 0.5f, 0.5f, 1.0f};
-  ColorRGBA grid_line_color = {0.3f, 0.3f, 0.3f, 1.0f};
+  ColorRGBA grid_line_color = {0.165f, 0.180f, 0.196f, 1.0f};  // #2A2E33
   int font_size = 14;
   float line_height = 1.2f;
 };

@@ -80,6 +80,7 @@ set(LIB_SOURCES
     # Threading module - this is the main focus of our task
     src/threading/task_scheduler.cpp
     src/threading/lockfree_queue.cpp
+    src/memory/memory_arena.cpp
     src/performance/frame_time_graph.cpp
     src/performance/regression_detector.cpp
     src/performance/cpu_profiler.cpp
@@ -160,6 +161,21 @@ set(DASHBOARD_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
+    src/components/microstructure_renderer.cpp
+    # src/components/realtime_dashboard_component.cpp  # ORPHAN: __access::_Data error, no consumer
+    # src/memory/memory_pool.cpp  # ORPHAN: FastTradePaceDataPool pool_ is int, no consumer
+    # src/components/tabbed_panel.cpp  # ORPHAN: override errors, no consumer
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
+    src/rendering/footprint_lod_fixed_part.cpp
+    src/analytics/tpoengine.cpp
+    src/telemetry/telemetry_collector.cpp
+    # src/performance_monitor.cpp  # ORPHAN: duplicate symbol, src/monitoring/performance_monitor.cpp wins
+    src/validation/input_validator.cpp
+    # src/memory/memory_pool.cpp  # ORPHAN: pool_ type errors, no consumer
+    src/data/unified_data_pipeline.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/layout/layout_presets.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp
@@ -227,6 +243,7 @@ set(BTQUANT_TERMINAL_SOURCES
     # Threading module - this is the main focus of our task
     src/threading/task_scheduler.cpp
     src/threading/lockfree_queue.cpp
+    src/memory/memory_arena.cpp
     src/performance/frame_time_graph.cpp
     src/performance/regression_detector.cpp
     src/performance/cpu_profiler.cpp
@@ -305,6 +322,21 @@ set(BTQUANT_TERMINAL_SOURCES
     src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/system/GPUMemoryManager.cpp
+    src/components/microstructure_renderer.cpp
+    # src/components/realtime_dashboard_component.cpp  # ORPHAN: __access::_Data error, no consumer
+    # src/memory/memory_pool.cpp  # ORPHAN: FastTradePaceDataPool pool_ is int, no consumer
+    # src/components/tabbed_panel.cpp  # ORPHAN: override errors, no consumer
+    src/vulkan/lob_heatmap_compute_pipeline.cpp
+    src/vulkan/ssbo_snapshot_updater.cpp
+    src/rendering/footprint_lod_fixed_part.cpp
+    src/analytics/tpoengine.cpp
+    src/telemetry/telemetry_collector.cpp
+    # src/performance_monitor.cpp  # ORPHAN: duplicate symbol, src/monitoring/performance_monitor.cpp wins
+    src/validation/input_validator.cpp
+    # src/memory/memory_pool.cpp  # ORPHAN: pool_ type errors, no consumer
+    src/data/unified_data_pipeline.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/layout/layout_presets.cpp
     src/components/theme_manager.cpp
     src/components/interaction_manager.cpp
     src/components/chart_replay.cpp

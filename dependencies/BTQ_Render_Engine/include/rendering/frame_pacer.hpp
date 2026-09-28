@@ -54,6 +54,19 @@ public:
     void end_frame();
 
     /**
+     * @brief Spec-aligned single-call frame pace. Call after vkQueuePresentKHR
+     *        returns. If the frame completed in less than budget_us, yield to
+     *        the OS scheduler so the network/ingestion thread can run. Default
+     *        6944us = 144fps budget per TASK_ULTIMA_MMT_GENESIS_WIRED.md 7.2.
+     */
+    void pace(uint64_t budget_us = 6944);
+
+    /**
+     * @brief Mark the start of a new frame (used by pace() if not called separately)
+     */
+    void mark_frame_start();
+
+    /**
      * @brief Wait for the next frame to maintain target FPS
      */
     void wait_for_next_frame();
@@ -167,4 +180,12 @@ private:
     void enhance_spike_response();
 };
 
+} // namespace RenderEngine
+
+// Global FramePacer singleton accessor (spec 7.2)
+namespace RenderEngine {
+inline FramePacer& g_frame_pacer() {
+    static FramePacer instance;
+    return instance;
+}
 } // namespace RenderEngine

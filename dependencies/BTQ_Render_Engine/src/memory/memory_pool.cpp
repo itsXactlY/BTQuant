@@ -1129,25 +1129,9 @@ void FastTradePairPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
-// IndicatorValuePairPool implementation
-IndicatorValuePairPool& IndicatorValuePairPool::getInstance() {
-    static IndicatorValuePairPool instance;
-    return instance;
-}
-
-std::pair<float, float>* IndicatorValuePairPool::allocate() {
-    return pool_.allocate();
-}
-
-void IndicatorValuePairPool::deallocate(std::pair<float, float>* pair) {
-    pool_.deallocate(pair);
-}
-
-void IndicatorValuePairPool::preallocate(size_t count) {
-    pool_.preallocate(count);
-}
-
 // FastIndicatorValuePairPool implementation
+// (Note: an earlier orphan `IndicatorValuePairPool` block was removed — the
+// header only declares `FastIndicatorValuePairPool`.)
 FastIndicatorValuePairPool& FastIndicatorValuePairPool::getInstance() {
     static FastIndicatorValuePairPool instance;
     return instance;

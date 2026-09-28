@@ -54,8 +54,11 @@ class TapePanel : public PanelBase {
   int tone_duration_ms_ = 200;                // Duration of the alert tone in milliseconds
 
   // Filtering options (these hide trades that don't match)
-  double min_size_filter_ = 0.0;
-  double max_size_filter_ = 0.0;  // 0 means no upper limit
+  // Spec 3.6: simple SliderFloat-driven min-size filter (0.0–100.0)
+  float   size_filter_ = 0.0f;
+  // Legacy text-based filters (kept for backward compatibility)
+  double  min_size_filter_ = 0.0;
+  double  max_size_filter_ = 0.0;  // 0 means no upper limit
   std::string exchange_filter_ = "";  // Empty means no filter
   uint64_t start_time_filter_ = 0;    // 0 means no filter
   uint64_t end_time_filter_ = 0;      // 0 means no filter (until now)
@@ -72,13 +75,13 @@ class TapePanel : public PanelBase {
   // UI state for filters
   bool show_histogram_ = false;
   bool show_search_ = false;  // New search panel
-  char min_size_input_[32] = "0.0";
-  char max_size_input_[32] = "";  // Empty means no upper limit
-  char min_price_input_[32] = ""; // Empty means no lower limit
-  char max_price_input_[32] = ""; // Empty means no upper limit
-  char exchange_input_[64] = "";
-  char start_time_input_[32] = "";
-  char end_time_input_[32] = "";
+  std::string min_size_input_ = "0.0";
+  std::string max_size_input_ = "";  // Empty means no upper limit
+  std::string min_price_input_ = ""; // Empty means no lower limit
+  std::string max_price_input_ = ""; // Empty means no upper limit
+  std::string exchange_input_ = "";
+  std::string start_time_input_ = "";
+  std::string end_time_input_ = "";
 
   // Cached trades for rendering
   std::vector<RenderEngine::TradeData> cached_trades_;
@@ -142,6 +145,27 @@ class TapePanel : public PanelBase {
   double calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const;
   void updateTradePaceHistory();
   void renderTradePaceChart();
+
+  // ------------------------------------------------------------------------
+  // Phase 3 (Tape) helpers — Spec 3.3 / 3.4 / 3.5 / 3.6
+  // ------------------------------------------------------------------------
+  // 3.3 alpha percentile: per-trade rank in [0, 1] based on size.
+  //     Returns a vector the same size as `trades`; out-of-window slots are 0.0.
+  std::vector<double> computeAlphaRanks(
+      const std::vector<RenderEngine::TradeData>& trades,
+      size_t last_n = 500) const;
+
+  // 3.5 sweep bracket: trade at `original_index` (newer) vs. next-newer trade.
+  //     True when delta_us < 50000 AND prices differ.
+  bool detectSweep(const std::vector<RenderEngine::TradeData>& trades,
+                   size_t original_index) const;
+
+  // 3.6 size filter: hide trades smaller than size_filter_.
+  //     Provided as a method to keep the call-site readable.
+  bool passesSizeFilter(const RenderEngine::TradeData& t) const noexcept {
+    return static_cast<double>(size_filter_) <= 0.0f ||
+           t.size >= static_cast<double>(size_filter_);
+  }
 };
 
 }  // namespace BTQuant

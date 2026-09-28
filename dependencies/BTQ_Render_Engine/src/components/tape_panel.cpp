@@ -13,8 +13,10 @@
 #endif
 
 #include "../../include/components/theme_manager.hpp"
+#include "../../include/sync/crosshair_helper.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "misc/cpp/imgui_stdlib.h"
 
 namespace BTQuant {
 
@@ -181,28 +183,28 @@ void TapePanel::render_search_controls() {
   ImGui::Text("Min Price:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##min_price", min_price_input_, sizeof(min_price_input_));
+  ImGui::InputText("##min_price", &min_price_input_);
 
   ImGui::SameLine();
   ImGui::AlignTextToFramePadding();
   ImGui::Text("Max Price:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##max_price", max_price_input_, sizeof(max_price_input_));
+  ImGui::InputText("##max_price", &max_price_input_);
 
   // Size Range Filter
   ImGui::AlignTextToFramePadding();
   ImGui::Text("Min Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##min_size_search", min_size_input_, sizeof(min_size_input_));
+  ImGui::InputText("##min_size_search", &min_size_input_);
 
   ImGui::SameLine();
   ImGui::AlignTextToFramePadding();
   ImGui::Text("Max Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##max_size", max_size_input_, sizeof(max_size_input_));
+  ImGui::InputText("##max_size", &max_size_input_);
 
   // Time Range Filter
   ImGui::SameLine();
@@ -210,7 +212,7 @@ void TapePanel::render_search_controls() {
   ImGui::Text("Start Time:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##start_time_search", start_time_input_, sizeof(start_time_input_));
+  ImGui::InputText("##start_time_search", &start_time_input_);
 
   // End Time Filter
   ImGui::SameLine();
@@ -218,45 +220,45 @@ void TapePanel::render_search_controls() {
   ImGui::Text("End Time:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##end_time_search", end_time_input_, sizeof(end_time_input_));
+  ImGui::InputText("##end_time_search", &end_time_input_);
 
   // Apply button
   ImGui::SameLine();
   if (ImGui::Button("Apply Search")) {
     // Parse minimum price
     try {
-      search_min_price_ = std::stod(std::string(min_price_input_));
+      search_min_price_ = std::stod(min_price_input_);
     } catch (...) {
       search_min_price_ = 0.0;
     }
 
     // Parse maximum price
     try {
-      search_max_price_ = std::stod(std::string(max_price_input_));
+      search_max_price_ = std::stod(max_price_input_);
     } catch (...) {
       search_max_price_ = 0.0;
     }
 
     // Parse minimum size
     try {
-      search_min_size_ = std::stod(std::string(min_size_input_));
+      search_min_size_ = std::stod(min_size_input_);
     } catch (...) {
       search_min_size_ = 0.0;
     }
 
     // Parse maximum size
     try {
-      search_max_size_ = std::stod(std::string(max_size_input_));
+      search_max_size_ = std::stod(max_size_input_);
     } catch (...) {
       search_max_size_ = 0.0;
     }
 
     // Set exchange filter
-    search_exchange_ = std::string(exchange_input_);
+    search_exchange_ = exchange_input_;
 
     // Parse start time - supports both raw timestamp and HH:MM:SS format
-    if (strlen(start_time_input_) > 0) {
-      std::string time_str = std::string(start_time_input_);
+    if (!start_time_input_.empty()) {
+      std::string time_str = start_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         search_start_time_ = parseTimeString(time_str);
@@ -273,8 +275,8 @@ void TapePanel::render_search_controls() {
     }
 
     // Parse end time - supports both raw timestamp and HH:SS format
-    if (strlen(end_time_input_) > 0) {
-      std::string time_str = std::string(end_time_input_);
+    if (!end_time_input_.empty()) {
+      std::string time_str = end_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         search_end_time_ = parseTimeString(time_str);
@@ -303,13 +305,13 @@ void TapePanel::render_search_controls() {
     search_exchange_ = "";
     search_start_time_ = 0;
     search_end_time_ = 0;
-    strcpy(min_price_input_, "");
-    strcpy(max_price_input_, "");
-    strcpy(min_size_input_, "0.0");
-    strcpy(max_size_input_, "");
-    strcpy(exchange_input_, "");
-    strcpy(start_time_input_, "");
-    strcpy(end_time_input_, "");
+    min_price_input_ = "";
+    max_price_input_ = "";
+    min_size_input_ = "0.0";
+    max_size_input_ = "";
+    exchange_input_ = "";
+    start_time_input_ = "";
+    end_time_input_ = "";
     markDirty();  // Refresh the display
   }
 }
@@ -384,11 +386,11 @@ void TapePanel::render_controls() {
   ImGui::Text("Min Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##min_size_filter", min_size_input_, sizeof(min_size_input_),
+  if (ImGui::InputText("##min_size_filter", &min_size_input_,
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse minimum size when Enter is pressed
     try {
-      min_size_filter_ = std::stod(std::string(min_size_input_));
+      min_size_filter_ = std::stod(min_size_input_);
     } catch (...) {
       min_size_filter_ = 0.0;
     }
@@ -401,12 +403,12 @@ void TapePanel::render_controls() {
   ImGui::Text("Max Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##max_size_filter", max_size_input_, sizeof(max_size_input_),
+  if (ImGui::InputText("##max_size_filter", &max_size_input_,
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse maximum size when Enter is pressed, empty means no limit
-    if (strlen(max_size_input_) > 0) {
+    if (!max_size_input_.empty()) {
       try {
-        max_size_filter_ = std::stod(std::string(max_size_input_));
+        max_size_filter_ = std::stod(max_size_input_);
       } catch (...) {
         max_size_filter_ = 0.0;
       }
@@ -422,10 +424,10 @@ void TapePanel::render_controls() {
   ImGui::Text("Exchange:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  if (ImGui::InputText("##exchange_filter", exchange_input_, sizeof(exchange_input_),
+  if (ImGui::InputText("##exchange_filter", &exchange_input_,
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Set exchange filter when Enter is pressed, empty means no filter
-    exchange_filter_ = std::string(exchange_input_);
+    exchange_filter_ = exchange_input_;
     markDirty();  // Refresh the display with new filter
   }
 
@@ -435,11 +437,11 @@ void TapePanel::render_controls() {
   ImGui::Text("Start:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##start_time_filter", start_time_input_, sizeof(start_time_input_),
+  if (ImGui::InputText("##start_time_filter", &start_time_input_,
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse start time when Enter is pressed
-    if (strlen(start_time_input_) > 0) {
-      std::string time_str = std::string(start_time_input_);
+    if (!start_time_input_.empty()) {
+      std::string time_str = start_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         start_time_filter_ = parseTimeString(time_str);
@@ -463,11 +465,11 @@ void TapePanel::render_controls() {
   ImGui::Text("End:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##end_time_filter", end_time_input_, sizeof(end_time_input_),
+  if (ImGui::InputText("##end_time_filter", &end_time_input_,
                        ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse end time when Enter is pressed
-    if (strlen(end_time_input_) > 0) {
-      std::string time_str = std::string(end_time_input_);
+    if (!end_time_input_.empty()) {
+      std::string time_str = end_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         end_time_filter_ = parseTimeString(time_str);
@@ -490,15 +492,15 @@ void TapePanel::render_controls() {
   if (ImGui::Button("Apply")) {
     // Parse minimum size
     try {
-      min_size_filter_ = std::stod(std::string(min_size_input_));
+      min_size_filter_ = std::stod(min_size_input_);
     } catch (...) {
       min_size_filter_ = 0.0;
     }
 
     // Parse maximum size
-    if (strlen(max_size_input_) > 0) {
+    if (!max_size_input_.empty()) {
       try {
-        max_size_filter_ = std::stod(std::string(max_size_input_));
+        max_size_filter_ = std::stod(max_size_input_);
       } catch (...) {
         max_size_filter_ = 0.0;
       }
@@ -507,11 +509,11 @@ void TapePanel::render_controls() {
     }
 
     // Set exchange filter
-    exchange_filter_ = std::string(exchange_input_);
+    exchange_filter_ = exchange_input_;
 
     // Parse start time - supports both raw timestamp and HH:MM:SS format
-    if (strlen(start_time_input_) > 0) {
-      std::string time_str = std::string(start_time_input_);
+    if (!start_time_input_.empty()) {
+      std::string time_str = start_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         start_time_filter_ = parseTimeString(time_str);
@@ -528,8 +530,8 @@ void TapePanel::render_controls() {
     }
 
     // Parse end time - supports both raw timestamp and HH:MM:SS format
-    if (strlen(end_time_input_) > 0) {
-      std::string time_str = std::string(end_time_input_);
+    if (!end_time_input_.empty()) {
+      std::string time_str = end_time_input_;
       if (time_str.find(':') != std::string::npos) {
         // Parse HH:MM:SS format
         end_time_filter_ = parseTimeString(time_str);
@@ -555,11 +557,11 @@ void TapePanel::render_controls() {
     exchange_filter_ = "";
     start_time_filter_ = 0;
     end_time_filter_ = 0;
-    strcpy(min_size_input_, "0.0");
-    strcpy(max_size_input_, "");
-    strcpy(exchange_input_, "");
-    strcpy(start_time_input_, "");
-    strcpy(end_time_input_, "");
+    min_size_input_ = "0.0";
+    max_size_input_ = "";
+    exchange_input_ = "";
+    start_time_input_ = "";
+    end_time_input_ = "";
     markDirty();  // Refresh the display
   }
 
@@ -796,6 +798,10 @@ void TapePanel::render_trade_table() {
     int filtered_index = 0;                                            // Index in the filtered list
     int original_index = static_cast<int>(cached_trades_.size()) - 1;  // Start from newest trade
 
+    // Phase 3.3: pre-compute alpha-by-size rank for the last 500 trades so
+    // every rendered row can apply an alpha tinted to its size (rank ∈ [0,1]).
+    const std::vector<double> alpha_ranks = computeAlphaRanks(cached_trades_, 500);
+
     while (original_index >= 0 && clipper.Step()) {
       // Process all rows in the current clipper step
       while (clipper.DisplayStart < clipper.DisplayEnd && original_index >= 0) {
@@ -838,6 +844,10 @@ void TapePanel::render_trade_table() {
 
             // Check if this trade is part of a cluster
             bool is_clustered = isTradeClustered(original_index, cached_trades_);
+
+            // Phase 3.3: alpha-by-size ranking for the last 500 trades.
+            // Reused across rows, computed once before the row loop.
+            (void)is_clustered;  // existing cluster highlight stays below
 
             // Set background color for search matches and clustered trades
             if (is_search_match) {
@@ -939,6 +949,29 @@ void TapePanel::render_trade_table() {
 
             if (is_block_trade_size) {
               ImGui::PopFont();
+            }
+
+            // Phase 3.3: apply alpha-by-size tint to the size cell. Rank 0
+            // (smallest of the last 500) -> alpha 0.05; rank 1 (largest) -> 0.50.
+            if (original_index < static_cast<int>(alpha_ranks.size())) {
+              float a = 0.05f + 0.45f * static_cast<float>(alpha_ranks[original_index]);
+              size_color.w *= a;  // Dim cell colour proportionally to rank
+              ImGui::SameLine();
+              ImGui::TextDisabled("(%.0f%%)", alpha_ranks[original_index] * 100.0f);
+            }
+
+            // Phase 3.5: detect sweep bracket (two trades within 50ms at
+            // different prices) and draw a 1px white vertical bracket on the
+            // left edge of the row. Uses the un-filtered cached_trades_ so
+            // the detection sees consecutive trades regardless of UI filter.
+            if (detectSweep(cached_trades_, original_index)) {
+              ImVec2 p_min = ImGui::GetItemRectMin();
+              ImVec2 p_max = ImGui::GetItemRectMax();
+              if (p_min.x > 0.0f && p_max.x > p_min.x) {
+                ImGui::GetWindowDrawList()->AddLine(
+                    ImVec2(p_min.x, p_min.y), ImVec2(p_min.x, p_max.y),
+                    IM_COL32(255, 255, 255, 200), 1.0f);
+              }
             }
 
             // Side column
@@ -1424,5 +1457,48 @@ void TapePanel::writeInt32(std::ofstream& file, int32_t value) {
   file.put((value >> 24) & 0xFF);
 }
 #endif
+
+// ============================================================================
+// Phase 3 helper implementations (Spec 3.3 / 3.5 / 3.6)
+// ============================================================================
+// computeAlphaRanks: for each trade, count how many of the last `last_n`
+// trades have size <= this trade's size. The rank ∈ [0, 1] is mapped by
+// render_trade_table to alpha ∈ [0.05, 0.50].
+std::vector<double> TapePanel::computeAlphaRanks(
+    const std::vector<RenderEngine::TradeData>& trades,
+    size_t last_n) const {
+  std::vector<double> ranks(trades.size(), 0.0);
+  if (trades.empty()) return ranks;
+
+  const size_t window = std::min(last_n, trades.size());
+  const size_t newest_offset = trades.size() - 1;
+
+  for (size_t i = 0; i < window; ++i) {
+    size_t idx = newest_offset - i;
+    size_t count = 0;
+    for (size_t j = 0; j < window; ++j) {
+      size_t jdx = newest_offset - j;
+      if (trades[jdx].size <= trades[idx].size) ++count;
+    }
+    ranks[idx] = static_cast<double>(count) / static_cast<double>(window);
+  }
+  return ranks;
+}
+
+// detectSweep: the row at `original_index` (newer) compares with the
+// next-newer trade. A sweep is "two consecutive trades within 50ms and
+// at different prices" — typical iceberg / stop-run signature.
+bool TapePanel::detectSweep(const std::vector<RenderEngine::TradeData>& trades,
+                            size_t original_index) const {
+  // trades[0] is oldest; trades[size-1] is newest.
+  // The newer trade sits at `original_index`; the next-newer is at index+1.
+  if (original_index + 1 >= trades.size()) return false;
+  const auto& t0 = trades[original_index];
+  const auto& t1 = trades[original_index + 1];
+  uint64_t delta_us =
+      (t0.timestamp > t1.timestamp) ? (t0.timestamp - t1.timestamp)
+                                    : (t1.timestamp - t0.timestamp);
+  return (delta_us < 50000ULL) && (t0.price != t1.price);
+}
 
 }  // namespace BTQuant

@@ -171,6 +171,33 @@ void FramePacer::wait_for_next_frame() {
     }
 }
 
+// ============================================================================
+// Spec 7.2 — single-call frame pace
+// ============================================================================
+// Call after vkQueuePresentKHR returns. If the frame completed in < budget_us,
+// yield to the OS scheduler so the network/ingestion thread can run. Default
+// 6944us = 144fps budget. Also records the start of the next frame.
+void FramePacer::pace(uint64_t budget_us) {
+    using Clock = std::chrono::high_resolution_clock;
+    auto now = Clock::now();
+    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        now - frame_start_time_).count();
+    if (elapsed_us < static_cast<int64_t>(budget_us)) {
+        // Yield to let OS schedule the network/ingestion thread.
+        std::this_thread::yield();
+    }
+    frame_start_time_ = Clock::now();
+    last_frame_time_  = frame_start_time_;
+    ++stats_.total_frames;
+    ++frame_count_;
+}
+
+void FramePacer::mark_frame_start() {
+    using Clock = std::chrono::high_resolution_clock;
+    frame_start_time_ = Clock::now();
+    last_frame_time_  = frame_start_time_;
+}
+
 FramePacer::Stats FramePacer::get_stats() const {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     return stats_;

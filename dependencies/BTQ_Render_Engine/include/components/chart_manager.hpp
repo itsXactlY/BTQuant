@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../data/data_types.hpp"  // defines OHLCVCandle
 #include "hotspine_data_bridge.hpp"
 #include "imgui.h"
 #include "implot.h"
@@ -69,6 +70,11 @@ class ChartManager {
   void update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe);
 
  private:
+  // Append one candle to all per-instance series. DRY helper that
+  // collapses three identical 5-line copies in populate_chart_data().
+  static void append_candle_to(ChartInstance& chart,
+                              const RenderEngine::OHLCVCandle& candle);
+
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unordered_map<uint32_t, ChartInstance> charts_;

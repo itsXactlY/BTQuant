@@ -50,6 +50,10 @@ class OrderbookPanel : public PanelBase {
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";
 
+  // Per-instance debug frame counter (was static local — sharing between
+  // multiple OrderbookPanels was wrong).
+  int frame_count_ = 0;
+
   // Configuration for number of levels to display
   int selected_levels_count_ = 20;  // Current selection (10, 20, 50, 100, 500, or -1 for unlimited)
   static constexpr int LEVEL_OPTIONS[] = {10, 20, 50, 100, 500, -1};  // -1 means unlimited

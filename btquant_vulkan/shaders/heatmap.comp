@@ -1,0 +1,82 @@
+// BTQuant Heatmap Compute Shader (v2 — per-pixel aggregation, no atomics)
+//
+// Each output pixel is processed by exactly one thread. The thread iterates
+// over all input trades and accumulates the volume of trades whose
+// (price, time) normalizes to this pixel's coordinates. Result is written
+// directly into an R8G8B8A8_UNORM storage image which is ALSO sampled by
+// ImGui for display — no readback, no copy, no second image.
+//
+// Output encoding (R8G8B8A8_UNORM):
+//   R = total volume at this pixel, normalized 0..255
+//   G = buy volume
+//   B = sell volume
+//   A = 255 (opaque) — lets ImGui treat it as a regular texture
+//
+// Dispatch:
+//   pc.comp_grid_x = image_width  / 16
+//   pc.comp_grid_y = image_height / 16
+//   pc.comp_grid_z = 1
+//   (For 256x256: 16x16 workgroups, 16x16 threads = 256x256 pixels.)
+
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct Trade {
+    float price;     // normalized 0..1 (caller normalizes over price range)
+    float time;      // normalized 0..1 (0 = oldest, 1 = newest)
+    float volume;    // trade volume in lots
+    uint  side;      // 0 = buy, 1 = sell
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer InputTrades {
+    Trade trades[];
+} input_trades;
+
+layout(set = 0, binding = 1, rgba8) uniform image2D output_image;
+
+layout(set = 0, binding = 2, std140) uniform Config {
+    float price_low;
+    float price_high;
+    uint  image_width;
+    uint  image_height;
+    uint  num_trades;
+} cfg;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(cfg.image_width) || pixel.y >= int(cfg.image_height)) return;
+
+    // Normalized center of this pixel (0..1 across the image).
+    float px = (float(pixel.x) + 0.5) / float(cfg.image_width);
+    float py = (float(pixel.y) + 0.5) / float(cfg.image_height);
+
+    // Aggregate trades that fall into this pixel's bin.
+    // Pixel contains all trades whose normalized (time, price) lands in
+    // [px - 0.5/w, px + 0.5/w) × [py - 0.5/h, py + 0.5/h).
+    float inv_w = 1.0 / float(cfg.image_width);
+    float inv_h = 1.0 / float(cfg.image_height);
+
+    float total_buy = 0.0;
+    float total_sell = 0.0;
+
+    for (uint i = 0; i < cfg.num_trades; ++i) {
+        Trade t = input_trades.trades[i];
+        if (t.time >= px - inv_w * 0.5 && t.time < px + inv_w * 0.5 &&
+            t.price >= py - inv_h * 0.5 && t.price < py + inv_h * 0.5) {
+            if (t.side == 0u) total_buy += t.volume;
+            else total_sell += t.volume;
+        }
+    }
+
+    // Normalize to 0..255. Scale by 200 to bring typical volumes (0.005-0.05
+    // lots/trade) into a visible range; clamp at 255.
+    float buy_n = clamp(total_buy * 200.0, 0.0, 255.0);
+    float sell_n = clamp(total_sell * 200.0, 0.0, 255.0);
+    float intensity = clamp((total_buy + total_sell) * 200.0, 0.0, 255.0);
+
+    // Heatmap color: green for buy-heavy, red for sell-heavy, dim grey for empty.
+    // R = intensity, G = buy, B = sell (faded), A = 255.
+    vec4 color = vec4(intensity, intensity * 0.5 + buy_n * 0.5, sell_n, 255.0);
+    imageStore(output_image, pixel, color);
+}

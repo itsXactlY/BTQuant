@@ -693,4 +693,112 @@ double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket)
   }
 }
 
+// ============================================================================
+// Phase 5.1+5.2+5.4+5.5+6.1 — Spec-compliant lock-free ingest path.
+// ============================================================================
+//
+// Takes the spec's BTQuant::RenderEngine::TradeData and accumulates into the
+// canvas_ in O(1) with no locks. Side effects:
+//   - buy_vol or sell_vol  (CAS on float, 5.2)
+//   - tpo_bits            (atomic fetch_or on uint16_t, 6.1)
+//   - poc_bin_            (CAS, 5.4)
+//   - cvd_                (atomic fetch_add, 5.5)
+//
+// This is the hot path called from MarketDataProcessor::process_queues(). The
+// older process_trade() / processTrade() methods are still available for
+// callers that pass the ccapi MarketData::Trade type or need the
+// cluster_canvas_/time-bucket bookkeeping — this method is for the spec's
+// TradeData from the hot path and is intentionally minimal.
+void ClusterEngine::ingest(const BTQuant::RenderEngine::TradeData& t) noexcept {
+  // session_start_us_ is not atomic (single-writer) — just a plain store.
+  if (session_start_us_ == 0) {
+    session_start_us_ = static_cast<int64_t>(t.timestamp);
+  }
+
+  int64_t abs_tick_index = static_cast<int64_t>(std::round(t.price / tick_size_));
+
+  // Lazy-init canvas on first call. We pick a 1k-bin arena (caller can
+  // resize later via the public API).
+  if (canvas_.empty()) {
+    min_tick_index_ = abs_tick_index - 500;
+    canvas_.resize(1000);
+  }
+
+  int64_t relative_index = abs_tick_index - min_tick_index_;
+
+  // Expand low side if needed.
+  if (relative_index < 0) {
+    size_t deficit  = static_cast<size_t>(-relative_index);
+    size_t padding  = 100;
+    size_t grow     = deficit + padding;
+    canvas_.insert(canvas_.begin(), grow, HotSpine::V3::VolumeNode{});
+    min_tick_index_ -= static_cast<int64_t>(grow);
+    relative_index   = abs_tick_index - min_tick_index_;
+  }
+  // Expand high side if needed.
+  if (static_cast<size_t>(relative_index) >= canvas_.size()) {
+    size_t needed  = static_cast<size_t>(relative_index) - canvas_.size() + 1;
+    size_t padding = 100;
+    canvas_.resize(canvas_.size() + needed + padding);
+  }
+
+  // 5.2 — CAS accumulation on the buy_vol or sell_vol float.
+  auto& node  = canvas_[relative_index];
+  float& side = t.is_buy ? node.buy_vol : node.sell_vol;
+  {
+    auto*   raw       = reinterpret_cast<std::atomic<uint32_t>*>(&side);
+    uint32_t delta    = std::bit_cast<uint32_t>(static_cast<float>(t.size));
+    if (delta == 0u) {
+      // size==0 degenerate: nothing to accumulate, just record the trade below.
+    } else {
+      uint32_t old_bits = raw->load(std::memory_order_relaxed);
+      uint32_t new_bits;
+      do {
+        const float cur = std::bit_cast<float>(old_bits);
+        new_bits = std::bit_cast<uint32_t>(cur + std::bit_cast<float>(delta));
+      } while (!raw->compare_exchange_weak(old_bits, new_bits,
+                                           std::memory_order_release,
+                                           std::memory_order_relaxed));
+    }
+  }
+
+  // 6.1 — Atomic TPO bracket bit-set. 30-min brackets, 16 bits = 8h session.
+  {
+    int64_t elapsed = static_cast<int64_t>(t.timestamp) - session_start_us_;
+    if (elapsed >= 0) {
+      constexpr int64_t INTERVAL_US = 30LL * 60 * 1000000;
+      int bucket = static_cast<int>(elapsed / INTERVAL_US);
+      if (bucket >= 0 && bucket < 16) {
+        auto* raw = reinterpret_cast<std::atomic<uint16_t>*>(&node.tpo_bits);
+        raw->fetch_or(static_cast<uint16_t>(1u << bucket), std::memory_order_relaxed);
+      }
+    }
+  }
+
+  // 5.4 — Dynamic POC: CAS the index if this bin now has the highest total.
+  {
+    size_t current_poc = poc_bin_.load(std::memory_order_relaxed);
+    if (current_poc < canvas_.size()) {
+      const float total     = node.buy_vol + node.sell_vol;
+      const float poc_total = canvas_[current_poc].buy_vol + canvas_[current_poc].sell_vol;
+      if (total > poc_total) {
+        poc_bin_.compare_exchange_strong(current_poc, relative_index,
+                                         std::memory_order_release,
+                                         std::memory_order_relaxed);
+      }
+    } else {
+      poc_bin_.store(relative_index, std::memory_order_relaxed);
+    }
+  }
+
+  // 5.5 — CVD: signed int add scaled by 100 to keep float precision.
+  {
+    // Spec field: t.volume. The spec sample uses `t.volume` but the real
+    // BTQuant::RenderEngine::TradeData field is `size`; alias it.
+    const int64_t delta = static_cast<int64_t>(t.size * 100.0);
+    if (t.is_buy) cvd_.fetch_add( delta, std::memory_order_relaxed);
+    else          cvd_.fetch_add(-delta, std::memory_order_relaxed);
+  }
+}
+
 }  // namespace Analytics

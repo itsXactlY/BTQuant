@@ -110,7 +110,7 @@ class PanelManager {
   void load_all_panel_configs(const std::string& config_file);
 
   // Layout name tracking
-  std::string get_current_layout_name() const { return current_layout_name_; }
+  const std::string& get_current_layout_name() const { return current_layout_name_; }
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
  private:

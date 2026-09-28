@@ -54,6 +54,7 @@ struct OrderBookLevel {
   double price;
   double size;
 };
+class MarketMicrostructureRenderer;
 }  // namespace RenderEngine
 
 // Helper: Convert ImVec4 to glm::vec4
@@ -185,47 +186,6 @@ class DataFilter {
 };
 
 // ============================================================================
-// Legacy Component Declarations (Archived but declared for compatibility)
-// ============================================================================
-
-struct StrategyControlComponent : public UIComponent {
-  StrategyControlComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-struct RiskManagerComponent : public UIComponent {
-  RiskManagerComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-struct TradingInterfaceComponent : public UIComponent {
-  TradingInterfaceComponent(const glm::vec2& p, const glm::vec2& s);
-  void update(float dt) override;
-  void render_gui() override;
-  void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore* core) override;
-};
-
-// Forward declarations for other archived components
-struct TapeComponent;
-struct OrderManagementComponent;
-struct PositionPanelComponent;
-struct MarketOverviewPanel;
-struct WatchlistComponent;
-struct LogDisplayComponent;
-struct HeatmapComponent;
-struct MarketScreenerComponent;
-struct AlertComponent;
-struct DataGridComponent;
-struct MarketDepthChartComponent;
-
-// ============================================================================
 // Main Dashboard Class
 // ============================================================================
 
@@ -317,6 +277,7 @@ class VulkanDashboard {
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> vulkan_core_;
   std::unique_ptr<QuantWorkspaceComponent> workspace_;
+  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> micro_renderer_;
   std::unique_ptr<VulkanSyncContext> sync_context_;
   std::unique_ptr<TimelineSemaphore> timeline_semaphore_;
 

@@ -1,0 +1,61 @@
+#ifndef BTQUANT_UI_CONTEXT_HPP
+#define BTQUANT_UI_CONTEXT_HPP
+
+#include <imgui.h>
+#include <implot.h>
+#include <vulkan/vulkan.h>
+#include <cstdint>
+#include <string>
+#include <optional>
+#include <functional>
+
+class VulkanContext;  // forward for UIContext to reach render-pass + font-upload
+
+namespace btquant::ui {
+
+struct UIConfig {
+    ImVec4 background = ImVec4(0.05f, 0.07f, 0.09f, 1.0f);
+    ImVec4 bidColor = ImVec4(0.0f, 0.83f, 1.0f, 1.0f);
+    ImVec4 askColor = ImVec4(1.0f, 0.28f, 0.34f, 1.0f);
+    ImVec4 gridColor = ImVec4(0.12f, 0.15f, 0.19f, 1.0f);
+    ImVec4 textColor = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+};
+
+class UIContext {
+public:
+    UIContext();
+    ~UIContext();
+
+    // Theme palette selector. Dark = the original Kraken Purple theme,
+    // Light = off-white background with dark text + blue accents.
+    enum class Theme { Dark = 0, Light = 1 };
+
+    bool initialize(void* window, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, uint32_t graphicsQueueFamily, VkQueue graphicsQueue, VkRenderPass renderPass, const char* iniFilename = nullptr, Theme theme = Theme::Dark);
+    void shutdown();
+    void newFrame();
+    void render(VkCommandBuffer commandBuffer);
+
+    // Persist ImGui's internal state (window positions, dock layout customisation,
+    // collapsed flags, sort orders) to disk. Called from main loop on shutdown.
+    void saveIniSettings() const;
+
+    // Switch theme at runtime. Re-applies the palette and the BTQuant custom
+    // colour overrides. Cheap (no allocations, just style table writes).
+    void applyTheme(Theme t);
+    Theme theme() const { return m_theme; }
+
+    [[nodiscard]] const UIConfig& config() const { return m_config; }
+    [[nodiscard]] UIConfig& config() { return m_config; }
+
+private:
+    UIConfig m_config;
+    bool m_initialized = false;
+    VkDevice m_imguiDevice = VK_NULL_HANDLE;
+    VkDescriptorPool m_imguiDescriptorPool = VK_NULL_HANDLE;
+    std::string m_iniFilename;  // empty → no ini save
+    Theme m_theme = Theme::Dark;
+};
+
+} // namespace btquant::ui
+
+#endif

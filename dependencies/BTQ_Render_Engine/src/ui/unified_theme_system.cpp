@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "imgui.h"  // Include imgui.h for the actual implementation
+#include "../include/components/font_data.hpp"  // JetBrains Mono + FontAwesome 6 TTF data
 
 #ifdef HAS_NLOHMANN_JSON
 #include <nlohmann/json.hpp>
@@ -546,8 +547,8 @@ void UnifiedThemeManager::apply_to_imgui() const {
       ImVec4(theme.colors.text_muted[0], theme.colors.text_muted[1], theme.colors.text_muted[2],
              theme.colors.text_muted[3]);
   style.Colors[ImGuiCol_WindowBg] =
-      ImVec4(theme.colors.background_panel[0], theme.colors.background_panel[1],
-             theme.colors.background_panel[2], theme.colors.background_panel[3]);
+      ImVec4(theme.colors.background_primary[0], theme.colors.background_primary[1],
+             theme.colors.background_primary[2], theme.colors.background_primary[3]);
   style.Colors[ImGuiCol_ChildBg] =
       ImVec4(theme.colors.background_secondary[0], theme.colors.background_secondary[1],
              theme.colors.background_secondary[2], theme.colors.background_secondary[3]);
@@ -654,11 +655,11 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.ScrollbarSize = 14.0f;
   style.GrabMinSize = 10.0f;
 
-  style.WindowBorderSize = 1.0f;
-  style.ChildBorderSize = 1.0f;
-  style.PopupBorderSize = 1.0f;
-  style.FrameBorderSize = 1.0f;
-  style.TabBorderSize = 1.0f;
+  style.WindowBorderSize = 0.0f;
+  style.ChildBorderSize = 0.0f;
+  style.PopupBorderSize = 0.0f;
+  style.FrameBorderSize = 0.0f;
+  style.TabBorderSize = 0.0f;
 
   style.WindowRounding = theme.border_radius_medium;
   style.ChildRounding = theme.border_radius_small;
@@ -667,6 +668,17 @@ void UnifiedThemeManager::apply_to_imgui() const {
   style.ScrollbarRounding = theme.border_radius_small;
   style.GrabRounding = theme.border_radius_small;
   style.TabRounding = theme.border_radius_small;
+
+  // Force zero rounding for the MMT Deep Void aesthetic (spec 2.2 apply_borders)
+  if (theme.border_radius_medium == 0.0f) {
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 0.0f;
+    style.FrameRounding = 0.0f;
+    style.PopupRounding = 0.0f;
+    style.ScrollbarRounding = 0.0f;
+    style.GrabRounding = 0.0f;
+    style.TabRounding = 0.0f;
+  }
 
 // Apply shadow effects (would need custom rendering for full shadow support)
 // For now, just set the shadow color as a reference

@@ -1,4 +1,5 @@
 #include <csignal>
+#include <cstdlib>
 #include <iostream>
 #include "market_data_collector.h"
 #include "nlohmann/json.hpp"
@@ -79,11 +80,27 @@ MarketDataCollector::Config loadConfig(const std::string& path) {
     MarketDataCollector::Config cfg;
 
     auto db = j.at("db");
+    // Password is NEVER stored in the repo config. Resolution order:
+    //   1. $BTQ_DB_PASSWORD   (export it, or source the secrets file)
+    //   2. the "password" key, which is expected to be EMPTY in git
+    // Keeping the key present means this file does not need changing when
+    // the resolution order grows.
+    std::string db_password = db.value("password", "");
+    if (const char* env_pw = std::getenv("BTQ_DB_PASSWORD");
+        env_pw && *env_pw) {
+        db_password = env_pw;
+    }
+    if (db_password.empty()) {
+        std::cerr << "FATAL: no DB password. Export BTQ_DB_PASSWORD, e.g.\n"
+                  << "  eval \"$(python3 -c \"import btq_secrets;"
+                  << " print('export BTQ_DB_PASSWORD=' + btq_secrets.get('password'))\")\"\n";
+        return 1;
+    }
     cfg.db_connection_string = createConnectionString(
         db.at("server").get<std::string>(),
         db.at("database").get<std::string>(),
         db.at("user").get<std::string>(),
-        db.at("password").get<std::string>());
+        db_password);
 
     cfg.timeframes = j.at("timeframes").get<std::vector<std::string>>();
 

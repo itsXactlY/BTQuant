@@ -62,3 +62,8 @@ class SuperSTrend_Scalp(BaseStrategy):
                 self.close_order(order_tracker)
                 return True
         return False
+
+
+# Loader-Vertrag: import_strategy() macht getattr(module, <Dateiname>).
+# Die Konzept-Klasse darunter behaelt ihren Namen, das Modul ist der Einstieg.
+SuperTrend_Scalp = SuperSTrend_Scalp

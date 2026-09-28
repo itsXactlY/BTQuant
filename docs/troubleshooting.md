@@ -235,7 +235,7 @@ print("Healthy:", integration.is_healthy())
 
 ```bash
 # Test ODBC connection
-isql -v "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=master;UID=SA;PWD=YourPassword;TrustServerCertificate=yes"
+isql -v "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=master;UID=SA;PWD=<from-secrets-file>;TrustServerCertificate=yes"
 
 # Check SQL Server status
 sudo systemctl status mssql-server
@@ -438,4 +438,48 @@ def profile_backtest():
     stats = pstats.Stats(pr)
     stats.sort_stats('cumulative')
     stats.print_stats(20)
+```
+
+### Credentials are never in this repo
+
+BTQuant reads SQL Server credentials from a local secrets file at import time.
+The repository contains **no** passwords — not in Python, not in JSON, not in
+the installer scripts. Do not add any back.
+
+Create the file once per machine:
+
+```bash
+mkdir -p ~/.btq/etc/btquant && chmod 700 ~/.btq/etc/btquant
+$EDITOR ~/.btq/etc/btquant/secrets.py
+chmod 600 ~/.btq/etc/btquant/secrets.py
+```
+
+```python
+# ~/.btq/etc/btquant/secrets.py
+server = '192.168.0.242,1433'   # host,port of the SQL Server
+candle_database = 'BinanceData'  # historical candles
+optuna_database = 'OptunaBT'     # optimization runs
+marketdata_database = 'BTQ_MarketData'  # live market data
+username = 'SA'
+password = 'your-real-password'
+driver = '{ODBC Driver 18 for SQL Server}'
+```
+
+Resolution order (first match wins, see `btq_secrets.py`):
+
+1. `$BTQ_SECRETS` — explicit path to your own secrets file
+2. `<venv>/etc/btquant/secrets.py` — inside a virtualenv
+3. `~/.btq/etc/btquant/secrets.py` — home fallback
+
+For the C++ market-data collector, which cannot import Python, export the
+password instead:
+
+```bash
+export BTQ_DB_PASSWORD="$(python3 -c 'import btq_secrets; print(btq_secrets.get("password"))')"
+```
+
+Check the whole tree any time with:
+
+```bash
+python3 audit_secrets.py
 ```

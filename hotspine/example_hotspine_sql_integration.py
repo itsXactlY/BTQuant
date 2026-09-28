@@ -23,7 +23,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dependencies'))
 from backtrader.hotspine.reader import HotSpineRuntime, HotTrade
 from backtrader.hotspine.sql_integration import HotSpineSQLIntegration
 from backtrader.bigbraincentral.storage_mssql import MSSQLConfig
-from backtrader.dontcommit import password as SA_PASSWORD
 
 
 class HotSpineStrategyWithSQLStorage:
@@ -174,13 +173,9 @@ def demonstrate_architecture():
     print("4. SQL is NOT used for live trading data ingestion")
     print()
     
-    # Configure SQL
-    sql_config = MSSQLConfig(
-        server="localhost",
-        database="BTQ_MarketData",
-        username="SA",
-        password=SA_PASSWORD
-    )
+    # Configure SQL — MSSQLConfig resolves server/user/password from the
+    # local secrets file (see btq_secrets.py), never from this repo.
+    sql_config = MSSQLConfig()
     
     print("🔧 SQL Configuration:")
     print(f"   Server: {sql_config.server}")
@@ -239,13 +234,8 @@ def run_live_trading_demo(sql_integration: Optional[HotSpineSQLIntegration]):
     print("⚠️  NOTE: SQL is NOT used for live trading decisions")
     print()
     
-    # Create SQL config for runtime
-    sql_config = MSSQLConfig(
-        server="localhost",
-        database="BTQ_MarketData", 
-        username="SA",
-        password=SA_PASSWORD
-    ) if sql_integration else None
+    # Create SQL config for runtime (creds from the local secrets file)
+    sql_config = MSSQLConfig() if sql_integration else None
     
     try:
         # Create runtime with SQL storage enabled

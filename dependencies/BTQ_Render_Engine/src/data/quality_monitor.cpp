@@ -62,7 +62,7 @@ uint64_t DataQualityMonitor::calculate_safe_time_diff(uint64_t current, uint64_t
 bool DataQualityMonitor::are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,
                                             double price_tolerance, double volume_tolerance) const {
     // Check if timestamps are within acceptable range
-    uint64_t time_diff = std::abs(static_cast<int64_t>(trade1.timestamp) - static_cast<int64_t>(trade2.timestamp));
+    uint64_t time_diff = std::abs(static_cast<int64_t>(trade1.ts.timestamp_us) - static_cast<int64_t>(trade2.ts.timestamp_us));
 
     // Check if prices are within tolerance
     double price_diff = std::abs(trade1.price - trade2.price);
@@ -74,7 +74,7 @@ bool DataQualityMonitor::are_trades_equivalent(const TradeData& trade1, const Tr
 
     // Check if other fields match exactly
     bool other_fields_match = (trade1.side == trade2.side) &&
-                              (trade1.exchange_id == trade2.exchange_id);
+                              (trade1.symbol_id == trade2.symbol_id);
 
     return (time_diff <= 100) && prices_match && volumes_match && other_fields_match; // 100ms tolerance for timestamp
 }
@@ -92,7 +92,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     // Check for invalid price/volume values
     if (!validate_trade_values(trade)) {
         if (trade.price <= 0 || std::isnan(trade.price) || std::isinf(trade.price)) {
-            DataQualityIssue issue(DataQualityIssueType::INVALID_PRICE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::INVALID_PRICE, symbol, trade.ts.timestamp_us,
                                  "Invalid price value: " + std::to_string(trade.price), 0.8);
             detected_issues.push_back(issue);
             metrics_.invalid_price_issues++;
@@ -100,7 +100,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         }
 
         if (trade.volume <= 0 || std::isnan(trade.volume) || std::isinf(trade.volume)) {
-            DataQualityIssue issue(DataQualityIssueType::INVALID_VOLUME, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::INVALID_VOLUME, symbol, trade.ts.timestamp_us,
                                  "Invalid volume value: " + std::to_string(trade.volume), 0.7);
             detected_issues.push_back(issue);
             metrics_.invalid_volume_issues++;
@@ -109,17 +109,17 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     }
 
     // Check for missing or invalid fields
-    check_missing_fields(trade, symbol, trade.timestamp);
+    check_missing_fields(trade, symbol, trade.ts.timestamp_us);
 
     // Check for missing data based on expected patterns
-    check_missing_data_for_symbol(symbol, trade.timestamp);
+    check_missing_data_for_symbol(symbol, trade.ts.timestamp_us);
 
     // NEW: Enhanced missing data gap detection
-    detect_and_alert_data_gaps(symbol, trade.timestamp);
+    detect_and_alert_data_gaps(symbol, trade.ts.timestamp_us);
 
     // Check for duplicate trades
     if (is_duplicate_trade(trade, symbol)) {
-        DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+        DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.ts.timestamp_us,
                              "Duplicate trade detected", 0.6);
         detected_issues.push_back(issue);
         metrics_.duplicate_trade_issues++;
@@ -149,8 +149,8 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     // Check for out-of-order timestamps
     auto last_timestamp_it = last_timestamps_.find(symbol);
     if (is_out_of_order_timestamp(trade, symbol)) {
-        DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
-                             "Out-of-order timestamp detected", 0.5);
+        DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.ts.timestamp_us,
+                             "Out-of-order ts.timestamp_us detected", 0.5);
         detected_issues.push_back(issue);
         metrics_.out_of_order_timestamp_issues++;
         add_issue(issue);
@@ -160,8 +160,8 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
             alert_on_out_of_order_timestamp(trade, symbol, last_timestamp_it->second);
         }
     } else {
-        // Update last timestamp if in order
-        last_timestamps_[symbol] = trade.timestamp;
+        // Update last ts.timestamp_us if in order
+        last_timestamps_[symbol] = trade.ts.timestamp_us;
     }
 
     // NEW: Enhanced out-of-order detection with predictive modeling
@@ -174,7 +174,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     enhanced_latency_monitoring(trade, symbol);
 
     // Update metrics
-    metrics_.last_timestamp = trade.timestamp;
+    metrics_.last_timestamp = trade.ts.timestamp_us;
     metrics_.last_update_time = std::chrono::high_resolution_clock::now();
 
     return detected_issues;
@@ -209,7 +209,7 @@ void DataQualityMonitor::check_missing_data(const std::string& symbol, uint64_t 
         }
     }
 
-    // Update the last timestamp for this symbol
+    // Update the last ts.timestamp_us for this symbol
     last_timestamps_[symbol] = current_timestamp;
 }
 
@@ -223,7 +223,7 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
     auto& stats = symbol_stats_[symbol];
 
     if (stats.last_timestamp != 0) {
-        // Only calculate time_diff if current timestamp is greater than last (no underflow)
+        // Only calculate time_diff if current ts.timestamp_us is greater than last (no underflow)
         if (current_timestamp >= stats.last_timestamp) {
             uint64_t time_diff = current_timestamp - stats.last_timestamp;
 
@@ -548,7 +548,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
     // Look for trades that appear in predictable intervals suggesting systematic duplication
     size_t systematic_duplicates = 0;
     for (const auto& recent_trade : trades) {
-        uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+        uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.ts.timestamp_us) - static_cast<int64_t>(trade.ts.timestamp_us));
 
         // Check if price and volume match closely but timestamps are at regular intervals
         if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
@@ -568,19 +568,19 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
     // If no exact hash match, fall back to the detailed comparison for near-duplicates
     for (const auto& recent_trade : trades) {
         // For duplicate detection, we focus on the core identifying fields:
-        // timestamp, price, volume, and exchange_id
+        // ts.timestamp_us, price, volume, and exchange_id
         // We allow some flexibility for flags that might differ due to processing
 
-        // Check for potential duplicates with configurable timestamp window
-        uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+        // Check for potential duplicates with configurable ts.timestamp_us window
+        uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.ts.timestamp_us) - static_cast<int64_t>(trade.ts.timestamp_us));
 
-        // If timestamp difference is within our duplicate check window, check other fields
+        // If ts.timestamp_us difference is within our duplicate check window, check other fields
         if (time_diff <= duplicate_check_window_ms_) {
             // Exact match check
-            if (recent_trade.timestamp == trade.timestamp &&
+            if (recent_trade.ts.timestamp_us == trade.ts.timestamp_us &&
                 recent_trade.price == trade.price &&
                 recent_trade.volume == trade.volume &&
-                recent_trade.exchange_id == trade.exchange_id) {
+                recent_trade.symbol_id == trade.symbol_id) {
 
                 // If the core fields match, consider it a duplicate even if flags differ slightly
                 // This handles cases where the same trade gets processed with different flags
@@ -591,15 +591,15 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
             // This handles cases where prices or volumes might have minor precision differences
             if (std::abs(recent_trade.price - trade.price) < 0.000001 &&  // Very small price tolerance
                 std::abs(recent_trade.volume - trade.volume) < 0.0001f &&  // Small volume tolerance
-                recent_trade.exchange_id == trade.exchange_id) {
+                recent_trade.symbol_id == trade.symbol_id) {
 
                 // If price and volume are nearly identical and exchange matches, consider duplicate
                 return true;
             }
 
-            // Additional duplicate check: Same price, volume, and timestamp but different exchange_id might indicate
+            // Additional duplicate check: Same price, volume, and ts.timestamp_us but different exchange_id might indicate
             // a cross-exchange duplicate or data duplication issue
-            if (recent_trade.timestamp == trade.timestamp &&
+            if (recent_trade.ts.timestamp_us == trade.ts.timestamp_us &&
                 std::abs(recent_trade.price - trade.price) < 0.000001 &&
                 std::abs(recent_trade.volume - trade.volume) < 0.0001f) {
 
@@ -623,7 +623,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
         if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
             std::abs(recent_trade.volume - trade.volume) < 0.0001f &&
             recent_trade.side == trade.side &&
-            recent_trade.exchange_id == trade.exchange_id) {
+            recent_trade.symbol_id == trade.symbol_id) {
 
             // If price, volume, side, and exchange match but timestamps are close, likely duplicate
             if (time_diff <= duplicate_check_window_ms_ * 2) {
@@ -640,7 +640,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                 recent_trade.side == trade.side) {
 
                 // If price, volume, and side match but exchange_id differs, it might be cross-feed duplication
-                if (recent_trade.exchange_id != trade.exchange_id) {
+                if (recent_trade.symbol_id != trade.symbol_id) {
                     // Check if this represents the same trade coming from different sources
                     // This could indicate a data feed issue where the same trade is reported multiple times
                     return true;
@@ -656,8 +656,8 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                 // This could indicate a systematic issue in the data pipeline
                 for (const auto& older_trade : trades) {
                     if (&older_trade != &recent_trade) { // Don't compare with itself
-                        uint64_t time_diff_older = std::abs(static_cast<int64_t>(older_trade.timestamp) -
-                                                           static_cast<int64_t>(recent_trade.timestamp));
+                        uint64_t time_diff_older = std::abs(static_cast<int64_t>(older_trade.ts.timestamp_us) -
+                                                           static_cast<int64_t>(recent_trade.ts.timestamp_us));
 
                         // If we have three trades with similar characteristics at regular intervals
                         if (time_diff_older <= duplicate_check_window_ms_ * 3 &&
@@ -691,8 +691,8 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
 
             // Count how many trades in the recent window are similar to this one
             for (const auto& check_trade : trades) {
-                uint64_t check_time_diff = std::abs(static_cast<int64_t>(check_trade.timestamp) -
-                                                   static_cast<int64_t>(trade.timestamp));
+                uint64_t check_time_diff = std::abs(static_cast<int64_t>(check_trade.ts.timestamp_us) -
+                                                   static_cast<int64_t>(trade.ts.timestamp_us));
 
                 if (check_time_diff <= duplicate_check_window_ms_ * 3 &&
                     std::abs(check_trade.price - trade.price) < 0.000001 &&
@@ -707,7 +707,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
             }
         }
 
-        // Enhanced duplicate detection: Check for systematic patterns in timestamp differences
+        // Enhanced duplicate detection: Check for systematic patterns in ts.timestamp_us differences
         // Look for arithmetic sequences that might indicate systematic duplication
         if (time_diff <= duplicate_check_window_ms_ * 10) {
             // Check if this trade fits a pattern with other recent trades
@@ -724,7 +724,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
             if (similar_price_trades.size() >= 3) {
                 std::vector<uint64_t> timestamps;
                 for (const auto* t : similar_price_trades) {
-                    timestamps.push_back(t->timestamp);
+                    timestamps.push_back(t->ts.timestamp_us);
                 }
 
                 std::sort(timestamps.begin(), timestamps.end());
@@ -773,8 +773,8 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                         std::abs(trade.volume - trade_i.volume) < 0.0001f) {
 
                         // Check if the timing pattern is consistent
-                        int64_t interval_ij = static_cast<int64_t>(trade_j.timestamp) - static_cast<int64_t>(trade_i.timestamp);
-                        int64_t interval_current = static_cast<int64_t>(trade.timestamp) - static_cast<int64_t>(trade_j.timestamp);
+                        int64_t interval_ij = static_cast<int64_t>(trade_j.ts.timestamp_us) - static_cast<int64_t>(trade_i.ts.timestamp_us);
+                        int64_t interval_current = static_cast<int64_t>(trade.ts.timestamp_us) - static_cast<int64_t>(trade_j.ts.timestamp_us);
 
                         // If intervals are similar, it suggests a repeating pattern
                         if (std::abs(interval_ij - interval_current) <= static_cast<int64_t>(duplicate_check_window_ms_)) {
@@ -790,7 +790,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
             // Look for sequences of trades that appear multiple times in similar patterns
             // This detects systematic duplication where the same sequence of trades repeats
             std::vector<std::tuple<double, float, uint64_t>> current_sequence;
-            current_sequence.emplace_back(trade.price, trade.volume, trade.timestamp);
+            current_sequence.emplace_back(trade.price, trade.volume, trade.ts.timestamp_us);
 
             // Look for similar sequences in recent trades
             for (size_t seq_start = 0; seq_start < trades.size(); ++seq_start) {
@@ -798,7 +798,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
 
                 // Build a sequence starting from seq_start
                 for (size_t k = seq_start; k < std::min(seq_start + 3, trades.size()); ++k) {
-                    existing_sequence.emplace_back(trades[k].price, trades[k].volume, trades[k].timestamp);
+                    existing_sequence.emplace_back(trades[k].price, trades[k].volume, trades[k].ts.timestamp_us);
                 }
 
                 // Compare the current trade with the sequence to see if it continues a pattern
@@ -811,7 +811,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                         // If the current trade matches the last element of an existing sequence,
                         // it might be a duplicate of that sequence
                         uint64_t time_diff_seq = std::abs(static_cast<int64_t>(std::get<2>(existing_sequence.back())) -
-                                                         static_cast<int64_t>(trade.timestamp));
+                                                         static_cast<int64_t>(trade.ts.timestamp_us));
 
                         if (time_diff_seq <= duplicate_check_window_ms_) {
                             return true;
@@ -829,12 +829,12 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
     auto it = last_timestamps_.find(symbol);
 
     if (it != last_timestamps_.end()) {
-        // If the current trade timestamp is earlier than the last one, it's out of order
-        if (trade.timestamp < it->second) {
+        // If the current trade ts.timestamp_us is earlier than the last one, it's out of order
+        if (trade.ts.timestamp_us < it->second) {
             return true;
         }
 
-        // Additionally, check if the timestamp is too far in the past compared to recent trades
+        // Additionally, check if the ts.timestamp_us is too far in the past compared to recent trades
         // This catches cases where a trade comes in significantly later than expected
         auto stats_it = symbol_stats_.find(symbol);
         if (stats_it != symbol_stats_.end()) {
@@ -848,16 +848,16 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
-                // Only perform this check if current_time > trade.timestamp to avoid underflow
-                if (current_time > trade.timestamp && (current_time - trade.timestamp) > max_acceptable_delay) {
+                // Only perform this check if current_time > trade.ts.timestamp_us to avoid underflow
+                if (current_time > trade.ts.timestamp_us && (current_time - trade.ts.timestamp_us) > max_acceptable_delay) {
                     return true;
                 }
             }
         }
 
-        // Additional check: if the trade timestamp is significantly behind the last known timestamp
+        // Additional check: if the trade ts.timestamp_us is significantly behind the last known timestamp
         // but still chronologically after it, it might indicate a data feed issue
-        if (trade.timestamp < (it->second - out_of_order_tolerance_ms_)) {
+        if (trade.ts.timestamp_us < (it->second - out_of_order_tolerance_ms_)) {
             return true;
         }
 
@@ -870,7 +870,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
 
                 // If the current gap is much larger than the median but the trade is still "in order",
                 // it might indicate a data feed issue
-                uint64_t current_gap = trade.timestamp - it->second;
+                uint64_t current_gap = trade.ts.timestamp_us - it->second;
                 if (median_interval > 0 && current_gap > median_interval * 5) {
                     // Large gap compared to recent median interval - potential issue
                     return true;
@@ -879,7 +879,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
         }
 
         // Enhanced out-of-order detection: Check for significant backward jumps
-        // Even if the timestamp is after the last one, if it's significantly before recent timestamps,
+        // Even if the ts.timestamp_us is after the last one, if it's significantly before recent timestamps,
         // it might indicate a data feed issue
         if (stats_it != symbol_stats_.end()) {
             const auto& stats = stats_it->second;
@@ -887,15 +887,15 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 // Look at the most recent timestamps to see if this one is unexpectedly early
                 uint64_t recent_max_timestamp = 0;
 
-                // Calculate the most recent expected timestamp based on recent activity
+                // Calculate the most recent expected ts.timestamp_us based on recent activity
                 for (size_t i = std::max(0, static_cast<int>(stats.recent_intervals.size()) - 5);
                      i < stats.recent_intervals.size(); ++i) {
-                    // Estimate what the timestamp should have been based on recent intervals
+                    // Estimate what the ts.timestamp_us should have been based on recent intervals
                     // This is a more sophisticated check for out-of-order conditions
                 }
 
                 // Check if this trade is significantly earlier than expected based on recent patterns
-                if (trade.timestamp < (stats.last_timestamp - (out_of_order_tolerance_ms_ / 2))) {
+                if (trade.ts.timestamp_us < (stats.last_timestamp - (out_of_order_tolerance_ms_ / 2))) {
                     return true;
                 }
             }
@@ -906,18 +906,18 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
         const auto& recent_trades = recent_trades_[symbol];
         if (recent_trades.size() >= 3) {
             // Check if the new trade is out of sequence with recent trades
-            uint64_t min_recent_ts = recent_trades.back().timestamp;
-            uint64_t max_recent_ts = recent_trades.front().timestamp;
+            uint64_t min_recent_ts = recent_trades.back().ts.timestamp_us;
+            uint64_t max_recent_ts = recent_trades.front().ts.timestamp_us;
 
             // If the new trade is earlier than the most recent trade but later than the earliest,
             // it might be out of order
-            if (trade.timestamp < max_recent_ts && trade.timestamp > min_recent_ts) {
+            if (trade.ts.timestamp_us < max_recent_ts && trade.ts.timestamp_us > min_recent_ts) {
                 // This suggests the trade is inserted somewhere in the middle of recent trades
                 return true;
             }
         }
 
-        // Enhanced out-of-order detection: Check for statistical anomalies in timestamp sequences
+        // Enhanced out-of-order detection: Check for statistical anomalies in ts.timestamp_us sequences
         if (stats_it != symbol_stats_.end()) {
             const auto& stats = stats_it->second;
             if (stats.recent_intervals.size() >= 20) {
@@ -934,9 +934,9 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 }
                 double std_dev = sqrt(variance_sum / stats.recent_intervals.size());
 
-                // If the gap from the last timestamp is significantly different from the expected pattern,
+                // If the gap from the last ts.timestamp_us is significantly different from the expected pattern,
                 // it might indicate an out-of-order condition
-                uint64_t current_gap = trade.timestamp - it->second;
+                uint64_t current_gap = trade.ts.timestamp_us - it->second;
                 if (std_dev > 0 && std::abs(static_cast<double>(current_gap) - mean) > 3 * std_dev) {
                     // This gap is a statistical outlier, suggesting potential out-of-order issue
                     return true;
@@ -944,7 +944,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             }
         }
 
-        // Enhanced out-of-order detection: Check for timestamp clustering
+        // Enhanced out-of-order detection: Check for ts.timestamp_us clustering
         // If we see many trades with the same or very similar timestamps, it might indicate
         // a data processing issue where timestamps weren't properly updated
         const auto& current_recent_trades = recent_trades_[symbol];
@@ -952,7 +952,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             // Count how many recent trades have similar timestamps (within a small window)
             size_t similar_timestamp_count = 0;
             for (const auto& recent_trade : current_recent_trades) {
-                uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+                uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.ts.timestamp_us) - static_cast<int64_t>(trade.ts.timestamp_us));
                 if (time_diff <= 10) { // Within 10ms window
                     similar_timestamp_count++;
                 }
@@ -964,7 +964,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             }
         }
 
-        // Enhanced out-of-order detection: Check for timestamp regression in recent history
+        // Enhanced out-of-order detection: Check for ts.timestamp_us regression in recent history
         // Look for cases where timestamps have been moving forward but suddenly regress
         if (current_recent_trades.size() >= 10) {
             // Check the trend in the last N trades
@@ -972,9 +972,9 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             size_t backward_moving = 0;
 
             for (size_t i = 1; i < std::min(static_cast<size_t>(10), current_recent_trades.size()); ++i) {
-                if (current_recent_trades[i].timestamp > current_recent_trades[i-1].timestamp) {
+                if (current_recent_trades[i].ts.timestamp_us > current_recent_trades[i-1].ts.timestamp_us) {
                     forward_moving++;
-                } else if (current_recent_trades[i].timestamp < current_recent_trades[i-1].timestamp) {
+                } else if (current_recent_trades[i].ts.timestamp_us < current_recent_trades[i-1].ts.timestamp_us) {
                     backward_moving++;
                 }
             }
@@ -982,7 +982,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             // If we had a mostly forward-moving sequence and now see a backward movement, flag it
             if (forward_moving > 6 && backward_moving <= 2) {
                 // Previously had a strong forward trend, now we're going backwards
-                if (trade.timestamp < current_recent_trades.front().timestamp) {
+                if (trade.ts.timestamp_us < current_recent_trades.front().ts.timestamp_us) {
                     return true;
                 }
             }
@@ -994,29 +994,29 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             // Check if the new trade violates the general trend of the last N trades
             std::vector<uint64_t> recent_timestamps;
             for (const auto& recent_trade : current_recent_trades) {
-                recent_timestamps.push_back(recent_trade.timestamp);
+                recent_timestamps.push_back(recent_trade.ts.timestamp_us);
             }
 
             // Sort to see the expected range
             std::sort(recent_timestamps.begin(), recent_timestamps.end());
 
-            // If the new timestamp is significantly earlier than what we'd expect from the sorted sequence
+            // If the new ts.timestamp_us is significantly earlier than what we'd expect from the sorted sequence
             if (recent_timestamps.size() >= 10) {
                 uint64_t expected_min = recent_timestamps[recent_timestamps.size() - 5]; // Top 5 recent
 
-                if (trade.timestamp < expected_min) {
+                if (trade.ts.timestamp_us < expected_min) {
                     return true;
                 }
             }
         }
 
-        // Enhanced out-of-order detection: Check for systematic timestamp issues
+        // Enhanced out-of-order detection: Check for systematic ts.timestamp_us issues
         // Look for patterns where timestamps consistently come in with wrong ordering
         if (current_recent_trades.size() >= 15) {
             // Count how many recent trades appear to be out of order
             size_t out_of_order_count = 0;
             for (size_t i = 1; i < current_recent_trades.size(); ++i) {
-                if (current_recent_trades[i].timestamp < current_recent_trades[i-1].timestamp) {
+                if (current_recent_trades[i].ts.timestamp_us < current_recent_trades[i-1].ts.timestamp_us) {
                     out_of_order_count++;
                 }
             }
@@ -1028,11 +1028,11 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
         }
 
         // Enhanced out-of-order detection: Check for time drift
-        // Look for systematic shifts in timestamp patterns that might indicate clock issues
+        // Look for systematic shifts in ts.timestamp_us patterns that might indicate clock issues
         if (stats_it != symbol_stats_.end()) {
             const auto& stats = stats_it->second;
             if (stats.recent_intervals.size() >= 30) {
-                // Calculate the trend in timestamp intervals
+                // Calculate the trend in ts.timestamp_us intervals
                 std::vector<uint64_t> intervals_copy = stats.recent_intervals;
 
                 // Look at first and last segments to see if there's a trend
@@ -1051,10 +1051,10 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                     }
                     late_avg /= segment_size;
 
-                    // If intervals are getting significantly longer, it might indicate timestamp issues
+                    // If intervals are getting significantly longer, it might indicate ts.timestamp_us issues
                     if (early_avg > 0 && late_avg > early_avg * 3) {
                         // Check if the current trade fits this problematic pattern
-                        uint64_t current_gap = trade.timestamp - it->second;
+                        uint64_t current_gap = trade.ts.timestamp_us - it->second;
                         if (current_gap > late_avg * 2) {
                             return true;
                         }
@@ -1063,16 +1063,16 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             }
         }
 
-        // Enhanced out-of-order detection: Check for extreme timestamp anomalies
+        // Enhanced out-of-order detection: Check for extreme ts.timestamp_us anomalies
         // Look for trades with timestamps that are significantly different from the norm
         if (current_recent_trades.size() >= 10) {
-            // Calculate the expected timestamp range based on recent trades
-            uint64_t min_recent_ts = current_recent_trades[0].timestamp;
-            uint64_t max_recent_ts = current_recent_trades[0].timestamp;
+            // Calculate the expected ts.timestamp_us range based on recent trades
+            uint64_t min_recent_ts = current_recent_trades[0].ts.timestamp_us;
+            uint64_t max_recent_ts = current_recent_trades[0].ts.timestamp_us;
 
             for (const auto& recent_trade : current_recent_trades) {
-                min_recent_ts = std::min(min_recent_ts, recent_trade.timestamp);
-                max_recent_ts = std::max(max_recent_ts, recent_trade.timestamp);
+                min_recent_ts = std::min(min_recent_ts, recent_trade.ts.timestamp_us);
+                max_recent_ts = std::max(max_recent_ts, recent_trade.ts.timestamp_us);
             }
 
             // Calculate avg_interval from stats if available
@@ -1084,21 +1084,21 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 }
             }
 
-            // If the current trade timestamp is significantly outside the recent range, it might be an issue
-            if (trade.timestamp < min_recent_ts || trade.timestamp > (max_recent_ts + avg_interval * 5)) {
+            // If the current trade ts.timestamp_us is significantly outside the recent range, it might be an issue
+            if (trade.ts.timestamp_us < min_recent_ts || trade.ts.timestamp_us > (max_recent_ts + avg_interval * 5)) {
                 // But only flag as out-of-order if it's earlier than minimum (the main concern)
-                if (trade.timestamp < min_recent_ts) {
+                if (trade.ts.timestamp_us < min_recent_ts) {
                     return true;
                 }
             }
         }
 
-        // NEW: Enhanced out-of-order detection: Check for timestamp clustering and anomalies using statistical methods
+        // NEW: Enhanced out-of-order detection: Check for ts.timestamp_us clustering and anomalies using statistical methods
         if (current_recent_trades.size() >= 15) {
             // Calculate statistical measures of recent timestamps
             std::vector<uint64_t> recent_timestamps;
             for (const auto& recent_trade : current_recent_trades) {
-                recent_timestamps.push_back(recent_trade.timestamp);
+                recent_timestamps.push_back(recent_trade.ts.timestamp_us);
             }
 
             // Sort to calculate percentiles
@@ -1116,14 +1116,14 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             uint64_t lower_bound = q1 - (iqr * 1.5);
             uint64_t upper_bound = q3 + (iqr * 1.5);
 
-            // If the current trade timestamp is below the lower bound, it's an early outlier (out-of-order)
-            if (trade.timestamp < lower_bound) {
+            // If the current trade ts.timestamp_us is below the lower bound, it's an early outlier (out-of-order)
+            if (trade.ts.timestamp_us < lower_bound) {
                 return true;
             }
         }
     }
 
-    // If we don't have a previous timestamp for this symbol, we can't determine if it's out of order
+    // If we don't have a previous ts.timestamp_us for this symbol, we can't determine if it's out of order
     return false;
 }
 
@@ -1154,7 +1154,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
             oss << "High processing latency detected: " << latency << "ms, exceeding threshold of "
                 << latency_alert_threshold_ms_ << "ms";
 
-            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                  oss.str(), 0.4);
             metrics_.latency_issues++;
             add_issue(issue);
@@ -1170,19 +1170,19 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
         }
     }
 
-    // Also check for potential data feed delays by comparing trade timestamp to current time
+    // Also check for potential data feed delays by comparing trade ts.timestamp_us to current time
     auto current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
     // Calculate delay between trade occurrence and our receipt
-    if (current_time > trade.timestamp) {
-        int64_t delay_ms = current_time - trade.timestamp;
+    if (current_time > trade.ts.timestamp_us) {
+        int64_t delay_ms = current_time - trade.ts.timestamp_us;
 
         if (delay_ms > latency_alert_threshold_ms_ * 2) {  // More stringent threshold for data feed delay
             std::ostringstream oss;
             oss << "Significant data feed delay detected: " << delay_ms << "ms";
 
-            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                  oss.str(), 0.6);
             metrics_.latency_issues++;
             add_issue(issue);
@@ -1206,7 +1206,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                     oss << "Data feed appears to be significantly behind schedule: " << delay_ms
                         << "ms delay vs typical interval of " << avg_interval << "ms";
 
-                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.7);
                     metrics_.latency_issues++;
                     add_issue(issue);
@@ -1231,7 +1231,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
 
         if (count > 0) {
             uint64_t recent_avg = sum / count;
-            int64_t current_delay = (current_time > trade.timestamp) ? (current_time - trade.timestamp) : 0;
+            int64_t current_delay = (current_time > trade.ts.timestamp_us) ? (current_time - trade.ts.timestamp_us) : 0;
 
             // If current delay is significantly higher than recent average, flag as latency issue
             if (recent_avg > 0 && current_delay > recent_avg * 5) { // 5x higher than recent average
@@ -1239,7 +1239,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Latency spike detected: " << current_delay << "ms vs recent average of "
                     << recent_avg << "ms";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.5);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1251,8 +1251,8 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
     }
 
     // Enhanced latency monitoring: Check for increasing trends in latency
-    if (current_time > trade.timestamp) {
-        int64_t current_delay = current_time - trade.timestamp;
+    if (current_time > trade.ts.timestamp_us) {
+        int64_t current_delay = current_time - trade.ts.timestamp_us;
 
         // Track recent delays separately to avoid interfering with interval tracking
         auto& delay_history = recent_delays_[symbol];
@@ -1286,7 +1286,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                     oss << "Latency increasing trend detected: recent avg " << second_half_avg
                         << "ms vs previous avg " << first_half_avg << "ms";
 
-                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.6);
                     metrics_.latency_issues++;
                     add_issue(issue);
@@ -1314,7 +1314,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Consistent high latency detected: " << high_latency_count << "/"
                     << latency_delay_history.size() << " recent delays exceeded threshold";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.7);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1345,7 +1345,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Extreme latency outlier detected: " << current_delay
                     << "ms (mean: " << mean << "ms, std dev: " << std_dev << "ms)";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.8);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1371,7 +1371,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Exponential latency growth detected: " << latency_delay_history.size()
                     << " consecutive increases in latency";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.9);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1410,7 +1410,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                     oss << "Symbol-specific high latency: " << avg_symbol_latency
                         << "ms vs system average " << system_avg_latency << "ms";
 
-                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.75);
                     metrics_.latency_issues++;
                     add_issue(issue);
@@ -1445,7 +1445,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Latency degradation detected: recent avg " << recent_avg
                     << "ms vs early avg " << early_avg << "ms";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.85);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1476,7 +1476,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Latency in extreme percentile: " << current_delay
                     << "ms vs 95th percentile of " << p95_latency << "ms";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.7);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1510,7 +1510,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                         << ". Coefficient of variation: " << std::fixed << std::setprecision(2)
                         << coeff_variation << " (threshold: 0.5)";
 
-                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.65);
                     metrics_.latency_issues++;
                     add_issue(issue);
@@ -1539,7 +1539,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                     << "/" << latency_delay_history.size()
                     << " recent latencies near threshold";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.75);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1600,7 +1600,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 oss << "Latency spike detected using moving average analysis: short-term avg " << short_avg
                     << "ms vs long-term avg " << long_avg << "ms";
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.65);
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -1646,9 +1646,9 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
 
     // Check for potentially invalid exchange_id (assuming valid range is 0-255, but we might expect a smaller range)
     // Common exchanges might have IDs 1-10, so anything above a threshold might be suspicious
-    if (trade.exchange_id > 50) {  // Assuming most exchanges have IDs under 50
+    if (trade.symbol_id > 50) {  // Assuming most exchanges have IDs under 50
         std::ostringstream oss;
-        oss << "Unusual exchange ID detected: " << static_cast<int>(trade.exchange_id);
+        oss << "Unusual exchange ID detected: " << static_cast<int>(trade.symbol_id);
 
         DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
                              oss.str(), 0.4);
@@ -1740,7 +1740,7 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
     }
 
     // Check for potentially invalid flags value (all bits set might indicate corruption)
-    if (trade.flags == 0xFF) {  // All bits set - likely data corruption
+    if (static_cast<uint8_t>(trade.flags) == 0xFF) {  // All bits set - likely data corruption
         DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
                              "Potentially corrupted flags field (all bits set)", 0.9);
         metrics_.missing_field_issues++;
@@ -1769,14 +1769,14 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
     }
 
     // Check for timestamp precision issues (e.g., if timestamp is 0 or extremely old)
-    if (trade.timestamp == 0) {
+    if (trade.ts.timestamp_us == 0) {
         DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
                              "Timestamp is zero, indicating potential missing data", 0.9);
         metrics_.missing_field_issues++;
         add_issue(issue);
-    } else if (trade.timestamp < 1000000000000ULL) {  // Before year 2001 (timestamp in milliseconds)
+    } else if (trade.ts.timestamp_us < 1000000000000ULL) {  // Before year 2001 (timestamp in milliseconds)
         std::ostringstream oss;
-        oss << "Timestamp is extremely old (year < 2001): " << trade.timestamp;
+        oss << "Timestamp is extremely old (year < 2001): " << trade.ts.timestamp_us;
 
         DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
                              oss.str(), 0.8);
@@ -1960,7 +1960,7 @@ std::string DataQualityMonitor::get_quality_summary() const {
     summary << "Total trades processed: " << metrics_.total_trades_processed << std::endl;
     summary << "Missing data issues: " << metrics_.missing_data_issues << std::endl;
     summary << "Duplicate trade issues: " << metrics_.duplicate_trade_issues << std::endl;
-    summary << "Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << std::endl;
+    summary << "Out-of-order ts.timestamp_us issues: " << metrics_.out_of_order_timestamp_issues << std::endl;
     summary << "Latency issues: " << metrics_.latency_issues << std::endl;
     summary << "Invalid price issues: " << metrics_.invalid_price_issues << std::endl;
     summary << "Invalid volume issues: " << metrics_.invalid_volume_issues << std::endl;
@@ -2036,7 +2036,7 @@ void DataQualityMonitor::trigger_data_quality_alerts() {
     if (current_metrics.out_of_order_timestamp_issues > 0) {
         std::ostringstream msg;
         msg << "Data quality alert: " << current_metrics.out_of_order_timestamp_issues
-            << " out-of-order timestamp issues detected";
+            << " out-of-order ts.timestamp_us issues detected";
         trigger_alert("SYSTEM", DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, msg.str(), 0.75);
     }
 
@@ -2146,7 +2146,7 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
     if (problem_description.find("duplicate") != std::string::npos) {
         issue_type = DataQualityIssueType::DUPLICATE_TRADE;
     } else if (problem_description.find("out of order") != std::string::npos ||
-               problem_description.find("timestamp") != std::string::npos) {
+               problem_description.find("ts.timestamp_us") != std::string::npos) {
         issue_type = DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP;
     } else if (problem_description.find("latency") != std::string::npos) {
         issue_type = DataQualityIssueType::LATENCY_ISSUE;
@@ -2230,7 +2230,7 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
                 recommendation << "Review data processing pipeline for duplicate filtering mechanisms.";
                 break;
             case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
-                recommendation << "Verify timestamp synchronization and ordering algorithms.";
+                recommendation << "Verify ts.timestamp_us synchronization and ordering algorithms.";
                 break;
             case DataQualityIssueType::LATENCY_ISSUE:
                 recommendation << "Investigate system performance and network connectivity.";
@@ -2334,8 +2334,8 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
                                   << "implement unique trade identification.";
             break;
         case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
-            mitigation_suggestion << "Implement timestamp correction algorithms, "
-                                  << "review data source timestamp accuracy.";
+            mitigation_suggestion << "Implement ts.timestamp_us correction algorithms, "
+                                  << "review data source ts.timestamp_us accuracy.";
             break;
         case DataQualityIssueType::LATENCY_ISSUE:
             mitigation_suggestion << "Optimize processing pipeline, increase system resources, "
@@ -2399,7 +2399,7 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
         std::ostringstream emergency_msg;
         emergency_msg << "{\"type\":\"EMERGENCY_ALERT\",\"severity\":\"CRITICAL\",\"symbol\":\""
                       << symbol << "\",\"description\":\"" << problem_description
-                      << "\",\"timestamp\":" << current_timestamp << "}";
+                      << "\",\"ts.timestamp_us\":" << current_timestamp << "}";
 
         if (console_alerts_enabled_) {
             std::cout << "[EMERGENCY ALERT] " << emergency_msg.str() << std::endl;
@@ -2473,7 +2473,7 @@ void DataQualityMonitor::notify_users_of_data_problem(const std::string& symbol,
                   << "\033[0m" << std::endl;
     }
 
-    // NEW: Add timestamp for when the issue was detected
+    // NEW: Add ts.timestamp_us for when the issue was detected
     auto now = std::chrono::system_clock::now();
     auto time_t_now = std::chrono::system_clock::to_time_t(now);
     std::cout << "Detection Time:  " << std::put_time(std::localtime(&time_t_now), "%Y-%m-%d %H:%M:%S") << std::endl;
@@ -2600,7 +2600,7 @@ void DataQualityMonitor::alert_user_to_data_problems_with_context(const std::str
     if (problem_description.find("duplicate") != std::string::npos) {
         issue_type = DataQualityIssueType::DUPLICATE_TRADE;
     } else if (problem_description.find("out of order") != std::string::npos ||
-               problem_description.find("timestamp") != std::string::npos) {
+               problem_description.find("ts.timestamp_us") != std::string::npos) {
         issue_type = DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP;
     } else if (problem_description.find("latency") != std::string::npos) {
         issue_type = DataQualityIssueType::LATENCY_ISSUE;
@@ -2663,7 +2663,7 @@ void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const s
                      << "\"alert_type\":\"DATA_QUALITY\","
                      << "\"symbol\":\"" << symbol << "\","
                      << "\"message\":\"" << problem_description << "\","
-                     << "\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     << "\"ts.timestamp_us\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
                          std::chrono::high_resolution_clock::now().time_since_epoch()).count() << "}";
 
     // Output in a format that can be consumed by UI components
@@ -2771,11 +2771,11 @@ void DataQualityMonitor::alert_on_duplicate_trade(const TradeData& trade, const 
 
     std::ostringstream description;
     description << "Duplicate trade detected for " << symbol
-                << " at timestamp " << trade.timestamp
+                << " at ts.timestamp_us " << trade.ts.timestamp_us
                 << ", price: " << trade.price
                 << ", volume: " << trade.volume;
 
-    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.ts.timestamp_us,
                           description.str(), 0.7);
     add_issue(issue);
 
@@ -2787,16 +2787,16 @@ void DataQualityMonitor::alert_on_out_of_order_timestamp(const TradeData& trade,
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream description;
-    description << "Out-of-order timestamp detected for " << symbol
-                << ". Received timestamp " << trade.timestamp
+    description << "Out-of-order ts.timestamp_us detected for " << symbol
+                << ". Received ts.timestamp_us " << trade.ts.timestamp_us
                 << " after processing " << last_timestamp;
 
     double severity = 0.6; // Base severity for out-of-order timestamps
-    if (trade.timestamp < (last_timestamp - 60000)) { // More than 1 minute difference
+    if (trade.ts.timestamp_us < (last_timestamp - 60000)) { // More than 1 minute difference
         severity = 0.8; // Higher severity for large gaps
     }
 
-    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.ts.timestamp_us,
                           description.str(), severity);
     add_issue(issue);
 
@@ -2818,7 +2818,7 @@ void DataQualityMonitor::alert_on_latency_issue(const TradeData& trade, const st
         severity = 0.6; // Medium-high severity
     }
 
-    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                           description.str(), severity);
     add_issue(issue);
 
@@ -2869,7 +2869,7 @@ void DataQualityMonitor::generate_comprehensive_alert_report() {
     report << "Total trades processed: " << metrics_.total_trades_processed << "\n";
     report << "Missing data issues: " << metrics_.missing_data_issues << "\n";
     report << "Duplicate trade issues: " << metrics_.duplicate_trade_issues << "\n";
-    report << "Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << "\n";
+    report << "Out-of-order ts.timestamp_us issues: " << metrics_.out_of_order_timestamp_issues << "\n";
     report << "Latency issues: " << metrics_.latency_issues << "\n";
     report << "Invalid price issues: " << metrics_.invalid_price_issues << "\n";
     report << "Invalid volume issues: " << metrics_.invalid_volume_issues << "\n";
@@ -3139,7 +3139,7 @@ void DataQualityMonitor::monitor_data_stream_health(const std::string& symbol) {
     // Check for duplicate trade patterns
     check_duplicate_trade_patterns(symbol);
 
-    // Check for out-of-order timestamp patterns
+    // Check for out-of-order ts.timestamp_us patterns
     check_out_of_order_timestamp_patterns(symbol);
 
     // Check for latency issues patterns
@@ -3231,10 +3231,10 @@ void DataQualityMonitor::check_out_of_order_timestamp_patterns(const std::string
             uint64_t prev_timestamp = 0;
 
             for (const auto& trade : trades) {
-                if (prev_timestamp > 0 && trade.timestamp < prev_timestamp) {
+                if (prev_timestamp > 0 && trade.ts.timestamp_us < prev_timestamp) {
                     out_of_order_count++;
                 }
-                prev_timestamp = trade.timestamp;
+                prev_timestamp = trade.ts.timestamp_us;
             }
 
             // If more than 20% of recent trades are out of order, flag it
@@ -3349,7 +3349,7 @@ std::string DataQualityMonitor::get_comprehensive_summary() const {
     summary << "Total trades processed: " << metrics_.total_trades_processed << "\n";
     summary << "Missing data issues: " << metrics_.missing_data_issues << "\n";
     summary << "Duplicate trade issues: " << metrics_.duplicate_trade_issues << "\n";
-    summary << "Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << "\n";
+    summary << "Out-of-order ts.timestamp_us issues: " << metrics_.out_of_order_timestamp_issues << "\n";
     summary << "Latency issues: " << metrics_.latency_issues << "\n";
     summary << "Invalid price issues: " << metrics_.invalid_price_issues << "\n";
     summary << "Invalid volume issues: " << metrics_.invalid_volume_issues << "\n";
@@ -3645,7 +3645,7 @@ void DataQualityMonitor::immediate_user_notification(const DataQualityIssue& iss
             std::cout << "Review duplicate filtering";
             break;
         case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
-            std::cout << "Verify timestamp synchronization";
+            std::cout << "Verify ts.timestamp_us synchronization";
             break;
         case DataQualityIssueType::LATENCY_ISSUE:
             std::cout << "Investigate system performance";
@@ -3939,7 +3939,7 @@ void DataQualityMonitor::enhanced_duplicate_detection(const TradeData& trade, co
         if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
             std::abs(recent_trade.volume - trade.volume) < 0.0001f &&
             recent_trade.side == trade.side) {
-            matching_timestamps.push_back(recent_trade.timestamp);
+            matching_timestamps.push_back(recent_trade.ts.timestamp_us);
         }
     }
 
@@ -3972,7 +3972,7 @@ void DataQualityMonitor::enhanced_duplicate_detection(const TradeData& trade, co
                     oss << "SYSTEMATIC DUPLICATION PATTERN DETECTED for " << symbol
                         << ". Same trade characteristics appearing at regular " << first_interval << "ms intervals";
 
-                    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.85); // High severity for systematic duplication
                     metrics_.duplicate_trade_issues++;
                     add_issue(issue);
@@ -3991,7 +3991,7 @@ void DataQualityMonitor::enhanced_duplicate_detection(const TradeData& trade, co
         size_t similar_in_cluster = 0;
 
         for (const auto& recent_trade : trades) {
-            uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+            uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.ts.timestamp_us) - static_cast<int64_t>(trade.ts.timestamp_us));
 
             if (time_diff <= cluster_timeframe &&
                 std::abs(recent_trade.price - trade.price) < 0.000001 &&
@@ -4006,7 +4006,7 @@ void DataQualityMonitor::enhanced_duplicate_detection(const TradeData& trade, co
             oss << "DUPLICATE CLUSTER DETECTED for " << symbol
                 << ". " << similar_in_cluster << " similar trades within " << cluster_timeframe << "ms timeframe";
 
-            DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.ts.timestamp_us,
                                  oss.str(), 0.8); // High severity for clusters
             metrics_.duplicate_trade_issues++;
             add_issue(issue);
@@ -4024,16 +4024,16 @@ void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade,
 
     auto last_timestamp_it = last_timestamps_.find(symbol);
     if (last_timestamp_it == last_timestamps_.end()) {
-        return; // No previous timestamp to compare with
+        return; // No previous ts.timestamp_us to compare with
     }
 
     uint64_t last_timestamp = last_timestamp_it->second;
 
     // If the trade is actually out of order, we've already handled it elsewhere
-    // This method focuses on predictive analysis of timestamp patterns
-    if (trade.timestamp >= last_timestamp) {
+    // This method focuses on predictive analysis of ts.timestamp_us patterns
+    if (trade.ts.timestamp_us >= last_timestamp) {
         // Check if the interval between trades is significantly different from expected
-        uint64_t interval = trade.timestamp - last_timestamp;
+        uint64_t interval = trade.ts.timestamp_us - last_timestamp;
 
         auto stats_it = symbol_stats_.find(symbol);
         if (stats_it != symbol_stats_.end()) {
@@ -4051,7 +4051,7 @@ void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade,
                         << "Actual interval: " << interval << "ms, "
                         << "Suggests " << (interval / expected_interval) << " trades may have been missed";
 
-                    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+                    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.ts.timestamp_us,
                                          oss.str(), 0.7); // Medium-high severity
                     metrics_.out_of_order_timestamp_issues++;
                     add_issue(issue);
@@ -4064,14 +4064,14 @@ void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade,
         }
     }
 
-    // NEW: Check for timestamp sequence anomalies using moving statistics
+    // NEW: Check for ts.timestamp_us sequence anomalies using moving statistics
     const auto& recent_trades = recent_trades_[symbol];
     if (recent_trades.size() >= 10) {
-        // Calculate statistics of recent timestamp intervals
+        // Calculate statistics of recent ts.timestamp_us intervals
         std::vector<uint64_t> recent_intervals;
         for (size_t i = 1; i < recent_trades.size(); ++i) {
-            if (recent_trades[i].timestamp >= recent_trades[i-1].timestamp) {
-                recent_intervals.push_back(recent_trades[i].timestamp - recent_trades[i-1].timestamp);
+            if (recent_trades[i].ts.timestamp_us >= recent_trades[i-1].ts.timestamp_us) {
+                recent_intervals.push_back(recent_trades[i].ts.timestamp_us - recent_trades[i-1].ts.timestamp_us);
             }
         }
 
@@ -4093,8 +4093,8 @@ void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade,
             if (recent_trades.size() >= 2) {
                 const auto& prev_trade = recent_trades[recent_trades.size() - 2];
 
-                if (trade.timestamp >= prev_trade.timestamp) {
-                    uint64_t current_interval = trade.timestamp - prev_trade.timestamp;
+                if (trade.ts.timestamp_us >= prev_trade.ts.timestamp_us) {
+                    uint64_t current_interval = trade.ts.timestamp_us - prev_trade.ts.timestamp_us;
 
                     // If current interval is a statistical outlier, flag it
                     if (std_dev > 0 && std::abs(static_cast<double>(current_interval) - mean) > 3 * std_dev) {
@@ -4104,12 +4104,12 @@ void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade,
                             << "Mean: " << std::fixed << std::setprecision(2) << mean << "ms, "
                             << "Std Dev: " << std_dev << "ms";
 
-                        DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+                        DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.ts.timestamp_us,
                                              oss.str(), 0.75); // High-medium severity
                         metrics_.out_of_order_timestamp_issues++;
                         add_issue(issue);
 
-                        // Alert user about timestamp interval outlier
+                        // Alert user about ts.timestamp_us interval outlier
                         alert_user_to_data_problems_with_context(symbol, oss.str(), 0.75,
                                                                "StatisticalAnalyzer", "Timestamp interval outlier detected");
                     }
@@ -4127,7 +4127,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
     auto current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
-    int64_t processing_delay = (current_time > trade.timestamp) ? (current_time - trade.timestamp) : 0;
+    int64_t processing_delay = (current_time > trade.ts.timestamp_us) ? (current_time - trade.ts.timestamp_us) : 0;
 
     // Track this delay for trend analysis
     auto& delay_history = recent_delays_[symbol];
@@ -4163,7 +4163,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
                 << "Increase factor: " << std::fixed << std::setprecision(2)
                 << (static_cast<double>(second_half_avg) / first_half_avg);
 
-            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                  oss.str(), 0.7); // Medium-high severity
             metrics_.latency_issues++;
             add_issue(issue);
@@ -4198,7 +4198,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
                 << "90th percentile: " << p90_latency << "ms, "
                 << "95th percentile: " << p95_latency << "ms";
 
-            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                  oss.str(), 0.6); // Medium severity for early warning
             metrics_.latency_issues++;
             add_issue(issue);
@@ -4234,7 +4234,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
                 oss << "HIGH LATENCY WITH HIGH VOLUME for " << symbol
                     << ". Delay: " << processing_delay << "ms, Volume: " << trade.volume;
 
-                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.ts.timestamp_us,
                                      oss.str(), 0.65); // Medium-high severity
                 metrics_.latency_issues++;
                 add_issue(issue);
@@ -4287,7 +4287,7 @@ std::string DataQualityMonitor::get_data_quality_summary() const {
     summary << "\nDetected Issues:" << std::endl;
     summary << "  Missing data issues: " << metrics_.missing_data_issues << std::endl;
     summary << "  Duplicate trade issues: " << metrics_.duplicate_trade_issues << std::endl;
-    summary << "  Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << std::endl;
+    summary << "  Out-of-order ts.timestamp_us issues: " << metrics_.out_of_order_timestamp_issues << std::endl;
     summary << "  Latency issues: " << metrics_.latency_issues << std::endl;
     summary << "  Invalid price issues: " << metrics_.invalid_price_issues << std::endl;
     summary << "  Invalid volume issues: " << metrics_.invalid_volume_issues << std::endl;

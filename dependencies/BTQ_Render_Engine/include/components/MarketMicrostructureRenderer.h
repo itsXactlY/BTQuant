@@ -12,7 +12,10 @@
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
 
-// Forward declarations and missing type definitions
+// Forward declarations
+namespace BTQuant { class PanelManager; }
+
+// Missing type definitions
 struct LOBHeatmapConfig {
     uint32_t width = 1024;
     uint32_t height = 512;

@@ -1,12 +1,19 @@
 #include "components/dom_surface_panel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <iostream>
+#include <limits>
 #include <numeric>
 
 #include <imgui.h>
+
+#include "ChartMath.hpp"
+#include "sync/crosshair_helper.hpp"
 
 namespace BTQuant {
 
@@ -554,6 +561,11 @@ void DomSurfacePanel::render() {
     }
   }
 
+  // Phase 4.3: Auto-center the viewport on the live mid price. Done every
+  // frame (not only when dirty) so the viewport follows the market in
+  // real-time. The function is a no-op if no snapshot is available.
+  updateAutoCenter();
+
   begin_panel_window();
 
   if (current_symbol_id_ == 0) {
@@ -619,6 +631,18 @@ void DomSurfacePanel::render() {
       ImPlot::PopColormap();
     }
 
+    // Phase 4.2: GPU compute heatmap texture backdrop (Phase 1). When the
+    // Vulkan LOB pipeline publishes an ImGui texture id, overlay it on the
+    // plot as a 70%-opacity background. Falls back to CPU heatmap above.
+    if (heatmap_tex_id_ != nullptr && cols > 0 && rows > 0) {
+      ImVec2 p_min = ImPlot::GetPlotPos();
+      ImVec2 p_size = ImPlot::GetPlotSize();
+      ImVec2 p_max = ImVec2(p_min.x + p_size.x, p_min.y + p_size.y);
+      ImPlot::GetPlotDrawList()->AddImage(
+          heatmap_tex_id_, p_min, p_max, ImVec2(0, 0), ImVec2(1, 1),
+          IM_COL32(255, 255, 255, 178));  // 70% opacity overlay
+    }
+
     // Render Persistent Level Lines OVER the heatmap
     if (show_persistent_lines_) {
       renderPersistentLevels();
@@ -649,6 +673,51 @@ void DomSurfacePanel::render() {
   }
 
   end_panel_window();
+}
+
+// ============================================================
+// Phase 4.3: Auto-center the price viewport on the live mid price.
+// Reads mid_price from the atomic L2 snapshot. If |mid - center| exceeds
+// 5 ticks, shifts the price bounds by 10% of the delta. The same shift
+// is applied to the heatmap bounds (used by the ImPlot view).
+// ============================================================
+void DomSurfacePanel::updateAutoCenter() {
+  if (!auto_center_enabled_ || !processor_ || current_symbol_id_ == 0) return;
+
+  auto snap_opt = processor_->get_atomic_snapshot(current_symbol_id_);
+  if (!snap_opt) return;
+  double mid = snap_opt->mid_price;
+  if (mid <= 0.0) return;
+
+  // Determine a tick size for the threshold. Use the same heuristic as
+  // renderDOMLadder() — diff between the first two bid/ask prices.
+  double tick_size = 0.01;
+  auto book_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (book_opt) {
+    const auto& book = *book_opt;
+    if (book.bids.size() >= 2) {
+      tick_size = std::abs(book.bids[0].price - book.bids[1].price);
+    } else if (book.asks.size() >= 2) {
+      tick_size = std::abs(book.asks[0].price - book.asks[1].price);
+    }
+  }
+  if (tick_size <= 0.0) tick_size = 0.01;
+
+  // Heatmap viewport (Y-axis is price)
+  if (bounds_max_[1] > bounds_min_[1]) {
+    double center = 0.5 * (bounds_min_[1] + bounds_max_[1]);
+    double delta = mid - center;
+    if (std::abs(delta) > tick_size * 5.0) {
+      double shift = 0.1 * delta;
+      bounds_min_[1] += shift;
+      bounds_max_[1] += shift;
+    }
+  }
+
+  // DOM ladder uses center_tick derived from mid_price every frame, so the
+  // ladder is intrinsically self-centering. We just remember the mid for
+  // any non-ladder use (e.g. overlay markers).
+  last_known_mid_ = mid;
 }
 
 // ============================================================
@@ -1192,10 +1261,51 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::Separator();
 }
 
+// ============================================================================
+// Flush DOM Ruler — live bid/ask imbalance bar drawn on the right edge of
+// the heatmap plot. Width is configurable (fraction of plot width).
+// ============================================================================
 void DomSurfacePanel::renderFlushDOMRuler() {
-  // TODO: Implement Flush DOM Ruler rendering
-  // This function should render the live orderbook at the right edge of the heatmap panel
-  // For now, this is a stub implementation
+  if (!show_flush_dom_ruler_) return;
+
+  ImDrawList* dl = ImPlot::GetPlotDrawList();
+  if (!dl) return;
+
+  // Compute plot's right edge and a vertical strip width.
+  ImVec2 plot_min = ImPlot::GetPlotPos();
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+  float x_right = plot_min.x + plot_size.x;
+  float strip_w = plot_size.x * flush_dom_ruler_width_;
+
+  // Pull the latest snapshot for bid/ask imbalance.
+  auto snap_opt =
+      processor_ ? processor_->get_atomic_snapshot(current_symbol_id_) : std::nullopt;
+  float bid_share = 0.5f, ask_share = 0.5f;
+  if (snap_opt) {
+    // AtomicL2Snapshot only carries top-of-book (best_bid_size / best_ask_size),
+    // not full depth. Use those as the imbalance proxy.
+    double total_bid = snap_opt->best_bid_size;
+    double total_ask = snap_opt->best_ask_size;
+    if ((total_bid + total_ask) > 0.0) {
+      bid_share = static_cast<float>(total_bid / (total_bid + total_ask));
+      ask_share = 1.0f - bid_share;
+    }
+  }
+
+  // Draw bid (Neon Mint) on the left half of the strip, ask (Crimson) on the right.
+  // y extent = full plot height (price range is the plot's vertical axis).
+  ImVec2 bot_left(plot_min.x + plot_size.x - strip_w, plot_min.y);
+  ImVec2 bot_right(x_right, plot_min.y + plot_size.y);
+  float mid_x = bot_left.x + strip_w * bid_share;
+  dl->AddRectFilled(bot_left, ImVec2(mid_x, bot_right.y),
+                    IM_COL32(0, 230, 102, 110));     // Neon Mint
+  dl->AddRectFilled(ImVec2(mid_x, bot_left.y), bot_right,
+                    IM_COL32(230, 25, 38, 110));     // Crimson
+  dl->AddRect(bot_left, bot_right, IM_COL32(255, 255, 255, 200), 0.0f, 0, 1.0f);
+
+  // 50% reference line in the centre.
+  dl->AddLine(ImVec2(mid_x, bot_left.y), ImVec2(mid_x, bot_right.y),
+              IM_COL32(255, 255, 255, 180), 1.0f);
 }
 
 }  // namespace BTQuant

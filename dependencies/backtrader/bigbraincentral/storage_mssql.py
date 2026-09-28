@@ -15,24 +15,47 @@ Updated design:
 import fast_mssql
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import json
+import os
+import sys
 from threading import Lock
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
+# Creds come from a local secrets file, never from this repo.
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+try:
+    import btq_secrets
+except ImportError:  # allow use as an installed backtrader without the repo
+    btq_secrets = None
+
+
+def _secret(name: str, default: str = "") -> str:
+    """Read one secret, falling back to the literal default when unavailable."""
+    if btq_secrets is None:
+        return default
+    try:
+        return btq_secrets.get(name, default)
+    except Exception:
+        return default
+
 
 @dataclass
 class MSSQLConfig:
     """SQL Server configuration"""
-    server: str = "localhost"
+    server: str = field(default_factory=lambda: _secret("server", "localhost"))
     # Separate DB for live market data; keep BinanceData for historical/backtests
-    database: str = "BTQ_MarketData"
-    username: str = "SA"
-    password: str = ""
-    driver: str = "{ODBC Driver 18 for SQL Server}"
+    database: str = field(default_factory=lambda: _secret("marketdata_database", "BTQ_MarketData"))
+    username: str = field(default_factory=lambda: _secret("username", "SA"))
+    password: str = field(default_factory=lambda: _secret("password", ""))
+    driver: str = field(default_factory=lambda: _secret("driver", "{ODBC Driver 18 for SQL Server}"))
     trust_server_certificate: bool = True
 
     def get_connection_string(self) -> str:

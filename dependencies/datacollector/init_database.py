@@ -6,17 +6,30 @@ Zero staging. Direct writes. Sub-millisecond inserts.
 """
 
 import pyodbc
+import os
 import sys
 
-import os
+# Creds come from a local secrets file, never from this repo.
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+import btq_secrets
 
-from backtrader.dontcommit import server as SERVER, username as USER, password as PASS
+_db = btq_secrets.require()
+SERVER = _db["server"]
+DB = _db["marketdata_database"]
+USER = _db["username"]
+PASS = _db["password"]
 
-DB = "BTQ_MarketData"
-# Preallocation; the installer shrinks these to fit the free disk
+# Preallocation; the installer shrinks these to fit the free disk.
+# RC3 added the env overrides, 0.0.2 added the secrets file — the credential
+# hunk swallowed them, and the sizes below are still referenced, so they go back.
 DATA_GB = int(os.environ.get("BTQ_MARKETDATA_DATA_GB", 50))
 LOG_GB = int(os.environ.get("BTQ_MARKETDATA_LOG_GB", 10))
 RESET = "--reset" in sys.argv
+
 
 def get_conn(database="master", autocommit=True):
     conn_str = (

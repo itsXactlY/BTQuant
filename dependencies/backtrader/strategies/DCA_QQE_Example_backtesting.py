@@ -1,0 +1,196 @@
+from .base import BaseStrategy, setup_logger
+import backtrader as bt
+import logging
+from datetime import datetime
+
+trade_logger = setup_logger('TradeLogger', 'QQE_DCA_Example_Trade_Monitor.log', level=logging.DEBUG)
+
+class VolumeOscillator(bt.Indicator):
+    lines = ('osc',)
+    params = (('shortlen', 5),
+            ('longlen', 10))
+    
+    def __init__(self):
+        shortlen, longlen = self.params.shortlen, self.params.longlen
+        self.lines.short = bt.indicators.ExponentialMovingAverage(self.data.volume, period=shortlen)
+        self.lines.long = bt.indicators.ExponentialMovingAverage(self.data.volume, period=longlen)
+        self.lines.osc = (self.lines.short - self.lines.long) / self.lines.long * 100
+
+    def next(self):
+        self.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
+
+class QQEIndicator(bt.Indicator):
+    params = (
+        ("period", 6),
+        ("fast", 5),
+        ("q", 3.0),
+        ("debug", False)
+    )
+    lines = ("qqe_line",)
+
+    def __init__(self):
+        self.rsi = bt.indicators.RSI(self.data.close, period=self.p.period)
+        self.atr = bt.indicators.ATR(self.data, period=self.p.fast)
+        self.dar = bt.If(self.atr > 0, bt.indicators.EMA(self.atr - self.p.q, period=int((self.p.period * 2) - 1)), 0)
+        self.lines.qqe_line = bt.If(self.rsi > 0, self.rsi + self.dar, 0)
+
+    def next(self):
+        # check if ATR is not zero to avoid division by zero errors
+        if self.atr[0] == 0:
+            print("ATR is zero, skipping this iteration to avoid division by zero.")
+            return
+
+        # check if RSI and DAR are valid before computing the QQE line
+        if self.rsi[0] != 0 and self.dar[0] != 0:
+            self.lines.qqe_line[0] = self.rsi[0] + self.dar[0]
+        else:
+            self.lines.qqe_line[0] = 0
+        
+        if self.p.debug:
+            print(f"RSI: {self.rsi[0]}, DAR: {self.dar[0]}, ATR: {self.atr[0]}, QQE: {self.lines.qqe_line[0]}")
+
+class QQE_DCA_Example(BaseStrategy):
+    params = (
+        ('dca_threshold', 1.5),
+        ('take_profit', 2),
+        ('percent_sizer', 0.01), # 0.01 -> 1%
+        ("ema_length", 20),
+        ('hull_length', 53),
+        ("printlog", True),
+        ("backtest", None)
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.qqe = QQEIndicator(self.data)
+        self.hma = bt.indicators.HullMovingAverage(self.data, period=self.p.hull_length)
+        self.ema = bt.indicators.EMA(self.data.close, period=self.params.ema_length)
+        self.volosc = VolumeOscillator(self.data)
+        self.DCA = True
+        self.buy_executed = False
+        self.conditions_checked = False
+        # log_entry/log_exit/reset_position_state zaehlen hierauf. Die alte
+        # live_functions hat sie angelegt, HEADs base.py nicht mehr.
+        self.total_buys = 0
+        self.total_profit_usd = 0
+        self.trade_cycles = 0
+        self.current_cycle_buys = 0
+        self.max_buys_per_cycle = 0
+        self.position_start_time = None
+        self.last_profit_usd = 0
+        self.start_time = datetime.utcnow()
+
+    def buy_or_short_condition(self):
+        if not self.buy_executed and not self.conditions_checked:
+            if (self.qqe.qqe_line[-1] > 0) and \
+                (self.data.close[-1] > self.hma[0]) and \
+                (self.volosc.osc[-1] > self.volosc.lines[0]
+            ):
+                
+                if self.create_order(action='BUY') is not None:
+                    self.buy_executed = True
+                    self.conditions_checked = True
+                    self.log_entry()
+                    return True
+        return False
+                    
+    def dca_or_short_condition(self):
+        if self.buy_executed and not self.conditions_checked:
+            if (self.qqe.qqe_line[-1] > 0) and \
+                (self.data.close[-1] > self.hma[0]) and \
+                (self.volosc.osc[-1] > self.volosc.lines[0]
+            ):
+            
+                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
+                    if self.create_order(action='BUY') is not None:
+                        self.conditions_checked = True
+                        self.log_entry()
+                        return True
+        return False
+
+    def sell_or_cover_condition(self):
+        if self.p.debug:
+            print(f'| - sell_or_cover_condition {self.data._name} Entry:{self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
+        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
+            average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
+
+            # Avoid selling at a loss or below the take profit price
+            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
+                self.log(
+                    f"| - Avoiding sell at a loss or below take profit. "
+                    f"| - Current close price: {self.data.close[0]:.12f}, "
+                    f"| - Average entry price: {average_entry_price:.12f}, "
+                    f"| - Take profit price: {self.take_profit_price:.12f}"
+                )
+                return
+
+            for order in list(self.active_orders):
+                self.close_order(order)
+            self.log_exit("Sell Signal - Take Profit")
+            self.reset_position_state()
+            self.buy_executed = False
+            self.conditions_checked = True
+            return True
+        return False
+
+    def next(self):
+        BaseStrategy.next(self)
+        # Reset conditions_checked flag for the new candle
+        self.conditions_checked = False
+
+    def log_entry(self):
+        trade_logger.debug("-" * 100)
+        self.total_buys += 1
+        self.current_cycle_buys += 1
+        self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+
+        trade_logger.debug(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
+        trade_logger.debug(f"Entry price: {self.entry_prices[-1]:.12f}")
+        trade_logger.debug(f"Position size: {self.sizes[-1]}")
+        trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
+        trade_logger.debug(f"Current portfolio value: {self.broker.getvalue():.2f}")
+        trade_logger.debug("*" * 100)
+
+    def log_exit(self, exit_type):
+        trade_logger.info("-" * 100)
+        trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
+        
+        position_size = sum(self.sizes)
+        exit_price = self.data.close[0]
+        # average_entry_price ist None, wenn reset_position_state() schon lief.
+        avg = self.average_entry_price or self.first_entry_price or exit_price
+        profit_usd = (exit_price - avg) * position_size
+        self.last_profit_usd = profit_usd
+        self.total_profit_usd += profit_usd
+        self.trade_cycles += 1
+
+        trade_logger.info(f"Exit price: {exit_price:.12f}")
+        trade_logger.info(f"Average entry price: {avg:.12f}")
+        trade_logger.info(f"Position size: {position_size}")
+        trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
+        trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
+        trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
+        trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
+        if self.start_time:
+            trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
+        if self.position_start_time:
+            trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
+        trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
+        trade_logger.info(f"Total buys: {self.total_buys}")
+        trade_logger.info("*" * 100)
+        
+        self.current_cycle_buys = 0
+        self.position_start_time = None
+
+    def stop(self):
+        # order_queue/order_thread existieren nur im Live-Betrieb (init_live_trading).
+        # Im Backtest gibt es sie nicht, und stop() laeuft trotzdem.
+        if getattr(self, "order_queue", None) is not None:
+            self.order_queue.put(None)
+            self.order_thread.join()
+        print('Final Portfolio Value: %.2f' % self.broker.getvalue())
+
+
+# Loader-Vertrag: import_strategy() macht getattr(module, <Dateiname>).
+# Die Konzept-Klasse darunter behaelt ihren Namen, das Modul ist der Einstieg.
+DCA_QQE_Example_backtesting = QQE_DCA_Example

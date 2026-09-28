@@ -23,7 +23,9 @@
 
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
+#include "data/TradeData.h"
 #include "cache_manager.hpp"
+#include "memory/memory_arena.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include "concurrentqueue.h"
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
@@ -56,6 +58,28 @@ struct TradeData {
   double price;
   double size;
   bool is_buy;
+};
+
+// Backwards-compat: the spec-compliant 64-byte TradeData lives in
+// `BTQuant::Data::TradeData` (include/data/TradeData.h). Existing code
+// keeps using `RenderEngine::TradeData` (the rich struct above) for
+// analytics; new hot-path code should use `Data::TradeData` for SPSC /
+// arena storage (see `TradeRing` below).
+using SpecTradeData = Data::TradeData;
+
+// Number of symbol ring buffers pre-allocated at startup. Each ring is
+// `TradeRing::CAP * sizeof(Data::TradeData)` bytes. 100 symbols × 1024 ×
+// 64 B = 6.4 MiB total, taken from `g_arena` once in the constructor.
+inline constexpr uint32_t MAX_SYMBOLS = 100;
+
+// Fixed-capacity per-symbol trade ring. Allocated once from `g_arena` at
+// startup — never uses `new`. The buffer is cache-line aligned so the
+// ring head/count fields are isolated from neighbouring symbols' rings.
+struct TradeRing {
+  Data::TradeData* buf   = nullptr;  // g_arena.acquire(CAP * sizeof(Data::TradeData), 64)
+  uint32_t         head  = 0;
+  uint32_t         count = 0;
+  static constexpr uint32_t CAP = 1024;
 };
 
 // Orderbook data for analytics
@@ -365,6 +389,25 @@ class MarketDataProcessor {
     return std::vector<OHLCVCandle>();
   }
 
+  // ----------------------------------------------------------------
+  // PHASE 0 / TUGW 0.4 — Arena-backed trade ring access
+  // ----------------------------------------------------------------
+  /**
+   * Get the arena-backed per-symbol trade ring. The ring buffer is
+   * pre-allocated at startup from `g_arena` (no `new` is called in the
+   * hot path). The returned reference is valid for the lifetime of the
+   * MarketDataProcessor; `symbol_id` is taken modulo `MAX_SYMBOLS` so
+   * out-of-range ids wrap rather than crash.
+   */
+  const TradeRing& get_trade_ring(uint32_t symbol_id) const noexcept {
+    return symbol_rings_[symbol_id % MAX_SYMBOLS];
+  }
+
+  /**
+   * Number of pre-allocated symbol rings (== MAX_SYMBOLS).
+   */
+  static constexpr uint32_t max_symbols() noexcept { return MAX_SYMBOLS; }
+
   /**
    * Get market summary statistics (thread-safe)
    * @return Market-wide summary data
@@ -453,6 +496,12 @@ class MarketDataProcessor {
   // SymbolID % 16 -> Shard Index
   static constexpr size_t NUM_SHARDS = 16;
   std::vector<std::unique_ptr<Shard>> shards_;
+
+  // PHASE 0 / TUGW 0.4 — Arena-backed per-symbol trade rings.
+  // Allocated once in the constructor from BTQuant::g_arena. Cache-line
+  // alignment of each ring's `buf` field prevents false sharing between
+  // adjacent symbols.
+  TradeRing symbol_rings_[MAX_SYMBOLS];
 
   // Lock-free Ingestion Queue
   // Using moodycamel::ConcurrentQueue for high-throughput non-blocking

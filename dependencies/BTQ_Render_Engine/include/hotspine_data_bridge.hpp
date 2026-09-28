@@ -36,7 +36,7 @@ struct HotOrderbookLevel {
   double size;
 };
 
-struct HotOrderbookSnapshot {
+struct alignas(64) HotOrderbookSnapshot {
   uint64_t ts_exchange;
   uint64_t ts_local;
   uint32_t symbol_id;

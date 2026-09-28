@@ -5,9 +5,21 @@
 *.py[cod]
 **/.btq_cache/
 .coverage
+.archive
+.daedalus
+.claude
+.ruff_cache
 
 # ===== Build & output =====
 build.sh
+
+# ImGui fallback ini (single-digit filename) when no IniFilename is set or path
+# is invalid. Shouldn't happen with our wired ~/.config/btquant_vulkan/imgui.ini
+# but guard against future regressions.
+/0
+/btquant_vulkan/0
+/btquant_vulkan/src/0
+/btquant_vulkan/build/0
 dependencies/BTQ_Render_Engine/build_tests/
 dependencies/BTQ_Render_Engine/build_tests/
 
@@ -86,5 +98,32 @@ Example_*.py
 dependencies/datacollector/market_data_collector
 TASK_ULTIMA_MMT_GENESIS_WIRED.md
 CT.md
+.OrderTracker_Live/
+
+# ===== The entire autonomous_agency/ tree: private, never tracked =====
+# Operator directive 2026-09-28: autonomous_agency/ in its COMPLETENESS is
+# private working material. Not just the generated output, the whole
+# directory. Overrides the earlier name-based rules, which only covered the
+# loop's output and deliberately left the source trackable.
+#
+# What this drops from tracking: 26 tracked files.
+#   20 source:  config.py, settings.py, backtester.py, broker.py,
+#               perpetual_loop.py, strategy_factory.py, mutation_engine.py,
+#               evolution_engine.py, mutant_factory.py, mssql_store.py,
+#               sweep.py, concept_vocab_ext.py, bulk_1m.py,
+#               scripts/batch_backtest.py, ... + README.md
+#    3 source:  strategies/base.py, strategies/concepts.py,
+#               strategies/disjoint_gate.py  (imported by 15 modules)
+#    3 loop output:  the hand-written crossover_* entries
+#
+# CONSEQUENCE, stated plainly: a clone of this repo will NOT contain
+# autonomous_agency/. The code does not travel with the repo. The files stay
+# on this machine. That is what was asked for.
+#
+# The leading slash anchors the rule to the repo root, so a nested copy is
+# not silently left covered by accident.
+/autonomous_agency/
+
+# dontcommit.py: local credentials module (RC3) — never tracked
 dependencies/backtrader/dontcommit.py
 dontcommit.py

@@ -204,7 +204,6 @@ class ChartPanel : public PanelBase {
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   ChartManager* chart_manager_;
-  IndicatorRenderer* indicator_renderer_;
 
   std::string symbol_ = "BTC-USDT";
   std::string exchange_ = "Binance";
@@ -213,6 +212,18 @@ class ChartPanel : public PanelBase {
 
   IndicatorConfig indicator_config_;
   bool follow_latest_ = true;
+
+  // Drawing-tool drag state (was 4x static locals in render_instrument_chart).
+  // Members so multiple charts/panels don't share one global drag state.
+  bool is_drawing_tool_ = false;
+  struct ToolPoint { float x = 0.0f; float y = 0.0f; };
+  ToolPoint tool_start_point_{};
+  std::string current_tool_id_;
+  int tool_counter_ = 0;
+
+  // Phase 7.4 TSC telemetry state (per-instance).
+  double   tsc_freq_mhz_       = 0.0;
+  uint64_t tsc_render_start_   = 0;
   float auto_follow_window_ = 1000.0f;
   double last_view_min_ = 0.0;
   double last_view_max_ = 0.0;
@@ -361,8 +372,6 @@ class ChartPanel : public PanelBase {
   void render_session_vwap_overlay(const ChartInstance& chart);
   void render_cumulative_delta_overlay(const ChartInstance& chart);
   void create_anchored_vwap_at_time(uint64_t timestamp);
-  void render_trades_popup();
-
   // Indicator rendering methods
   void render_sma_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_ema_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx);

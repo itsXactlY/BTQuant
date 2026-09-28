@@ -23,6 +23,17 @@ MarketDataProcessor::MarketDataProcessor()
     shards_.emplace_back(std::make_unique<Shard>());
   }
 
+  // PHASE 0 / TUGW 0.4 — pre-allocate every per-symbol trade ring
+  // from BTQuant::g_arena. Each ring is 1024 × sizeof(Data::TradeData)
+  // (= 64 KiB) and 64-byte aligned. Done once at startup, never in the
+  // hot path, so no `new` is ever called for trade storage.
+  for (auto& r : symbol_rings_) {
+    r.buf = static_cast<Data::TradeData*>(
+        g_arena.acquire(TradeRing::CAP * sizeof(Data::TradeData), 64));
+    r.head  = 0;
+    r.count = 0;
+  }
+
   // Initialize cache manager
   cache_manager_ = std::make_shared<CacheManager>();
 
@@ -31,8 +42,10 @@ MarketDataProcessor::MarketDataProcessor()
     workers_.emplace_back(&MarketDataProcessor::processQueueLoop, this);
   }
 
-  std::cout << "[MarketDataProcessor] Initialized with " << NUM_SHARDS << " shards and "
-            << workers_.size() << " worker threads" << std::endl;
+  std::cout << "[MarketDataProcessor] Initialized with " << NUM_SHARDS << " shards, "
+            << MAX_SYMBOLS << " arena trade rings ("
+            << (MAX_SYMBOLS * TradeRing::CAP * sizeof(Data::TradeData))
+            << " bytes) and " << workers_.size() << " worker threads" << std::endl;
 }
 
 MarketDataProcessor::~MarketDataProcessor() {

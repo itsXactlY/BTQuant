@@ -46,3 +46,8 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy):
                 self.close_order(order_tracker)
                 return True
         return False
+
+
+# Loader-Vertrag: import_strategy() macht getattr(module, <Dateiname>).
+# Die Konzept-Klasse darunter behaelt ihren Namen, das Modul ist der Einstieg.
+SMA_Cross_MESAdaptive_Prime = SMA_Cross_MESAdaptivePrime

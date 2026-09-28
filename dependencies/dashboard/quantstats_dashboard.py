@@ -1,6 +1,7 @@
 
 import os
 import re
+import tempfile
 import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup
@@ -23,7 +24,6 @@ def parse_quantstats_html(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
     except Exception as e:
-        st.error(f"Error reading file {file_path}: {str(e)}")
         return None
 
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -76,12 +76,13 @@ def parse_quantstats_html(file_path):
 
     return metrics
 
-@st.cache_data
 def load_all_reports(folder_path):
     """Load all quantstats HTML reports from a folder."""
     html_files = glob.glob(os.path.join(folder_path, "*.html"))
-    all_metrics = []
+    if not html_files:
+        return pd.DataFrame()
 
+    all_metrics = []
     progress_bar = st.progress(0)
     status_text = st.empty()
 
@@ -90,11 +91,12 @@ def load_all_reports(folder_path):
             metrics = parse_quantstats_html(file_path)
             if metrics:
                 all_metrics.append(metrics)
+            else:
+                st.warning(f"Could not parse {os.path.basename(file_path)}")
         except Exception as e:
             st.warning(f"Error parsing {file_path}: {str(e)}")
 
-        progress = (i + 1) / len(html_files)
-        progress_bar.progress(progress)
+        progress_bar.progress((i + 1) / len(html_files))
         status_text.text(f"Processing {i+1}/{len(html_files)}: {os.path.basename(file_path)}")
 
     progress_bar.empty()
@@ -255,10 +257,9 @@ def create_performance_ranking(df):
         st.warning("No valid data available for ranking")
         return None
 
-    clean_df['Risk_Adjusted_Return'] = clean_df['Total Return'] / np.abs(clean_df['Max Drawdown'])
-
-    clean_df['Risk_Adjusted_Return'] = clean_df['Risk_Adjusted_Return'].replace([np.inf, -np.inf], np.nan)
-    clean_df['Risk_Adjusted_Return'] = clean_df['Risk_Adjusted_Return'].fillna(0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        clean_df['Risk_Adjusted_Return'] = clean_df['Total Return'] / np.abs(clean_df['Max Drawdown'])
+    clean_df['Risk_Adjusted_Return'] = clean_df['Risk_Adjusted_Return'].replace([np.inf, -np.inf], np.nan).fillna(0)
 
     clean_df['Composite_Score'] = (
         clean_df['Sharpe'].rank(ascending=False, na_option='bottom') +
@@ -392,26 +393,27 @@ def main():
         status_text = st.empty()
 
         for i, uploaded_file in enumerate(uploaded_files):
-            temp_path = f"temp_{uploaded_file.name}"
+            tmp_fd, temp_path = tempfile.mkstemp(suffix='.html')
             try:
-                with open(temp_path, "wb") as f:
+                with os.fdopen(tmp_fd, 'wb') as f:
                     f.write(uploaded_file.getbuffer())
 
                 metrics = parse_quantstats_html(temp_path)
                 if metrics:
+                    metrics['pair'] = os.path.splitext(uploaded_file.name)[0]
                     all_metrics.append(metrics)
+                else:
+                    st.warning(f"Could not parse {uploaded_file.name}")
 
-                progress = (i + 1) / len(uploaded_files)
-                progress_bar.progress(progress)
+                progress_bar.progress((i + 1) / len(uploaded_files))
                 status_text.text(f"Processing {i+1}/{len(uploaded_files)}: {uploaded_file.name}")
 
             except Exception as e:
                 st.warning(f"Error processing {uploaded_file.name}: {str(e)}")
             finally:
                 try:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                except:
+                    os.remove(temp_path)
+                except OSError:
                     pass
 
         progress_bar.empty()
@@ -465,7 +467,7 @@ def main():
 
         with col3:
             if 'Max Drawdown' in df.columns and not df['Max Drawdown'].isna().all():
-                best_drawdown = df.loc[df['Max Drawdown'].idxmax()]  # Closest to 0
+                best_drawdown = df.loc[df['Max Drawdown'].abs().idxmin()]
                 st.metric(
                     "🛡️ Lowest Drawdown",
                     f"{best_drawdown['pair']}",

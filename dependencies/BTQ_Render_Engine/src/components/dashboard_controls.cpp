@@ -153,7 +153,7 @@ void DashboardControls::render_dashboard_controls() {
 
       // Create a more compact multi-select dropdown
       static bool show_exchange_selector = false;
-      static char exchange_preview[256] = "All Exchanges";
+      static std::string exchange_preview = "All Exchanges";
 
       // Update preview text to show selected exchanges
       std::string preview_text = "";
@@ -167,16 +167,15 @@ void DashboardControls::render_dashboard_controls() {
       }
 
       if (selected_count == 0) {
-        strcpy(exchange_preview, "No Exchanges Selected");
+        exchange_preview = "No Exchanges Selected";
       } else if (selected_count == static_cast<int>(all_exchanges_.size())) {
-        strcpy(exchange_preview, "All Exchanges");
+        exchange_preview = "All Exchanges";
       } else {
-        strncpy(exchange_preview, preview_text.c_str(), sizeof(exchange_preview) - 1);
-        exchange_preview[sizeof(exchange_preview) - 1] = '\0';
+        exchange_preview = preview_text;
       }
 
       // Button that acts as a dropdown
-      if (ImGui::Button(exchange_preview, ImVec2(-1, 0))) {
+      if (ImGui::Button(exchange_preview.c_str(), ImVec2(-1, 0))) {
         show_exchange_selector = !show_exchange_selector;
       }
 
@@ -329,12 +328,11 @@ void DashboardControls::render_dashboard_controls() {
             }
 
             if (updated_selected_count == 0) {
-              strcpy(exchange_preview, "No Exchanges Selected");
+              exchange_preview = "No Exchanges Selected";
             } else if (updated_selected_count == static_cast<int>(all_exchanges_.size())) {
-              strcpy(exchange_preview, "All Exchanges");
+              exchange_preview = "All Exchanges";
             } else {
-              strncpy(exchange_preview, updated_preview_text.c_str(), sizeof(exchange_preview) - 1);
-              exchange_preview[sizeof(exchange_preview) - 1] = '\0';
+              exchange_preview = updated_preview_text;
             }
           }
 

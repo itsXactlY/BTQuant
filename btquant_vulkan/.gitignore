@@ -1,0 +1,12 @@
+# btquant_vulkan local ignore — extends parent /home/alca/projects/PubBTQuant/.gitignore.
+#
+# Parent already covers build/, .cache/, CMakeFiles/, CMakeCache.txt, Makefile, etc.
+# This file adds the btquant_vulkan-specific runtime artifacts.
+
+# ImGui auto-generated state file (created on first run, user-specific).
+imgui.ini
+
+# Re-include btquant_vulkan/build.sh — parent's .gitignore has a bare "build.sh"
+# rule that would otherwise ignore ours (it's our build entrypoint, not a script
+# to skip). The negation must come AFTER any matching ignore rule.
+!build.sh

@@ -20,6 +20,14 @@
 #include "../../include/components/drawing_tools.hpp"
 #include "../../include/components/chart_panel_settings.hpp"
 
+// Phase 7.1 + 7.4: crosshair global sync + TSC telemetry
+#include "../../include/sync/crosshair_helper.hpp"
+#include "../../include/telemetry_collector.h"
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
+#include <thread>
+
 namespace BTQuant {
 
 // Helper method to calculate all indicators when new data arrives
@@ -122,7 +130,6 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
                        ChartManager* chart_manager,
                        PanelManager* panel_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
-  indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 
   // Initialize the historical time & sales panel for showing trades
@@ -314,6 +321,23 @@ void ChartPanel::update(float dt) {
 }
 
 void ChartPanel::render() {
+  // Phase 7.4: TSC frequency calibration (per-instance member, computed once).
+  if (tsc_freq_mhz_ <= 0.0) {
+#if defined(__x86_64__) || defined(__i386__)
+    auto t0 = std::chrono::high_resolution_clock::now();
+    uint64_t r0 = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    uint64_t r1 = __rdtsc();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    tsc_freq_mhz_ = (us > 0.0) ? (static_cast<double>(r1 - r0) / us) : 0.0;
+#else
+    tsc_freq_mhz_ = 0.0;
+#endif
+  }
+#if defined(__x86_64__) || defined(__i386__)
+  tsc_render_start_ = __rdtsc();
+#endif
   begin_panel_window();
 
   if (!is_visible()) {
@@ -424,9 +448,6 @@ void ChartPanel::render() {
   // Render the indicator overlay panel
   render_indicator_overlay_panel();
 
-  // Render the trades popup if needed
-  render_trades_popup();
-
   // Render the historical time & sales popup if needed
   if (historical_time_sales_panel_ && show_trades_popup_) {
     historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_, symbol_);
@@ -436,6 +457,16 @@ void ChartPanel::render() {
   if (settings_) {
     settings_->render();
   }
+
+  // Phase 7.4: record render latency (TSC -> TelemetryCollector).
+#if defined(__x86_64__) || defined(__i386__)
+  if (tsc_freq_mhz_ > 0.0) {
+    uint64_t tsc_render_end = __rdtsc();
+    double latency_us = static_cast<double>(tsc_render_end - tsc_render_start_) / tsc_freq_mhz_;
+    btq::TelemetryCollector::getInstance().recordPerformanceMetric(
+        "chart_panel_render_latency_us", latency_us, "us");
+  }
+#endif
 }
 
 void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchange) {
@@ -2853,6 +2884,16 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
+
+      // Phase 7.1: publish crosshair price to global atomic for sibling panels
+      // (footprint/tpo/dom). ChartPanel is the writer; readers honour symbol_id.
+      auto ch_id_opt = chart_manager_->getSymbolId(symbol_);
+      int32_t ch_symbol_id = ch_id_opt ? static_cast<int32_t>(*ch_id_opt) : -1;
+      BTQuant::write_crosshair(mouse_pos.y, ch_symbol_id);
+    } else {
+      // Mouse not over the plot: clear the global crosshair so sibling panels
+      // don't keep drawing a stale line.
+      BTQuant::clear_crosshair();
     }
     
     // Render global synchronized crosshair if enabled
@@ -2914,18 +2955,13 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
         // Handle mouse dragging for creating drawing tools
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
-            // Check if we're in drawing mode
-            static bool is_drawing = false;
-            static ImPlotPoint start_point;
-            static std::string current_tool_id;
-
-            if (!is_drawing) {
-                start_point = ImPlot::GetPlotMousePos();
-                is_drawing = true;
-
-                // Generate a unique ID for the new tool
-                static int tool_counter = 0;
-                current_tool_id = "tool_" + std::to_string(++tool_counter);
+            // Check if we're in drawing mode (per-instance state via members)
+            if (!is_drawing_tool_) {
+                ImPlotPoint mp = ImPlot::GetPlotMousePos();
+                tool_start_point_.x = mp.x;
+                tool_start_point_.y = mp.y;
+                is_drawing_tool_ = true;
+                current_tool_id_ = "tool_" + std::to_string(++tool_counter_);
             }
 
             // During drag, we could preview the tool being drawn
@@ -2938,7 +2974,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
                 // In a real implementation, we would create the tool based on the
                 // selected tool type and the start/end points
                 // For now, we'll just reset the drawing state
-                is_drawing = false;
+                is_drawing_tool_ = false;
             }
         }
     }
@@ -3605,12 +3641,6 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
     }
   }
 
-}
-
-void ChartPanel::render_trades_popup() {
-  // This method is kept for backward compatibility but will be replaced by the HistoricalTimeSalesPanel popup
-  // The actual popup is now handled by the HistoricalTimeSalesPanel.show_trades_popup method
-  // which is called from the render method
 }
 
 // Multi-timeframe indicator methods implementation

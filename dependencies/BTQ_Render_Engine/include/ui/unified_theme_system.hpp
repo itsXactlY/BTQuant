@@ -4,8 +4,8 @@
 #include <unordered_map>
 #include <vector>
 
-// We'll include imgui.h in the implementation file to avoid conflicts
-// Forward declarations are not needed here since we're including imgui.h in the implementation
+// Forward-declare ImGuiStyle. The full imgui.h is included in the .cpp file.
+struct ImGuiStyle;
 
 namespace BTQuant {
 namespace UI {
@@ -99,6 +99,15 @@ class UnifiedThemeManager {
 
   // Apply theme to custom components
   void apply_to_components() const;
+
+  // Apply the hardcoded MMT Deep Void preset (bypasses config)
+  void apply_mmt_void() const;
+
+  // Apply zero-border / zero-radius style mutations
+  static void apply_borders(ImGuiStyle& s);
+
+  // Apply fonts: JetBrains Mono (or default if not embedded)
+  void apply_fonts() const;
 
   // Get color by name from current theme
   void get_color(const std::string& color_name, float* rgba) const;

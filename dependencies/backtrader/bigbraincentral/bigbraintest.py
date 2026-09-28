@@ -2,17 +2,11 @@ from datetime import datetime, timedelta
 import backtrader as bt
 from backtrader.dataseries import TimeFrame
 from backtrader.strategies.Aligator_supertrend import AliG_STrend
-from backtrader.dontcommit import password as SA_PASSWORD
 from backtrader.bigbraincentral.db_ohlcv_mssql import (
     MSSQLFeedConfig, BinanceDBData,
 )
 
-cfg = MSSQLFeedConfig(
-    server="localhost",
-    database="BTQ_MarketData",   # deine Live-DB
-    username="SA",
-    password=SA_PASSWORD,
-)
+cfg = MSSQLFeedConfig()  # server/user/password from the local secrets file
 
 data = BinanceDBData(
     db_config=cfg,

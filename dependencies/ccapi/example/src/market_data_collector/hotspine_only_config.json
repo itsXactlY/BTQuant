@@ -1,0 +1,34 @@
+{
+    "db": {
+        "server": "localhost",
+        "database": "BTQ_MarketData",
+        "user": "SA",
+        "password": "",
+        "_credentials_note": "Credentials are NOT stored here. Set $BTQ_DB_PASSWORD, or source\n    ~/.btq/etc/btquant/secrets.py (see btq_secrets.py at the repo root)."
+    },
+    "timeframes": [
+        "1m",
+        "5m"
+    ],
+    "exchanges": [
+        {
+            "name": "binance",
+            "symbols": [
+                "BTCUSDT",
+                "ETHUSDT"
+            ],
+            "channels": [
+                "TRADE",
+                "MARKET_DEPTH"
+            ],
+            "market_type": "spot"
+        }
+    ],
+    "trade_buffer_size": 1000,
+    "candle_buffer_size": 200,
+    "orderbook_buffer_size": 100,
+    "flush_interval_ms": 1000,
+    "stats_report_interval_s": 10,
+    "enable_mssql": false,
+    "enable_exclusive_hotspine": true
+}

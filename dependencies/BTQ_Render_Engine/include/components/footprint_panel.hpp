@@ -64,10 +64,11 @@ class FootprintPanel : public PanelBase {
   void render() override;
 
   uint32_t get_symbol_id() const { return symbol_id_; }
-  void set_symbol_id(uint32_t id) {
-    symbol_id_ = id;
-    // Note: Exchange connection management has been moved out of the renderer
-    // The renderer now only handles rendering, not data subscription
+  void set_symbol_id(uint32_t id) { symbol_id_ = id; }
+
+  void set_cluster_engine(Analytics::ClusterEngine* engine) {
+    cluster_engine_ = engine;
+    data_dirty_.store(true, std::memory_order_relaxed);
   }
 
   // Configuration
@@ -178,8 +179,8 @@ class FootprintPanel : public PanelBase {
   // Level of Detail (LOD) system for footprint rendering
   BTQuant::Rendering::FootprintLOD lod_system_;
 
-  // Cluster Engine for advanced imbalance and exhaustion detection
-  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+  // Cluster Engine for advanced imbalance and exhaustion detection (non-owning)
+  Analytics::ClusterEngine* cluster_engine_ = nullptr;
 
   // Rendering Helpers
   ImU32 getCellColor(const FootprintCell& cell, double max_volume = 10000.0) const;
@@ -203,6 +204,19 @@ class FootprintPanel : public PanelBase {
   void detectImbalances(const std::vector<FootprintCell>& cells,
                         std::vector<FootprintCell>& diagonal_imbalances,
                         std::vector<FootprintCell>& stacked_imbalances) const;
+
+  // UI toggle / threshold state (was 4x static locals in render()).
+  // Members so multiple FootprintPanels don't share one global UI state.
+  bool  show_imbalances_       = true;
+  bool  show_exhaustion_       = true;
+  float imbalance_threshold_  = 3.0f;
+  float exhaustion_threshold_  = 3.0f;
+
+  // Per-frame TSC telemetry state (Phase 7.4). One pair, shared between the
+  // update() and render() functions that each had a `static` tsc_freq_mhz_.
+  double   tsc_freq_mhz_       = 0.0;
+  uint64_t tsc_update_start_   = 0;
+  uint64_t tsc_update_end_     = 0;
 
  private:
   // Number formatting helper

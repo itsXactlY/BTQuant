@@ -108,15 +108,11 @@ CT.md
 # (2525 + 1677 files, ~32 MB) while the tracked source in
 # autonomous_agency/ is 22 files. Never track them.
 #
-# A trailing slash matters here: it matches directories only, so a same-named
-# .py at the repo root stays trackable. Leading slash anchors the pattern to
-# the repo root, so a nested second copy is NOT silently covered.
-#
-# Ignoring does not untrack. Both rules were already present, yet 1279 files
-# stayed in the index because they had been added before the rule existed
-# (git only applies .gitignore to files it is not already tracking). They were
-# removed with `git rm -r --cached`, which drops the index entry and leaves
-# the file on disk. If a tree ever gets re-added by accident, the same
-# command fixes it.
-/autonomous_agency/strategies/
-/autonomous_agency/results/
+# A blanket ignore of the whole directory is WRONG here: base.py lives in
+# autonomous_agency/strategies/ and is the BaseStrategy that 15 strategy
+# modules import. Ignoring the tree would untrack real source. So the rule
+# matches the generated NAME, not the directory.
+# <Konzept>_<YYYYMMDD_HHMMSS> is the loop's naming scheme; base.py and any
+# hand-written file do not carry a timestamp and stay trackable.
+/autonomous_agency/strategies/*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].*
+/autonomous_agency/results/*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].*

@@ -100,19 +100,26 @@ TASK_ULTIMA_MMT_GENESIS_WIRED.md
 CT.md
 .OrderTracker_Live/
 
-# ===== Private output of the autonomous agency =====
-# The loop GENERATES these two trees: every cycle writes a new strategy .py
-# plus a _backtest_results.json and an _evaluation.json, named
-# <Concept>_<YYYYMMDD_HHMMSS>. They are the operator's private working
-# material, not source, and they are already in the thousands
-# (2525 + 1677 files, ~32 MB) while the tracked source in
-# autonomous_agency/ is 22 files. Never track them.
+# ===== The entire autonomous_agency/ tree: private, never tracked =====
+# Operator directive 2026-09-28: autonomous_agency/ in its COMPLETENESS is
+# private working material. Not just the generated output, the whole
+# directory. Overrides the earlier name-based rules, which only covered the
+# loop's output and deliberately left the source trackable.
 #
-# A blanket ignore of the whole directory is WRONG here: base.py lives in
-# autonomous_agency/strategies/ and is the BaseStrategy that 15 strategy
-# modules import. Ignoring the tree would untrack real source. So the rule
-# matches the generated NAME, not the directory.
-# <Konzept>_<YYYYMMDD_HHMMSS> is the loop's naming scheme; base.py and any
-# hand-written file do not carry a timestamp and stay trackable.
-/autonomous_agency/strategies/*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].*
-/autonomous_agency/results/*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].*
+# What this drops from tracking: 26 tracked files.
+#   20 source:  config.py, settings.py, backtester.py, broker.py,
+#               perpetual_loop.py, strategy_factory.py, mutation_engine.py,
+#               evolution_engine.py, mutant_factory.py, mssql_store.py,
+#               sweep.py, concept_vocab_ext.py, bulk_1m.py,
+#               scripts/batch_backtest.py, ... + README.md
+#    3 source:  strategies/base.py, strategies/concepts.py,
+#               strategies/disjoint_gate.py  (imported by 15 modules)
+#    3 loop output:  the hand-written crossover_* entries
+#
+# CONSEQUENCE, stated plainly: a clone of this repo will NOT contain
+# autonomous_agency/. The code does not travel with the repo. The files stay
+# on this machine. That is what was asked for.
+#
+# The leading slash anchors the rule to the repo root, so a nested copy is
+# not silently left covered by accident.
+/autonomous_agency/

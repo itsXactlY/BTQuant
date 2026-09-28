@@ -78,6 +78,13 @@ class LineBuffer(LineSingle):
         self.bindings = list()
         self.reset()
         self._tz = None
+        # 1-Entry-Memo fuer datetime(): dieselbe Bar wird pro Backtest bis zu
+        # 6x mit identischen Argumenten abgefragt (Analyzer _dt_over x4,
+        # positions, leverage) und num2date ist der teuerste Einzelschritt
+        # im Hot-Path. Der Schluessel enthaelt den Rohwert, ein Barwechsel
+        # invalidiert automatisch.
+        self._dtcache_key = None
+        self._dtcache_val = None
 
     def get_idx(self):
         return self._idx
@@ -384,8 +391,15 @@ class LineBuffer(LineSingle):
         self._tz = tz
 
     def datetime(self, ago=0, tz=None, naive=True):
-        return num2date(self.array[self.idx + ago],
-                        tz=tz or self._tz, naive=naive)
+        raw = self.array[self.idx + ago]
+        tz = tz or self._tz
+        key = (raw, tz, naive)
+        if key == self._dtcache_key:
+            return self._dtcache_val
+        val = num2date(raw, tz=tz, naive=naive)
+        self._dtcache_key = key
+        self._dtcache_val = val
+        return val
 
     def date(self, ago=0, tz=None, naive=True):
         return num2date(self.array[self.idx + ago],

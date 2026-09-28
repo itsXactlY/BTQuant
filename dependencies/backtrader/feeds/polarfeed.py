@@ -1,6 +1,7 @@
 import backtrader as bt
 from backtrader import date2num
 import polars as pl
+from datetime import datetime
 
 class PolarsData(bt.feed.DataBase):
     '''
@@ -81,37 +82,53 @@ class PolarsData(bt.feed.DataBase):
     def start(self):
         super(PolarsData, self).start()
         self._idx = -1
+        # Spalten EINMAL zu Python-Listen ziehen. Vorher stand in _load()
+        # self.p.dataname[self.colnames[col_idx]][self._idx] -- und df["Open"]
+        # erzeugt in polars ein NEUES Series-Objekt. Das passierte pro Bar und
+        # pro Feld, also 7 Series-Konstruktionen je Bar. Bei 384k 1m-Bars sind
+        # das rund 2.7 Mio. Series-Objekte und genau der Grund, warum ein
+        # Backtest sich wie x100 langsam anfuehlt.
+        df = self.p.dataname
+        self._n = len(df)
+        self._aliases = list(self.getlinealiases())
+        self._cols = {}
+        for datafield in self._aliases:
+            col_idx = self._colmapping.get(datafield)
+            if col_idx is None:
+                continue
+            try:
+                self._cols[datafield] = (col_idx, df[self.colnames[col_idx]].to_list())
+            except Exception as e:
+                print(f"Error pre-buffering column {datafield}: {e}")
+                self._cols[datafield] = None
 
     def _load(self):
         self._idx += 1
-        if self._idx >= len(self.p.dataname):
+        if self._idx >= self._n:
             return False
+        i = self._idx
 
-        for datafield in self.getlinealiases():
-            if datafield == 'datetime':
+        for datafield, packed in self._cols.items():
+            if datafield == 'datetime' or packed is None:
                 continue
-            col_idx = self._colmapping[datafield]
-            if col_idx is None:
-                continue
-
+            col_idx, values = packed
             line = getattr(self.lines, datafield)
             try:
-                val = self.p.dataname[self.colnames[col_idx]][self._idx]
+                val = values[i]
                 if hasattr(val, "item"):
                     val = val.item()
                 line[0] = float(val)
             except Exception as e:
-                print(f"Error getting value for {datafield} at index {self._idx}, col_idx {col_idx}: {e}")
+                print(f"Error getting value for {datafield} at index {i}, col_idx {col_idx}: {e}")
                 line[0] = float('nan')
 
-        dt_idx = self._colmapping['datetime']
-        if dt_idx is not None:
+        packed = self._cols.get('datetime')
+        if packed is not None:
+            dt_idx, values = packed
             try:
-                dt_value = self.p.dataname[self.colnames[dt_idx]][self._idx]
+                dt_value = values[i]
                 if hasattr(dt_value, "item"):
                     dt_value = dt_value.item()
-                # convert
-                from datetime import datetime
                 if isinstance(dt_value, str):
                     dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
                 elif isinstance(dt_value, (int, float)):
@@ -120,7 +137,7 @@ class PolarsData(bt.feed.DataBase):
                     dt = dt_value
                 self.lines.datetime[0] = date2num(dt)
             except Exception as e:
-                print(f"Error processing datetime at index {self._idx}, col_idx {dt_idx}: {e}")
+                print(f"Error processing datetime at index {i}, col_idx {dt_idx}: {e}")
                 self.lines.datetime[0] = float('nan')
 
         return True

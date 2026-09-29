@@ -107,32 +107,58 @@ class MAMA(bt.Indicator):
         self.l.Re[0] = self.smoother(self.l.Re)
         self.l.Im[0] = self.smoother(self.l.Im)
 
-        if self.l.Im[0] != 0.0 and self.l.Re[0] != 0.0:
+        if (self.l.Im[0] != 0.0 and self.l.Re[0] != 0.0
+                and np.isfinite(self.l.Im[0]) and np.isfinite(self.l.Re[0])):
             self.l.mp[0] = 360/(self.deg(np.arctan(self.l.Im[0]/self.l.Re[0])))
-        if self.l.mp[0] > 1.5*self.l.mp[-1]:
+        # "not (x >= y)" statt "x < y": ein NaN vergleicht mit allem False und
+        # wuerde jede Schranke stillschweigend umgehen. So faellt er durch.
+        if not (self.l.mp[0] > 1.5*self.l.mp[-1]):
             self.l.mp[0] = 1.5*self.l.mp[-1]
-        if self.l.mp[0] < (2.0/3)*self.l.mp[-1]:
+        if not (self.l.mp[0] >= (2.0/3)*self.l.mp[-1]):
             self.l.mp[0] = (2.0/3)*self.l.mp[-1]
-        if self.l.mp[0] < 6:
+        if not (self.l.mp[0] >= 6):
             self.l.mp[0] = 6.0
-        if self.l.mp[0] > 50:
+        if not (self.l.mp[0] <= 50):
             self.l.mp[0] = 50.0
         self.l.mp[0] = self.smoother(self.l.mp)
+        if not np.isfinite(self.l.mp[0]):
+            self.l.mp[0] = self.l.mp[-1]
         self.l.smoothPeriod[0] = (1.0/3)*self.l.mp[0] + (2.0/3)*self.l.smoothPeriod[-1]
 
-        if self.l.I1[0] != 0.0:
-            self.l.phi[0] = self.deg(np.arctan(self.l.Q1[0]/self.l.I1[0]))
+        # phi MUSS jeden Bar geschrieben werden. Ein bedingtes Schreiben laesst
+        # in diesem Fork den NaN-Default der LineBuffer stehen - "vorheriger
+        # Wert behalten" passiert nicht von selbst. Genau das war die Geburt des
+        # NaN: I1 == 0.0 -> Zweig aus -> phi = NaN -> dphi/alpha/MAMA vergiftet.
+        prev_phi = self.l.phi[-1]
+        phi_val = prev_phi
+        if (self.l.I1[0] != 0.0 and self.l.Q1[0] != 0.0
+                and np.isfinite(self.l.I1[0]) and np.isfinite(self.l.Q1[0])):
+            computed = self.deg(np.arctan(self.l.Q1[0]/self.l.I1[0]))
+            if np.isfinite(computed):
+                phi_val = computed
+        if not np.isfinite(phi_val):
+            phi_val = prev_phi
+        if not np.isfinite(phi_val):
+            phi_val = 0.0
+        self.l.phi[0] = phi_val
+
         dphi = self.l.phi[-1] - self.l.phi[0]
 
-        if dphi < 1:
+        if not (dphi >= 1):          # NaN < 1 waere immer False -> hier greift es
             dphi = 1.0
 
         alpha = self.p.fast/dphi
-
-        if alpha < self.slow:
+        if not np.isfinite(alpha):
             alpha = self.slow
-        if alpha > self.fast:
+
+        if not (alpha >= self.slow):
+            alpha = self.slow
+        if not (alpha <= self.fast):
             alpha = self.fast
 
-        self.l.MAMA[0] = alpha*self.l.p[0] + (1-alpha)*self.l.MAMA[-1]
-        self.l.FAMA[0] = 0.5*alpha*self.l.MAMA[0] + (1-0.5*alpha)*self.l.FAMA[-1]
+        # Letzte Sicherung: MAMA/FAMA duerfen kein unendliches Vorgängerwert
+        # erben. Im gesunden Betrieb nie ausgeloest, also verhaltensneutral.
+        mama_prev = self.l.MAMA[-1] if np.isfinite(self.l.MAMA[-1]) else self.l.p[0]
+        fama_prev = self.l.FAMA[-1] if np.isfinite(self.l.FAMA[-1]) else self.l.p[0]
+        self.l.MAMA[0] = alpha*self.l.p[0] + (1-alpha)*mama_prev
+        self.l.FAMA[0] = 0.5*alpha*self.l.MAMA[0] + (1-0.5*alpha)*fama_prev
